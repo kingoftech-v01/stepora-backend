@@ -1,0 +1,46 @@
+{
+  "name": "dreamplanner",
+  "version": "1.0.0",
+  "description": "Application mobile de planification de rêves et d'objectifs avec IA",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "yarn workspace @dreamplanner/mobile",
+    "api": "yarn workspace @dreamplanner/api",
+    "shared": "yarn workspace @dreamplanner/shared",
+    "dev:api": "yarn api dev",
+    "dev:mobile": "yarn mobile start",
+    "build:api": "yarn api build",
+    "build:mobile:android": "yarn mobile android:build",
+    "build:mobile:ios": "yarn mobile ios:build",
+    "test": "yarn workspaces run test",
+    "lint": "yarn workspaces run lint",
+    "typecheck": "yarn workspaces run typecheck",
+    "clean": "yarn workspaces run clean",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "yarn": ">=1.22.0"
+  },
+  "author": "DreamPlanner Team",
+  "license": "UNLICENSED"
+}

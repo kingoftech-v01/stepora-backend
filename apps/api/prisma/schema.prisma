@@ -1,0 +1,230 @@
+// DreamPlanner Database Schema
+// Prisma ORM with PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id          String   @id @default(uuid())
+  firebaseUid String   @unique @map("firebase_uid")
+  email       String   @unique
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  timezone    String   @default("Europe/Paris")
+
+  // Subscription
+  subscription     String   @default("free") // free, premium, pro
+  subscriptionEnds DateTime? @map("subscription_ends")
+
+  // Work Schedule (JSON)
+  // { workDays: [1,2,3,4,5], startTime: "09:00", endTime: "18:00" }
+  workSchedule Json? @map("work_schedule")
+
+  // Notification Preferences (JSON)
+  // { reminders: true, motivation: true, dndStart: 22, dndEnd: 7 }
+  notificationPrefs Json? @map("notification_prefs")
+
+  // App Preferences (JSON)
+  // { theme: "light", language: "fr", reminderMinutesBefore: 15 }
+  appPrefs Json? @map("app_prefs")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  dreams        Dream[]
+  conversations Conversation[]
+  notifications Notification[]
+  fcmTokens     FcmToken[]
+
+  @@map("users")
+}
+
+model FcmToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // ios, android
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fcm_tokens")
+}
+
+// ============================================
+// DREAMS & GOALS
+// ============================================
+
+model Dream {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String    @db.Text
+  category    String?   // career, health, education, personal, finance, travel, creativity, wellness
+  targetDate  DateTime? @map("target_date")
+  priority    Int       @default(1) // 1-5
+
+  status      String    @default("active") // active, completed, paused, archived
+  completedAt DateTime? @map("completed_at")
+
+  // AI Analysis (JSON)
+  // { feasibility: "high", estimatedDuration: "6 months", tips: [], obstacles: [] }
+  aiAnalysis Json? @map("ai_analysis")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  goals         Goal[]
+  conversations Conversation[]
+
+  @@index([userId, status])
+  @@map("dreams")
+}
+
+model Goal {
+  id          String   @id @default(uuid())
+  dreamId     String   @map("dream_id")
+  dream       Dream    @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?  @db.Text
+  order       Int      // Sequence order within dream
+
+  // Scheduling
+  estimatedMinutes Int?      @map("estimated_minutes")
+  scheduledStart   DateTime? @map("scheduled_start")
+  scheduledEnd     DateTime? @map("scheduled_end")
+
+  status      String    @default("pending") // pending, in_progress, completed, skipped
+  completedAt DateTime? @map("completed_at")
+
+  // Reminders
+  reminderEnabled Boolean   @default(true) @map("reminder_enabled")
+  reminderTime    DateTime? @map("reminder_time")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tasks Task[]
+
+  @@index([dreamId, order])
+  @@map("goals")
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  goalId      String   @map("goal_id")
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  order       Int      // Sequence order within goal
+
+  // Scheduling
+  scheduledDate DateTime? @map("scheduled_date")
+  scheduledTime String?   @map("scheduled_time") // "HH:mm"
+  durationMins  Int?      @map("duration_mins")
+
+  // Recurrence (JSON)
+  // { type: "daily" | "weekly", days: [1,3,5], until: "2024-12-31" }
+  recurrence Json?
+
+  status      String    @default("pending") // pending, completed, skipped
+  completedAt DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([goalId, scheduledDate])
+  @@map("tasks")
+}
+
+// ============================================
+// CONVERSATIONS & MESSAGES
+// ============================================
+
+model Conversation {
+  id      String  @id @default(uuid())
+  userId  String  @map("user_id")
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dreamId String? @map("dream_id")
+  dream   Dream?  @relation(fields: [dreamId], references: [id], onDelete: SetNull)
+
+  // Conversation type
+  type String // dream_creation, planning, check_in, adjustment, general
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  messages Message[]
+
+  @@index([userId, createdAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    String // user, assistant, system
+  content String @db.Text
+
+  // Metadata (JSON)
+  // For assistant: { tokensUsed: 150, model: "gpt-4" }
+  // For user: { extractedIntent: "create_dream" }
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Notification content
+  type  String // reminder, motivation, progress, achievement, check_in
+  title String
+  body  String
+
+  // Deep link data (JSON)
+  // { screen: "dream_detail", params: { dreamId: "xxx" } }
+  data Json?
+
+  // Scheduling
+  scheduledFor DateTime @map("scheduled_for")
+  sentAt       DateTime? @map("sent_at")
+  readAt       DateTime? @map("read_at")
+
+  status String @default("pending") // pending, sent, failed, cancelled
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, scheduledFor])
+  @@index([status, scheduledFor])
+  @@map("notifications")
+}
