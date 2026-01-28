@@ -8,6 +8,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, extend_schema_view
+
 from .models import User, FcmToken, GamificationProfile, DreamBuddy
 from .serializers import (
     UserSerializer, UserProfileSerializer, UserUpdateSerializer,
@@ -16,11 +18,13 @@ from .serializers import (
 from .services import BuddyMatchingService
 
 
+@extend_schema_view()
 class AuthViewSet(viewsets.ViewSet):
     """Authentication endpoints."""
 
     permission_classes = [AllowAny]
 
+    @extend_schema(summary="Register user", description="Register a new user with Firebase credentials", tags=["Authentication"], responses={201: UserSerializer})
     @action(detail=False, methods=['post'])
     def register(self, request):
         """Register a new user."""
@@ -63,6 +67,13 @@ class AuthViewSet(viewsets.ViewSet):
         )
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List users", description="Get user list (current user only)", tags=["Users"]),
+    retrieve=extend_schema(summary="Get user", description="Get a specific user", tags=["Users"]),
+    update=extend_schema(summary="Update user", description="Update a user", tags=["Users"]),
+    partial_update=extend_schema(summary="Partial update user", description="Partially update a user", tags=["Users"]),
+    destroy=extend_schema(summary="Delete user", description="Delete a user", tags=["Users"]),
+)
 class UserViewSet(viewsets.ModelViewSet):
     """User management endpoints."""
 
@@ -74,12 +85,14 @@ class UserViewSet(viewsets.ModelViewSet):
         """Filter to only allow users to see their own data."""
         return User.objects.filter(id=self.request.user.id)
 
+    @extend_schema(summary="Get current user", description="Get the current authenticated user's profile", tags=["Users"], responses={200: UserProfileSerializer})
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Get current user profile."""
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
+    @extend_schema(summary="Update profile", description="Update the current user's profile", tags=["Users"], request=UserUpdateSerializer, responses={200: UserSerializer})
     @action(detail=False, methods=['put', 'patch'])
     def update_profile(self, request):
         """Update current user profile."""
@@ -94,6 +107,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(UserSerializer(request.user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(summary="Register FCM token", description="Register a Firebase Cloud Messaging token for push notifications", tags=["Users"], responses={200: FcmTokenSerializer})
     @action(detail=False, methods=['post'])
     def register_fcm_token(self, request):
         """Register FCM token for push notifications."""
@@ -123,6 +137,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = FcmTokenSerializer(fcm_token)
         return Response(serializer.data)
 
+    @extend_schema(summary="Get gamification profile", description="Get the current user's gamification profile with XP and levels", tags=["Users"], responses={200: GamificationProfileSerializer})
     @action(detail=False, methods=['get'])
     def gamification(self, request):
         """Get gamification profile."""
@@ -130,6 +145,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = GamificationProfileSerializer(profile)
         return Response(serializer.data)
 
+    @extend_schema(summary="Get user statistics", description="Get comprehensive statistics for the current user", tags=["Users"], responses={200: dict})
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get user statistics."""
@@ -152,6 +168,14 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(stats)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List buddy pairings", description="Get all buddy pairings for the current user", tags=["Dream Buddies"]),
+    retrieve=extend_schema(summary="Get buddy pairing", description="Get a specific buddy pairing", tags=["Dream Buddies"]),
+    create=extend_schema(summary="Create buddy pairing", description="Create a new buddy pairing", tags=["Dream Buddies"]),
+    update=extend_schema(summary="Update buddy pairing", description="Update a buddy pairing", tags=["Dream Buddies"]),
+    partial_update=extend_schema(summary="Partial update buddy pairing", description="Partially update a buddy pairing", tags=["Dream Buddies"]),
+    destroy=extend_schema(summary="Delete buddy pairing", description="Delete a buddy pairing", tags=["Dream Buddies"]),
+)
 class DreamBuddyViewSet(viewsets.ModelViewSet):
     """Dream Buddy pairing endpoints."""
 
@@ -167,6 +191,7 @@ class DreamBuddyViewSet(viewsets.ModelViewSet):
             user2=user
         )
 
+    @extend_schema(summary="Find compatible buddy", description="Find a compatible dream buddy using the matching algorithm", tags=["Dream Buddies"], responses={201: dict, 404: dict})
     @action(detail=False, methods=['post'])
     def find_buddy(self, request):
         """Find a compatible dream buddy."""
@@ -223,6 +248,7 @@ class DreamBuddyViewSet(viewsets.ModelViewSet):
             'shared_categories': shared_categories
         }, status=status.HTTP_201_CREATED)
 
+    @extend_schema(summary="Accept buddy request", description="Accept a buddy pairing request", tags=["Dream Buddies"], responses={200: DreamBuddySerializer})
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         """Accept a buddy pairing."""
@@ -240,6 +266,7 @@ class DreamBuddyViewSet(viewsets.ModelViewSet):
 
         return Response(DreamBuddySerializer(buddy_pair).data)
 
+    @extend_schema(summary="Decline buddy request", description="Decline a buddy pairing request", tags=["Dream Buddies"], responses={200: DreamBuddySerializer})
     @action(detail=True, methods=['post'])
     def decline(self, request, pk=None):
         """Decline a buddy pairing."""

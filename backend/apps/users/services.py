@@ -242,9 +242,36 @@ class BuddyMatchingService:
             shared_categories=shared_categories
         )
 
-        # TODO: Send notification to target_user about buddy request
+        # Send notification to target_user about buddy request
+        self._send_buddy_request_notification(requesting_user, target_user, shared_categories)
 
         return buddy_pair
+
+    def _send_buddy_request_notification(
+        self,
+        requesting_user: User,
+        target_user: User,
+        shared_categories: List[str]
+    ) -> None:
+        """Send a notification to the target user about the buddy request."""
+        from apps.notifications.models import Notification
+
+        categories_text = ', '.join(shared_categories[:3]) if shared_categories else 'achieving dreams'
+
+        Notification.objects.create(
+            user=target_user,
+            notification_type='buddy_request',
+            title='New Dream Buddy Request!',
+            body=f'{requesting_user.display_name or "Someone"} wants to be your dream buddy! '
+                 f'You both share interests in {categories_text}.',
+            data={
+                'type': 'buddy_request',
+                'requesting_user_id': str(requesting_user.id),
+                'requesting_user_name': requesting_user.display_name or 'A user',
+                'shared_categories': shared_categories,
+            },
+            status='pending'
+        )
 
 
 class UserStatsService:

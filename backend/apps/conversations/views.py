@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from .models import Conversation, Message
 from .serializers import (
@@ -17,6 +18,14 @@ from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List conversations", description="Get all conversations for the current user", tags=["Conversations"]),
+    create=extend_schema(summary="Create conversation", description="Create a new AI conversation", tags=["Conversations"]),
+    retrieve=extend_schema(summary="Get conversation", description="Get a specific conversation with messages", tags=["Conversations"]),
+    update=extend_schema(summary="Update conversation", description="Update a conversation", tags=["Conversations"]),
+    partial_update=extend_schema(summary="Partial update conversation", description="Partially update a conversation", tags=["Conversations"]),
+    destroy=extend_schema(summary="Delete conversation", description="Delete a conversation", tags=["Conversations"]),
+)
 class ConversationViewSet(viewsets.ModelViewSet):
     """CRUD operations for conversations."""
 
@@ -41,6 +50,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         """Create conversation with current user."""
         serializer.save(user=self.request.user)
 
+    @extend_schema(summary="Send message", description="Send a message and get AI response", tags=["Conversations"], request=MessageCreateSerializer, responses={200: dict})
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
         """Send a message in the conversation."""
@@ -94,6 +104,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(summary="Get messages", description="Get all messages for a conversation", tags=["Conversations"], responses={200: MessageSerializer(many=True)})
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
         """Get messages for a conversation."""
@@ -109,6 +120,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List messages", description="Get all messages for the current user", tags=["Messages"]),
+    retrieve=extend_schema(summary="Get message", description="Get a specific message", tags=["Messages"]),
+)
 class MessageViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only access to messages."""
 

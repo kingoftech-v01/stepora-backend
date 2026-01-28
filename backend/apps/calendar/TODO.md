@@ -10,9 +10,10 @@
 - [x] Integration avec Tasks
 - [x] Tests unitaires
 
-## In Progress
+## Recently Completed
 
-- [ ] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Sanitization XSS des champs texte
 
 ## Planned - High Priority
 

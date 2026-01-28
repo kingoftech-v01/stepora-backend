@@ -11,11 +11,11 @@
 - [x] Tests unitaires et WebSocket
 - [x] Gestion du contexte conversation
 
-## In Progress
+## Recently Completed
 
-- [ ] Ajouter decorateurs @extend_schema pour Swagger
-- [ ] Implementer authentification WebSocket Firebase
-- [ ] Sanitization XSS du contenu des messages
+- [x] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Implementer authentification WebSocket Firebase
+- [x] Sanitization XSS du contenu des messages
 
 ## Planned - High Priority
 

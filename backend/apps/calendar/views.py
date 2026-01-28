@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import datetime, timedelta
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from .models import CalendarEvent, TimeBlock
 from .serializers import (
@@ -17,6 +18,14 @@ from .serializers import (
 from apps.dreams.models import Task
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List events", description="Get all calendar events for the current user", tags=["Calendar Events"]),
+    create=extend_schema(summary="Create event", description="Create a new calendar event", tags=["Calendar Events"]),
+    retrieve=extend_schema(summary="Get event", description="Get a specific calendar event", tags=["Calendar Events"]),
+    update=extend_schema(summary="Update event", description="Update a calendar event", tags=["Calendar Events"]),
+    partial_update=extend_schema(summary="Partial update event", description="Partially update a calendar event", tags=["Calendar Events"]),
+    destroy=extend_schema(summary="Delete event", description="Delete a calendar event", tags=["Calendar Events"]),
+)
 class CalendarEventViewSet(viewsets.ModelViewSet):
     """CRUD operations for calendar events."""
 
@@ -37,6 +46,14 @@ class CalendarEventViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List time blocks", description="Get all time blocks for the current user", tags=["Time Blocks"]),
+    create=extend_schema(summary="Create time block", description="Create a new time block", tags=["Time Blocks"]),
+    retrieve=extend_schema(summary="Get time block", description="Get a specific time block", tags=["Time Blocks"]),
+    update=extend_schema(summary="Update time block", description="Update a time block", tags=["Time Blocks"]),
+    partial_update=extend_schema(summary="Partial update time block", description="Partially update a time block", tags=["Time Blocks"]),
+    destroy=extend_schema(summary="Delete time block", description="Delete a time block", tags=["Time Blocks"]),
+)
 class TimeBlockViewSet(viewsets.ModelViewSet):
     """CRUD operations for time blocks."""
 
@@ -52,11 +69,22 @@ class TimeBlockViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
+@extend_schema_view()
 class CalendarViewSet(viewsets.ViewSet):
     """Calendar views and operations."""
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Get calendar view",
+        description="Get tasks for a date range",
+        tags=["Calendar"],
+        parameters=[
+            OpenApiParameter(name='start', description='Start date (ISO format)', required=True, type=str),
+            OpenApiParameter(name='end', description='End date (ISO format)', required=True, type=str),
+        ],
+        responses={200: CalendarTaskSerializer(many=True)}
+    )
     @action(detail=False, methods=['get'])
     def view(self, request):
         """Get calendar view for date range."""
@@ -104,6 +132,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         return Response(calendar_tasks)
 
+    @extend_schema(summary="Today's tasks", description="Get all tasks scheduled for today", tags=["Calendar"], responses={200: CalendarTaskSerializer(many=True)})
     @action(detail=False, methods=['get'])
     def today(self, request):
         """Get tasks for today."""
@@ -133,6 +162,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         return Response(calendar_tasks)
 
+    @extend_schema(summary="Reschedule task", description="Reschedule a task to a new date", tags=["Calendar"], responses={200: dict})
     @action(detail=False, methods=['post'])
     def reschedule(self, request):
         """Reschedule a task."""

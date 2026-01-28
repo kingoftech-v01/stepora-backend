@@ -3,6 +3,7 @@ Serializers for Notifications app.
 """
 
 from rest_framework import serializers
+from core.sanitizers import sanitize_text
 from .models import Notification, NotificationTemplate, NotificationBatch
 
 
@@ -34,6 +35,14 @@ class NotificationCreateSerializer(serializers.ModelSerializer):
             'notification_type', 'title', 'body',
             'data', 'scheduled_for'
         ]
+
+    def validate_title(self, value):
+        """Sanitize title to prevent XSS."""
+        return sanitize_text(value)
+
+    def validate_body(self, value):
+        """Sanitize body to prevent XSS."""
+        return sanitize_text(value)
 
 
 class NotificationTemplateSerializer(serializers.ModelSerializer):

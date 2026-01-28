@@ -11,9 +11,10 @@
 - [x] Retry logic sur echec d'envoi
 - [x] Tests unitaires
 
-## In Progress
+## Recently Completed
 
-- [ ] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Sanitization XSS du contenu des notifications
 
 ## Planned - High Priority
 

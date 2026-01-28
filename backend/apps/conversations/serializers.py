@@ -3,6 +3,7 @@ Serializers for Conversations app.
 """
 
 from rest_framework import serializers
+from core.sanitizers import sanitize_text
 from .models import Conversation, Message, ConversationSummary
 
 
@@ -24,10 +25,10 @@ class MessageCreateSerializer(serializers.Serializer):
     content = serializers.CharField(max_length=5000)
 
     def validate_content(self, value):
-        """Validate message content."""
+        """Validate and sanitize message content."""
         if not value.strip():
             raise serializers.ValidationError("Message content cannot be empty")
-        return value.strip()
+        return sanitize_text(value.strip())
 
 
 class ConversationSerializer(serializers.ModelSerializer):

@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
 from .models import Dream, Goal, Task, Obstacle
 from .serializers import (
@@ -22,6 +23,14 @@ from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List dreams", description="Get all dreams for the current user", tags=["Dreams"]),
+    create=extend_schema(summary="Create dream", description="Create a new dream", tags=["Dreams"]),
+    retrieve=extend_schema(summary="Get dream", description="Get a specific dream with details", tags=["Dreams"]),
+    update=extend_schema(summary="Update dream", description="Update a dream", tags=["Dreams"]),
+    partial_update=extend_schema(summary="Partial update dream", description="Partially update a dream", tags=["Dreams"]),
+    destroy=extend_schema(summary="Delete dream", description="Delete a dream", tags=["Dreams"]),
+)
 class DreamViewSet(viewsets.ModelViewSet):
     """CRUD operations for dreams."""
 
@@ -58,6 +67,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         """Create dream with current user."""
         serializer.save(user=self.request.user)
 
+    @extend_schema(summary="Analyze dream", description="Analyze a dream using AI to get insights", tags=["Dreams"], responses={200: dict})
     @action(detail=True, methods=['post'])
     def analyze(self, request, pk=None):
         """Analyze dream with AI."""
@@ -82,6 +92,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(summary="Generate plan", description="Generate a complete AI-powered plan with goals and tasks", tags=["Dreams"], responses={200: DreamDetailSerializer})
     @action(detail=True, methods=['post'])
     def generate_plan(self, request, pk=None):
         """Generate complete plan for dream with AI."""
@@ -143,6 +154,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(summary="Generate 2-minute start", description="Generate a micro-action to start working on the dream in 2 minutes", tags=["Dreams"], responses={200: DreamDetailSerializer})
     @action(detail=True, methods=['post'])
     def generate_two_minute_start(self, request, pk=None):
         """Generate 2-minute start task for dream."""
@@ -192,6 +204,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(summary="Generate vision board", description="Generate a vision board image using DALL-E", tags=["Dreams"], responses={200: dict})
     @action(detail=True, methods=['post'])
     def generate_vision(self, request, pk=None):
         """Generate vision board image for dream."""
@@ -215,6 +228,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(summary="Complete dream", description="Mark a dream as completed", tags=["Dreams"], responses={200: DreamSerializer})
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark dream as completed."""
@@ -224,6 +238,14 @@ class DreamViewSet(viewsets.ModelViewSet):
         return Response(DreamSerializer(dream).data)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List goals", description="Get all goals for the current user", tags=["Goals"]),
+    create=extend_schema(summary="Create goal", description="Create a new goal", tags=["Goals"]),
+    retrieve=extend_schema(summary="Get goal", description="Get a specific goal", tags=["Goals"]),
+    update=extend_schema(summary="Update goal", description="Update a goal", tags=["Goals"]),
+    partial_update=extend_schema(summary="Partial update goal", description="Partially update a goal", tags=["Goals"]),
+    destroy=extend_schema(summary="Delete goal", description="Delete a goal", tags=["Goals"]),
+)
 class GoalViewSet(viewsets.ModelViewSet):
     """CRUD operations for goals."""
 
@@ -249,6 +271,7 @@ class GoalViewSet(viewsets.ModelViewSet):
             return GoalCreateSerializer
         return GoalSerializer
 
+    @extend_schema(summary="Complete goal", description="Mark a goal as completed", tags=["Goals"], responses={200: GoalSerializer})
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark goal as completed."""
@@ -258,6 +281,14 @@ class GoalViewSet(viewsets.ModelViewSet):
         return Response(GoalSerializer(goal).data)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List tasks", description="Get all tasks for the current user", tags=["Tasks"]),
+    create=extend_schema(summary="Create task", description="Create a new task", tags=["Tasks"]),
+    retrieve=extend_schema(summary="Get task", description="Get a specific task", tags=["Tasks"]),
+    update=extend_schema(summary="Update task", description="Update a task", tags=["Tasks"]),
+    partial_update=extend_schema(summary="Partial update task", description="Partially update a task", tags=["Tasks"]),
+    destroy=extend_schema(summary="Delete task", description="Delete a task", tags=["Tasks"]),
+)
 class TaskViewSet(viewsets.ModelViewSet):
     """CRUD operations for tasks."""
 
@@ -283,6 +314,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             return TaskCreateSerializer
         return TaskSerializer
 
+    @extend_schema(summary="Complete task", description="Mark a task as completed and earn XP", tags=["Tasks"], responses={200: TaskSerializer})
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark task as completed."""
@@ -291,6 +323,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         return Response(TaskSerializer(task).data)
 
+    @extend_schema(summary="Skip task", description="Skip a task without completing it", tags=["Tasks"], responses={200: TaskSerializer})
     @action(detail=True, methods=['post'])
     def skip(self, request, pk=None):
         """Skip a task."""
@@ -301,6 +334,14 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(TaskSerializer(task).data)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List obstacles", description="Get all obstacles for the current user", tags=["Obstacles"]),
+    create=extend_schema(summary="Create obstacle", description="Create a new obstacle", tags=["Obstacles"]),
+    retrieve=extend_schema(summary="Get obstacle", description="Get a specific obstacle", tags=["Obstacles"]),
+    update=extend_schema(summary="Update obstacle", description="Update an obstacle", tags=["Obstacles"]),
+    partial_update=extend_schema(summary="Partial update obstacle", description="Partially update an obstacle", tags=["Obstacles"]),
+    destroy=extend_schema(summary="Delete obstacle", description="Delete an obstacle", tags=["Obstacles"]),
+)
 class ObstacleViewSet(viewsets.ModelViewSet):
     """CRUD operations for obstacles."""
 
@@ -317,6 +358,7 @@ class ObstacleViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    @extend_schema(summary="Resolve obstacle", description="Mark an obstacle as resolved", tags=["Obstacles"], responses={200: ObstacleSerializer})
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         """Mark obstacle as resolved."""

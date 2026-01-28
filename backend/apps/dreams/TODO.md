@@ -13,10 +13,10 @@
 - [x] Tests unitaires et d'integration
 - [x] Serializers avec validation
 
-## In Progress
+## Recently Completed
 
-- [ ] Ajouter decorateurs @extend_schema pour Swagger
-- [ ] Sanitization XSS des champs texte
+- [x] Ajouter decorateurs @extend_schema pour Swagger
+- [x] Sanitization XSS des champs texte
 
 ## Planned - High Priority
 

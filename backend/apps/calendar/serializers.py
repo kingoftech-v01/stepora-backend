@@ -3,6 +3,7 @@ Serializers for Calendar app.
 """
 
 from rest_framework import serializers
+from core.sanitizers import sanitize_text
 from .models import CalendarEvent, TimeBlock
 
 
@@ -35,6 +36,22 @@ class CalendarEventCreateSerializer(serializers.ModelSerializer):
             'start_time', 'end_time', 'location',
             'reminder_minutes_before'
         ]
+
+    def validate_title(self, value):
+        """Sanitize title to prevent XSS."""
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        """Sanitize description to prevent XSS."""
+        if value:
+            return sanitize_text(value)
+        return value
+
+    def validate_location(self, value):
+        """Sanitize location to prevent XSS."""
+        if value:
+            return sanitize_text(value)
+        return value
 
     def validate(self, data):
         """Validate that end_time is after start_time."""
