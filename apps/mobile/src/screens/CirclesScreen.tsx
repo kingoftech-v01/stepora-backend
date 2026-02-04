@@ -79,7 +79,7 @@ export const CirclesScreen = () => {
               />
             ))}
             <Text variant="bodySmall" style={styles.memberCount}>
-              {item.memberCount} / {item.maxMembers} membres
+              {item.memberCount} / {item.maxMembers} members
             </Text>
           </View>
 
@@ -89,7 +89,7 @@ export const CirclesScreen = () => {
             onPress={() => joinCircleMutation.mutate(item.id)}
             loading={joinCircleMutation.isPending}
           >
-            Rejoindre
+            Join
           </Button>
         </View>
       </Card.Content>
@@ -101,21 +101,21 @@ export const CirclesScreen = () => {
       {/* Filters */}
       <View style={styles.filters}>
         <Chip selected={filter === 'my'} onPress={() => setFilter('my')} style={styles.filterChip}>
-          Mes cercles
+          My Circles
         </Chip>
         <Chip
           selected={filter === 'recommended'}
           onPress={() => setFilter('recommended')}
           style={styles.filterChip}
         >
-          Recommandés
+          Recommended
         </Chip>
         <Chip
           selected={filter === 'public'}
           onPress={() => setFilter('public')}
           style={styles.filterChip}
         >
-          Publics
+          Public
         </Chip>
       </View>
 
@@ -128,10 +128,10 @@ export const CirclesScreen = () => {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text variant="headlineSmall" style={styles.emptyTitle}>
-              Aucun cercle trouvé
+              No circles found
             </Text>
             <Text variant="bodyMedium" style={styles.emptyText}>
-              Crée ton propre cercle pour commencer !
+              Create your own circle to get started!
             </Text>
           </View>
         }
@@ -142,16 +142,16 @@ export const CirclesScreen = () => {
         icon="plus"
         style={styles.fab}
         onPress={() => setCreateDialogVisible(true)}
-        label="Créer un cercle"
+        label="Create Circle"
       />
 
       {/* Create Dialog */}
       <Portal>
         <Dialog visible={createDialogVisible} onDismiss={() => setCreateDialogVisible(false)}>
-          <Dialog.Title>Créer un Dream Circle</Dialog.Title>
+          <Dialog.Title>Create a Dream Circle</Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Nom du cercle"
+              label="Circle Name"
               value={newCircle.name}
               onChangeText={(text) => setNewCircle({ ...newCircle, name: text })}
               style={styles.input}
@@ -165,22 +165,22 @@ export const CirclesScreen = () => {
               style={styles.input}
             />
             <View style={styles.switchRow}>
-              <Text>Cercle public</Text>
+              <Text>Public Circle</Text>
               <Chip
                 selected={newCircle.isPublic}
                 onPress={() => setNewCircle({ ...newCircle, isPublic: !newCircle.isPublic })}
               >
-                {newCircle.isPublic ? 'Oui' : 'Non'}
+                {newCircle.isPublic ? 'Yes' : 'No'}
               </Chip>
             </View>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setCreateDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setCreateDialogVisible(false)}>Cancel</Button>
             <Button
               onPress={() => createCircleMutation.mutate()}
               loading={createCircleMutation.isPending}
             >
-              Créer
+              Create
             </Button>
           </Dialog.Actions>
         </Dialog>

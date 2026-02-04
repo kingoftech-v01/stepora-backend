@@ -58,6 +58,20 @@ def premium_user(db, user_data):
 
 
 @pytest.fixture
+def pro_user(db):
+    """Create and return a pro user"""
+    user = User.objects.create(
+        firebase_uid=f'pro_firebase_uid_{uuid.uuid4().hex[:8]}',
+        email=f'pro_{uuid.uuid4().hex[:8]}@example.com',
+        display_name='Pro User',
+        subscription='pro',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+    user.set_unusable_password()
+    return user
+
+
+@pytest.fixture
 def authenticated_client(api_client, user):
     """Return authenticated API client"""
     api_client.force_authenticate(user=user)

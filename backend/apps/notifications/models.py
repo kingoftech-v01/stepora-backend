@@ -23,6 +23,8 @@ class Notification(models.Model):
         ('rescue', 'Rescue'),
         ('buddy', 'Buddy'),
         ('system', 'System'),
+        ('dream_completed', 'Dream Completed'),
+        ('weekly_report', 'Weekly Report'),
     ]
     notification_type = models.CharField(
         max_length=20,

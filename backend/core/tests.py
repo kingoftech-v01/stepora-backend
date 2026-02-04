@@ -8,7 +8,14 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory
 from unittest.mock import Mock, patch
 
-from .permissions import IsOwner, IsPremiumUser
+from .permissions import (
+    IsOwner, IsPremiumUser, IsProUser, CanCreateDream,
+    CanUseAI, CanUseBuddy, CanUseCircles, CanUseVisionBoard, CanUseLeague,
+)
+from .throttling import (
+    AIChatThrottle, AIPlanGenerationThrottle,
+    SubscriptionThrottle, StorePurchaseThrottle,
+)
 from .pagination import StandardResultsSetPagination, LargeResultsSetPagination
 from .exceptions import OpenAIError, FCMError, ValidationError
 from .views import health_check, liveness, readiness
@@ -236,3 +243,198 @@ class TestAuthentication:
         response = api_client.get('/api/users/me/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestIsProUser:
+    """Test IsProUser permission"""
+
+    def test_allows_pro_user(self, pro_user):
+        permission = IsProUser()
+        request = Mock()
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_premium_user(self, premium_user):
+        permission = IsProUser()
+        request = Mock()
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is False
+
+    def test_denies_free_user(self, user):
+        permission = IsProUser()
+        request = Mock()
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+    def test_denies_unauthenticated(self):
+        permission = IsProUser()
+        request = Mock()
+        request.user = Mock(is_authenticated=False)
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanCreateDream:
+    """Test CanCreateDream permission"""
+
+    def test_allows_get_requests(self, user):
+        permission = CanCreateDream()
+        request = Mock()
+        request.method = 'GET'
+        request.user = user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_allows_post_when_can_create(self, user):
+        permission = CanCreateDream()
+        request = Mock()
+        request.method = 'POST'
+        request.user = user
+        request.user.can_create_dream = Mock(return_value=True)
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_post_when_limit_reached(self, user):
+        permission = CanCreateDream()
+        request = Mock()
+        request.method = 'POST'
+        request.user = user
+        request.user.can_create_dream = Mock(return_value=False)
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanUseAI:
+    """Test CanUseAI permission"""
+
+    def test_allows_premium_user(self, premium_user):
+        permission = CanUseAI()
+        request = Mock()
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_allows_pro_user(self, pro_user):
+        permission = CanUseAI()
+        request = Mock()
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_free_user(self, user):
+        permission = CanUseAI()
+        request = Mock()
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanUseBuddy:
+    """Test CanUseBuddy permission"""
+
+    def test_allows_premium_user(self, premium_user):
+        permission = CanUseBuddy()
+        request = Mock()
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_allows_pro_user(self, pro_user):
+        permission = CanUseBuddy()
+        request = Mock()
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_free_user(self, user):
+        permission = CanUseBuddy()
+        request = Mock()
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanUseCircles:
+    """Test CanUseCircles permission"""
+
+    def test_post_allowed_for_pro(self, pro_user):
+        permission = CanUseCircles()
+        request = Mock()
+        request.method = 'POST'
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_post_denied_for_premium(self, premium_user):
+        permission = CanUseCircles()
+        request = Mock()
+        request.method = 'POST'
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is False
+
+    def test_get_allowed_for_premium(self, premium_user):
+        permission = CanUseCircles()
+        request = Mock()
+        request.method = 'GET'
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_get_denied_for_free(self, user):
+        permission = CanUseCircles()
+        request = Mock()
+        request.method = 'GET'
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanUseVisionBoard:
+    """Test CanUseVisionBoard permission"""
+
+    def test_allows_pro_user(self, pro_user):
+        permission = CanUseVisionBoard()
+        request = Mock()
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_premium_user(self, premium_user):
+        permission = CanUseVisionBoard()
+        request = Mock()
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is False
+
+    def test_denies_free_user(self, user):
+        permission = CanUseVisionBoard()
+        request = Mock()
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestCanUseLeague:
+    """Test CanUseLeague permission"""
+
+    def test_allows_premium_user(self, premium_user):
+        permission = CanUseLeague()
+        request = Mock()
+        request.user = premium_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_allows_pro_user(self, pro_user):
+        permission = CanUseLeague()
+        request = Mock()
+        request.user = pro_user
+        assert permission.has_permission(request, Mock()) is True
+
+    def test_denies_free_user(self, user):
+        permission = CanUseLeague()
+        request = Mock()
+        request.user = user
+        assert permission.has_permission(request, Mock()) is False
+
+
+class TestThrottleClasses:
+    """Test custom throttle classes exist and have correct scopes"""
+
+    def test_ai_chat_throttle_scope(self):
+        throttle = AIChatThrottle()
+        assert throttle.scope == 'ai_chat'
+
+    def test_ai_plan_generation_throttle_scope(self):
+        throttle = AIPlanGenerationThrottle()
+        assert throttle.scope == 'ai_plan'
+
+    def test_subscription_throttle_scope(self):
+        throttle = SubscriptionThrottle()
+        assert throttle.scope == 'subscription'
+
+    def test_store_purchase_throttle_scope(self):
+        throttle = StorePurchaseThrottle()
+        assert throttle.scope == 'store_purchase'

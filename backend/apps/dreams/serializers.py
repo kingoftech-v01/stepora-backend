@@ -4,7 +4,7 @@ Serializers for Dreams app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -74,6 +74,7 @@ class DreamSerializer(serializers.ModelSerializer):
             'target_date', 'priority', 'status',
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'vision_image_url',
+            'calibration_status',
             'goals_count', 'tasks_count',
             'created_at', 'updated_at'
         ]
@@ -89,11 +90,24 @@ class DreamSerializer(serializers.ModelSerializer):
         return total
 
 
+class CalibrationResponseSerializer(serializers.ModelSerializer):
+    """Serializer for CalibrationResponse model."""
+
+    class Meta:
+        model = CalibrationResponse
+        fields = [
+            'id', 'dream', 'question', 'answer', 'question_number',
+            'category', 'created_at'
+        ]
+        read_only_fields = ['id', 'dream', 'question', 'question_number', 'category', 'created_at']
+
+
 class DreamDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for Dream with nested goals and tasks."""
 
     goals = GoalSerializer(many=True, read_only=True)
     obstacles = ObstacleSerializer(many=True, read_only=True)
+    calibration_responses = CalibrationResponseSerializer(many=True, read_only=True)
 
     class Meta:
         model = Dream
@@ -103,6 +117,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'ai_analysis', 'vision_image_url',
             'progress_percentage', 'completed_at',
             'has_two_minute_start',
+            'calibration_status', 'calibration_responses',
             'goals', 'obstacles',
             'created_at', 'updated_at'
         ]

@@ -22,7 +22,7 @@ export function CalendarScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.headerTitle}>
-          Calendrier
+          Calendar
         </Text>
       </View>
 
@@ -47,7 +47,7 @@ export function CalendarScreen() {
 
       <ScrollView style={styles.tasksList}>
         <Text variant="titleMedium" style={styles.sectionTitle}>
-          Tâches du {format(new Date(selectedDate), 'dd MMMM yyyy')}
+          Tasks for {format(new Date(selectedDate), 'MMM dd, yyyy')}
         </Text>
 
         {isLoading ? (
@@ -74,7 +74,7 @@ export function CalendarScreen() {
         ) : (
           <View style={styles.emptyState}>
             <Text variant="bodyMedium" style={styles.emptyText}>
-              Aucune tâche pour ce jour
+              No tasks for this day
             </Text>
           </View>
         )}

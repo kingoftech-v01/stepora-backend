@@ -134,12 +134,12 @@ export const LeaderboardScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.title}>
-          Classement
+          Leaderboard
         </Text>
 
         {leaderboard?.myRank && (
           <Chip icon="trophy" style={styles.myRankChip}>
-            Ton rang: #{leaderboard.myRank}
+            Your rank: #{leaderboard.myRank}
           </Chip>
         )}
       </View>
@@ -158,7 +158,7 @@ export const LeaderboardScreen = () => {
           onPress={() => setSelectedType('friends')}
           style={styles.filterChip}
         >
-          Amis
+          Friends
         </Chip>
         <Chip
           selected={selectedType === 'local'}
@@ -172,7 +172,7 @@ export const LeaderboardScreen = () => {
           onPress={() => setSelectedType('category')}
           style={styles.filterChip}
         >
-          Catégorie
+          Category
         </Chip>
       </ScrollView>
 
@@ -196,7 +196,7 @@ export const LeaderboardScreen = () => {
         {!isLoading && (!leaderboard?.entries || leaderboard.entries.length === 0) && (
           <View style={styles.emptyState}>
             <Text variant="bodyLarge" style={styles.emptyText}>
-              Aucun résultat pour ce classement
+              No results for this leaderboard
             </Text>
           </View>
         )}

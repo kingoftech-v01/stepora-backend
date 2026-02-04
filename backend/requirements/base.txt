@@ -31,6 +31,9 @@ openai==1.7.2
 # Authentication
 PyJWT==2.8.0
 
+# Stripe payments
+stripe>=7.0.0
+
 # Utilities
 python-dotenv==1.0.0
 pytz==2023.3

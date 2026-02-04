@@ -33,8 +33,8 @@ export function useChat(): UseChatReturn {
       const apiError = err as ApiError;
       setError(apiError);
       Alert.alert(
-        'Erreur',
-        'Impossible de démarrer une nouvelle conversation. Veuillez réessayer.'
+        'Error',
+        'Unable to start a new conversation. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -87,12 +87,12 @@ export function useChat(): UseChatReturn {
       // Add error message to chat
       addMessage({
         role: 'assistant',
-        content: "Désolé, je n'ai pas pu traiter votre message. Veuillez réessayer.",
+        content: "Sorry, I couldn't process your message. Please try again.",
       });
 
       Alert.alert(
-        'Erreur',
-        apiError.message || "Une erreur s'est produite lors de l'envoi du message."
+        'Error',
+        apiError.message || 'An error occurred while sending the message.'
       );
     } finally {
       setIsStreaming(false);

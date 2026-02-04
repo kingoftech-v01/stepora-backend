@@ -42,7 +42,7 @@ export function LoginScreen({ navigation }: any) {
           DreamPlanner
         </Text>
         <Text variant="bodyLarge" style={styles.subtitle}>
-          Transforme tes rêves en réalité
+          Turn your dreams into reality
         </Text>
 
         <TextInput
@@ -57,7 +57,7 @@ export function LoginScreen({ navigation }: any) {
         />
 
         <TextInput
-          label="Mot de passe"
+          label="Password"
           value={password}
           onChangeText={setPassword}
           mode="outlined"
@@ -79,7 +79,7 @@ export function LoginScreen({ navigation }: any) {
           disabled={loading || !email || !password}
           style={styles.button}
         >
-          Se connecter
+          Sign In
         </Button>
 
         <Button
@@ -88,7 +88,7 @@ export function LoginScreen({ navigation }: any) {
           style={styles.textButton}
           disabled={loading}
         >
-          Créer un compte
+          Create Account
         </Button>
       </KeyboardAvoidingView>
     </SafeAreaView>

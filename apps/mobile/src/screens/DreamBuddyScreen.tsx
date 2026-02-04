@@ -79,7 +79,7 @@ export const DreamBuddyScreen = () => {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text>Chargement...</Text>
+        <Text>Loading...</Text>
       </View>
     );
   }
@@ -89,10 +89,10 @@ export const DreamBuddyScreen = () => {
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.emptyState}>
           <Text variant="headlineMedium" style={styles.emptyTitle}>
-            Trouve ton Dream Buddy! 🤝
+            Find Your Dream Buddy!
           </Text>
           <Text variant="bodyLarge" style={styles.emptyDescription}>
-            Un partenaire pour t'aider à rester motivé et atteindre tes objectifs ensemble.
+            A partner to help you stay motivated and achieve your goals together.
           </Text>
           <Button
             mode="contained"
@@ -100,7 +100,7 @@ export const DreamBuddyScreen = () => {
             loading={findMatchMutation.isPending}
             style={styles.findButton}
           >
-            Trouver un Buddy
+            Find a Buddy
           </Button>
         </ScrollView>
       </View>
@@ -121,7 +121,7 @@ export const DreamBuddyScreen = () => {
                   {buddy.partner.title}
                 </Text>
                 <View style={styles.buddyStats}>
-                  <Text variant="bodySmall">Niveau {buddy.partner.currentLevel}</Text>
+                  <Text variant="bodySmall">Level {buddy.partner.currentLevel}</Text>
                   <Text variant="bodySmall"> • </Text>
                   <Text variant="bodySmall">{buddy.partner.influenceScore} Influence</Text>
                 </View>
@@ -131,11 +131,11 @@ export const DreamBuddyScreen = () => {
             <View style={styles.streakContainer}>
               <Surface style={styles.streakBadge} elevation={1}>
                 <Text variant="headlineMedium">🔥 {buddy.partner.currentStreak}</Text>
-                <Text variant="bodySmall">Série actuelle</Text>
+                <Text variant="bodySmall">Current Streak</Text>
               </Surface>
               <Surface style={styles.streakBadge} elevation={1}>
                 <Text variant="headlineMedium">📅 {buddy.recentActivity}</Text>
-                <Text variant="bodySmall">Tâches cette semaine</Text>
+                <Text variant="bodySmall">Tasks This Week</Text>
               </Surface>
             </View>
 
@@ -146,7 +146,7 @@ export const DreamBuddyScreen = () => {
                 onPress={() => setEncourageDialogVisible(true)}
                 style={styles.actionButton}
               >
-                Encourager
+                Encourage
               </Button>
               <Button
                 mode="outlined"
@@ -154,7 +154,7 @@ export const DreamBuddyScreen = () => {
                 onPress={() => endPairingMutation.mutate()}
                 style={styles.actionButton}
               >
-                Terminer
+                End Pairing
               </Button>
             </View>
           </Card.Content>
@@ -165,16 +165,16 @@ export const DreamBuddyScreen = () => {
           <Card style={styles.progressCard}>
             <Card.Content>
               <Text variant="titleLarge" style={styles.sectionTitle}>
-                Comparaison des progrès
+                Progress Comparison
               </Text>
 
               <View style={styles.progressItem}>
                 <Text variant="bodyMedium" style={styles.progressLabel}>
-                  Série actuelle
+                  Current Streak
                 </Text>
                 <View style={styles.progressBars}>
                   <View style={styles.progressRow}>
-                    <Text style={styles.progressName}>Toi</Text>
+                    <Text style={styles.progressName}>You</Text>
                     <ProgressBar
                       progress={progress.user.currentStreak / 100}
                       style={styles.progressBar}
@@ -194,11 +194,11 @@ export const DreamBuddyScreen = () => {
 
               <View style={styles.progressItem}>
                 <Text variant="bodyMedium" style={styles.progressLabel}>
-                  Tâches cette semaine
+                  Tasks This Week
                 </Text>
                 <View style={styles.progressBars}>
                   <View style={styles.progressRow}>
-                    <Text style={styles.progressName}>Toi</Text>
+                    <Text style={styles.progressName}>You</Text>
                     <ProgressBar
                       progress={progress.user.tasksThisWeek / 20}
                       style={styles.progressBar}
@@ -222,7 +222,7 @@ export const DreamBuddyScreen = () => {
                 </Text>
                 <View style={styles.progressBars}>
                   <View style={styles.progressRow}>
-                    <Text style={styles.progressName}>Toi</Text>
+                    <Text style={styles.progressName}>You</Text>
                     <ProgressBar
                       progress={progress.user.influenceScore / 10000}
                       style={styles.progressBar}
@@ -250,10 +250,10 @@ export const DreamBuddyScreen = () => {
           visible={encourageDialogVisible}
           onDismiss={() => setEncourageDialogVisible(false)}
         >
-          <Dialog.Title>Envoyer un message d'encouragement</Dialog.Title>
+          <Dialog.Title>Send Encouragement</Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Message (optionnel)"
+              label="Message (optional)"
               value={message}
               onChangeText={setMessage}
               multiline
@@ -261,12 +261,12 @@ export const DreamBuddyScreen = () => {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setEncourageDialogVisible(false)}>Annuler</Button>
+            <Button onPress={() => setEncourageDialogVisible(false)}>Cancel</Button>
             <Button
               onPress={() => encourageMutation.mutate()}
               loading={encourageMutation.isPending}
             >
-              Envoyer
+              Send
             </Button>
           </Dialog.Actions>
         </Dialog>

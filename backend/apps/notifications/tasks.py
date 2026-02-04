@@ -111,7 +111,7 @@ def generate_daily_motivation(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='motivation',
-                    title='💪 Motivation du jour',
+                    title='💪 Daily motivation',
                     body=message,
                     scheduled_for=timezone.now(),
                     data={
@@ -190,7 +190,7 @@ def send_weekly_report(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='weekly_report',
-                    title='📊 Ton rapport hebdomadaire',
+                    title='📊 Your weekly report',
                     body=report,
                     scheduled_for=timezone.now(),
                     data={
@@ -261,7 +261,7 @@ def check_inactive_users(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='rescue',
-                    title='🌟 On est toujours là pour toi',
+                    title='🌟 We are still here for you',
                     body=rescue_message,
                     scheduled_for=timezone.now(),
                     data={
@@ -329,8 +329,8 @@ def send_reminder_notifications(self):
                 Notification.objects.create(
                     user=goal.dream.user,
                     notification_type='reminder',
-                    title=f'⏰ Rappel: {goal.title}',
-                    body=f"C'est l'heure de travailler sur ton objectif!",
+                    title=f'⏰ Reminder: {goal.title}',
+                    body="It's time to work on your goal!",
                     scheduled_for=goal.reminder_time,
                     data={
                         'action': 'open_goal',
@@ -393,8 +393,8 @@ def send_streak_milestone_notification(user_id, streak_days):
             Notification.objects.create(
                 user=user,
                 notification_type='achievement',
-                title=f'🔥 {streak_days} jours de série!',
-                body=f'Incroyable! Tu as maintenu ta série pendant {streak_days} jours consécutifs. Continue comme ça!',
+                title=f'🔥 {streak_days}-day streak!',
+                body=f'Incredible! You maintained your streak for {streak_days} consecutive days. Keep it up!',
                 scheduled_for=timezone.now(),
                 data={
                     'action': 'open_profile',
@@ -430,8 +430,8 @@ def send_level_up_notification(user_id, new_level):
         Notification.objects.create(
             user=user,
             notification_type='achievement',
-            title=f'🎉 Niveau {new_level} atteint!',
-            body=f'Félicitations! Tu as atteint le niveau {new_level}. Continue à accomplir tes rêves!',
+            title=f'🎉 Level {new_level} reached!',
+            body=f'Congratulations! You reached level {new_level}. Keep achieving your dreams!',
             scheduled_for=timezone.now(),
             data={
                 'action': 'open_profile',

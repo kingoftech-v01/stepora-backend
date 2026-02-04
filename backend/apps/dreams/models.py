@@ -50,6 +50,19 @@ class Dream(models.Model):
     # 2-minute start
     has_two_minute_start = models.BooleanField(default=False)
 
+    # Calibration status
+    calibration_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('in_progress', 'In Progress'),
+            ('completed', 'Completed'),
+            ('skipped', 'Skipped'),
+        ],
+        default='pending',
+        help_text='Status of the calibration questionnaire'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -290,3 +303,33 @@ class Obstacle(models.Model):
 
     def __str__(self):
         return f"Obstacle: {self.title}"
+
+
+class CalibrationResponse(models.Model):
+    """Stores a calibration Q&A pair for a dream."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='calibration_responses')
+
+    question = models.TextField(help_text='AI-generated calibration question')
+    answer = models.TextField(blank=True, help_text='User response to the question')
+    question_number = models.IntegerField(help_text='Order of question in the calibration flow')
+
+    # Metadata about the question
+    category = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text='Question category: experience, timeline, resources, motivation, constraints, specifics, lifestyle, preferences'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'calibration_responses'
+        ordering = ['dream', 'question_number']
+        indexes = [
+            models.Index(fields=['dream', 'question_number']),
+        ]
+
+    def __str__(self):
+        return f"Q{self.question_number}: {self.question[:50]}"

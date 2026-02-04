@@ -89,10 +89,10 @@ export function MicroStartScreen({ route, navigation }: MicroStartScreenProps) {
               🎉
             </Text>
             <Text variant="headlineLarge" style={styles.celebrationTitle}>
-              Bravo !
+              Well Done!
             </Text>
             <Text variant="titleMedium" style={styles.celebrationText}>
-              Premier pas accompli ! Le plus dur est fait.
+              First step done! The hardest part is over.
             </Text>
             <Text variant="bodyMedium" style={styles.xpText}>
               +5 XP
@@ -100,7 +100,7 @@ export function MicroStartScreen({ route, navigation }: MicroStartScreenProps) {
           </Animated.View>
 
           <Button mode="contained" onPress={() => navigation.goBack()} style={styles.button}>
-            Continuer
+            Continue
           </Button>
         </View>
       </SafeAreaView>
@@ -127,7 +127,7 @@ export function MicroStartScreen({ route, navigation }: MicroStartScreenProps) {
             </View>
 
             <Text variant="bodyMedium" style={styles.why}>
-              Pourquoi: {microTask.why}
+              Why: {microTask.why}
             </Text>
           </Card.Content>
         </Card>
@@ -139,19 +139,19 @@ export function MicroStartScreen({ route, navigation }: MicroStartScreenProps) {
             </Text>
             <ProgressBar progress={progress} color={theme.colors.primary} style={styles.progressBar} />
             <Button mode="outlined" onPress={handleComplete} style={styles.button}>
-              J'ai terminé
+              I'm Done
             </Button>
           </View>
         ) : (
           <View style={styles.startContainer}>
             <Text variant="bodyLarge" style={styles.instruction}>
-              Prêt à commencer ? Juste {microTask.duration}, c'est tout !
+              Ready to start? Just {microTask.duration}, that's all!
             </Text>
             <Button mode="contained" onPress={handleStart} style={styles.button}>
-              Lancer le timer
+              Start Timer
             </Button>
             <Button mode="text" onPress={() => navigation.goBack()}>
-              Plus tard
+              Later
             </Button>
           </View>
         )}

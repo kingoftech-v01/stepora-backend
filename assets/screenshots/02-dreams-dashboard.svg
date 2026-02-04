@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 812" width="375" height="812">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A855F7"/>
+      <stop offset="100%" style="stop-color:#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="successGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10B981"/>
+      <stop offset="100%" style="stop-color:#14B8A6"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#F59E0B"/>
+      <stop offset="100%" style="stop-color:#EAB308"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="375" height="812" fill="#F9FAFB" rx="40"/>
+
+  <!-- Status Bar -->
+  <rect width="375" height="44" fill="#FFFFFF"/>
+  <text x="187" y="28" font-family="SF Pro, Arial" font-size="14" font-weight="600" text-anchor="middle" fill="#1F2937">9:41</text>
+
+  <!-- Header -->
+  <rect y="44" width="375" height="80" fill="#FFFFFF"/>
+  <text x="24" y="82" font-family="SF Pro, Arial" font-size="28" font-weight="700" fill="#1F2937">Mes Rêves</text>
+  <text x="24" y="108" font-family="SF Pro, Arial" font-size="14" fill="#6B7280">3 objectifs en cours</text>
+  <circle cx="340" cy="84" r="22" fill="url(#primaryGrad)"/>
+  <text x="340" y="90" font-family="SF Pro, Arial" font-size="24" font-weight="500" text-anchor="middle" fill="#FFFFFF">+</text>
+
+  <!-- Stats Cards Row -->
+  <rect x="16" y="140" width="105" height="80" fill="#FFFFFF" rx="16" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.05))"/>
+  <text x="32" y="168" font-family="SF Pro, Arial" font-size="24" font-weight="700" fill="#8B5CF6">12</text>
+  <text x="32" y="188" font-family="SF Pro, Arial" font-size="11" fill="#6B7280">Jours de série</text>
+  <text x="32" y="206" font-family="SF Pro, Arial" font-size="16">🔥</text>
+
+  <rect x="135" y="140" width="105" height="80" fill="#FFFFFF" rx="16" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.05))"/>
+  <text x="151" y="168" font-family="SF Pro, Arial" font-size="24" font-weight="700" fill="#10B981">45</text>
+  <text x="151" y="188" font-family="SF Pro, Arial" font-size="11" fill="#6B7280">Tâches faites</text>
+  <text x="151" y="206" font-family="SF Pro, Arial" font-size="16">✅</text>
+
+  <rect x="254" y="140" width="105" height="80" fill="#FFFFFF" rx="16" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.05))"/>
+  <text x="270" y="168" font-family="SF Pro, Arial" font-size="24" font-weight="700" fill="#F59E0B">Lv.8</text>
+  <text x="270" y="188" font-family="SF Pro, Arial" font-size="11" fill="#6B7280">Dream Warrior</text>
+  <text x="270" y="206" font-family="SF Pro, Arial" font-size="16">⚔️</text>
+
+  <!-- Section Title -->
+  <text x="24" y="260" font-family="SF Pro, Arial" font-size="18" font-weight="600" fill="#1F2937">🔥 En cours</text>
+
+  <!-- Dream Card 1 -->
+  <rect x="16" y="280" width="343" height="130" fill="#FFFFFF" rx="20" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.08))"/>
+  <rect x="16" y="280" width="6" height="130" fill="url(#primaryGrad)" rx="3"/>
+
+  <text x="36" y="312" font-family="SF Pro, Arial" font-size="18" font-weight="600" fill="#1F2937">🎸 Apprendre la guitare</text>
+
+  <!-- Progress Bar -->
+  <rect x="36" y="328" width="200" height="8" fill="#E5E7EB" rx="4"/>
+  <rect x="36" y="328" width="70" height="8" fill="url(#primaryGrad)" rx="4"/>
+  <text x="246" y="336" font-family="SF Pro, Arial" font-size="12" font-weight="600" fill="#8B5CF6">35%</text>
+
+  <text x="36" y="360" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">📅 Objectif: Juin 2026</text>
+  <text x="36" y="380" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">⏰ Prochaine: Aujourd'hui 18h30</text>
+
+  <rect x="280" y="360" width="60" height="28" fill="#F3E8FF" rx="14"/>
+  <text x="310" y="379" font-family="SF Pro, Arial" font-size="11" text-anchor="middle" fill="#8B5CF6">Voir</text>
+
+  <!-- Dream Card 2 -->
+  <rect x="16" y="424" width="343" height="130" fill="#FFFFFF" rx="20" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.08))"/>
+  <rect x="16" y="424" width="6" height="130" fill="url(#successGrad)" rx="3"/>
+
+  <text x="36" y="456" font-family="SF Pro, Arial" font-size="18" font-weight="600" fill="#1F2937">🏃 Courir un 10km</text>
+
+  <rect x="36" y="472" width="200" height="8" fill="#E5E7EB" rx="4"/>
+  <rect x="36" y="472" width="130" height="8" fill="url(#successGrad)" rx="4"/>
+  <text x="246" y="480" font-family="SF Pro, Arial" font-size="12" font-weight="600" fill="#10B981">65%</text>
+
+  <text x="36" y="504" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">📅 Objectif: Mars 2026</text>
+  <text x="36" y="524" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">⏰ Prochaine: Demain 7h00</text>
+
+  <rect x="280" y="504" width="60" height="28" fill="#D1FAE5" rx="14"/>
+  <text x="310" y="523" font-family="SF Pro, Arial" font-size="11" text-anchor="middle" fill="#10B981">Voir</text>
+
+  <!-- Dream Card 3 -->
+  <rect x="16" y="568" width="343" height="130" fill="#FFFFFF" rx="20" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.08))"/>
+  <rect x="16" y="568" width="6" height="130" fill="url(#orangeGrad)" rx="3"/>
+
+  <text x="36" y="600" font-family="SF Pro, Arial" font-size="18" font-weight="600" fill="#1F2937">📚 Lire 20 livres</text>
+
+  <rect x="36" y="616" width="200" height="8" fill="#E5E7EB" rx="4"/>
+  <rect x="36" y="616" width="30" height="8" fill="url(#orangeGrad)" rx="4"/>
+  <text x="246" y="624" font-family="SF Pro, Arial" font-size="12" font-weight="600" fill="#F59E0B">15%</text>
+
+  <text x="36" y="648" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">📅 Objectif: Décembre 2026</text>
+  <text x="36" y="668" font-family="SF Pro, Arial" font-size="12" fill="#6B7280">⏰ 3/20 livres terminés</text>
+
+  <rect x="280" y="648" width="60" height="28" fill="#FEF3C7" rx="14"/>
+  <text x="310" y="667" font-family="SF Pro, Arial" font-size="11" text-anchor="middle" fill="#F59E0B">Voir</text>
+
+  <!-- Bottom Navigation -->
+  <rect y="732" width="375" height="80" fill="#FFFFFF"/>
+  <line x1="0" y1="732" x2="375" y2="732" stroke="#E5E7EB" stroke-width="1"/>
+
+  <g transform="translate(47, 752)">
+    <text x="0" y="5" font-family="SF Pro, Arial" font-size="20" text-anchor="middle">💬</text>
+    <text x="0" y="40" font-family="SF Pro, Arial" font-size="10" text-anchor="middle" fill="#6B7280">Chat</text>
+  </g>
+
+  <g transform="translate(140, 752)">
+    <text x="0" y="5" font-family="SF Pro, Arial" font-size="20" text-anchor="middle">📅</text>
+    <text x="0" y="40" font-family="SF Pro, Arial" font-size="10" text-anchor="middle" fill="#6B7280">Calendrier</text>
+  </g>
+
+  <g transform="translate(235, 752)">
+    <circle cx="0" cy="0" r="24" fill="#F3E8FF"/>
+    <text x="0" y="5" font-family="SF Pro, Arial" font-size="20" text-anchor="middle">🎯</text>
+    <text x="0" y="40" font-family="SF Pro, Arial" font-size="10" text-anchor="middle" fill="#8B5CF6" font-weight="600">Rêves</text>
+  </g>
+
+  <g transform="translate(328, 752)">
+    <text x="0" y="5" font-family="SF Pro, Arial" font-size="20" text-anchor="middle">👤</text>
+    <text x="0" y="40" font-family="SF Pro, Arial" font-size="10" text-anchor="middle" fill="#6B7280">Profil</text>
+  </g>
+
+  <!-- Home Indicator -->
+  <rect x="140" y="800" width="95" height="5" fill="#1F2937" rx="2.5"/>
+</svg>

@@ -11,12 +11,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
-from .models import Dream, Goal, Task, Obstacle
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
     TaskSerializer, TaskCreateSerializer,
-    ObstacleSerializer
+    ObstacleSerializer, CalibrationResponseSerializer
 )
 from core.permissions import IsOwner, CanCreateDream
 from integrations.openai_service import OpenAIService
@@ -92,10 +92,183 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Generate plan", description="Generate a complete AI-powered plan with goals and tasks", tags=["Dreams"], responses={200: DreamDetailSerializer})
+    @extend_schema(summary="Start calibration", description="Generate initial calibration questions for a dream", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['post'])
+    def start_calibration(self, request, pk=None):
+        """Generate initial calibration questions (7 questions) for the dream."""
+        dream = self.get_object()
+        ai_service = OpenAIService()
+
+        # Check if calibration already completed
+        if dream.calibration_status == 'completed':
+            return Response(
+                {'message': 'Calibration already completed for this dream'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Generate initial batch of 7 questions
+            result = ai_service.generate_calibration_questions(
+                dream.title,
+                dream.description,
+                batch_size=7
+            )
+
+            # Save questions to database
+            questions_created = []
+            for i, q_data in enumerate(result.get('questions', []), start=1):
+                cr = CalibrationResponse.objects.create(
+                    dream=dream,
+                    question=q_data['question'],
+                    question_number=i,
+                    category=q_data.get('category', '')
+                )
+                questions_created.append(cr)
+
+            # Update dream calibration status
+            dream.calibration_status = 'in_progress'
+            dream.save(update_fields=['calibration_status'])
+
+            return Response({
+                'status': 'in_progress',
+                'questions': CalibrationResponseSerializer(questions_created, many=True).data,
+                'total_questions': len(questions_created),
+                'answered': 0,
+            })
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(summary="Answer calibration", description="Submit answers to calibration questions and get follow-ups if needed", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['post'])
+    def answer_calibration(self, request, pk=None):
+        """
+        Submit answers to calibration questions.
+
+        Expects: { "answers": [{ "question_id": "uuid", "answer": "text" }, ...] }
+
+        Returns either more questions or marks calibration as complete.
+        """
+        dream = self.get_object()
+        answers_data = request.data.get('answers', [])
+
+        if not answers_data:
+            return Response(
+                {'error': 'No answers provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Save answers
+        for ans in answers_data:
+            try:
+                cr = CalibrationResponse.objects.get(
+                    id=ans['question_id'],
+                    dream=dream
+                )
+                cr.answer = ans['answer']
+                cr.save(update_fields=['answer'])
+            except CalibrationResponse.DoesNotExist:
+                continue
+
+        # Get all Q&A pairs so far
+        all_qa = list(
+            CalibrationResponse.objects.filter(
+                dream=dream,
+                answer__gt=''
+            ).order_by('question_number').values('question', 'answer')
+        )
+
+        total_questions = CalibrationResponse.objects.filter(dream=dream).count()
+        answered_count = len(all_qa)
+
+        # If we've reached 15 questions, force complete
+        if total_questions >= 15:
+            dream.calibration_status = 'completed'
+            dream.save(update_fields=['calibration_status'])
+
+            return Response({
+                'status': 'completed',
+                'total_questions': total_questions,
+                'answered': answered_count,
+                'message': 'Calibration complete. Ready to generate your personalized plan.',
+            })
+
+        # Ask AI if we have enough info or need more questions
+        ai_service = OpenAIService()
+
+        try:
+            remaining_capacity = 15 - total_questions
+            batch_size = min(remaining_capacity, 4)  # Follow-up batches of up to 4
+
+            result = ai_service.generate_calibration_questions(
+                dream.title,
+                dream.description,
+                existing_qa=all_qa,
+                batch_size=batch_size
+            )
+
+            if result.get('sufficient', False) or not result.get('questions'):
+                # AI says we have enough info
+                dream.calibration_status = 'completed'
+                dream.save(update_fields=['calibration_status'])
+
+                return Response({
+                    'status': 'completed',
+                    'total_questions': total_questions,
+                    'answered': answered_count,
+                    'confidence_score': result.get('confidence_score', 1.0),
+                    'message': 'Calibration complete. Ready to generate your personalized plan.',
+                })
+            else:
+                # Save new follow-up questions
+                new_questions = []
+                start_number = total_questions + 1
+                for i, q_data in enumerate(result.get('questions', [])):
+                    cr = CalibrationResponse.objects.create(
+                        dream=dream,
+                        question=q_data['question'],
+                        question_number=start_number + i,
+                        category=q_data.get('category', '')
+                    )
+                    new_questions.append(cr)
+
+                new_total = total_questions + len(new_questions)
+
+                return Response({
+                    'status': 'in_progress',
+                    'questions': CalibrationResponseSerializer(new_questions, many=True).data,
+                    'total_questions': new_total,
+                    'answered': answered_count,
+                    'confidence_score': result.get('confidence_score', 0.5),
+                    'missing_areas': result.get('missing_areas', []),
+                })
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(summary="Skip calibration", description="Skip the calibration step and use basic info for plan generation", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['post'])
+    def skip_calibration(self, request, pk=None):
+        """Allow user to skip calibration and proceed with basic info."""
+        dream = self.get_object()
+        dream.calibration_status = 'skipped'
+        dream.save(update_fields=['calibration_status'])
+
+        return Response({
+            'status': 'skipped',
+            'message': 'Calibration skipped. You can generate a plan with basic info.',
+        })
+
+    @extend_schema(summary="Generate plan", description="Generate a complete AI-powered plan with goals and tasks, using calibration data if available", tags=["Dreams"], responses={200: DreamDetailSerializer})
     @action(detail=True, methods=['post'])
     def generate_plan(self, request, pk=None):
-        """Generate complete plan for dream with AI."""
+        """Generate complete plan for dream with AI, enriched by calibration data."""
         dream = self.get_object()
         ai_service = OpenAIService()
 
@@ -104,16 +277,46 @@ class DreamViewSet(viewsets.ModelViewSet):
             'work_schedule': dream.user.work_schedule or {},
         }
 
+        # If calibration was completed, build rich context from Q&A
+        calibration_context = None
+        if dream.calibration_status == 'completed':
+            qa_pairs = list(
+                CalibrationResponse.objects.filter(
+                    dream=dream,
+                    answer__gt=''
+                ).order_by('question_number').values('question', 'answer')
+            )
+
+            if qa_pairs:
+                try:
+                    calibration_context = ai_service.generate_calibration_summary(
+                        dream.title,
+                        dream.description,
+                        qa_pairs
+                    )
+                    # Store the calibration summary in ai_analysis
+                    user_context['calibration_profile'] = calibration_context.get('user_profile', {})
+                    user_context['plan_recommendations'] = calibration_context.get('plan_recommendations', {})
+                    # Use enriched description if available
+                    enriched = calibration_context.get('enriched_description', '')
+                    if enriched:
+                        user_context['enriched_description'] = enriched
+                except OpenAIError:
+                    pass  # Fall back to basic plan generation
+
         try:
-            # Generate plan with AI
+            # Generate plan with AI (now with calibration context)
             plan = ai_service.generate_plan(
                 dream.title,
                 dream.description,
                 user_context
             )
 
-            # Save AI analysis
-            dream.ai_analysis = plan
+            # Save AI analysis (include calibration summary)
+            analysis_data = plan
+            if calibration_context:
+                analysis_data['calibration_summary'] = calibration_context
+            dream.ai_analysis = analysis_data
             dream.save(update_fields=['ai_analysis'])
 
             # Create Goals and Tasks from plan
