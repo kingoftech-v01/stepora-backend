@@ -110,17 +110,17 @@ export const SocialScreen = () => {
   const getActivityMessage = (activity: ActivityItem) => {
     switch (activity.type) {
       case 'task_completed':
-        return `a complété une tâche: "${activity.content.taskTitle}"`;
+        return `completed a task: "${activity.content.taskTitle}"`;
       case 'dream_completed':
-        return `a réalisé un rêve: "${activity.content.dreamTitle}" 🎉`;
+        return `achieved a dream: "${activity.content.dreamTitle}"`;
       case 'milestone_reached':
-        return `a atteint un jalon: ${activity.content.milestone}`;
+        return `reached a milestone: ${activity.content.milestone}`;
       case 'buddy_matched':
-        return `a trouvé un Dream Buddy!`;
+        return `found a Dream Buddy!`;
       case 'circle_joined':
-        return `a rejoint le cercle "${activity.content.circleName}"`;
+        return `joined the circle "${activity.content.circleName}"`;
       default:
-        return 'a une nouvelle activité';
+        return 'has new activity';
     }
   };
 
@@ -141,7 +141,7 @@ export const SocialScreen = () => {
                   {getActivityMessage(item)}
                 </Text>
                 <Text variant="bodySmall" style={styles.activityTime}>
-                  {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+                  {new Date(item.createdAt).toLocaleDateString('en-US')}
                 </Text>
               </View>
             </View>
@@ -151,10 +151,10 @@ export const SocialScreen = () => {
       ListEmptyComponent={
         <View style={styles.emptyState}>
           <Text variant="bodyLarge" style={styles.emptyText}>
-            Aucune activité récente
+            No recent activity
           </Text>
           <Text variant="bodySmall" style={styles.emptySubtext}>
-            Ajoute des amis pour voir leurs progrès !
+            Add friends to see their progress!
           </Text>
         </View>
       }
@@ -167,7 +167,7 @@ export const SocialScreen = () => {
       {requests && requests.length > 0 && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.sectionTitle}>
-            Demandes en attente ({requests.length})
+            Pending Requests ({requests.length})
           </Text>
           {requests.map((request: any) => (
             <Card key={request.id} style={styles.friendCard}>
@@ -200,7 +200,7 @@ export const SocialScreen = () => {
       {/* Friends List */}
       <View style={styles.section}>
         <Text variant="titleMedium" style={styles.sectionTitle}>
-          Mes amis ({friends?.length || 0})
+          My Friends ({friends?.length || 0})
         </Text>
         {friends?.map((friend: any) => (
           <Card key={friend.id} style={styles.friendCard}>
@@ -210,7 +210,7 @@ export const SocialScreen = () => {
                 <View style={styles.friendInfo}>
                   <Text variant="bodyLarge">{friend.username}</Text>
                   <Text variant="bodySmall" style={styles.friendTitle}>
-                    {friend.title} • Niveau {friend.currentLevel}
+                    {friend.title} • Level {friend.currentLevel}
                   </Text>
                   <Text variant="bodySmall" style={styles.friendInfluence}>
                     {friend.influenceScore} influence
@@ -223,7 +223,7 @@ export const SocialScreen = () => {
         {(!friends || friends.length === 0) && (
           <View style={styles.emptyState}>
             <Text variant="bodyMedium" style={styles.emptyText}>
-              Pas encore d'amis
+              No friends yet
             </Text>
           </View>
         )}
@@ -234,7 +234,7 @@ export const SocialScreen = () => {
   const renderSearch = () => (
     <View style={styles.searchContainer}>
       <Searchbar
-        placeholder="Rechercher des utilisateurs..."
+        placeholder="Search users..."
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
@@ -260,14 +260,14 @@ export const SocialScreen = () => {
                   </View>
                   <View style={styles.userActions}>
                     {item.isFriend ? (
-                      <Chip icon="check">Ami</Chip>
+                      <Chip icon="check">Friend</Chip>
                     ) : (
                       <Button
                         mode="contained"
                         compact
                         onPress={() => sendRequestMutation.mutate(item.id)}
                       >
-                        Ajouter
+                        Add
                       </Button>
                     )}
                     {!item.isFollowing && (
@@ -277,7 +277,7 @@ export const SocialScreen = () => {
                         onPress={() => followMutation.mutate(item.id)}
                         style={styles.followButton}
                       >
-                        Suivre
+                        Follow
                       </Button>
                     )}
                   </View>
@@ -291,7 +291,7 @@ export const SocialScreen = () => {
       {searchQuery.length >= 2 && (!searchResults || searchResults.length === 0) && (
         <View style={styles.emptyState}>
           <Text variant="bodyMedium" style={styles.emptyText}>
-            Aucun résultat
+            No results
           </Text>
         </View>
       )}
@@ -307,21 +307,21 @@ export const SocialScreen = () => {
           onPress={() => setActiveTab('feed')}
           style={styles.tab}
         >
-          Activités
+          Activity
         </Chip>
         <Chip
           selected={activeTab === 'friends'}
           onPress={() => setActiveTab('friends')}
           style={styles.tab}
         >
-          Amis
+          Friends
         </Chip>
         <Chip
           selected={activeTab === 'search'}
           onPress={() => setActiveTab('search')}
           style={styles.tab}
         >
-          Rechercher
+          Search
         </Chip>
       </View>
 

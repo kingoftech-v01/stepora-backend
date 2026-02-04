@@ -5,7 +5,7 @@ import { api, ApiError } from '../services/api';
 // Helper to show error alerts
 const showError = (error: unknown, defaultMessage: string) => {
   const apiError = error as ApiError;
-  Alert.alert('Erreur', apiError?.message || defaultMessage);
+  Alert.alert('Error', apiError?.message || defaultMessage);
 };
 
 export function useUpdateTask() {
@@ -19,7 +19,7 @@ export function useUpdateTask() {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de mettre à jour la tâche. Veuillez réessayer.');
+      showError(error, 'Unable to update task. Please try again.');
     },
   });
 }
@@ -35,7 +35,7 @@ export function useCompleteTask() {
       queryClient.invalidateQueries({ queryKey: ['dreams'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de compléter la tâche. Veuillez réessayer.');
+      showError(error, 'Unable to complete task. Please try again.');
     },
   });
 }
@@ -49,7 +49,7 @@ export function useSkipTask() {
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de passer la tâche. Veuillez réessayer.');
+      showError(error, 'Unable to skip task. Please try again.');
     },
   });
 }

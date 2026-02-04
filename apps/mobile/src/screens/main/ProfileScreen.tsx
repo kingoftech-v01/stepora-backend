@@ -36,12 +36,12 @@ export function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      'Log Out',
+      'Are you sure you want to log out?',
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Déconnexion',
+          text: 'Log Out',
           style: 'destructive',
           onPress: signOut,
         },
@@ -59,13 +59,13 @@ export function ProfileScreen() {
             style={styles.avatar}
           />
           <Text variant="headlineSmall" style={styles.name}>
-            {user?.displayName || 'Utilisateur'}
+            {user?.displayName || 'User'}
           </Text>
           <Text variant="bodyMedium" style={styles.email}>
             {user?.email}
           </Text>
           <Text variant="bodySmall" style={styles.title}>
-            {profile?.title || 'Rêveur'}
+            {profile?.title || 'Dreamer'}
           </Text>
         </View>
 
@@ -75,11 +75,11 @@ export function ProfileScreen() {
             <Card style={styles.statsCard}>
               <Card.Content>
                 <Text variant="titleMedium" style={styles.sectionTitle}>
-                  Niveau & XP
+                  Level & XP
                 </Text>
                 <View style={styles.levelContainer}>
                   <Text variant="headlineLarge" style={styles.level}>
-                    Niveau {profile.currentLevel}
+                    Level {profile.currentLevel}
                   </Text>
                   <Text variant="bodySmall" style={styles.xp}>
                     {profile.totalXp} XP
@@ -93,7 +93,7 @@ export function ProfileScreen() {
                   color={theme.colors.primary}
                 />
                 <Text variant="bodySmall" style={styles.xpLabel}>
-                  {profile.xpToNextLevel} XP jusqu'au niveau suivant
+                  {profile.xpToNextLevel} XP to next level
                 </Text>
               </Card.Content>
             </Card>
@@ -113,7 +113,7 @@ export function ProfileScreen() {
                   {profile.currentStreak} 🔥
                 </Text>
                 <Text variant="bodySmall" style={styles.statLabel}>
-                  Série
+                  Streak
                 </Text>
               </Surface>
 
@@ -122,7 +122,7 @@ export function ProfileScreen() {
                   {stats?.completedDreams || 0}
                 </Text>
                 <Text variant="bodySmall" style={styles.statLabel}>
-                  Rêves
+                  Dreams
                 </Text>
               </Surface>
             </View>
@@ -130,14 +130,14 @@ export function ProfileScreen() {
             <Card style={styles.statsCard}>
               <Card.Content>
                 <Text variant="titleMedium" style={styles.sectionTitle}>
-                  Attributs RPG
+                  RPG Attributes
                 </Text>
                 {[
                   { name: 'Discipline', value: profile.attributeDiscipline },
-                  { name: 'Apprentissage', value: profile.attributeLearning },
-                  { name: 'Bien-être', value: profile.attributeWellbeing },
-                  { name: 'Carrière', value: profile.attributeCareer },
-                  { name: 'Créativité', value: profile.attributeCreativity },
+                  { name: 'Learning', value: profile.attributeLearning },
+                  { name: 'Wellbeing', value: profile.attributeWellbeing },
+                  { name: 'Career', value: profile.attributeCareer },
+                  { name: 'Creativity', value: profile.attributeCreativity },
                 ].map((attr) => (
                   <View key={attr.name} style={styles.attributeRow}>
                     <Text style={styles.attributeName}>{attr.name}</Text>
@@ -159,10 +159,10 @@ export function ProfileScreen() {
         <Divider />
 
         <List.Section>
-          <List.Subheader>Préférences</List.Subheader>
+          <List.Subheader>Preferences</List.Subheader>
 
           <List.Item
-            title="Thème sombre"
+            title="Dark Theme"
             left={(props) => <List.Icon {...props} icon="theme-light-dark" />}
             right={() => (
               <Switch
@@ -178,8 +178,8 @@ export function ProfileScreen() {
           />
 
           <List.Item
-            title="Langue"
-            description={preferences?.language === 'fr' ? 'Français' : 'English'}
+            title="Language"
+            description={preferences?.language || 'English'}
             left={(props) => <List.Icon {...props} icon="translate" />}
           />
         </List.Section>
@@ -190,7 +190,7 @@ export function ProfileScreen() {
           <List.Subheader>Notifications</List.Subheader>
 
           <List.Item
-            title="Rappels de tâches"
+            title="Task Reminders"
             left={(props) => <List.Icon {...props} icon="bell" />}
             right={() => (
               <Switch
@@ -206,7 +206,7 @@ export function ProfileScreen() {
           />
 
           <List.Item
-            title="Messages de motivation"
+            title="Motivational Messages"
             left={(props) => <List.Icon {...props} icon="emoticon-happy" />}
             right={() => (
               <Switch
@@ -222,7 +222,7 @@ export function ProfileScreen() {
           />
 
           <List.Item
-            title="Progrès et achievements"
+            title="Progress & Achievements"
             left={(props) => <List.Icon {...props} icon="trophy" />}
             right={() => (
               <Switch
@@ -241,7 +241,7 @@ export function ProfileScreen() {
         <Divider />
 
         <List.Section>
-          <List.Subheader>À propos</List.Subheader>
+          <List.Subheader>About</List.Subheader>
 
           <List.Item
             title="Version"
@@ -250,13 +250,13 @@ export function ProfileScreen() {
           />
 
           <List.Item
-            title="Conditions d'utilisation"
+            title="Terms of Service"
             left={(props) => <List.Icon {...props} icon="file-document" />}
             onPress={() => console.log('Terms')}
           />
 
           <List.Item
-            title="Politique de confidentialité"
+            title="Privacy Policy"
             left={(props) => <List.Icon {...props} icon="shield-check" />}
             onPress={() => console.log('Privacy')}
           />
@@ -269,7 +269,7 @@ export function ProfileScreen() {
             style={styles.logoutButton}
             textColor={theme.colors.error}
           >
-            Se déconnecter
+            Log Out
           </Button>
         </View>
       </ScrollView>

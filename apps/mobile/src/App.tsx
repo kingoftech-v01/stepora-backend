@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
 
-import { MainNavigator } from './navigation/MainNavigator';
+import { RootNavigator } from './navigation/RootNavigator';
 import { lightTheme, darkTheme } from './theme';
 import { useAuthStore } from './stores/authStore';
 
@@ -34,7 +34,7 @@ export default function App() {
                 backgroundColor="transparent"
                 translucent
               />
-              <MainNavigator />
+              <RootNavigator />
             </NavigationContainer>
           </PaperProvider>
         </QueryClientProvider>

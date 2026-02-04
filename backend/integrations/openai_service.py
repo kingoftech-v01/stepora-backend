@@ -1,5 +1,14 @@
 """
-OpenAI GPT-4 integration service for AI features.
+OpenAI GPT-4 integration service for AI-powered features.
+
+Handles all OpenAI API interactions including:
+- Chat conversations with streaming support
+- Dream plan generation (structured JSON output)
+- Dream analysis and categorization
+- Motivational message generation
+- Micro-action generation for quick starts
+- Rescue messages for inactive users
+- Vision board image generation via DALL-E
 """
 
 import openai
@@ -14,93 +23,96 @@ if hasattr(settings, 'OPENAI_ORGANIZATION_ID'):
 
 
 class OpenAIService:
-    """Service for interacting with OpenAI API."""
+    """Service for interacting with OpenAI API for all AI features."""
 
     # System prompts for different conversation types
     SYSTEM_PROMPTS = {
-        'dream_creation': """Tu es DreamPlanner, un assistant personnel bienveillant et motivant qui aide les utilisateurs à transformer leurs rêves en plans d'action concrets.
+        'dream_creation': """You are DreamPlanner, a caring and motivating personal assistant that helps users transform their dreams into concrete action plans.
 
-Ton rôle dans la création d'un rêve:
-1. Écoute activement et pose des questions de clarification
-2. Aide à définir un objectif SMART (Spécifique, Mesurable, Atteignable, Réaliste, Temporel)
-3. Explore les motivations profondes
-4. Identifie les obstacles potentiels
-5. Encourage et motive
+Your role in dream creation:
+1. Listen actively and ask clarifying questions
+2. Help define a SMART goal (Specific, Measurable, Achievable, Realistic, Time-bound)
+3. Explore deep motivations
+4. Identify potential obstacles
+5. Encourage and motivate
 
-Ton ton: empathique, positif, encourageant mais réaliste.
-Réponds en français de manière concise (2-3 phrases maximum).""",
+Your tone: empathetic, positive, encouraging but realistic.
+IMPORTANT: Always respond in the user's language. Detect the language they write in and match it.""",
 
-        'planning': """Tu es DreamPlanner, un expert en planification stratégique et décomposition d'objectifs.
+        'planning': """You are DreamPlanner, an expert in strategic planning and goal decomposition.
 
-Ton rôle:
-1. Analyser l'objectif de l'utilisateur
-2. Le décomposer en étapes concrètes et réalisables
-3. Tenir compte des contraintes de temps et d'emploi du temps
-4. Proposer un plan progressif et motivant
+Your role:
+1. Analyze the user's goal
+2. Break it down into concrete, achievable steps
+3. Account for time constraints and schedule
+4. Propose a progressive and motivating plan
 
-IMPORTANT: Tu dois répondre UNIQUEMENT avec un objet JSON valide, SANS texte avant ou après.
+IMPORTANT: You must respond ONLY with a valid JSON object, NO text before or after.
 
-Format JSON requis:
+Required JSON format:
 {
-  "analysis": "Analyse brève de l'objectif et sa faisabilité",
+  "analysis": "Brief analysis of the goal and its feasibility",
   "estimated_duration_weeks": 12,
   "weekly_time_hours": 5,
   "goals": [
     {
-      "title": "Titre de l'étape",
-      "description": "Description détaillée",
+      "title": "Step title",
+      "description": "Detailed description",
       "order": 1,
       "estimated_minutes": 300,
       "tasks": [
         {
-          "title": "Tâche spécifique",
+          "title": "Specific task",
           "order": 1,
           "duration_mins": 30,
-          "description": "Description de la tâche"
+          "description": "Task description"
         }
       ]
     }
   ],
-  "tips": ["Conseil pratique 1", "Conseil pratique 2"],
+  "tips": ["Practical tip 1", "Practical tip 2"],
   "potential_obstacles": [
     {
-      "title": "Obstacle possible",
-      "solution": "Comment le surmonter"
+      "title": "Possible obstacle",
+      "solution": "How to overcome it"
     }
   ]
 }""",
 
-        'motivation': """Tu génères des messages de motivation courts et personnalisés (1-2 phrases maximum).
+        'motivation': """You generate short, personalized motivational messages (1-2 sentences max).
 
-Prends en compte:
-- Le prénom de l'utilisateur
-- Son niveau de progression
-- Sa série de jours consécutifs
-- L'objectif en cours
+Consider:
+- The user's name
+- Their progress level
+- Their consecutive day streak
+- The current goal
 
-Ton ton: énergique, encourageant, personnel. Utilise des emojis avec parcimonie (1-2 max).""",
+Your tone: energetic, encouraging, personal. Use emojis sparingly (1-2 max).
+IMPORTANT: Respond in the user's language.""",
 
-        'check_in': """Tu es DreamPlanner, tu fais un check-in régulier avec l'utilisateur pour:
-1. Comprendre sa progression
-2. Identifier les difficultés
-3. Ajuster le plan si nécessaire
-4. Maintenir la motivation
+        'check_in': """You are DreamPlanner, performing a regular check-in with the user to:
+1. Understand their progress
+2. Identify difficulties
+3. Adjust the plan if needed
+4. Maintain motivation
 
-Pose 1-2 questions ouvertes. Sois empathique et encourageant.""",
+Ask 1-2 open questions. Be empathetic and encouraging.
+IMPORTANT: Respond in the user's language.""",
 
-        'rescue': """Tu es DreamPlanner en "mode rescue" - l'utilisateur est inactif depuis plusieurs jours.
+        'rescue': """You are DreamPlanner in "rescue mode" - the user has been inactive for several days.
 
-Ton rôle:
-1. Montrer de l'empathie (pas de culpabilisation)
-2. Comprendre ce qui bloque
-3. Proposer une action simple pour redémarrer
-4. Rappeler pourquoi c'est important
+Your role:
+1. Show empathy (no guilt-tripping)
+2. Understand what's blocking them
+3. Suggest a simple action to restart
+4. Remind them why it matters
 
-Ton message doit être court (2-3 phrases), empathique et proposer UNE action concrète.""",
+Your message should be short (2-3 sentences), empathetic, and propose ONE concrete action.
+IMPORTANT: Respond in the user's language.""",
     }
 
     def __init__(self):
-        """Initialize OpenAI service."""
+        """Initialize OpenAI service with model and timeout from settings."""
         self.model = settings.OPENAI_MODEL
         self.timeout = getattr(settings, 'OPENAI_TIMEOUT', 30)
 
@@ -109,16 +121,15 @@ Ton message doit être court (2-3 phrases), empathique et proposer UNE action co
         Synchronous chat completion.
 
         Args:
-            messages: List of message dictionaries with 'role' and 'content'
-            conversation_type: Type of conversation for system prompt
+            messages: List of message dicts with 'role' and 'content'
+            conversation_type: Key for system prompt selection
             temperature: Randomness (0-1)
-            max_tokens: Maximum tokens in response
+            max_tokens: Maximum response tokens
 
         Returns:
-            Dict with 'content' and 'tokens_used'
+            Dict with 'content', 'tokens_used', and 'model'
         """
         try:
-            # Add system prompt
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
             full_messages = [{'role': 'system', 'content': system_prompt}] + messages
 
@@ -142,7 +153,7 @@ Ton message doit être court (2-3 phrases), empathique et proposer UNE action co
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
     async def chat_async(self, messages, conversation_type='general', temperature=0.7, max_tokens=1000):
-        """Async version of chat."""
+        """Async version of chat completion."""
         try:
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
             full_messages = [{'role': 'system', 'content': system_prompt}] + messages
@@ -168,10 +179,10 @@ Ton message doit être court (2-3 phrases), empathique et proposer UNE action co
 
     async def chat_stream_async(self, messages, conversation_type='general', temperature=0.7):
         """
-        Async streaming chat completion.
+        Async streaming chat completion. Yields response chunks as they arrive.
 
         Yields:
-            String chunks of the response
+            String chunks of the streamed response
         """
         try:
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
@@ -196,26 +207,26 @@ Ton message doit être court (2-3 phrases), empathique et proposer UNE action co
 
     def generate_plan(self, dream_title, dream_description, user_context):
         """
-        Generate complete plan for a dream.
+        Generate a complete structured plan for a dream.
 
         Args:
-            dream_title: Title of the dream
-            dream_description: Description of the dream
-            user_context: Dict with user info (work_schedule, timezone, etc.)
+            dream_title: Title of the dream/goal
+            dream_description: Detailed description
+            user_context: Dict with timezone, work_schedule, etc.
 
         Returns:
-            Dict with plan structure
+            Dict with structured plan including goals, tasks, tips, obstacles
         """
-        prompt = f"""Génère un plan détaillé pour atteindre cet objectif:
+        prompt = f"""Generate a detailed plan to achieve this goal:
 
-RÊVE/OBJECTIF: {dream_title}
+DREAM/GOAL: {dream_title}
 DESCRIPTION: {dream_description}
 
-CONTEXTE UTILISATEUR:
-- Fuseau horaire: {user_context.get('timezone', 'Europe/Paris')}
-- Horaires de travail: {json.dumps(user_context.get('work_schedule', {}), ensure_ascii=False)}
+USER CONTEXT:
+- Timezone: {user_context.get('timezone', 'UTC')}
+- Work schedule: {json.dumps(user_context.get('work_schedule', {}), ensure_ascii=False)}
 
-Réponds UNIQUEMENT avec le JSON du plan."""
+Respond ONLY with the plan JSON."""
 
         try:
             response = openai.ChatCompletion.create(
@@ -244,30 +255,30 @@ Réponds UNIQUEMENT avec le JSON du plan."""
 
     def analyze_dream(self, dream_title, dream_description):
         """
-        Analyze a dream and extract key information.
+        Analyze a dream and extract category, difficulty, and recommendations.
 
         Returns:
-            Dict with analysis results
+            Dict with category, duration estimate, difficulty, challenges, approach
         """
-        prompt = f"""Analyse ce rêve/objectif et réponds avec un JSON:
+        prompt = f"""Analyze this dream/goal and respond with JSON:
 
-TITRE: {dream_title}
+TITLE: {dream_title}
 DESCRIPTION: {dream_description}
 
-Format JSON requis:
+Required JSON format:
 {{
-  "category": "santé|carrière|relations|finances|développement_personnel|loisirs|autre",
+  "category": "health|career|relationships|finance|personal_development|hobbies|other",
   "estimated_duration_weeks": 12,
-  "difficulty": "facile|moyen|difficile",
-  "key_challenges": ["Défi 1", "Défi 2"],
-  "recommended_approach": "Approche recommandée en 1-2 phrases"
+  "difficulty": "easy|medium|hard",
+  "key_challenges": ["Challenge 1", "Challenge 2"],
+  "recommended_approach": "Recommended approach in 1-2 sentences"
 }}"""
 
         try:
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': 'Tu analyses des objectifs et réponds uniquement en JSON.'},
+                    {'role': 'system', 'content': 'You analyze goals and respond only in JSON.'},
                     {'role': 'user', 'content': prompt}
                 ],
                 temperature=0.3,
@@ -282,13 +293,13 @@ Format JSON requis:
             raise OpenAIError(f"Analysis failed: {str(e)}")
 
     def generate_motivational_message(self, user_name, goal_title, progress_percentage, streak_days):
-        """Generate short motivational message."""
-        prompt = f"""Utilisateur: {user_name}
-Objectif: {goal_title}
-Progression: {progress_percentage}%
-Série: {streak_days} jours
+        """Generate a short motivational message personalized for the user."""
+        prompt = f"""User: {user_name}
+Goal: {goal_title}
+Progress: {progress_percentage}%
+Streak: {streak_days} days
 
-Génère un message de motivation court (1-2 phrases, 1-2 emojis max)."""
+Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
         try:
             response = openai.ChatCompletion.create(
@@ -306,17 +317,17 @@ Génère un message de motivation court (1-2 phrases, 1-2 emojis max)."""
 
         except openai.error.OpenAIError as e:
             # Fallback message if API fails
-            return f"Bravo {user_name}! Continue comme ça! 💪"
+            return f"Great job {user_name}! Keep going!"
 
     def generate_two_minute_start(self, dream_title, dream_description):
-        """Generate a 2-minute micro-action to start."""
-        prompt = f"""Pour l'objectif "{dream_title}" ({dream_description}), génère UNE micro-action très simple qui prend 30 secondes à 2 minutes maximum. Réponds avec juste l'action, sans explication."""
+        """Generate a micro-action (30s-2min) to help the user get started."""
+        prompt = f"""For the goal "{dream_title}" ({dream_description}), generate ONE very simple micro-action that takes 30 seconds to 2 minutes maximum. Respond with just the action, no explanation."""
 
         try:
             response = openai.ChatCompletion.create(
                 model='gpt-3.5-turbo',
                 messages=[
-                    {'role': 'system', 'content': 'Tu génères des micro-actions rapides (30s-2min).'},
+                    {'role': 'system', 'content': 'You generate quick micro-actions (30s-2min).'},
                     {'role': 'user', 'content': prompt}
                 ],
                 temperature=0.7,
@@ -328,16 +339,16 @@ Génère un message de motivation court (1-2 phrases, 1-2 emojis max)."""
 
         except openai.error.OpenAIError as e:
             # Fallback
-            return "Prends 2 minutes pour noter 3 raisons pourquoi cet objectif est important pour toi"
+            return "Take 2 minutes to write down 3 reasons why this goal is important to you"
 
     def generate_rescue_message(self, user_name, days_inactive, last_goal_title):
-        """Generate rescue message for inactive users."""
-        prompt = f"""L'utilisateur {user_name} est inactif depuis {days_inactive} jours sur son objectif "{last_goal_title}".
+        """Generate an empathetic rescue message for inactive users."""
+        prompt = f"""User {user_name} has been inactive for {days_inactive} days on their goal "{last_goal_title}".
 
-Génère un message empathique (2-3 phrases) qui:
-1. Ne culpabilise pas
-2. Comprend que c'est normal
-3. Propose UNE micro-action simple pour redémarrer"""
+Generate an empathetic message (2-3 sentences) that:
+1. Does not guilt-trip
+2. Acknowledges it's normal
+3. Proposes ONE simple micro-action to restart"""
 
         try:
             response = openai.ChatCompletion.create(
@@ -354,14 +365,14 @@ Génère un message empathique (2-3 phrases) qui:
             return response.choices[0].message.content
 
         except openai.error.OpenAIError:
-            return f"Hey {user_name}, on est toujours là! La vie est pleine d'imprévus, c'est normal. Que dirais-tu de recommencer doucement avec juste 5 minutes aujourd'hui? 💪"
+            return f"Hey {user_name}, we're still here! Life is full of surprises, and that's okay. How about starting fresh with just 5 minutes today?"
 
     def generate_vision_image(self, dream_title, dream_description):
         """
-        Generate vision board image with DALL-E.
+        Generate a vision board image using DALL-E 3.
 
         Returns:
-            URL of generated image
+            URL of the generated image
         """
         prompt = f"""Create an inspiring, photorealistic image representing someone who has successfully achieved: {dream_title}. {dream_description}.
 

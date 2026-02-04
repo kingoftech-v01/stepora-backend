@@ -309,7 +309,7 @@ class TestNotificationTasks:
             ).first()
 
             assert notification is not None
-            assert notification.title == '💪 Motivation du jour'
+            assert notification.title == '💪 Daily motivation'
 
     def test_send_weekly_report(self, db, user, dream, task, mock_openai):
         """Test send_weekly_report task"""
@@ -362,7 +362,7 @@ class TestNotificationTasks:
             ).first()
 
             assert notification is not None
-            assert 'toujours là' in notification.title
+            assert 'still here' in notification.title
 
     def test_send_reminder_notifications(self, db, user, goal):
         """Test send_reminder_notifications task"""

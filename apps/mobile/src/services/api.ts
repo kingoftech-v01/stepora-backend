@@ -1,14 +1,21 @@
+/**
+ * API service for DreamPlanner mobile app.
+ * Centralized HTTP client with Firebase token injection, automatic retry on 401,
+ * and typed endpoints for all backend features.
+ */
+
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import auth from '@react-native-firebase/auth';
 import { ENV } from '../config/env';
 
-// Types for API responses
+/** Standardized API error shape for UI error handling. */
 export interface ApiError {
   message: string;
   code?: string;
   details?: Record<string, string[]>;
 }
 
+/** Paginated list response matching DRF PageNumberPagination. */
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -28,7 +35,7 @@ class ApiService {
       },
     });
 
-    // Request interceptor: Add Firebase token
+    // Request interceptor: inject Firebase Bearer token
     this.client.interceptors.request.use(
       async (config) => {
         const user = auth().currentUser;
@@ -45,26 +52,22 @@ class ApiService {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor: Handle errors and unwrap data
+    // Response interceptor: unwrap data, handle 401 token refresh
     this.client.interceptors.response.use(
       (response) => response.data,
       async (error) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid
           try {
             const user = auth().currentUser;
             if (user) {
               await user.getIdToken(true); // Force refresh
-              // Retry the request
               return this.client.request(error.config);
             }
           } catch (refreshError) {
-            // If refresh fails, logout
             await auth().signOut();
           }
         }
 
-        // Format error for consistent handling
         const apiError: ApiError = {
           message: error.response?.data?.detail ||
                    error.response?.data?.message ||
@@ -79,7 +82,7 @@ class ApiService {
     );
   }
 
-  // Base HTTP methods for direct access
+  // Base HTTP methods
   get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.client.get(url, config);
   }
@@ -100,7 +103,9 @@ class ApiService {
     return this.client.delete(url, config);
   }
 
-  // Auth endpoints (Django REST Framework)
+  // ----------------------------------------------------------------
+  // Auth endpoints
+  // ----------------------------------------------------------------
   auth = {
     register: (data: { email: string; password: string; username?: string }) =>
       this.client.post('/api/auth/register/', data),
@@ -110,7 +115,9 @@ class ApiService {
       this.client.post('/api/auth/login/', data),
   };
 
-  // Users endpoints
+  // ----------------------------------------------------------------
+  // User endpoints
+  // ----------------------------------------------------------------
   users = {
     getMe: () =>
       this.client.get('/api/users/me/'),
@@ -120,7 +127,9 @@ class ApiService {
       this.client.post('/api/users/fcm-token/', { token, platform }),
   };
 
-  // Dreams endpoints (Django DRF ViewSet)
+  // ----------------------------------------------------------------
+  // Dreams endpoints
+  // ----------------------------------------------------------------
   dreams = {
     list: (params?: Record<string, unknown>) =>
       this.client.get('/api/dreams/dreams/', { params }),
@@ -138,7 +147,9 @@ class ApiService {
       this.client.post(`/api/dreams/dreams/${id}/complete/`),
   };
 
-  // Goals endpoints (Django DRF ViewSet)
+  // ----------------------------------------------------------------
+  // Goals endpoints
+  // ----------------------------------------------------------------
   goals = {
     list: (params?: Record<string, unknown>) =>
       this.client.get('/api/dreams/goals/', { params }),
@@ -150,7 +161,9 @@ class ApiService {
       this.client.post(`/api/dreams/goals/${id}/complete/`),
   };
 
-  // Tasks endpoints (Django DRF ViewSet)
+  // ----------------------------------------------------------------
+  // Tasks endpoints
+  // ----------------------------------------------------------------
   tasks = {
     list: (params?: Record<string, unknown>) =>
       this.client.get('/api/dreams/tasks/', { params }),
@@ -162,7 +175,9 @@ class ApiService {
       this.client.post(`/api/dreams/tasks/${id}/skip/`),
   };
 
+  // ----------------------------------------------------------------
   // Conversations endpoints
+  // ----------------------------------------------------------------
   conversations = {
     list: () =>
       this.client.get('/api/conversations/'),
@@ -174,7 +189,9 @@ class ApiService {
       this.client.post(`/api/conversations/${id}/messages/`, { content }),
   };
 
+  // ----------------------------------------------------------------
   // Calendar endpoints
+  // ----------------------------------------------------------------
   calendar = {
     get: (startDate: string, endDate: string) =>
       this.client.get('/api/calendar/', { params: { start_date: startDate, end_date: endDate } }),
@@ -184,7 +201,9 @@ class ApiService {
       this.client.get('/api/calendar/week/'),
   };
 
+  // ----------------------------------------------------------------
   // Notifications endpoints
+  // ----------------------------------------------------------------
   notifications = {
     list: () =>
       this.client.get('/api/notifications/'),
@@ -194,7 +213,9 @@ class ApiService {
       this.client.patch('/api/notifications/read-all/'),
   };
 
+  // ----------------------------------------------------------------
   // Gamification endpoints
+  // ----------------------------------------------------------------
   gamification = {
     getProfile: () =>
       this.client.get('/api/gamification/profile/'),
@@ -202,7 +223,9 @@ class ApiService {
       this.client.get(`/api/gamification/leaderboards/${type}/`, { params }),
   };
 
+  // ----------------------------------------------------------------
   // Social endpoints
+  // ----------------------------------------------------------------
   social = {
     getFeed: (type: 'friends' | 'global' = 'friends') =>
       this.client.get(`/api/social/feed/${type}/`),
@@ -216,9 +239,13 @@ class ApiService {
       this.client.post(`/api/social/friend-requests/${requestId}/accept/`),
     rejectFriendRequest: (requestId: string) =>
       this.client.post(`/api/social/friend-requests/${requestId}/reject/`),
+    searchUsers: (query: string) =>
+      this.client.get('/api/social/users/search/', { params: { q: query } }),
   };
 
+  // ----------------------------------------------------------------
   // Buddy endpoints
+  // ----------------------------------------------------------------
   buddies = {
     getCurrent: () =>
       this.client.get('/api/buddies/current/'),
@@ -234,7 +261,9 @@ class ApiService {
       this.client.post(`/api/buddies/${buddyId}/end/`),
   };
 
+  // ----------------------------------------------------------------
   // Circles endpoints
+  // ----------------------------------------------------------------
   circles = {
     list: (filter?: string) =>
       this.client.get('/api/circles/', { params: filter ? { filter } : undefined }),
@@ -252,6 +281,72 @@ class ApiService {
       this.client.get(`/api/circles/${id}/challenges/`),
     createChallenge: (id: string, data: Record<string, unknown>) =>
       this.client.post(`/api/circles/${id}/challenges/`, data),
+  };
+
+  // ----------------------------------------------------------------
+  // Subscription endpoints (Stripe)
+  // ----------------------------------------------------------------
+  subscriptions = {
+    getPlans: () =>
+      this.client.get('/api/subscriptions/plans/'),
+    getCurrent: () =>
+      this.client.get('/api/subscriptions/current/'),
+    createCheckout: (priceId: string) =>
+      this.client.post('/api/subscriptions/checkout/', { price_id: priceId }),
+    cancel: () =>
+      this.client.post('/api/subscriptions/cancel/'),
+    resume: () =>
+      this.client.post('/api/subscriptions/resume/'),
+    getPortalUrl: () =>
+      this.client.get('/api/subscriptions/portal/'),
+  };
+
+  // ----------------------------------------------------------------
+  // Store endpoints
+  // ----------------------------------------------------------------
+  store = {
+    getCategories: () =>
+      this.client.get('/api/store/categories/'),
+    getItems: (params?: Record<string, unknown>) =>
+      this.client.get('/api/store/items/', { params }),
+    getItem: (id: string) =>
+      this.client.get(`/api/store/items/${id}/`),
+    purchase: (itemId: string) =>
+      this.client.post('/api/store/purchase/', { item_id: itemId }),
+    getInventory: () =>
+      this.client.get('/api/store/inventory/'),
+    equipItem: (inventoryId: string) =>
+      this.client.post(`/api/store/inventory/${inventoryId}/equip/`),
+    unequipItem: (inventoryId: string) =>
+      this.client.post(`/api/store/inventory/${inventoryId}/unequip/`),
+  };
+
+  // ----------------------------------------------------------------
+  // League endpoints
+  // ----------------------------------------------------------------
+  leagues = {
+    list: () =>
+      this.client.get('/api/leagues/'),
+    getCurrent: () =>
+      this.client.get('/api/leagues/current/'),
+    getStandings: (leagueId: string) =>
+      this.client.get(`/api/leagues/${leagueId}/standings/`),
+    getCurrentSeason: () =>
+      this.client.get('/api/leagues/season/'),
+    getMyStanding: () =>
+      this.client.get('/api/leagues/my-standing/'),
+  };
+
+  // ----------------------------------------------------------------
+  // Vision Board endpoints (Pro only)
+  // ----------------------------------------------------------------
+  visionBoards = {
+    list: (dreamId: string) =>
+      this.client.get(`/api/dreams/dreams/${dreamId}/vision-boards/`),
+    generate: (dreamId: string) =>
+      this.client.post(`/api/dreams/dreams/${dreamId}/vision-boards/generate/`),
+    delete: (dreamId: string, boardId: string) =>
+      this.client.delete(`/api/dreams/dreams/${dreamId}/vision-boards/${boardId}/`),
   };
 }
 

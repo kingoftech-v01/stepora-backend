@@ -43,8 +43,8 @@ def generate_two_minute_start(dream_id):
             # Create initial goal if none exists
             first_goal = Goal.objects.create(
                 dream=dream,
-                title=f"Démarrer: {dream.title}",
-                description="Premières étapes vers ton rêve",
+                title=f"Get started: {dream.title}",
+                description="First steps toward your dream",
                 order=0,
                 status='pending'
             )
@@ -53,7 +53,7 @@ def generate_two_minute_start(dream_id):
         Task.objects.create(
             goal=first_goal,
             title=f"🚀 {micro_action}",
-            description="Cette micro-action prend seulement 2 minutes et te permettra de démarrer!",
+            description="This micro-action takes only 2 minutes and will help you get started!",
             order=0,
             duration_mins=2,
             scheduled_date=timezone.now(),
@@ -68,8 +68,8 @@ def generate_two_minute_start(dream_id):
         Notification.objects.create(
             user=dream.user,
             notification_type='task_created',
-            title='🚀 Prêt à démarrer en 2 minutes?',
-            body=f'On a créé une micro-action pour ton rêve: {micro_action}',
+            title='🚀 Ready to get started in 2 minutes?',
+            body=f'We created a micro-action for your dream: {micro_action}',
             scheduled_for=timezone.now(),
             data={
                 'action': 'open_dream',
@@ -160,8 +160,8 @@ def auto_schedule_tasks(user_id):
             Notification.objects.create(
                 user=user,
                 notification_type='tasks_scheduled',
-                title='📅 Tâches planifiées automatiquement',
-                body=f'{scheduled_count} tâches ont été ajoutées à ton calendrier!',
+                title='📅 Tasks automatically scheduled',
+                body=f'{scheduled_count} tasks have been added to your calendar!',
                 scheduled_for=timezone.now(),
                 data={
                     'action': 'open_calendar',
@@ -272,8 +272,8 @@ def update_dream_progress():
                     Notification.objects.create(
                         user=dream.user,
                         notification_type='dream_completed',
-                        title='🎉 Rêve accompli!',
-                        body=f'Félicitations! Tu as réalisé ton rêve: {dream.title}',
+                        title='🎉 Dream achieved!',
+                        body=f'Congratulations! You achieved your dream: {dream.title}',
                         scheduled_for=timezone.now(),
                         data={
                             'action': 'open_dream',
@@ -328,8 +328,8 @@ def check_overdue_tasks():
             Notification.objects.create(
                 user=user,
                 notification_type='overdue_tasks',
-                title=f'⏰ {overdue_count} tâche{"s" if overdue_count > 1 else ""} en retard',
-                body=f'Tu as {overdue_count} tâche{"s" if overdue_count > 1 else ""} qui attend{"ent" if overdue_count > 1 else ""} d\'être faite{"s" if overdue_count > 1 else ""}!',
+                title=f'⏰ {overdue_count} overdue task{"s" if overdue_count > 1 else ""}',
+                body=f'You have {overdue_count} task{"s" if overdue_count > 1 else ""} waiting to be completed!',
                 scheduled_for=now,
                 data={
                     'action': 'open_calendar',
@@ -379,7 +379,7 @@ def suggest_task_adjustments(user_id):
             Notification.objects.create(
                 user=user,
                 notification_type='coaching',
-                title='💡 Suggestions pour mieux réussir',
+                title='💡 Suggestions to help you succeed',
                 body=suggestions['summary'],
                 scheduled_for=timezone.now(),
                 data={
@@ -436,8 +436,8 @@ def generate_vision_board(dream_id):
         Notification.objects.create(
             user=dream.user,
             notification_type='vision_ready',
-            title='🎨 Ta vision est prête!',
-            body=f'On a créé une image inspirante pour ton rêve: {dream.title}',
+            title='🎨 Your vision is ready!',
+            body=f'We created an inspiring image for your dream: {dream.title}',
             scheduled_for=timezone.now(),
             data={
                 'action': 'view_vision',
@@ -489,8 +489,8 @@ def cleanup_abandoned_dreams():
             Notification.objects.create(
                 user=dream.user,
                 notification_type='dream_archived',
-                title='📦 Rêve archivé',
-                body=f'Ton rêve "{dream.title}" a été archivé automatiquement après 90 jours d\'inactivité.',
+                title='📦 Dream archived',
+                body=f'Your dream "{dream.title}" has been automatically archived after 90 days of inactivity.',
                 scheduled_for=timezone.now(),
                 data={
                     'action': 'view_archived',

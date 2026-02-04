@@ -29,10 +29,10 @@ export function HomeScreen({ navigation }: any) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.headerTitle}>
-          Mes Rêves
+          My Dreams
         </Text>
         <Text variant="bodyMedium" style={styles.headerSubtitle}>
-          {todayTasks.length} tâche{todayTasks.length !== 1 ? 's' : ''} aujourd'hui
+          {todayTasks.length} task{todayTasks.length !== 1 ? 's' : ''} today
         </Text>
       </View>
 
@@ -54,10 +54,10 @@ export function HomeScreen({ navigation }: any) {
               </Text>
               <View style={styles.progress}>
                 <Text variant="bodySmall">
-                  Progression: {item.completionPercentage || 0}%
+                  Progress: {item.completionPercentage || 0}%
                 </Text>
                 <Text variant="bodySmall">
-                  Priorité: {item.priority}/5
+                  Priority: {item.priority}/5
                 </Text>
               </View>
             </Card.Content>
@@ -71,10 +71,10 @@ export function HomeScreen({ navigation }: any) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text variant="titleLarge" style={styles.emptyTitle}>
-              Aucun rêve pour le moment
+              No dreams yet
             </Text>
             <Text variant="bodyMedium" style={styles.emptySubtext}>
-              Commence par créer ton premier rêve
+              Start by creating your first dream
             </Text>
           </View>
         }
@@ -84,7 +84,7 @@ export function HomeScreen({ navigation }: any) {
         icon="plus"
         style={styles.fab}
         onPress={() => console.log('Create dream')}
-        label="Nouveau rêve"
+        label="New Dream"
       />
     </SafeAreaView>
   );

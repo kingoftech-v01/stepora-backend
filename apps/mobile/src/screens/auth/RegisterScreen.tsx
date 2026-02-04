@@ -51,14 +51,14 @@ export function RegisterScreen({ navigation }: any) {
         style={styles.content}
       >
         <Text variant="headlineMedium" style={styles.title}>
-          Créer un compte
+          Create Account
         </Text>
         <Text variant="bodyMedium" style={styles.subtitle}>
-          Commence ton aventure DreamPlanner
+          Start your DreamPlanner adventure
         </Text>
 
         <TextInput
-          label="Nom"
+          label="Name"
           value={displayName}
           onChangeText={setDisplayName}
           mode="outlined"
@@ -78,7 +78,7 @@ export function RegisterScreen({ navigation }: any) {
         />
 
         <TextInput
-          label="Mot de passe"
+          label="Password"
           value={password}
           onChangeText={setPassword}
           mode="outlined"
@@ -88,7 +88,7 @@ export function RegisterScreen({ navigation }: any) {
         />
 
         <TextInput
-          label="Confirmer le mot de passe"
+          label="Confirm Password"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           mode="outlined"
@@ -110,7 +110,7 @@ export function RegisterScreen({ navigation }: any) {
           disabled={loading || !displayName || !email || !password || !confirmPassword}
           style={styles.button}
         >
-          Créer mon compte
+          Create My Account
         </Button>
 
         <Button
@@ -119,7 +119,7 @@ export function RegisterScreen({ navigation }: any) {
           style={styles.textButton}
           disabled={loading}
         >
-          J'ai déjà un compte
+          I already have an account
         </Button>
       </KeyboardAvoidingView>
     </SafeAreaView>

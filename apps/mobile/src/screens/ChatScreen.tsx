@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Text, useTheme, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import auth from '@react-native-firebase/auth';
 
 import { ChatBubble } from '../components/ChatBubble';
 import { ChatInput } from '../components/ChatInput';
@@ -15,48 +16,75 @@ import { SuggestionChips } from '../components/SuggestionChips';
 import { useChatStore } from '../stores/chatStore';
 import { Message } from '../types';
 import { AppTheme, spacing, typography, colors } from '../theme';
+import { api } from '../services/api';
+import { ENV } from '../config/env';
 
-// Generate unique ID
+// ---------------------------------------------------------------------------
+// Helpers & constants
+// ---------------------------------------------------------------------------
+
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+const RECONNECT_DELAY_MS = 3000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: `Bonjour ! 👋 Je suis DreamPlanner, ton assistant personnel pour transformer tes rêves en réalité.
-
-Parle-moi de ce que tu voudrais accomplir. Quel est ton prochain grand objectif ?`,
+  content: `Hello! I'm DreamPlanner, your personal assistant for turning your dreams into reality.\n\nTell me about what you'd like to accomplish. What's your next big goal?`,
   timestamp: new Date(),
 };
 
 const SUGGESTIONS = [
-  'Je veux apprendre une nouvelle langue',
-  'Je veux me mettre au sport',
-  'Je veux changer de carrière',
-  'Je veux apprendre un instrument',
+  'I want to learn a new language',
+  'I want to start working out',
+  'I want to change careers',
+  'I want to learn an instrument',
 ];
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export const ChatScreen: React.FC = () => {
   const theme = useTheme() as AppTheme;
   const flatListRef = useRef<FlatList>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const streamingMessageIdRef = useRef<string | null>(null);
+
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>('disconnected');
 
   const {
+    conversationId,
     messages,
     isLoading,
     isStreaming,
     addMessage,
+    appendToMessage,
+    finalizeMessage,
+    setConversationId,
     setLoading,
     setStreaming,
     setError,
   } = useChatStore();
 
-  // Initialize with welcome message if empty
+  // -----------------------------------------------------------------------
+  // Lifecycle
+  // -----------------------------------------------------------------------
+
+  // Seed the chat with a welcome message when the screen first renders.
   useEffect(() => {
     if (messages.length === 0) {
       addMessage(WELCOME_MESSAGE);
     }
   }, []);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to the bottom whenever the message list changes.
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => {
@@ -65,148 +93,363 @@ export const ChatScreen: React.FC = () => {
     }
   }, [messages]);
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
-
-    // Add user message immediately
-    const userMessage: Message = {
-      id: generateId(),
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
+  // Bootstrap: load or create a conversation, then open the WebSocket.
+  useEffect(() => {
+    initializeConversation();
+    return () => {
+      cleanupWebSocket();
     };
-    addMessage(userMessage);
-    setLoading(true);
-    setError(null);
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // WebSocket management
+  // -----------------------------------------------------------------------
+
+  const cleanupWebSocket = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (wsRef.current) {
+      // Prevent the onclose handler from triggering reconnection.
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  const initializeConversation = async () => {
+    try {
+      // Attempt to load existing conversations from the backend.
+      const response: any = await api.conversations.list();
+      const conversations = response.results || response;
+
+      let activeConversationId: string;
+
+      if (conversations && conversations.length > 0) {
+        // Resume the most recent conversation.
+        activeConversationId = conversations[0].id;
+      } else {
+        // No prior conversations -- create a new one.
+        const newConversation: any = await api.conversations.create({
+          type: 'general',
+        });
+        activeConversationId = newConversation.id;
+      }
+
+      setConversationId(activeConversationId);
+      connectWebSocket(activeConversationId);
+    } catch (error) {
+      // If the API is unreachable, generate a local ID so the user can still
+      // type messages (they will be sent via REST once connectivity returns).
+      console.warn(
+        'Failed to initialize conversation; will use REST fallback:',
+        error,
+      );
+      const fallbackId = generateId();
+      setConversationId(fallbackId);
+      setConnectionStatus('error');
+    }
+  };
+
+  const connectWebSocket = async (convId: string) => {
+    cleanupWebSocket();
+    setConnectionStatus('connecting');
 
     try {
-      // Simulate AI response for demo
-      await simulateAIResponse(text);
+      const user = auth().currentUser;
+      if (!user) {
+        setConnectionStatus('error');
+        return;
+      }
+
+      const token = await user.getIdToken();
+      const wsUrl = `${ENV.WS_URL}/chat/${convId}/?token=${token}`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setConnectionStatus('connected');
+        reconnectAttemptsRef.current = 0;
+      };
+
+      ws.onmessage = (event: WebSocketMessageEvent) => {
+        handleWebSocketMessage(event);
+      };
+
+      ws.onerror = () => {
+        setConnectionStatus('error');
+      };
+
+      ws.onclose = () => {
+        setConnectionStatus('disconnected');
+        attemptReconnect(convId);
+      };
+
+      wsRef.current = ws;
     } catch (error) {
-      setError((error as Error).message);
-      addMessage({
-        id: generateId(),
-        role: 'assistant',
-        content: "Désolé, je n'ai pas pu traiter ta demande. Réessaie dans un moment.",
-        timestamp: new Date(),
-      });
-    } finally {
-      setLoading(false);
-      setStreaming(false);
+      console.warn('Failed to connect WebSocket:', error);
+      setConnectionStatus('error');
     }
-  }, [isLoading]);
+  };
 
-  // Simulate AI response for demo
-  const simulateAIResponse = async (userMessage: string) => {
-    setStreaming(true);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
-    let response = '';
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes('langue') || lowerMessage.includes('anglais') || lowerMessage.includes('espagnol')) {
-      response = `Super choix ! Apprendre une nouvelle langue ouvre tellement de portes. 🌍
-
-Quelques questions pour créer ton plan personnalisé :
-
-1. Quelle langue veux-tu apprendre ?
-2. Quel est ton niveau actuel (débutant, intermédiaire) ?
-3. Combien de temps par jour peux-tu y consacrer ?
-4. As-tu une date cible en tête ?`;
-    } else if (lowerMessage.includes('sport') || lowerMessage.includes('fitness') || lowerMessage.includes('courir')) {
-      response = `Excellent objectif ! Le sport est une habitude qui change la vie. 💪
-
-Pour bien planifier, dis-moi :
-
-1. Quel type d'activité t'attire ? (course, musculation, yoga...)
-2. Quel est ton niveau actuel ?
-3. Combien de fois par semaine peux-tu t'entraîner ?
-4. As-tu un objectif précis ? (perdre du poids, marathon, etc.)`;
-    } else if (lowerMessage.includes('carrière') || lowerMessage.includes('travail') || lowerMessage.includes('métier')) {
-      response = `Un changement de carrière, c'est courageux et excitant ! 🚀
-
-Explorons ensemble :
-
-1. Dans quel domaine voudrais-tu te diriger ?
-2. As-tu déjà des compétences dans ce domaine ?
-3. Combien de temps es-tu prêt(e) à investir ?
-4. Quelle est ta situation actuelle ?`;
-    } else if (lowerMessage.includes('instrument') || lowerMessage.includes('guitare') || lowerMessage.includes('piano')) {
-      response = `La musique, quelle belle aventure ! 🎵
-
-Quelques questions pour bien démarrer :
-
-1. Quel instrument veux-tu apprendre ?
-2. As-tu déjà l'instrument chez toi ?
-3. As-tu des bases musicales ou tu pars de zéro ?
-4. Combien de temps par jour peux-tu pratiquer ?
-5. Y a-t-il un morceau que tu rêves de jouer ?`;
-    } else if (lowerMessage.includes('génère') || lowerMessage.includes('plan')) {
-      response = `🎯 **Voici ton plan personnalisé !**
-
-📊 **Analyse :** Objectif ambitieux mais réalisable
-⏱ **Durée estimée :** 6 mois
-📅 **Temps requis :** 30 min/jour
-
-**Étape 1 (Sem. 1-2) : Les fondations**
-• Préparer ton environnement
-• Établir ta routine quotidienne
-
-**Étape 2 (Sem. 3-6) : Construction**
-• Progression graduelle
-• Premiers résultats visibles
-
-**Étape 3 (Sem. 7-12) : Maîtrise**
-• Techniques avancées
-• Consolidation
-
-Veux-tu que j'ajoute ce plan à tes objectifs ?`;
-    } else {
-      response = `Je comprends ! 😊
-
-Pour mieux t'aider à planifier cet objectif, j'aurais besoin d'en savoir plus :
-
-• Peux-tu me décrire ton objectif en détail ?
-• Quelle est ta motivation principale ?
-• As-tu une date limite en tête ?
-• Combien de temps peux-tu y consacrer chaque jour ?`;
+  const attemptReconnect = (convId: string) => {
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      setConnectionStatus('error');
+      return;
     }
+
+    reconnectAttemptsRef.current += 1;
+    const delay = RECONNECT_DELAY_MS * reconnectAttemptsRef.current;
+
+    reconnectTimerRef.current = setTimeout(() => {
+      connectWebSocket(convId);
+    }, delay);
+  };
+
+  // -----------------------------------------------------------------------
+  // Incoming WebSocket messages
+  // -----------------------------------------------------------------------
+
+  const handleWebSocketMessage = (event: WebSocketMessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      switch (data.type) {
+        case 'chat.token': {
+          if (!streamingMessageIdRef.current) {
+            // First token -- create a new placeholder assistant message.
+            const msgId = generateId();
+            streamingMessageIdRef.current = msgId;
+            setStreaming(true);
+            addMessage({
+              id: msgId,
+              role: 'assistant',
+              content: data.token,
+              timestamp: new Date(),
+              isStreaming: true,
+            });
+          } else {
+            // Subsequent tokens -- append to the existing message.
+            appendToMessage(streamingMessageIdRef.current, data.token);
+          }
+          break;
+        }
+
+        case 'chat.complete': {
+          if (streamingMessageIdRef.current) {
+            finalizeMessage(
+              streamingMessageIdRef.current,
+              data.message_id,
+            );
+            streamingMessageIdRef.current = null;
+          }
+          setStreaming(false);
+          setLoading(false);
+          break;
+        }
+
+        case 'chat.error': {
+          setError(data.message || 'An error occurred');
+          setStreaming(false);
+          setLoading(false);
+          streamingMessageIdRef.current = null;
+          addMessage({
+            id: generateId(),
+            role: 'assistant',
+            content:
+              'Sorry, I could not process your request. Please try again in a moment.',
+            timestamp: new Date(),
+          });
+          break;
+        }
+
+        default:
+          break;
+      }
+    } catch (error) {
+      console.warn('Failed to parse WebSocket message:', error);
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Sending messages
+  // -----------------------------------------------------------------------
+
+  /** Attempt to send via the open WebSocket. Returns true on success. */
+  const sendViaWebSocket = (text: string): boolean => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'chat.message',
+          content: text,
+        }),
+      );
+      return true;
+    }
+    return false;
+  };
+
+  /** Fallback: send via the REST API and add the response to the store. */
+  const sendViaRest = async (text: string) => {
+    const convId = useChatStore.getState().conversationId;
+    if (!convId) {
+      throw new Error('No active conversation');
+    }
+
+    const response: any = await api.conversations.sendMessage(convId, text);
+    const assistantContent =
+      response.content || response.message || response.reply || '';
 
     addMessage({
-      id: generateId(),
+      id: response.id || generateId(),
       role: 'assistant',
-      content: response,
+      content: assistantContent,
       timestamp: new Date(),
     });
   };
 
-  const handleSuggestionPress = useCallback((suggestion: string) => {
-    handleSend(suggestion);
-  }, [handleSend]);
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isLoading) return;
 
-  const renderMessage = useCallback(({ item }: { item: Message }) => (
-    <ChatBubble
-      message={item.content}
-      isUser={item.role === 'user'}
-      timestamp={item.timestamp}
-      isStreaming={item.isStreaming}
-    />
-  ), []);
+      // Immediately show the user's message in the list.
+      const userMessage: Message = {
+        id: generateId(),
+        role: 'user',
+        content: text,
+        timestamp: new Date(),
+      };
+      addMessage(userMessage);
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Prefer the WebSocket path for streaming responses.
+        const sentViaWs = sendViaWebSocket(text);
+
+        if (!sentViaWs) {
+          // WebSocket unavailable -- fall back to REST.
+          await sendViaRest(text);
+          setLoading(false);
+        }
+        // When sent via WS, loading is cleared by the chat.complete handler.
+      } catch (error) {
+        setError((error as Error).message || 'Failed to send message');
+        addMessage({
+          id: generateId(),
+          role: 'assistant',
+          content:
+            'Sorry, I could not process your request. Please try again in a moment.',
+          timestamp: new Date(),
+        });
+        setLoading(false);
+        setStreaming(false);
+      }
+    },
+    [isLoading],
+  );
+
+  const handleSuggestionPress = useCallback(
+    (suggestion: string) => {
+      handleSend(suggestion);
+    },
+    [handleSend],
+  );
+
+  // -----------------------------------------------------------------------
+  // Render helpers
+  // -----------------------------------------------------------------------
+
+  const renderMessage = useCallback(
+    ({ item }: { item: Message }) => (
+      <ChatBubble
+        message={item.content}
+        isUser={item.role === 'user'}
+        timestamp={item.timestamp}
+        isStreaming={item.isStreaming}
+      />
+    ),
+    [],
+  );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
+
   const showSuggestions = messages.length <= 1;
+
+  // Connection status visual helpers
+  const getStatusColor = (): string => {
+    switch (connectionStatus) {
+      case 'connected':
+        return colors.success;
+      case 'connecting':
+        return colors.warning;
+      case 'disconnected':
+        return colors.gray[400];
+      case 'error':
+        return colors.error;
+    }
+  };
+
+  const getStatusLabel = (): string => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Connected';
+      case 'connecting':
+        return 'Connecting...';
+      case 'disconnected':
+        return 'Disconnected';
+      case 'error':
+        return 'Connection error';
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // JSX
+  // -----------------------------------------------------------------------
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       edges={['top']}
     >
+      {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <Text style={[styles.headerTitle, { color: theme.custom.colors.textPrimary }]}>
-          DreamPlanner
-        </Text>
-        <Text style={[styles.headerSubtitle, { color: theme.custom.colors.textSecondary }]}>
-          Ton assistant pour réaliser tes rêves
+        <View style={styles.headerRow}>
+          <Text
+            style={[
+              styles.headerTitle,
+              { color: theme.custom.colors.textPrimary },
+            ]}
+          >
+            DreamPlanner
+          </Text>
+
+          {/* Connection status indicator */}
+          <View style={styles.statusContainer}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: getStatusColor() },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                { color: theme.custom.colors.textSecondary },
+              ]}
+            >
+              {getStatusLabel()}
+            </Text>
+          </View>
+        </View>
+
+        <Text
+          style={[
+            styles.headerSubtitle,
+            { color: theme.custom.colors.textSecondary },
+          ]}
+        >
+          Your assistant for making dreams come true
         </Text>
       </View>
 
@@ -224,9 +467,17 @@ Pour mieux t'aider à planifier cet objectif, j'aurais besoin d'en savoir plus :
           ListFooterComponent={
             isLoading && !isStreaming ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.custom.colors.textSecondary }]}>
-                  DreamPlanner réfléchit...
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.loadingText,
+                    { color: theme.custom.colors.textSecondary },
+                  ]}
+                >
+                  DreamPlanner is thinking...
                 </Text>
               </View>
             ) : null
@@ -234,14 +485,25 @@ Pour mieux t'aider à planifier cet objectif, j'aurais besoin d'en savoir plus :
         />
 
         {showSuggestions && (
-          <SuggestionChips suggestions={SUGGESTIONS} onPress={handleSuggestionPress} />
+          <SuggestionChips
+            suggestions={SUGGESTIONS}
+            onPress={handleSuggestionPress}
+          />
         )}
 
-        <ChatInput onSend={handleSend} isLoading={isLoading} />
+        <ChatInput
+          onSend={handleSend}
+          isLoading={isLoading}
+          placeholder="Type your message..."
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   container: {
@@ -253,12 +515,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[200],
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     ...typography.h2,
   },
   headerSubtitle: {
     ...typography.bodySmall,
     marginTop: 2,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
   },
   keyboardAvoid: {
     flex: 1,

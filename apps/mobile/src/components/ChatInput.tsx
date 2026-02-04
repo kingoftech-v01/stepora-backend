@@ -15,7 +15,7 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   isLoading = false,
-  placeholder = 'Écris ton message...',
+  placeholder = 'Type your message...',
 }) => {
   const [text, setText] = useState('');
   const theme = useTheme() as AppTheme;

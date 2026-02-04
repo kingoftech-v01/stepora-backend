@@ -91,7 +91,7 @@ export const CircleDetailScreen = () => {
                 onPress={() => leaveCircleMutation.mutate()}
                 loading={leaveCircleMutation.isPending}
               >
-                Quitter
+                Leave
               </Button>
             )}
           </View>
@@ -104,7 +104,7 @@ export const CircleDetailScreen = () => {
             <View style={styles.stat}>
               <Text variant="titleMedium">{circle.members?.length || 0}</Text>
               <Text variant="bodySmall" style={styles.statLabel}>
-                Membres
+                Members
               </Text>
             </View>
             <View style={styles.stat}>
@@ -142,7 +142,7 @@ export const CircleDetailScreen = () => {
           <Card style={styles.createPostCard}>
             <Card.Content>
               <TextInput
-                placeholder="Partage ton progrès..."
+                placeholder="Share your progress..."
                 value={newPost}
                 onChangeText={setNewPost}
                 multiline
@@ -156,7 +156,7 @@ export const CircleDetailScreen = () => {
                 loading={createPostMutation.isPending}
                 style={styles.postButton}
               >
-                Publier
+                Post
               </Button>
             </Card.Content>
           </Card>
@@ -172,7 +172,7 @@ export const CircleDetailScreen = () => {
                       {post.user.username}
                     </Text>
                     <Text variant="bodySmall" style={styles.postTime}>
-                      {new Date(post.createdAt).toLocaleDateString('fr-FR')}
+                      {new Date(post.createdAt).toLocaleDateString('en-US')}
                     </Text>
                   </View>
                 </View>
@@ -193,7 +193,7 @@ export const CircleDetailScreen = () => {
           {(!feed || feed.length === 0) && (
             <View style={styles.emptyState}>
               <Text variant="bodyMedium" style={styles.emptyText}>
-                Aucun post encore. Sois le premier à partager !
+                No posts yet. Be the first to share!
               </Text>
             </View>
           )}
@@ -214,10 +214,10 @@ export const CircleDetailScreen = () => {
                 </Text>
                 <View style={styles.challengeDates}>
                   <Text variant="bodySmall">
-                    Du {new Date(challenge.startDate).toLocaleDateString('fr-FR')}
+                    From {new Date(challenge.startDate).toLocaleDateString('en-US')}
                   </Text>
                   <Text variant="bodySmall">
-                    au {new Date(challenge.endDate).toLocaleDateString('fr-FR')}
+                    to {new Date(challenge.endDate).toLocaleDateString('en-US')}
                   </Text>
                 </View>
                 {circle.isMember && (
@@ -226,7 +226,7 @@ export const CircleDetailScreen = () => {
                     onPress={() => joinChallengeMutation.mutate(challenge.id)}
                     style={styles.joinChallengeButton}
                   >
-                    Participer
+                    Join
                   </Button>
                 )}
               </Card.Content>
@@ -236,7 +236,7 @@ export const CircleDetailScreen = () => {
           {(!circle.challenges || circle.challenges.length === 0) && (
             <View style={styles.emptyState}>
               <Text variant="bodyMedium" style={styles.emptyText}>
-                Aucun challenge actif
+                No active challenges
               </Text>
             </View>
           )}
@@ -247,7 +247,7 @@ export const CircleDetailScreen = () => {
       <Card style={styles.membersCard}>
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
-            Membres ({circle.members?.length || 0})
+            Members ({circle.members?.length || 0})
           </Text>
           <View style={styles.membersList}>
             {circle.members?.slice(0, 6).map((member: any) => (

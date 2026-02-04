@@ -5,6 +5,7 @@ Base settings shared across all environments.
 
 import os
 from pathlib import Path
+from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -40,6 +41,9 @@ INSTALLED_APPS = [
     'apps.conversations',
     'apps.notifications',
     'apps.calendar',
+    'apps.subscriptions',
+    'apps.store',
+    'apps.leagues',
     'core',
 ]
 
@@ -47,6 +51,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -103,10 +108,34 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-LANGUAGE_CODE = 'fr-fr'
+LANGUAGE_CODE = 'en'
 TIME_ZONE = 'UTC'
 USE_I18N = True
+USE_L10N = True
 USE_TZ = True
+
+# Supported languages (15 languages)
+LANGUAGES = [
+    ('en', _('English')),
+    ('fr', _('French')),
+    ('es', _('Spanish')),
+    ('pt', _('Portuguese')),
+    ('ar', _('Arabic')),
+    ('zh', _('Chinese')),
+    ('hi', _('Hindi')),
+    ('ja', _('Japanese')),
+    ('de', _('German')),
+    ('ru', _('Russian')),
+    ('ko', _('Korean')),
+    ('it', _('Italian')),
+    ('tr', _('Turkish')),
+    ('nl', _('Dutch')),
+    ('pl', _('Polish')),
+]
+
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
@@ -139,23 +168,38 @@ REST_FRAMEWORK = {
     ],
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/minute',
+        'user': '120/minute',
+        'ai_chat': '20/minute',
+        'ai_plan': '10/minute',
+        'subscription': '10/minute',
+        'store_purchase': '10/minute',
+    },
 }
 
 # DRF Spectacular - OpenAPI/Swagger Documentation
 SPECTACULAR_SETTINGS = {
     'TITLE': 'DreamPlanner API',
-    'DESCRIPTION': 'API pour la gestion des rêves, objectifs et tâches avec coaching IA',
+    'DESCRIPTION': 'API for dream and goal management with AI coaching, subscriptions, and gamification',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/api/',
     'TAGS': [
-        {'name': 'auth', 'description': 'Authentification et inscription'},
-        {'name': 'users', 'description': 'Gestion des profils utilisateurs'},
-        {'name': 'dreams', 'description': 'Gestion des rêves et objectifs'},
-        {'name': 'conversations', 'description': 'Chat IA en temps réel'},
-        {'name': 'notifications', 'description': 'Notifications push'},
-        {'name': 'calendar', 'description': 'Calendrier et planification'},
+        {'name': 'auth', 'description': 'Authentication and registration'},
+        {'name': 'users', 'description': 'User profile management'},
+        {'name': 'dreams', 'description': 'Dream and goal management'},
+        {'name': 'conversations', 'description': 'AI chat in real-time'},
+        {'name': 'notifications', 'description': 'Push notifications'},
+        {'name': 'calendar', 'description': 'Calendar and planning'},
+        {'name': 'subscriptions', 'description': 'Stripe subscription management'},
+        {'name': 'store', 'description': 'In-app store for cosmetic items'},
+        {'name': 'leagues', 'description': 'League and ranking system'},
     ],
 }
 
@@ -237,6 +281,36 @@ CORS_ALLOWED_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+# Stripe Configuration
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
+STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+
+# Subscription plan Stripe Price IDs
+STRIPE_PRICES = {
+    'premium_monthly': os.getenv('STRIPE_PREMIUM_MONTHLY_PRICE_ID', ''),
+    'premium_yearly': os.getenv('STRIPE_PREMIUM_YEARLY_PRICE_ID', ''),
+    'pro_monthly': os.getenv('STRIPE_PRO_MONTHLY_PRICE_ID', ''),
+    'pro_yearly': os.getenv('STRIPE_PRO_YEARLY_PRICE_ID', ''),
+}
+
+# Subscription pricing (for display and validation)
+SUBSCRIPTION_PRICES = {
+    'premium': {'monthly': 9.99, 'yearly': 99.99},
+    'pro': {'monthly': 19.99, 'yearly': 199.99},
+}
+
+# Free tier limits
+FREE_TIER_LIMITS = {
+    'max_dreams': 3,
+    'ai_access': False,
+    'buddy_access': False,
+    'circle_access': False,
+    'vision_board_access': False,
+    'league_access': False,
+    'has_ads': True,
+}
 
 # Security settings (will be overridden in production)
 SECURE_SSL_REDIRECT = False

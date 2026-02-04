@@ -1,12 +1,13 @@
 """
 URL configuration for DreamPlanner backend.
+Routes all API endpoints to their respective app URL configurations.
 """
 
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework.routers import DefaultRouter
+from django.conf.urls.i18n import i18n_patterns
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -32,6 +33,9 @@ urlpatterns = [
     path('api/conversations/', include('apps.conversations.urls')),
     path('api/calendar/', include('apps.calendar.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
+    path('api/subscriptions/', include('apps.subscriptions.urls')),
+    path('api/store/', include('apps.store.urls')),
+    path('api/leagues/', include('apps.leagues.urls')),
 ]
 
 # Serve media files in development

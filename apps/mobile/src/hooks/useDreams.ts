@@ -5,7 +5,7 @@ import { api, ApiError } from '../services/api';
 // Helper to show error alerts
 const showError = (error: unknown, defaultMessage: string) => {
   const apiError = error as ApiError;
-  Alert.alert('Erreur', apiError?.message || defaultMessage);
+  Alert.alert('Error', apiError?.message || defaultMessage);
 };
 
 export function useDreams(filters?: Record<string, unknown>) {
@@ -31,7 +31,7 @@ export function useCreateDream() {
       queryClient.invalidateQueries({ queryKey: ['dreams'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de créer le rêve. Veuillez réessayer.');
+      showError(error, 'Unable to create dream. Please try again.');
     },
   });
 }
@@ -46,7 +46,7 @@ export function useUpdateDream() {
       queryClient.invalidateQueries({ queryKey: ['dreams', variables.id] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de mettre à jour le rêve. Veuillez réessayer.');
+      showError(error, 'Unable to update dream. Please try again.');
     },
   });
 }
@@ -59,7 +59,7 @@ export function useDeleteDream() {
       queryClient.invalidateQueries({ queryKey: ['dreams'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de supprimer le rêve. Veuillez réessayer.');
+      showError(error, 'Unable to delete dream. Please try again.');
     },
   });
 }
@@ -75,7 +75,7 @@ export function useGeneratePlan() {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de générer le plan. Veuillez réessayer.');
+      showError(error, 'Unable to generate plan. Please try again.');
     },
   });
 }
@@ -89,7 +89,7 @@ export function useCompleteDream() {
       queryClient.invalidateQueries({ queryKey: ['dreams', id] });
     },
     onError: (error) => {
-      showError(error, 'Impossible de compléter le rêve. Veuillez réessayer.');
+      showError(error, 'Unable to complete dream. Please try again.');
     },
   });
 }
