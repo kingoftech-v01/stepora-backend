@@ -1,0 +1,50 @@
+# Django Core
+Django==5.0.1
+djangorestframework==3.14.0
+django-filter==23.5
+django-cors-headers==4.3.1
+
+# Database
+psycopg2-binary==2.9.9
+dj-database-url==2.1.0
+
+# Redis & Caching
+django-redis==5.4.0
+redis==5.0.1
+
+# Channels for WebSockets
+channels==4.0.0
+channels-redis==4.1.0
+daphne==4.0.0
+
+# Celery for background tasks
+celery==5.3.4
+celery[redis]==5.3.4
+django-celery-beat==2.5.0
+
+# Firebase
+firebase-admin==6.3.0
+
+# OpenAI
+openai==1.7.2
+
+# Authentication
+PyJWT==2.8.0
+
+# Utilities
+python-dotenv==1.0.0
+pytz==2023.3
+python-dateutil==2.8.2
+
+# Validation
+marshmallow==3.20.1
+
+# API Documentation
+drf-spectacular==0.27.0
+
+# Security - XSS Sanitization
+bleach==6.1.0
+
+# Production server
+gunicorn==21.2.0
+uvicorn[standard]==0.25.0

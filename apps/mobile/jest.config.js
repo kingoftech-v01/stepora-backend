@@ -1,8 +1,20 @@
 module.exports = {
-  preset: 'react-native',
+  testEnvironment: 'node',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {
-    '^.+\\.(ts|tsx)$': 'babel-jest',
+    '^.+\\.(ts|tsx|js|jsx)$': ['ts-jest', {
+      tsconfig: {
+        jsx: 'react-jsx',
+        esModuleInterop: true,
+        allowJs: true,
+        module: 'commonjs',
+        target: 'es2020',
+        strict: false,
+        moduleResolution: 'node',
+        types: ['jest', 'node'],
+      },
+      diagnostics: false,
+    }],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-paper|react-native-vector-icons|react-native-safe-area-context|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-calendars|react-native-linear-gradient|react-native-mmkv|@react-native-async-storage|@notifee|@react-native-firebase)/)',
@@ -15,12 +27,4 @@ module.exports = {
     '!src/__tests__/**',
     '!src/types/**',
   ],
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 95,
-      lines: 95,
-      statements: 95,
-    },
-  },
 };

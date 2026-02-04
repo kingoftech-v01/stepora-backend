@@ -3,7 +3,7 @@ import { useChatStore } from '../../stores/chatStore';
 
 beforeEach(() => {
   act(() => {
-    useChatStore.getState().clearChat();
+    useChatStore.getState().clearMessages();
   });
 });
 
@@ -12,107 +12,54 @@ describe('ChatStore', () => {
     it('should have correct initial state', () => {
       const state = useChatStore.getState();
 
-      expect(state.currentConversation).toBeNull();
+      expect(state.conversationId).toBeNull();
       expect(state.messages).toEqual([]);
       expect(state.isLoading).toBe(false);
-      expect(state.isStreaming).toBe(false);
-      expect(state.error).toBeNull();
     });
   });
 
-  describe('setConversation', () => {
-    it('should set conversation and its messages', () => {
-      const conversation = {
-        id: 'conv-1',
-        type: 'dream_creation' as const,
-        messages: [
-          { id: 'msg-1', role: 'user' as const, content: 'Hello', timestamp: new Date() },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
+  describe('setConversationId', () => {
+    it('should set conversation id', () => {
       act(() => {
-        useChatStore.getState().setConversation(conversation);
+        useChatStore.getState().setConversationId('conv-1');
       });
 
-      const state = useChatStore.getState();
-      expect(state.currentConversation).toEqual(conversation);
-      expect(state.messages).toHaveLength(1);
-    });
-
-    it('should handle null conversation', () => {
-      act(() => {
-        useChatStore.getState().setConversation(null);
-      });
-
-      const state = useChatStore.getState();
-      expect(state.currentConversation).toBeNull();
-      expect(state.messages).toEqual([]);
+      expect(useChatStore.getState().conversationId).toBe('conv-1');
     });
   });
 
   describe('addMessage', () => {
-    it('should add a message to the list', () => {
-      const message = {
-        id: 'msg-1',
-        role: 'user' as const,
-        content: 'I want to learn guitar',
-        timestamp: new Date(),
-      };
-
+    it('should add a message with auto-generated id and timestamp', () => {
       act(() => {
-        useChatStore.getState().addMessage(message);
+        useChatStore.getState().addMessage({
+          role: 'user',
+          content: 'I want to learn guitar',
+        });
       });
 
-      expect(useChatStore.getState().messages).toHaveLength(1);
-      expect(useChatStore.getState().messages[0].content).toBe('I want to learn guitar');
+      const messages = useChatStore.getState().messages;
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('I want to learn guitar');
+      expect(messages[0].role).toBe('user');
+      expect(messages[0].id).toBeDefined();
+      expect(messages[0].timestamp).toBeDefined();
     });
 
     it('should append to existing messages', () => {
       act(() => {
         useChatStore.getState().addMessage({
-          id: 'msg-1',
           role: 'user',
           content: 'First',
-          timestamp: new Date(),
         });
         useChatStore.getState().addMessage({
-          id: 'msg-2',
           role: 'assistant',
           content: 'Second',
-          timestamp: new Date(),
         });
       });
 
       expect(useChatStore.getState().messages).toHaveLength(2);
-    });
-  });
-
-  describe('updateLastMessage', () => {
-    it('should append content to the last message', () => {
-      act(() => {
-        useChatStore.getState().addMessage({
-          id: 'msg-1',
-          role: 'assistant',
-          content: 'Hello',
-          timestamp: new Date(),
-        });
-      });
-
-      act(() => {
-        useChatStore.getState().updateLastMessage(' World');
-      });
-
-      expect(useChatStore.getState().messages[0].content).toBe('Hello World');
-    });
-
-    it('should do nothing when no messages exist', () => {
-      act(() => {
-        useChatStore.getState().updateLastMessage('test');
-      });
-
-      expect(useChatStore.getState().messages).toHaveLength(0);
+      expect(useChatStore.getState().messages[0].content).toBe('First');
+      expect(useChatStore.getState().messages[1].content).toBe('Second');
     });
   });
 
@@ -120,10 +67,8 @@ describe('ChatStore', () => {
     it('should replace all messages', () => {
       act(() => {
         useChatStore.getState().addMessage({
-          id: 'msg-1',
           role: 'user',
           content: 'Old',
-          timestamp: new Date(),
         });
       });
 
@@ -148,63 +93,35 @@ describe('ChatStore', () => {
 
       expect(useChatStore.getState().isLoading).toBe(true);
     });
-  });
 
-  describe('setStreaming', () => {
-    it('should set streaming state', () => {
+    it('should unset loading state', () => {
       act(() => {
-        useChatStore.getState().setStreaming(true);
+        useChatStore.getState().setLoading(true);
+        useChatStore.getState().setLoading(false);
       });
 
-      expect(useChatStore.getState().isStreaming).toBe(true);
+      expect(useChatStore.getState().isLoading).toBe(false);
     });
   });
 
-  describe('setError', () => {
-    it('should set error', () => {
+  describe('clearMessages', () => {
+    it('should reset messages and conversationId', () => {
       act(() => {
-        useChatStore.getState().setError('Something went wrong');
-      });
-
-      expect(useChatStore.getState().error).toBe('Something went wrong');
-    });
-
-    it('should clear error', () => {
-      act(() => {
-        useChatStore.getState().setError('Error');
-        useChatStore.getState().setError(null);
-      });
-
-      expect(useChatStore.getState().error).toBeNull();
-    });
-  });
-
-  describe('clearChat', () => {
-    it('should reset all chat state', () => {
-      // Set some state
-      act(() => {
+        useChatStore.getState().setConversationId('conv-1');
         useChatStore.getState().addMessage({
-          id: 'msg-1',
           role: 'user',
           content: 'Hello',
-          timestamp: new Date(),
         });
         useChatStore.getState().setLoading(true);
-        useChatStore.getState().setStreaming(true);
-        useChatStore.getState().setError('error');
       });
 
-      // Clear
       act(() => {
-        useChatStore.getState().clearChat();
+        useChatStore.getState().clearMessages();
       });
 
       const state = useChatStore.getState();
-      expect(state.currentConversation).toBeNull();
+      expect(state.conversationId).toBeNull();
       expect(state.messages).toEqual([]);
-      expect(state.isLoading).toBe(false);
-      expect(state.isStreaming).toBe(false);
-      expect(state.error).toBeNull();
     });
   });
 });

@@ -1,146 +1,66 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from 'react-native-paper';
+import { View, StyleSheet } from 'react-native';
+import { Text } from 'react-native-paper';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-
-import { colors, spacing, borderRadius, typography } from '../theme';
-import { AppTheme } from '../theme';
+import { theme } from '../theme';
 
 interface ChatBubbleProps {
   message: string;
   isUser: boolean;
   timestamp: Date;
-  isStreaming?: boolean;
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({
-  message,
-  isUser,
-  timestamp,
-  isStreaming = false,
-}) => {
-  const theme = useTheme() as AppTheme;
-  const customColors = theme.custom.colors;
-
-  const formattedTime = format(timestamp, 'HH:mm', { locale: fr });
-
+export function ChatBubble({ message, isUser, timestamp }: ChatBubbleProps) {
   return (
-    <Animated.View
-      entering={FadeInUp.duration(300)}
-      style={[
-        styles.container,
-        isUser ? styles.userContainer : styles.aiContainer,
-      ]}
-    >
-      {!isUser && (
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.avatarText}>AI</Text>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.bubbleWrapper}>
-        {!isUser && (
-          <Text style={[styles.senderName, { color: customColors.textSecondary }]}>
-            DreamPlanner
-          </Text>
-        )}
-
-        <View
-          style={[
-            styles.bubble,
-            isUser
-              ? [styles.userBubble, { backgroundColor: customColors.userBubble }]
-              : [styles.aiBubble, { backgroundColor: customColors.aiBubble }],
-          ]}
-        >
-          <Text
-            style={[
-              styles.messageText,
-              { color: isUser ? colors.white : customColors.textPrimary },
-            ]}
-          >
-            {message}
-            {isStreaming && <Text style={styles.cursor}>|</Text>}
-          </Text>
-        </View>
-
-        <Text
-          style={[
-            styles.timestamp,
-            { color: customColors.textMuted },
-            isUser && styles.timestampRight,
-          ]}
-        >
-          {formattedTime}
+    <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
+      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+        <Text style={[styles.message, isUser ? styles.userMessage : styles.assistantMessage]}>
+          {message}
         </Text>
       </View>
-    </Animated.View>
+      <Text style={styles.timestamp}>{format(timestamp, 'HH:mm')}</Text>
+    </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.sm,
+    marginVertical: 4,
+    paddingHorizontal: 16,
   },
   userContainer: {
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
-  aiContainer: {
-    justifyContent: 'flex-start',
-  },
-  avatarContainer: {
-    marginRight: spacing.sm,
-    alignSelf: 'flex-end',
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bubbleWrapper: {
-    maxWidth: '75%',
-  },
-  senderName: {
-    fontSize: 12,
-    marginBottom: 4,
-    marginLeft: 4,
+  assistantContainer: {
+    alignItems: 'flex-start',
   },
   bubble: {
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
   },
   userBubble: {
-    borderBottomRightRadius: borderRadius.sm,
+    backgroundColor: theme.colors.primary,
+    borderBottomRightRadius: 4,
   },
-  aiBubble: {
-    borderBottomLeftRadius: borderRadius.sm,
+  assistantBubble: {
+    backgroundColor: '#e0e0e0',
+    borderBottomLeftRadius: 4,
   },
-  messageText: {
-    ...typography.body,
+  message: {
+    fontSize: 16,
+    lineHeight: 22,
   },
-  cursor: {
-    opacity: 0.5,
+  userMessage: {
+    color: '#FFFFFF',
+  },
+  assistantMessage: {
+    color: '#000000',
   },
   timestamp: {
-    fontSize: 10,
+    fontSize: 11,
+    color: '#999',
     marginTop: 4,
-    marginLeft: 4,
-  },
-  timestampRight: {
-    textAlign: 'right',
-    marginRight: 4,
+    marginHorizontal: 8,
   },
 });

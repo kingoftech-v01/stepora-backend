@@ -1,72 +1,63 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
+import { HomeScreen } from '../screens/main/HomeScreen';
+import { CalendarScreen } from '../screens/main/CalendarScreen';
 import { ChatScreen } from '../screens/ChatScreen';
-import { CalendarScreen } from '../screens/CalendarScreen';
-import { DreamsScreen } from '../screens/DreamsScreen';
-import { ProfileScreen } from '../screens/ProfileScreen';
-import { MainTabParamList } from '../types';
-import { AppTheme } from '../theme';
+import { ProfileScreen } from '../screens/main/ProfileScreen';
+import { MainTabParamList } from './types';
+import { theme } from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const getTabIcon = (routeName: string, focused: boolean) => {
-  const icons: Record<string, string> = {
-    Chat: focused ? 'chat' : 'chat-outline',
-    Calendar: focused ? 'calendar' : 'calendar-outline',
-    Dreams: focused ? 'target' : 'target',
-    Profile: focused ? 'account' : 'account-outline',
-  };
-  return icons[routeName] || 'circle';
-};
-
-export const MainNavigator: React.FC = () => {
-  const theme = useTheme() as AppTheme;
-
+export function MainNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => (
-          <Icon name={getTabIcon(route.name, focused)} size={size} color={color} />
-        ),
+      screenOptions={{
         tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.custom.colors.textMuted,
+        tabBarInactiveTintColor: '#999',
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.custom.colors.border,
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 64,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#e0e0e0',
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-      })}
+      }}
     >
       <Tab.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{ tabBarLabel: 'Chat' }}
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Accueil',
+          tabBarIcon: ({ color, size }) => <Icon name="home" size={size} color={color} />,
+          headerShown: false,
+        }}
       />
       <Tab.Screen
         name="Calendar"
         component={CalendarScreen}
-        options={{ tabBarLabel: 'Calendrier' }}
+        options={{
+          tabBarLabel: 'Calendrier',
+          tabBarIcon: ({ color, size }) => <Icon name="calendar" size={size} color={color} />,
+          headerShown: false,
+        }}
       />
       <Tab.Screen
-        name="Dreams"
-        component={DreamsScreen}
-        options={{ tabBarLabel: 'Rêves' }}
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          tabBarLabel: 'Assistant',
+          tabBarIcon: ({ color, size }) => <Icon name="chat" size={size} color={color} />,
+          headerShown: false,
+        }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ tabBarLabel: 'Profil' }}
+        options={{
+          tabBarLabel: 'Profil',
+          tabBarIcon: ({ color, size }) => <Icon name="account" size={size} color={color} />,
+          headerShown: false,
+        }}
       />
     </Tab.Navigator>
   );
-};
+}

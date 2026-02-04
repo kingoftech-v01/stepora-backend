@@ -1,8 +1,94 @@
+# Dependencies
 node_modules/
-coverage/
+.pnp/
+.pnp.js
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+
+# Build outputs
 dist/
 build/
+*.egg-info/
+
+# Environment files
 .env
 .env.local
-*.log
+.env.*.local
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+nul
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Django
+*.pot
+*.pyc
+staticfiles/
+media/
+db.sqlite3
+
+# React Native
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# iOS
+ios/Pods/
+ios/.xcode.env.local
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+*.keystore
+!debug.keystore
+
+# Misc
+*.bak
+*.tmp
+*.temp
+.cache/

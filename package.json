@@ -4,28 +4,27 @@
   "description": "Application mobile de planification de rêves et d'objectifs avec IA",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/mobile"
   ],
   "scripts": {
     "mobile": "yarn workspace @dreamplanner/mobile",
-    "api": "yarn workspace @dreamplanner/api",
-    "shared": "yarn workspace @dreamplanner/shared",
-    "dev:api": "yarn api dev",
     "dev:mobile": "yarn mobile start",
-    "build:api": "yarn api build",
     "build:mobile:android": "yarn mobile android:build",
     "build:mobile:ios": "yarn mobile ios:build",
     "test": "yarn workspaces run test",
     "lint": "yarn workspaces run lint",
     "typecheck": "yarn workspaces run typecheck",
     "clean": "yarn workspaces run clean",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "backend:dev": "cd backend && python manage.py runserver",
+    "backend:test": "cd backend && python -m pytest",
+    "backend:migrate": "cd backend && python manage.py migrate"
   },
   "devDependencies": {
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "prettier": "^3.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.3.0"
   },
   "lint-staged": {

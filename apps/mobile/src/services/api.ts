@@ -1,485 +1,258 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import { Dream, Message, Conversation, PlanningResult, User, Task, ApiResponse } from '../types';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import auth from '@react-native-firebase/auth';
+import { ENV } from '../config/env';
 
-// Configuration
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:3000/api'
-  : 'https://api.dreamplanner.app/api';
+// Types for API responses
+export interface ApiError {
+  message: string;
+  code?: string;
+  details?: Record<string, string[]>;
+}
 
-// Create axios instance
-const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
 
-// Token management
-let authToken: string | null = null;
+class ApiService {
+  private client: AxiosInstance;
 
-export const setAuthToken = (token: string | null) => {
-  authToken = token;
-  if (token) {
-    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  } else {
-    delete apiClient.defaults.headers.common['Authorization'];
+  constructor() {
+    this.client = axios.create({
+      baseURL: ENV.API_URL,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Request interceptor: Add Firebase token
+    this.client.interceptors.request.use(
+      async (config) => {
+        const user = auth().currentUser;
+        if (user) {
+          try {
+            const token = await user.getIdToken();
+            config.headers.Authorization = `Bearer ${token}`;
+          } catch (error) {
+            // Token retrieval failed - continue without auth
+          }
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // Response interceptor: Handle errors and unwrap data
+    this.client.interceptors.response.use(
+      (response) => response.data,
+      async (error) => {
+        if (error.response?.status === 401) {
+          // Token expired or invalid
+          try {
+            const user = auth().currentUser;
+            if (user) {
+              await user.getIdToken(true); // Force refresh
+              // Retry the request
+              return this.client.request(error.config);
+            }
+          } catch (refreshError) {
+            // If refresh fails, logout
+            await auth().signOut();
+          }
+        }
+
+        // Format error for consistent handling
+        const apiError: ApiError = {
+          message: error.response?.data?.detail ||
+                   error.response?.data?.message ||
+                   error.message ||
+                   'An error occurred',
+          code: error.response?.status?.toString(),
+          details: error.response?.data?.errors,
+        };
+
+        return Promise.reject(apiError);
+      }
+    );
   }
-};
 
-export const getAuthToken = () => authToken;
-
-// Response interceptor to extract data
-apiClient.interceptors.response.use(
-  (response) => {
-    // Backend wraps responses in { success, data }
-    if (response.data?.success && response.data?.data !== undefined) {
-      response.data = response.data.data;
-    }
-    return response;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Error handler
-const handleError = (error: AxiosError): never => {
-  if (error.response) {
-    const responseData = error.response.data as any;
-    const message = responseData?.error?.message || responseData?.message || 'Une erreur est survenue';
-    throw new Error(message);
-  } else if (error.request) {
-    throw new Error('Impossible de contacter le serveur');
-  } else {
-    throw new Error(error.message);
+  // Base HTTP methods for direct access
+  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.get(url, config);
   }
-};
 
-// ============================================
-// AUTH API
-// ============================================
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.post(url, data, config);
+  }
 
-export const authApi = {
-  register: async (
-    idToken: string,
-    email: string,
-    displayName?: string,
-    timezone?: string,
-    fcmToken?: string,
-    platform?: 'ios' | 'android'
-  ): Promise<{ user: User; stats: any }> => {
-    try {
-      const response = await apiClient.post('/auth/register', {
-        idToken,
-        email,
-        displayName,
-        timezone,
-        fcmToken,
-        platform,
-      });
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.patch(url, data, config);
+  }
 
-  login: async (
-    idToken: string,
-    fcmToken?: string,
-    platform?: 'ios' | 'android'
-  ): Promise<{ user: User; stats: any }> => {
-    try {
-      const response = await apiClient.post('/auth/login', {
-        idToken,
-        fcmToken,
-        platform,
-      });
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.put(url, data, config);
+  }
 
-  logout: async (fcmToken?: string): Promise<void> => {
-    try {
-      await apiClient.post('/auth/logout', { fcmToken });
-    } catch (error) {
-      // Ignore logout errors
-    }
-  },
+  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.delete(url, config);
+  }
 
-  refreshToken: async (idToken: string): Promise<{ valid: boolean; expiresAt: string }> => {
-    try {
-      const response = await apiClient.post('/auth/refresh-token', { idToken });
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
+  // Auth endpoints (Django REST Framework)
+  auth = {
+    register: (data: { email: string; password: string; username?: string }) =>
+      this.client.post('/api/auth/register/', data),
+    verify: () =>
+      this.client.post('/api/auth/verify/'),
+    login: (data: { email: string; password: string }) =>
+      this.client.post('/api/auth/login/', data),
+  };
 
-// ============================================
-// USER API
-// ============================================
+  // Users endpoints
+  users = {
+    getMe: () =>
+      this.client.get('/api/users/me/'),
+    updateMe: (data: Record<string, unknown>) =>
+      this.client.patch('/api/users/me/', data),
+    registerFcmToken: (token: string, platform: string) =>
+      this.client.post('/api/users/fcm-token/', { token, platform }),
+  };
 
-export const userApi = {
-  getProfile: async (): Promise<{ user: User; stats: any }> => {
-    try {
-      const response = await apiClient.get('/users/me');
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Dreams endpoints (Django DRF ViewSet)
+  dreams = {
+    list: (params?: Record<string, unknown>) =>
+      this.client.get('/api/dreams/dreams/', { params }),
+    create: (data: Record<string, unknown>) =>
+      this.client.post('/api/dreams/dreams/', data),
+    get: (id: string) =>
+      this.client.get(`/api/dreams/dreams/${id}/`),
+    update: (id: string, data: Record<string, unknown>) =>
+      this.client.patch(`/api/dreams/dreams/${id}/`, data),
+    delete: (id: string) =>
+      this.client.delete(`/api/dreams/dreams/${id}/`),
+    generatePlan: (id: string, data?: Record<string, unknown>) =>
+      this.client.post(`/api/dreams/dreams/${id}/generate_plan/`, data),
+    complete: (id: string) =>
+      this.client.post(`/api/dreams/dreams/${id}/complete/`),
+  };
 
-  updateProfile: async (updates: {
-    displayName?: string;
-    timezone?: string;
-    workSchedule?: any;
-    notificationPrefs?: any;
-    appPrefs?: any;
-  }): Promise<{ user: User }> => {
-    try {
-      const response = await apiClient.patch('/users/me', updates);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Goals endpoints (Django DRF ViewSet)
+  goals = {
+    list: (params?: Record<string, unknown>) =>
+      this.client.get('/api/dreams/goals/', { params }),
+    get: (id: string) =>
+      this.client.get(`/api/dreams/goals/${id}/`),
+    update: (id: string, data: Record<string, unknown>) =>
+      this.client.patch(`/api/dreams/goals/${id}/`, data),
+    complete: (id: string) =>
+      this.client.post(`/api/dreams/goals/${id}/complete/`),
+  };
 
-  getStats: async (): Promise<any> => {
-    try {
-      const response = await apiClient.get('/users/me/stats');
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Tasks endpoints (Django DRF ViewSet)
+  tasks = {
+    list: (params?: Record<string, unknown>) =>
+      this.client.get('/api/dreams/tasks/', { params }),
+    update: (id: string, data: Record<string, unknown>) =>
+      this.client.patch(`/api/dreams/tasks/${id}/`, data),
+    complete: (id: string) =>
+      this.client.post(`/api/dreams/tasks/${id}/complete/`),
+    skip: (id: string) =>
+      this.client.post(`/api/dreams/tasks/${id}/skip/`),
+  };
 
-  deleteAccount: async (): Promise<void> => {
-    try {
-      await apiClient.delete('/users/me');
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Conversations endpoints
+  conversations = {
+    list: () =>
+      this.client.get('/api/conversations/'),
+    create: (data: Record<string, unknown>) =>
+      this.client.post('/api/conversations/', data),
+    get: (id: string) =>
+      this.client.get(`/api/conversations/${id}/`),
+    sendMessage: (id: string, content: string) =>
+      this.client.post(`/api/conversations/${id}/messages/`, { content }),
+  };
 
-  registerFcmToken: async (token: string, platform: 'ios' | 'android'): Promise<void> => {
-    try {
-      await apiClient.post('/users/me/fcm-token', { token, platform });
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
+  // Calendar endpoints
+  calendar = {
+    get: (startDate: string, endDate: string) =>
+      this.client.get('/api/calendar/', { params: { start_date: startDate, end_date: endDate } }),
+    getToday: () =>
+      this.client.get('/api/calendar/today/'),
+    getWeek: () =>
+      this.client.get('/api/calendar/week/'),
+  };
 
-// ============================================
-// CHAT API
-// ============================================
+  // Notifications endpoints
+  notifications = {
+    list: () =>
+      this.client.get('/api/notifications/'),
+    markRead: (id: string) =>
+      this.client.patch(`/api/notifications/${id}/read/`),
+    markAllRead: () =>
+      this.client.patch('/api/notifications/read-all/'),
+  };
 
-export const chatApi = {
-  sendMessage: async (
-    conversationId: string,
-    content: string
-  ): Promise<{ userMessage: Message; assistantMessage: Message }> => {
-    try {
-      const response = await apiClient.post(
-        `/conversations/${conversationId}/messages`,
-        { content }
-      );
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Gamification endpoints
+  gamification = {
+    getProfile: () =>
+      this.client.get('/api/gamification/profile/'),
+    getLeaderboard: (type: string, params?: Record<string, unknown>) =>
+      this.client.get(`/api/gamification/leaderboards/${type}/`, { params }),
+  };
 
-  getConversation: async (conversationId: string): Promise<{ conversation: Conversation }> => {
-    try {
-      const response = await apiClient.get(`/conversations/${conversationId}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Social endpoints
+  social = {
+    getFeed: (type: 'friends' | 'global' = 'friends') =>
+      this.client.get(`/api/social/feed/${type}/`),
+    getFriends: () =>
+      this.client.get('/api/social/friends/'),
+    getFriendRequests: () =>
+      this.client.get('/api/social/friend-requests/'),
+    sendFriendRequest: (userId: string) =>
+      this.client.post('/api/social/friend-requests/', { user_id: userId }),
+    acceptFriendRequest: (requestId: string) =>
+      this.client.post(`/api/social/friend-requests/${requestId}/accept/`),
+    rejectFriendRequest: (requestId: string) =>
+      this.client.post(`/api/social/friend-requests/${requestId}/reject/`),
+  };
 
-  getConversations: async (options?: {
-    type?: string;
-    dreamId?: string;
-    limit?: number;
-  }): Promise<{ conversations: Conversation[]; total: number }> => {
-    try {
-      const params = new URLSearchParams();
-      if (options?.type) params.set('type', options.type);
-      if (options?.dreamId) params.set('dreamId', options.dreamId);
-      if (options?.limit) params.set('limit', options.limit.toString());
+  // Buddy endpoints
+  buddies = {
+    getCurrent: () =>
+      this.client.get('/api/buddies/current/'),
+    findMatch: () =>
+      this.client.post('/api/buddies/find-match/'),
+    pair: (userId: string) =>
+      this.client.post('/api/buddies/pair/', { user_id: userId }),
+    getProgress: (buddyId: string) =>
+      this.client.get(`/api/buddies/${buddyId}/progress/`),
+    sendEncouragement: (buddyId: string, message: string) =>
+      this.client.post(`/api/buddies/${buddyId}/encourage/`, { message }),
+    endPairing: (buddyId: string) =>
+      this.client.post(`/api/buddies/${buddyId}/end/`),
+  };
 
-      const response = await apiClient.get(`/conversations?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
+  // Circles endpoints
+  circles = {
+    list: (filter?: string) =>
+      this.client.get('/api/circles/', { params: filter ? { filter } : undefined }),
+    get: (id: string) =>
+      this.client.get(`/api/circles/${id}/`),
+    create: (data: Record<string, unknown>) =>
+      this.client.post('/api/circles/', data),
+    join: (id: string) =>
+      this.client.post(`/api/circles/${id}/join/`),
+    leave: (id: string) =>
+      this.client.post(`/api/circles/${id}/leave/`),
+    getMembers: (id: string) =>
+      this.client.get(`/api/circles/${id}/members/`),
+    getChallenges: (id: string) =>
+      this.client.get(`/api/circles/${id}/challenges/`),
+    createChallenge: (id: string, data: Record<string, unknown>) =>
+      this.client.post(`/api/circles/${id}/challenges/`, data),
+  };
+}
 
-  createConversation: async (
-    type: Conversation['type'],
-    dreamId?: string
-  ): Promise<{ conversation: Conversation }> => {
-    try {
-      const response = await apiClient.post('/conversations', { type, dreamId });
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  deleteConversation: async (conversationId: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/conversations/${conversationId}`);
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
-
-// ============================================
-// DREAMS API
-// ============================================
-
-export const dreamsApi = {
-  getDreams: async (options?: {
-    status?: string;
-    category?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ dreams: Dream[]; total: number }> => {
-    try {
-      const params = new URLSearchParams();
-      if (options?.status) params.set('status', options.status);
-      if (options?.category) params.set('category', options.category);
-      if (options?.limit) params.set('limit', options.limit.toString());
-      if (options?.offset) params.set('offset', options.offset.toString());
-
-      const response = await apiClient.get(`/dreams?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getDream: async (id: string): Promise<{ dream: Dream; progress: any }> => {
-    try {
-      const response = await apiClient.get(`/dreams/${id}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  createDream: async (data: {
-    title: string;
-    description: string;
-    category?: string;
-    targetDate?: string;
-    priority?: number;
-  }): Promise<{ dream: Dream }> => {
-    try {
-      const response = await apiClient.post('/dreams', data);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  updateDream: async (id: string, updates: Partial<Dream>): Promise<{ dream: Dream }> => {
-    try {
-      const response = await apiClient.patch(`/dreams/${id}`, updates);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  deleteDream: async (id: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/dreams/${id}`);
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  generatePlan: async (dreamId: string, availableHoursPerWeek?: number): Promise<{ dream: Dream; progress: any }> => {
-    try {
-      const response = await apiClient.post(`/dreams/${dreamId}/generate-plan`, {
-        availableHoursPerWeek,
-      });
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getProgress: async (dreamId: string): Promise<any> => {
-    try {
-      const response = await apiClient.get(`/dreams/${dreamId}/progress`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
-
-// ============================================
-// TASKS API
-// ============================================
-
-export const tasksApi = {
-  getTodayTasks: async (): Promise<{ tasks: Task[] }> => {
-    try {
-      const response = await apiClient.get('/tasks?today=true');
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getUpcomingTasks: async (limit?: number): Promise<{ tasks: Task[] }> => {
-    try {
-      const response = await apiClient.get(`/tasks?upcoming=true&limit=${limit || 10}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getOverdueTasks: async (): Promise<{ tasks: Task[] }> => {
-    try {
-      const response = await apiClient.get('/tasks?overdue=true');
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getTasksByDateRange: async (startDate: string, endDate: string): Promise<{ tasks: Task[] }> => {
-    try {
-      const response = await apiClient.get(
-        `/tasks?startDate=${startDate}&endDate=${endDate}`
-      );
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  completeTask: async (taskId: string): Promise<{ task: Task }> => {
-    try {
-      const response = await apiClient.post(`/tasks/${taskId}/complete`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  skipTask: async (taskId: string): Promise<{ task: Task }> => {
-    try {
-      const response = await apiClient.post(`/tasks/${taskId}/skip`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  updateTask: async (taskId: string, updates: Partial<Task>): Promise<{ task: Task }> => {
-    try {
-      const response = await apiClient.patch(`/tasks/${taskId}`, updates);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
-
-// ============================================
-// CALENDAR API
-// ============================================
-
-export const calendarApi = {
-  getMonthView: async (year: number, month: number): Promise<any> => {
-    try {
-      const response = await apiClient.get(
-        `/calendar/month?year=${year}&month=${month}`
-      );
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getDayView: async (date: string): Promise<any> => {
-    try {
-      const response = await apiClient.get(`/calendar/day?date=${date}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
-
-// ============================================
-// NOTIFICATIONS API
-// ============================================
-
-export const notificationsApi = {
-  getNotifications: async (options?: {
-    limit?: number;
-    offset?: number;
-  }): Promise<{ notifications: any[]; total: number }> => {
-    try {
-      const params = new URLSearchParams();
-      if (options?.limit) params.set('limit', options.limit.toString());
-      if (options?.offset) params.set('offset', options.offset.toString());
-
-      const response = await apiClient.get(`/notifications?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  getUnreadCount: async (): Promise<{ count: number }> => {
-    try {
-      const response = await apiClient.get('/notifications/unread-count');
-      return response.data;
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  markAsRead: async (id: string): Promise<void> => {
-    try {
-      await apiClient.patch(`/notifications/${id}/read`);
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-
-  markAllAsRead: async (): Promise<void> => {
-    try {
-      await apiClient.post('/notifications/read-all');
-    } catch (error) {
-      throw handleError(error as AxiosError);
-    }
-  },
-};
-
-// Export API object
-export default {
-  auth: authApi,
-  user: userApi,
-  chat: chatApi,
-  dreams: dreamsApi,
-  tasks: tasksApi,
-  calendar: calendarApi,
-  notifications: notificationsApi,
-  setAuthToken,
-  getAuthToken,
-};
+export const api = new ApiService();
