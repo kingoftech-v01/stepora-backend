@@ -1,14 +1,25 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, RefreshControl } from 'react-native';
-import { Text, FAB, Card, Chip, ActivityIndicator } from 'react-native-paper';
+import { View, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { Text, FAB, Card, Chip, ActivityIndicator, Badge } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useQuery } from '@tanstack/react-query';
 import { useDreams } from '../../hooks/useDreams';
 import { useTodayTasks } from '../../hooks/useCalendar';
+import { api } from '../../services/api';
 import { theme } from '../../theme';
 
 export function HomeScreen({ navigation }: any) {
   const { data: dreamsData, isLoading: dreamsLoading, refetch: refetchDreams } = useDreams({ status: 'active' });
   const { data: todayData, isLoading: tasksLoading } = useTodayTasks();
+  const { data: notificationsData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await api.notifications.list();
+      return res.data?.results ?? res.data ?? [];
+    },
+  });
+  const unreadCount = (notificationsData as any[])?.filter((n: any) => !n.read_at).length ?? 0;
 
   const dreams = dreamsData?.data?.dreams || [];
   const todayTasks = todayData?.data?.tasks || [];
@@ -28,12 +39,27 @@ export function HomeScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.headerTitle}>
-          My Dreams
-        </Text>
-        <Text variant="bodyMedium" style={styles.headerSubtitle}>
-          {todayTasks.length} task{todayTasks.length !== 1 ? 's' : ''} today
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTextContainer}>
+            <Text variant="headlineMedium" style={styles.headerTitle}>
+              My Dreams
+            </Text>
+            <Text variant="bodyMedium" style={styles.headerSubtitle}>
+              {todayTasks.length} task{todayTasks.length !== 1 ? 's' : ''} today
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.bellButton}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Icon name="bell-outline" size={26} color={theme.colors.primary} />
+            {unreadCount > 0 && (
+              <Badge style={styles.bellBadge} size={18}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Badge>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -104,6 +130,14 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#ffffff',
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
   headerTitle: {
     fontWeight: 'bold',
     color: theme.colors.primary,
@@ -111,6 +145,16 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     marginTop: 4,
     color: '#666',
+  },
+  bellButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
   },
   listContent: {
     padding: 16,

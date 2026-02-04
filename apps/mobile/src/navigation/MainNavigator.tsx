@@ -23,6 +23,7 @@ import { SubscriptionScreen } from '../screens/SubscriptionScreen';
 import { StoreScreen } from '../screens/StoreScreen';
 import { LeagueScreen } from '../screens/LeagueScreen';
 import { VisionBoardScreen } from '../screens/VisionBoardScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 
 import {
   MainTabParamList,
@@ -45,6 +46,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
       <HomeStack.Screen name="VisionBoard" component={VisionBoardScreen} />
       <HomeStack.Screen name="MicroStart" component={MicroStartScreen} />
+      <HomeStack.Screen name="Notifications" component={NotificationsScreen} />
     </HomeStack.Navigator>
   );
 }

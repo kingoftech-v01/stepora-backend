@@ -27,13 +27,14 @@ export type MainTabParamList = {
   ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
 };
 
-/** Home tab stack: dream browsing, detail, creation, vision boards. */
+/** Home tab stack: dream browsing, detail, creation, vision boards, notifications. */
 export type HomeStackParamList = {
   HomeScreen: undefined;
   DreamDetail: { dreamId: string };
   CreateDream: undefined;
   VisionBoard: { dreamId: string };
   MicroStart: { dreamId: string; microTask: string };
+  Notifications: undefined;
 };
 
 /** Social tab stack: social feed, circles, buddy, leaderboard, leagues. */
