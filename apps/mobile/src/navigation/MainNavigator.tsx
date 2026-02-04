@@ -26,6 +26,7 @@ import { VisionBoardScreen } from '../screens/VisionBoardScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { DreamDetailScreen } from '../screens/DreamDetailScreen';
 import { CreateDreamScreen } from '../screens/CreateDreamScreen';
+import { CalibrationScreen } from '../screens/CalibrationScreen';
 
 import {
   MainTabParamList,
@@ -51,6 +52,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="VisionBoard" component={VisionBoardScreen} />
       <HomeStack.Screen name="MicroStart" component={MicroStartScreen} />
       <HomeStack.Screen name="Notifications" component={NotificationsScreen} />
+      <HomeStack.Screen name="Calibration" component={CalibrationScreen} />
     </HomeStack.Navigator>
   );
 }

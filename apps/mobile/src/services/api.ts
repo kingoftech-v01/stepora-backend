@@ -145,6 +145,12 @@ class ApiService {
       this.client.post(`/api/dreams/dreams/${id}/generate_plan/`, data),
     complete: (id: string) =>
       this.client.post(`/api/dreams/dreams/${id}/complete/`),
+    startCalibration: (id: string) =>
+      this.client.post(`/api/dreams/dreams/${id}/start_calibration/`),
+    answerCalibration: (id: string, answers: Array<{ question_id: string; answer: string }>) =>
+      this.client.post(`/api/dreams/dreams/${id}/answer_calibration/`, { answers }),
+    skipCalibration: (id: string) =>
+      this.client.post(`/api/dreams/dreams/${id}/skip_calibration/`),
   };
 
   // ----------------------------------------------------------------

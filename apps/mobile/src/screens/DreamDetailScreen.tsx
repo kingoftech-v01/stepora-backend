@@ -67,6 +67,7 @@ export const DreamDetailScreen: React.FC = () => {
 
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [fabOpen, setFabOpen] = useState(false);
+  const [calibrationStatus, setCalibrationStatus] = useState<'pending' | 'in_progress' | 'completed' | 'skipped'>('pending');
 
   const {
     data: dream,
@@ -154,6 +155,14 @@ export const DreamDetailScreen: React.FC = () => {
       },
     });
   }, [navigation, dreamId]);
+
+  const handleCalibrate = useCallback(() => {
+    setCalibrationStatus('in_progress');
+    navigation.navigate('Calibration', {
+      dreamId,
+      dreamTitle: dream?.title || 'My Dream',
+    });
+  }, [navigation, dreamId, dream?.title]);
 
   const formatDuration = (mins?: number): string => {
     if (!mins) return '';
@@ -307,6 +316,86 @@ export const DreamDetailScreen: React.FC = () => {
             />
           </View>
         </Surface>
+
+        {/* Calibration Section - shown when no goals yet */}
+        {(!dream.goals || dream.goals.length === 0) && (
+          <>
+            {/* Calibration Status Indicator */}
+            {calibrationStatus === 'completed' && (
+              <Surface style={[styles.calibrationStatusCard, shadows.sm]} elevation={1}>
+                <View style={[styles.calibrationStatusIcon, { backgroundColor: colors.success + '15' }]}>
+                  <Icon name="check-circle" size={20} color={colors.success} />
+                </View>
+                <View style={styles.calibrationStatusContent}>
+                  <Text style={[typography.bodySmall, { color: colors.success, fontWeight: '600' }]}>
+                    Calibration Complete
+                  </Text>
+                  <Text style={[typography.caption, { color: theme.custom.colors.textMuted }]}>
+                    The AI has a deep understanding of your dream.
+                  </Text>
+                </View>
+              </Surface>
+            )}
+
+            {/* Calibrate Your Dream Card */}
+            {(calibrationStatus === 'pending' || calibrationStatus === 'in_progress') && (
+              <Surface style={[styles.calibrationCard, shadows.md]} elevation={2}>
+                <View style={[styles.calibrationIconContainer, { backgroundColor: colors.primary[500] + '10' }]}>
+                  <Icon name="tune" size={32} color={colors.primary[500]} />
+                </View>
+                <Text style={[typography.h3, { color: theme.custom.colors.textPrimary, marginTop: spacing.md }]}>
+                  Calibrate Your Dream
+                </Text>
+                <Text style={[typography.body, { color: theme.custom.colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' }]}>
+                  Answer a few quick questions so the AI can deeply understand your dream and create
+                  a highly personalized plan tailored to your situation.
+                </Text>
+                <View style={styles.calibrationBenefits}>
+                  <View style={styles.calibrationBenefitRow}>
+                    <Icon name="check-circle" size={16} color={colors.success} />
+                    <Text style={[typography.bodySmall, { color: theme.custom.colors.textSecondary, marginLeft: spacing.sm }]}>
+                      More accurate timeline estimates
+                    </Text>
+                  </View>
+                  <View style={styles.calibrationBenefitRow}>
+                    <Icon name="check-circle" size={16} color={colors.success} />
+                    <Text style={[typography.bodySmall, { color: theme.custom.colors.textSecondary, marginLeft: spacing.sm }]}>
+                      Tasks tailored to your experience level
+                    </Text>
+                  </View>
+                  <View style={styles.calibrationBenefitRow}>
+                    <Icon name="check-circle" size={16} color={colors.success} />
+                    <Text style={[typography.bodySmall, { color: theme.custom.colors.textSecondary, marginLeft: spacing.sm }]}>
+                      Considers your schedule and constraints
+                    </Text>
+                  </View>
+                </View>
+                <Button
+                  mode="contained"
+                  onPress={handleCalibrate}
+                  style={styles.calibrateButton}
+                  icon="arrow-right"
+                  contentStyle={{ flexDirection: 'row-reverse' }}
+                >
+                  {calibrationStatus === 'in_progress' ? 'Continue Calibration' : 'Start Calibration'}
+                </Button>
+                <Text style={[typography.caption, { color: theme.custom.colors.textMuted, marginTop: spacing.sm, textAlign: 'center' }]}>
+                  Takes about 2-3 minutes
+                </Text>
+              </Surface>
+            )}
+
+            {/* Note about calibration on generate plan */}
+            {calibrationStatus !== 'completed' && (
+              <Surface style={[styles.calibrationNote, shadows.sm]} elevation={1}>
+                <Icon name="information-outline" size={16} color={colors.info} />
+                <Text style={[typography.caption, { color: theme.custom.colors.textSecondary, marginLeft: spacing.sm, flex: 1 }]}>
+                  Calibration recommended for better results. You can still generate a plan without it.
+                </Text>
+              </Surface>
+            )}
+          </>
+        )}
 
         {/* Goals Section */}
         <View style={styles.sectionHeader}>
@@ -679,6 +768,58 @@ const styles = StyleSheet.create({
   noTasksContainer: {
     padding: spacing.md,
     paddingTop: 0,
+  },
+  calibrationCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+  },
+  calibrationIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calibrationBenefits: {
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  calibrationBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  calibrateButton: {
+    marginTop: spacing.lg,
+    minWidth: 200,
+  },
+  calibrationStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  calibrationStatusIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calibrationStatusContent: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  calibrationNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
   },
   generatingCard: {
     flexDirection: 'row',

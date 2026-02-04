@@ -386,6 +386,7 @@ export type HomeStackParamList = {
   CreateDream: undefined;
   VisionBoard: { dreamId: string };
   MicroStart: { dreamId: string; microTask: string };
+  Calibration: { dreamId: string; dreamTitle: string };
 };
 
 export type SocialStackParamList = {

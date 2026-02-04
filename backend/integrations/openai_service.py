@@ -209,6 +209,9 @@ IMPORTANT: Respond in the user's language.""",
         """
         Generate a complete structured plan for a dream.
 
+        If calibration data is present in user_context, uses the enriched profile
+        for highly personalized plan generation.
+
         Args:
             dream_title: Title of the dream/goal
             dream_description: Detailed description
@@ -217,6 +220,44 @@ IMPORTANT: Respond in the user's language.""",
         Returns:
             Dict with structured plan including goals, tasks, tips, obstacles
         """
+        # Build calibration context if available
+        calibration_section = ""
+        if user_context.get('calibration_profile'):
+            profile = user_context['calibration_profile']
+            recommendations = user_context.get('plan_recommendations', {})
+            enriched = user_context.get('enriched_description', '')
+
+            calibration_section = f"""
+CALIBRATION PROFILE (from user interview):
+- Experience Level: {profile.get('experience_level', 'unknown')}
+- Experience Details: {profile.get('experience_details', 'N/A')}
+- Available Hours/Week: {profile.get('available_hours_per_week', 'unknown')}
+- Preferred Schedule: {profile.get('preferred_schedule', 'N/A')}
+- Budget: {profile.get('budget', 'N/A')}
+- Tools Available: {', '.join(profile.get('tools_available', []))}
+- Primary Motivation: {profile.get('primary_motivation', 'N/A')}
+- Known Constraints: {', '.join(profile.get('known_constraints', []))}
+- Success Definition: {profile.get('success_definition', 'N/A')}
+- Preferred Learning Style: {profile.get('preferred_learning_style', 'N/A')}
+- Timeline: {profile.get('timeline_preference', 'N/A')}
+- Risk Tolerance: {profile.get('risk_tolerance', 'medium')}
+
+PLAN RECOMMENDATIONS:
+- Suggested Pace: {recommendations.get('suggested_pace', 'moderate')}
+- Focus Areas: {', '.join(recommendations.get('focus_areas', []))}
+- Potential Pitfalls: {', '.join(recommendations.get('potential_pitfalls', []))}
+- Personalization Notes: {recommendations.get('personalization_notes', 'N/A')}
+
+ENRICHED DREAM DESCRIPTION:
+{enriched or dream_description}
+
+IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED plan.
+- Match task durations to the user's available hours/week
+- Respect their constraints and budget
+- Align with their preferred learning style
+- Set pace according to their timeline and risk tolerance
+- Address their specific potential pitfalls proactively"""
+
         prompt = f"""Generate a detailed plan to achieve this goal:
 
 DREAM/GOAL: {dream_title}
@@ -225,6 +266,7 @@ DESCRIPTION: {dream_description}
 USER CONTEXT:
 - Timezone: {user_context.get('timezone', 'UTC')}
 - Work schedule: {json.dumps(user_context.get('work_schedule', {}), ensure_ascii=False)}
+{calibration_section}
 
 Respond ONLY with the plan JSON."""
 
@@ -252,6 +294,177 @@ Respond ONLY with the plan JSON."""
             raise OpenAIError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
+
+    def generate_calibration_questions(self, dream_title, dream_description, existing_qa=None, batch_size=7):
+        """
+        Generate calibration questions to deeply understand the user's dream.
+
+        First call generates 7 initial questions. Subsequent calls generate
+        follow-up questions based on previous answers (up to 15 total).
+
+        Args:
+            dream_title: Title of the dream/goal
+            dream_description: User's initial description
+            existing_qa: List of dicts with 'question' and 'answer' keys (previous Q&A pairs)
+            batch_size: Number of questions to generate (7 for initial, varies for follow-ups)
+
+        Returns:
+            Dict with 'questions' list and 'sufficient' boolean
+        """
+        if existing_qa:
+            qa_context = "\n".join([
+                f"Q{i+1}: {qa['question']}\nA{i+1}: {qa['answer']}"
+                for i, qa in enumerate(existing_qa)
+            ])
+            prompt = f"""The user wants to achieve this dream/goal:
+TITLE: {dream_title}
+DESCRIPTION: {dream_description}
+
+Here are the calibration questions already asked and answered:
+{qa_context}
+
+Based on the answers above, determine:
+1. Do you have ENOUGH information to create a highly personalized, detailed plan? Consider whether you understand their current level, time availability, specific preferences, constraints, resources, and deep motivations.
+2. If NOT sufficient, generate {batch_size} MORE follow-up questions that dig deeper into gaps or vague answers.
+3. If sufficient, set "sufficient" to true and return an empty questions array.
+
+IMPORTANT: Be thorough. Vague answers like "some experience" or "a few hours" need follow-up. You need concrete, actionable details.
+
+Respond ONLY with JSON:
+{{
+  "sufficient": false,
+  "confidence_score": 0.7,
+  "missing_areas": ["specific area needing more info"],
+  "questions": [
+    {{
+      "question": "The question text",
+      "category": "experience|timeline|resources|motivation|constraints|specifics|lifestyle|preferences"
+    }}
+  ]
+}}"""
+        else:
+            prompt = f"""The user wants to achieve this dream/goal:
+TITLE: {dream_title}
+DESCRIPTION: {dream_description}
+
+Generate exactly {batch_size} calibration questions to deeply understand what the user truly wants. These questions should cover:
+
+1. **Experience Level** - What is their current level/background related to this dream?
+2. **Timeline** - When do they want to achieve this? Any deadlines?
+3. **Time Availability** - How many hours per day/week can they dedicate? When are they free?
+4. **Resources** - What budget, tools, or resources do they have access to?
+5. **Motivation** - Why is this dream important? What's driving them?
+6. **Constraints** - What obstacles, limitations, or challenges do they foresee?
+7. **Specifics** - What exact outcome do they envision? What does "success" look like concretely?
+
+Each question should be clear, specific, and conversational (not robotic). Ask ONE thing per question.
+
+Respond ONLY with JSON:
+{{
+  "sufficient": false,
+  "confidence_score": 0.1,
+  "questions": [
+    {{
+      "question": "The question text",
+      "category": "experience|timeline|resources|motivation|constraints|specifics|lifestyle|preferences"
+    }}
+  ]
+}}"""
+
+        try:
+            response = openai.ChatCompletion.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': 'You are a skilled life coach and project planner. Your job is to ask the RIGHT questions to truly understand someone\'s goal before creating a plan. Ask questions that reveal hidden assumptions, unstated preferences, and concrete details. Never accept vague answers - always dig deeper. Respond only in JSON.'
+                    },
+                    {'role': 'user', 'content': prompt}
+                ],
+                temperature=0.6,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            return result
+
+        except (json.JSONDecodeError, openai.error.OpenAIError) as e:
+            raise OpenAIError(f"Calibration question generation failed: {str(e)}")
+
+    def generate_calibration_summary(self, dream_title, dream_description, qa_pairs):
+        """
+        Generate a rich summary from calibration Q&A to feed into plan generation.
+
+        Args:
+            dream_title: Title of the dream/goal
+            dream_description: User's initial description
+            qa_pairs: List of dicts with 'question' and 'answer' keys
+
+        Returns:
+            Dict with structured user profile for plan generation
+        """
+        qa_text = "\n".join([
+            f"Q: {qa['question']}\nA: {qa['answer']}"
+            for qa in qa_pairs
+        ])
+
+        prompt = f"""Based on the following dream and calibration interview, create a structured user profile for personalized plan generation.
+
+DREAM: {dream_title}
+DESCRIPTION: {dream_description}
+
+CALIBRATION INTERVIEW:
+{qa_text}
+
+Create a structured JSON profile that captures everything needed for a highly personalized plan:
+
+{{
+  "user_profile": {{
+    "experience_level": "beginner|intermediate|advanced",
+    "experience_details": "Specific details about their background",
+    "available_hours_per_week": 10,
+    "preferred_schedule": "Description of when they're free",
+    "budget": "Description of financial resources",
+    "tools_available": ["list of tools/resources they have"],
+    "primary_motivation": "Their core why",
+    "secondary_motivations": ["other motivating factors"],
+    "known_constraints": ["specific limitations"],
+    "success_definition": "What success looks like concretely to them",
+    "preferred_learning_style": "How they prefer to learn/work",
+    "timeline_preference": "Their desired timeline",
+    "risk_tolerance": "low|medium|high"
+  }},
+  "plan_recommendations": {{
+    "suggested_pace": "aggressive|moderate|relaxed",
+    "focus_areas": ["areas to prioritize based on their answers"],
+    "potential_pitfalls": ["likely challenges based on their profile"],
+    "personalization_notes": "Key things to customize in the plan"
+  }},
+  "enriched_description": "A much richer, more detailed version of their dream description incorporating all calibration data"
+}}"""
+
+        try:
+            response = openai.ChatCompletion.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': 'You are an expert at synthesizing interview data into actionable profiles. Extract maximum insight from the Q&A pairs and create a comprehensive profile. Respond only in JSON.'
+                    },
+                    {'role': 'user', 'content': prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1500,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            return json.loads(response.choices[0].message.content)
+
+        except (json.JSONDecodeError, openai.error.OpenAIError) as e:
+            raise OpenAIError(f"Calibration summary generation failed: {str(e)}")
 
     def analyze_dream(self, dream_title, dream_description):
         """

@@ -35,6 +35,7 @@ export type HomeStackParamList = {
   VisionBoard: { dreamId: string };
   MicroStart: { dreamId: string; microTask: string };
   Notifications: undefined;
+  Calibration: { dreamId: string; dreamTitle: string };
 };
 
 /** Social tab stack: social feed, circles, buddy, leaderboard, leagues. */
