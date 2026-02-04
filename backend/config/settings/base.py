@@ -44,6 +44,9 @@ INSTALLED_APPS = [
     'apps.subscriptions',
     'apps.store',
     'apps.leagues',
+    'apps.circles',
+    'apps.social',
+    'apps.buddies',
     'core',
 ]
 
@@ -200,6 +203,9 @@ SPECTACULAR_SETTINGS = {
         {'name': 'subscriptions', 'description': 'Stripe subscription management'},
         {'name': 'store', 'description': 'In-app store for cosmetic items'},
         {'name': 'leagues', 'description': 'League and ranking system'},
+        {'name': 'Circles', 'description': 'Dream Circles for group goals and challenges'},
+        {'name': 'Social', 'description': 'Friends, follows, and activity feed'},
+        {'name': 'Buddies', 'description': 'Dream Buddy accountability pairing'},
     ],
 }
 

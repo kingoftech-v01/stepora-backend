@@ -24,6 +24,8 @@ import { StoreScreen } from '../screens/StoreScreen';
 import { LeagueScreen } from '../screens/LeagueScreen';
 import { VisionBoardScreen } from '../screens/VisionBoardScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { DreamDetailScreen } from '../screens/DreamDetailScreen';
+import { CreateDreamScreen } from '../screens/CreateDreamScreen';
 
 import {
   MainTabParamList,
@@ -44,6 +46,8 @@ function HomeStackNavigator() {
   return (
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
+      <HomeStack.Screen name="DreamDetail" component={DreamDetailScreen} />
+      <HomeStack.Screen name="CreateDream" component={CreateDreamScreen} />
       <HomeStack.Screen name="VisionBoard" component={VisionBoardScreen} />
       <HomeStack.Screen name="MicroStart" component={MicroStartScreen} />
       <HomeStack.Screen name="Notifications" component={NotificationsScreen} />
