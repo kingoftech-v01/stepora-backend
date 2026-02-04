@@ -65,7 +65,7 @@ export function HomeScreen({ navigation }: any) {
       <FlatList
         data={dreams}
         renderItem={({ item }) => (
-          <Card style={styles.card} onPress={() => console.log('Dream tapped:', item.id)}>
+          <Card style={styles.card} onPress={() => navigation.navigate('DreamDetail', { dreamId: item.id })}>
             <Card.Content>
               <View style={styles.cardHeader}>
                 <Text variant="titleLarge">{item.title}</Text>
@@ -109,7 +109,7 @@ export function HomeScreen({ navigation }: any) {
       <FAB
         icon="plus"
         style={styles.fab}
-        onPress={() => console.log('Create dream')}
+        onPress={() => navigation.navigate('CreateDream')}
         label="New Dream"
       />
     </SafeAreaView>

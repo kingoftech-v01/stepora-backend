@@ -90,7 +90,7 @@ const defaultNotificationPrefs: NotificationPrefs = {
 
 const defaultAppPreferences: AppPreferences = {
   theme: 'system',
-  language: 'fr',
+  language: 'en',
 };
 
 export const useAuthStore = create<AuthState>()(

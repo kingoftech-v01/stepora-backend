@@ -223,5 +223,8 @@ export const shadows = StyleSheet.create({
   },
 });
 
+// Default theme alias used throughout the app
+export const theme = lightTheme;
+
 // Export theme type
 export type AppTheme = typeof lightTheme;

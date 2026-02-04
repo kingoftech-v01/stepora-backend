@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, Linking } from 'react-native';
 import { Text, List, Switch, Button, Avatar, Divider, ProgressBar, Card, Surface } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/authStore';
@@ -252,13 +252,13 @@ export function ProfileScreen() {
           <List.Item
             title="Terms of Service"
             left={(props) => <List.Icon {...props} icon="file-document" />}
-            onPress={() => console.log('Terms')}
+            onPress={() => Linking.openURL('https://dreamplanner.app/terms')}
           />
 
           <List.Item
             title="Privacy Policy"
             left={(props) => <List.Icon {...props} icon="shield-check" />}
-            onPress={() => console.log('Privacy')}
+            onPress={() => Linking.openURL('https://dreamplanner.app/privacy')}
           />
         </List.Section>
 

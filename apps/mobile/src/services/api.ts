@@ -290,15 +290,15 @@ class ApiService {
     getPlans: () =>
       this.client.get('/api/subscriptions/plans/'),
     getCurrent: () =>
-      this.client.get('/api/subscriptions/current/'),
+      this.client.get('/api/subscriptions/subscription/current/'),
     createCheckout: (priceId: string) =>
-      this.client.post('/api/subscriptions/checkout/', { price_id: priceId }),
+      this.client.post('/api/subscriptions/subscription/checkout/', { price_id: priceId }),
     cancel: () =>
-      this.client.post('/api/subscriptions/cancel/'),
+      this.client.post('/api/subscriptions/subscription/cancel/'),
     resume: () =>
-      this.client.post('/api/subscriptions/resume/'),
+      this.client.post('/api/subscriptions/subscription/reactivate/'),
     getPortalUrl: () =>
-      this.client.get('/api/subscriptions/portal/'),
+      this.client.post('/api/subscriptions/subscription/portal/'),
   };
 
   // ----------------------------------------------------------------
@@ -316,9 +316,9 @@ class ApiService {
     getInventory: () =>
       this.client.get('/api/store/inventory/'),
     equipItem: (inventoryId: string) =>
-      this.client.post(`/api/store/inventory/${inventoryId}/equip/`),
+      this.client.post(`/api/store/inventory/${inventoryId}/equip/`, { equip: true }),
     unequipItem: (inventoryId: string) =>
-      this.client.post(`/api/store/inventory/${inventoryId}/unequip/`),
+      this.client.post(`/api/store/inventory/${inventoryId}/equip/`, { equip: false }),
   };
 
   // ----------------------------------------------------------------
@@ -326,15 +326,15 @@ class ApiService {
   // ----------------------------------------------------------------
   leagues = {
     list: () =>
-      this.client.get('/api/leagues/'),
+      this.client.get('/api/leagues/leagues/'),
     getCurrent: () =>
-      this.client.get('/api/leagues/current/'),
+      this.client.get('/api/leagues/leaderboard/league/'),
     getStandings: (leagueId: string) =>
-      this.client.get(`/api/leagues/${leagueId}/standings/`),
+      this.client.get('/api/leagues/leaderboard/league/', { params: { league_id: leagueId } }),
     getCurrentSeason: () =>
-      this.client.get('/api/leagues/season/'),
+      this.client.get('/api/leagues/seasons/current/'),
     getMyStanding: () =>
-      this.client.get('/api/leagues/my-standing/'),
+      this.client.get('/api/leagues/leaderboard/me/'),
   };
 
   // ----------------------------------------------------------------
