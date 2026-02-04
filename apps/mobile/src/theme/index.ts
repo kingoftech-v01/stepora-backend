@@ -1,4 +1,5 @@
-import { MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
+import { MD3LightTheme, MD3DarkTheme, configureFonts } from 'react-native-paper';
+import { StyleSheet } from 'react-native';
 
 // Color palette
 export const colors = {
@@ -9,7 +10,7 @@ export const colors = {
     200: '#D8B4FE',
     300: '#C084FC',
     400: '#A855F7',
-    500: '#8B5CF6', // Main primary
+    500: '#8B5CF6',
     600: '#7C3AED',
     700: '#6D28D9',
     800: '#5B21B6',
@@ -23,7 +24,7 @@ export const colors = {
     200: '#99F6E4',
     300: '#5EEAD4',
     400: '#2DD4BF',
-    500: '#14B8A6', // Main secondary
+    500: '#14B8A6',
     600: '#0D9488',
     700: '#0F766E',
     800: '#115E59',
@@ -56,10 +57,13 @@ export const colors = {
     card: '#1A1A2E',
     elevated: '#25253A',
   },
+
+  white: '#FFFFFF',
+  black: '#000000',
 };
 
 // Light theme
-const lightTheme = {
+export const lightTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
@@ -68,28 +72,37 @@ const lightTheme = {
     secondary: colors.secondary[500],
     secondaryContainer: colors.secondary[100],
     background: colors.gray[50],
-    surface: '#FFFFFF',
+    surface: colors.white,
     surfaceVariant: colors.gray[100],
     error: colors.error,
-    onPrimary: '#FFFFFF',
-    onSecondary: '#FFFFFF',
+    onPrimary: colors.white,
+    onSecondary: colors.white,
     onBackground: colors.gray[800],
     onSurface: colors.gray[800],
     onSurfaceVariant: colors.gray[600],
     outline: colors.gray[300],
-    elevation: {
-      level0: 'transparent',
-      level1: '#FFFFFF',
-      level2: colors.gray[50],
-      level3: colors.gray[100],
-      level4: colors.gray[100],
-      level5: colors.gray[200],
+    outlineVariant: colors.gray[200],
+  },
+  custom: {
+    colors: {
+      textPrimary: colors.gray[800],
+      textSecondary: colors.gray[500],
+      textMuted: colors.gray[400],
+      border: colors.gray[200],
+      cardBackground: colors.white,
+      inputBackground: colors.gray[50],
+      success: colors.success,
+      warning: colors.warning,
+      error: colors.error,
+      info: colors.info,
+      aiBubble: colors.primary[50],
+      userBubble: colors.primary[500],
     },
   },
 };
 
 // Dark theme
-const darkTheme = {
+export const darkTheme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
@@ -101,37 +114,29 @@ const darkTheme = {
     surface: colors.dark.card,
     surfaceVariant: colors.dark.elevated,
     error: colors.error,
-    onPrimary: '#FFFFFF',
-    onSecondary: '#FFFFFF',
+    onPrimary: colors.white,
+    onSecondary: colors.white,
     onBackground: colors.gray[50],
     onSurface: colors.gray[50],
     onSurfaceVariant: colors.gray[400],
     outline: colors.gray[700],
-    elevation: {
-      level0: 'transparent',
-      level1: colors.dark.card,
-      level2: colors.dark.elevated,
-      level3: colors.dark.elevated,
-      level4: colors.dark.elevated,
-      level5: colors.dark.elevated,
-    },
+    outlineVariant: colors.gray[800],
   },
-};
-
-// Theme export
-export const theme = {
-  light: lightTheme,
-  dark: darkTheme,
-  colors: {
-    ...colors,
-    primary: colors.primary[500],
-    secondary: colors.secondary[500],
-    background: colors.gray[50],
-    surface: '#FFFFFF',
-    text: colors.gray[800],
-    textSecondary: colors.gray[500],
-    border: colors.gray[200],
-    disabled: colors.gray[400],
+  custom: {
+    colors: {
+      textPrimary: colors.gray[50],
+      textSecondary: colors.gray[400],
+      textMuted: colors.gray[500],
+      border: colors.gray[700],
+      cardBackground: colors.dark.card,
+      inputBackground: colors.dark.elevated,
+      success: colors.success,
+      warning: colors.warning,
+      error: colors.error,
+      info: colors.info,
+      aiBubble: colors.dark.elevated,
+      userBubble: colors.primary[600],
+    },
   },
 };
 
@@ -142,52 +147,7 @@ export const spacing = {
   md: 16,
   lg: 24,
   xl: 32,
-  '2xl': 48,
-  '3xl': 64,
-};
-
-// Typography
-export const typography = {
-  h1: {
-    fontSize: 32,
-    fontWeight: '700' as const,
-    lineHeight: 38,
-  },
-  h2: {
-    fontSize: 24,
-    fontWeight: '600' as const,
-    lineHeight: 31,
-  },
-  h3: {
-    fontSize: 20,
-    fontWeight: '600' as const,
-    lineHeight: 28,
-  },
-  h4: {
-    fontSize: 18,
-    fontWeight: '500' as const,
-    lineHeight: 25,
-  },
-  bodyLarge: {
-    fontSize: 18,
-    fontWeight: '400' as const,
-    lineHeight: 29,
-  },
-  body: {
-    fontSize: 16,
-    fontWeight: '400' as const,
-    lineHeight: 24,
-  },
-  bodySmall: {
-    fontSize: 14,
-    fontWeight: '400' as const,
-    lineHeight: 21,
-  },
-  caption: {
-    fontSize: 12,
-    fontWeight: '400' as const,
-    lineHeight: 17,
-  },
+  xxl: 48,
 };
 
 // Border radius
@@ -199,27 +159,69 @@ export const borderRadius = {
   full: 9999,
 };
 
+// Typography
+export const typography = StyleSheet.create({
+  h1: {
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 40,
+  },
+  h2: {
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 32,
+  },
+  h3: {
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  h4: {
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 26,
+  },
+  body: {
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 24,
+  },
+  bodySmall: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  caption: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
+  },
+});
+
 // Shadows
-export const shadows = {
+export const shadows = StyleSheet.create({
   sm: {
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
-    elevation: 5,
+    elevation: 6,
   },
-};
+});
+
+// Export theme type
+export type AppTheme = typeof lightTheme;

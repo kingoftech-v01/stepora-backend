@@ -6,8 +6,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
 
-import { RootNavigator } from './navigation/RootNavigator';
-import { theme } from './theme';
+import { MainNavigator } from './navigation/MainNavigator';
+import { lightTheme, darkTheme } from './theme';
 import { useAuthStore } from './stores/authStore';
 
 const queryClient = new QueryClient({
@@ -20,20 +20,21 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
-  const isDarkMode = useAuthStore((state) => state.preferences?.theme === 'dark');
+  const preferences = useAuthStore((state) => state.preferences);
+  const isDarkMode = preferences?.theme === 'dark';
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <PaperProvider theme={isDarkMode ? theme.dark : theme.light}>
+          <PaperProvider theme={isDarkMode ? darkTheme : lightTheme}>
             <NavigationContainer>
               <StatusBar
                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                 backgroundColor="transparent"
                 translucent
               />
-              <RootNavigator />
+              <MainNavigator />
             </NavigationContainer>
           </PaperProvider>
         </QueryClientProvider>
