@@ -75,7 +75,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
                     final rank = index + 1;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
-                      color: rank <= 3 ? AppTheme.accent.withOpacity(0.05) : null,
+                      color: rank <= 3 ? AppTheme.accent.withValues(alpha: 0.05) : null,
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: rank == 1
@@ -84,7 +84,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
                                   ? Colors.grey[400]
                                   : rank == 3
                                       ? Colors.brown[300]
-                                      : AppTheme.primaryPurple.withOpacity(0.1),
+                                      : AppTheme.primaryPurple.withValues(alpha: 0.1),
                           child: Text(
                             '$rank',
                             style: TextStyle(

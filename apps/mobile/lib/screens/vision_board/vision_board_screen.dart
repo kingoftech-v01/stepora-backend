@@ -81,7 +81,7 @@ class _VisionBoardScreenState extends ConsumerState<VisionBoardScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.image_outlined, size: 80, color: AppTheme.primaryPurple.withOpacity(0.3)),
+                        Icon(Icons.image_outlined, size: 80, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
                         const SizedBox(height: 16),
                         Text('No vision board yet', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),

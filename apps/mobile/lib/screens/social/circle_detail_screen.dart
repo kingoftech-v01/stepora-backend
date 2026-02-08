@@ -61,7 +61,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   const SizedBox(height: 12),
                   Chip(
                     label: Text('${_circle?['category'] ?? 'General'}'),
-                    backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                    backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                   ),
                 ],
               ),
@@ -74,7 +74,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                 child: Text(
                   (member['display_name'] ?? 'U')[0].toUpperCase(),
                   style: TextStyle(color: AppTheme.primaryPurple),

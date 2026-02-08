@@ -106,7 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                  backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                   child: Text(
                     (user.displayName.isNotEmpty
                         ? user.displayName[0]
@@ -179,7 +179,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'AI Coach',
             color: AppTheme.primaryPurple,
             onTap: () async {
-              final chatNotifier = ref.read(dreamsProvider.notifier);
               // Navigate to general chat
               context.push('/chat/new');
             },

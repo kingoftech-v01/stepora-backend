@@ -98,7 +98,7 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    Icon(Icons.people_outline, size: 64, color: AppTheme.primaryPurple.withOpacity(0.3)),
+                    Icon(Icons.people_outline, size: 64, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
                     const SizedBox(height: 16),
                     Text('Find Your Dream Buddy', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -129,7 +129,7 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                  backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                   child: Text((s['display_name'] ?? 'U')[0].toUpperCase(), style: TextStyle(color: AppTheme.primaryPurple)),
                 ),
                 title: Text(s['display_name'] ?? ''),

@@ -137,7 +137,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_bubble_outline, size: 64, color: AppTheme.primaryPurple.withOpacity(0.3)),
+          Icon(Icons.chat_bubble_outline, size: 64, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text(
             'Start a conversation',

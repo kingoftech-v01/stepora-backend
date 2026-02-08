@@ -62,7 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 40,
-                            backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                            backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                             child: Text(
                               (user.displayName.isNotEmpty ? user.displayName[0] : user.email[0]).toUpperCase(),
                               style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primaryPurple),
@@ -78,7 +78,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           if (user.isPremium)
                             Chip(
                               label: Text(user.subscription.toUpperCase()),
-                              backgroundColor: AppTheme.accent.withOpacity(0.1),
+                              backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
                               labelStyle: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold),
                               avatar: Icon(Icons.star, color: AppTheme.accent, size: 16),
                             ),
@@ -185,7 +185,7 @@ class _SkillBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: (xp % 1000) / 1000,
-                backgroundColor: color.withOpacity(0.1),
+                backgroundColor: color.withValues(alpha: 0.1),
                 color: color,
                 minHeight: 8,
               ),

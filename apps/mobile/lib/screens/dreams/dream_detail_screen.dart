@@ -122,15 +122,15 @@ class _DreamDetailScreenState extends ConsumerState<DreamDetailScreen> {
                       children: [
                         Chip(
                           label: Text(dream.categoryLabel),
-                          backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                          backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                           labelStyle: TextStyle(color: AppTheme.primaryPurple),
                         ),
                         const Spacer(),
                         Chip(
                           label: Text(dream.status.toUpperCase()),
                           backgroundColor: dream.status == 'active'
-                              ? AppTheme.success.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.1),
+                              ? AppTheme.success.withValues(alpha: 0.1)
+                              : Colors.grey.withValues(alpha: 0.1),
                           labelStyle: TextStyle(
                             color: dream.status == 'active' ? AppTheme.success : Colors.grey,
                           ),
@@ -150,7 +150,7 @@ class _DreamDetailScreenState extends ConsumerState<DreamDetailScreen> {
                             child: LinearProgressIndicator(
                               value: dream.progress / 100,
                               minHeight: 12,
-                              backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                              backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                               color: AppTheme.primaryPurple,
                             ),
                           ),
@@ -255,7 +255,7 @@ class _GoalCardState extends State<_GoalCard> {
               radius: 16,
               backgroundColor: widget.goal.isCompleted
                   ? AppTheme.success
-                  : AppTheme.primaryPurple.withOpacity(0.1),
+                  : AppTheme.primaryPurple.withValues(alpha: 0.1),
               child: widget.goal.isCompleted
                   ? const Icon(Icons.check, color: Colors.white, size: 16)
                   : Text(

@@ -125,7 +125,7 @@ class _SocialScreenState extends ConsumerState<SocialScreen> {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                  backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                   child: Text(
                     (user['display_name'] ?? 'U')[0].toUpperCase(),
                     style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold),

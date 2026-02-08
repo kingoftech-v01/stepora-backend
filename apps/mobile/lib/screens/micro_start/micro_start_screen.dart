@@ -107,7 +107,7 @@ class _MicroStartScreenState extends ConsumerState<MicroStartScreen> {
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: 1 - (_seconds / 120),
-                backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                 color: AppTheme.primaryPurple,
                 minHeight: 8,
               ),

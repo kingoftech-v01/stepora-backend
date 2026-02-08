@@ -87,7 +87,7 @@ class _CalibrationScreenState extends ConsumerState<CalibrationScreen> {
           children: [
             LinearProgressIndicator(
               value: (_currentIndex + 1) / _questions.length,
-              backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+              backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
               color: AppTheme.primaryPurple,
             ),
             const SizedBox(height: 32),
@@ -175,7 +175,7 @@ class _CalibrationScreenState extends ConsumerState<CalibrationScreen> {
           child: ChoiceChip(
             label: Text(option),
             selected: isSelected,
-            selectedColor: AppTheme.primaryPurple.withOpacity(0.2),
+            selectedColor: AppTheme.primaryPurple.withValues(alpha: 0.2),
             onSelected: (_) => setState(() => _answers[key] = option),
           ),
         );

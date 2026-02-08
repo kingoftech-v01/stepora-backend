@@ -20,8 +20,8 @@ class SuggestionChips extends StatelessWidget {
         runSpacing: 8,
         children: suggestions.map((text) => ActionChip(
           label: Text(text, style: const TextStyle(fontSize: 13)),
-          backgroundColor: AppTheme.primaryPurple.withOpacity(0.08),
-          side: BorderSide(color: AppTheme.primaryPurple.withOpacity(0.3)),
+          backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.08),
+          side: BorderSide(color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
           onPressed: () => onSelected(text),
         )).toList(),
       ),

@@ -38,7 +38,7 @@ class DreamCard extends StatelessWidget {
                       dream.categoryLabel,
                       style: const TextStyle(fontSize: 11),
                     ),
-                    backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                    backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                     labelStyle: TextStyle(color: AppTheme.primaryPurple),
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
@@ -65,7 +65,7 @@ class DreamCard extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: dream.progress / 100,
                         minHeight: 8,
-                        backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                        backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
                         color: dream.progress >= 100
                             ? AppTheme.success
                             : AppTheme.primaryPurple,

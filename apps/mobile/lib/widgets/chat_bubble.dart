@@ -116,7 +116,7 @@ class _DotAnimationState extends State<_DotAnimation> with SingleTickerProviderS
         width: 5,
         height: 5,
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.3 + _controller.value * 0.7),
+          color: Colors.grey.withValues(alpha: 0.3 + _controller.value * 0.7),
           shape: BoxShape.circle,
         ),
       ),

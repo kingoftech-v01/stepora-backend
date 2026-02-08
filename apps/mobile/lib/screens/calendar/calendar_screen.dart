@@ -67,7 +67,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             },
             calendarStyle: CalendarStyle(
               todayDecoration: BoxDecoration(
-                color: AppTheme.primaryPurple.withOpacity(0.3),
+                color: AppTheme.primaryPurple.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
               selectedDecoration: const BoxDecoration(

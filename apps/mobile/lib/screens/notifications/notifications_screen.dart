@@ -56,7 +56,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         leading: CircleAvatar(
                           backgroundColor: notif.isRead
                               ? Colors.grey[200]
-                              : AppTheme.primaryPurple.withOpacity(0.1),
+                              : AppTheme.primaryPurple.withValues(alpha: 0.1),
                           child: Icon(
                             _getNotifIcon(notif.notificationType),
                             color: notif.isRead ? Colors.grey : AppTheme.primaryPurple,
