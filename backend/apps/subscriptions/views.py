@@ -11,7 +11,7 @@ import stripe
 from django.http import HttpResponse
 from rest_framework import viewsets, status, views
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
@@ -20,6 +20,7 @@ from .serializers import (
     SubscriptionPlanSerializer,
     SubscriptionSerializer,
     SubscriptionCreateSerializer,
+    InvoiceSerializer,
 )
 from .services import StripeService
 
@@ -39,12 +40,7 @@ logger = logging.getLogger(__name__)
     ),
 )
 class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Public read-only viewset for subscription plans.
-
-    Anyone (authenticated or not) can view available plans so the
-    pricing page works without requiring login.
-    """
+    """Public read-only viewset for subscription plans."""
 
     permission_classes = [AllowAny]
     serializer_class = SubscriptionPlanSerializer
@@ -54,12 +50,7 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
 
 @extend_schema_view()
 class SubscriptionViewSet(viewsets.GenericViewSet):
-    """
-    Viewset for managing the authenticated user's subscription.
-
-    Provides actions to view the current subscription, create a checkout
-    session, cancel, and reactivate.
-    """
+    """Viewset for managing the authenticated user's subscription."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = SubscriptionSerializer
@@ -70,10 +61,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Get current subscription",
-        description=(
-            "Returns the authenticated user's active subscription details. "
-            "Returns 404 if the user has no subscription (free tier)."
-        ),
+        description="Returns the authenticated user's active subscription details.",
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
@@ -97,10 +85,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Create checkout session",
-        description=(
-            "Creates a Stripe Checkout Session and returns the checkout URL. "
-            "The client should redirect the user to this URL to complete payment."
-        ),
+        description="Creates a Stripe Checkout Session and returns the checkout URL.",
         tags=["Subscriptions"],
         request=SubscriptionCreateSerializer,
         responses={
@@ -123,6 +108,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
                 plan=plan,
                 success_url=serializer.validated_data.get('success_url', ''),
                 cancel_url=serializer.validated_data.get('cancel_url', ''),
+                coupon_code=serializer.validated_data.get('coupon_code', ''),
             )
         except ValueError as e:
             return Response(
@@ -143,10 +129,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Create billing portal session",
-        description=(
-            "Creates a Stripe Billing Portal Session for self-service "
-            "subscription management. Returns the portal URL."
-        ),
+        description="Creates a Stripe Billing Portal Session for self-service management.",
         tags=["Subscriptions"],
         responses={
             200: OpenApiResponse(description="Portal URL returned"),
@@ -181,10 +164,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Cancel subscription",
-        description=(
-            "Cancels the current subscription at the end of the billing period. "
-            "The user retains access until the period ends."
-        ),
+        description="Cancels the current subscription at the end of the billing period.",
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
@@ -214,10 +194,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Reactivate subscription",
-        description=(
-            "Reverses a pending cancellation so the subscription renews "
-            "at the next billing cycle."
-        ),
+        description="Reverses a pending cancellation.",
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
@@ -247,10 +224,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         summary="Sync subscription from Stripe",
-        description=(
-            "Forces a refresh of the subscription state from Stripe. "
-            "Useful if webhook delivery was delayed."
-        ),
+        description="Forces a refresh of the subscription state from Stripe.",
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
@@ -278,25 +252,49 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         serializer = SubscriptionSerializer(subscription)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="List invoices",
+        description="Fetch recent invoices from Stripe for the current user.",
+        tags=["Subscriptions"],
+        responses={200: InvoiceSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def invoices(self, request):
+        """Get invoice history for the current user."""
+        try:
+            invoices = StripeService.list_invoices(request.user)
+        except stripe.error.StripeError:
+            logger.exception("Stripe error fetching invoices")
+            return Response(
+                {'detail': 'Payment service error. Please try again later.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        serializer = InvoiceSerializer(invoices, many=True)
+        return Response({'invoices': serializer.data})
+
+    @extend_schema(
+        summary="Subscription analytics",
+        description="Get subscription analytics (MRR, churn, conversion). Admin only.",
+        tags=["Subscriptions"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def analytics(self, request):
+        """Get subscription analytics (admin only)."""
+        analytics = StripeService.get_analytics()
+        return Response(analytics)
+
 
 class StripeWebhookView(views.APIView):
-    """
-    Endpoint for receiving Stripe webhook events.
-
-    This view is exempt from authentication because Stripe sends
-    the events directly. We verify authenticity using the webhook
-    signing secret instead.
-    """
+    """Endpoint for receiving Stripe webhook events."""
 
     permission_classes = [AllowAny]
-    authentication_classes = []  # No auth required for webhooks
+    authentication_classes = []
 
     @extend_schema(
         summary="Stripe webhook endpoint",
-        description=(
-            "Receives and processes Stripe webhook events. "
-            "Verifies the payload signature before processing."
-        ),
+        description="Receives and processes Stripe webhook events.",
         tags=["Subscriptions"],
         request=None,
         responses={
@@ -305,12 +303,7 @@ class StripeWebhookView(views.APIView):
         },
     )
     def post(self, request):
-        """
-        Handle incoming Stripe webhook events.
-
-        The raw body is passed to the service layer which verifies the
-        signature and dispatches to the appropriate handler.
-        """
+        """Handle incoming Stripe webhook events."""
         payload = request.body
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
 

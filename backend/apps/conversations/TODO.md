@@ -16,20 +16,17 @@
 - [x] Add @extend_schema decorators for Swagger
 - [x] Implement WebSocket Token authentication
 - [x] XSS sanitization of message content
+- [x] **Automatic summarization** - Summarize long conversations (Celery task)
+- [x] **Export conversations** - Export as PDF/JSON
+- [x] **Conversation templates** - Pre-defined coaching templates (model + viewset)
+- [x] **Voice messages** - Audio support with Whisper (send-voice endpoint)
+- [x] **Image analysis** - Analyze images with GPT-4V (send-image endpoint)
 
 ## Planned - High Priority
 
 - [ ] **Function calling** - Allow AI to create tasks directly
-- [ ] **Automatic summarization** - Summarize long conversations
 - [ ] **Context window management** - Intelligent context management
 - [ ] **Retry logic** - OpenAI error handling with retry
-
-## Planned - Medium Priority
-
-- [ ] **Voice messages** - Audio support with Whisper
-- [ ] **Image analysis** - Analyze images with GPT-4V
-- [ ] **Export conversations** - Export as PDF/JSON
-- [ ] **Conversation templates** - Pre-defined coaching templates
 
 ## Planned - Low Priority
 

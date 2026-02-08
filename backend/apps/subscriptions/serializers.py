@@ -11,12 +11,7 @@ from .models import StripeCustomer, Subscription, SubscriptionPlan
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
-    """
-    Serializer for SubscriptionPlan.
-
-    Used in the public plan listing so prospective and current users
-    can compare tiers and feature sets.
-    """
+    """Serializer for SubscriptionPlan."""
 
     is_free = serializers.BooleanField(read_only=True)
     has_unlimited_dreams = serializers.BooleanField(read_only=True)
@@ -36,6 +31,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             'has_vision_board',
             'has_league',
             'has_ads',
+            'trial_period_days',
             'is_free',
             'has_unlimited_dreams',
             'is_active',
@@ -44,12 +40,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
 
 
 class StripeCustomerSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the StripeCustomer mapping.
-
-    Primarily used in admin or debug endpoints; the customer ID
-    itself is not exposed to end users.
-    """
+    """Serializer for the StripeCustomer mapping."""
 
     user_email = serializers.EmailField(source='user.email', read_only=True)
 
@@ -66,12 +57,7 @@ class StripeCustomerSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the active Subscription record.
-
-    Includes nested plan details so the client has everything it needs
-    to render the subscription status in a single response.
-    """
+    """Serializer for the active Subscription record."""
 
     plan = SubscriptionPlanSerializer(read_only=True)
     is_active = serializers.BooleanField(read_only=True)
@@ -95,12 +81,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionCreateSerializer(serializers.Serializer):
-    """
-    Input serializer for creating a Stripe Checkout Session.
-
-    Accepts the plan slug (or plan ID) and optional redirect URLs.
-    Validates that the requested plan exists and is purchasable.
-    """
+    """Input serializer for creating a Stripe Checkout Session."""
 
     plan_slug = serializers.SlugField(
         help_text='Slug of the plan to subscribe to (e.g., "premium", "pro")',
@@ -114,6 +95,12 @@ class SubscriptionCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text='URL to redirect to if the user cancels checkout',
+    )
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text='Optional Stripe coupon/promo code',
     )
 
     def validate_plan_slug(self, value):
@@ -133,12 +120,24 @@ class SubscriptionCreateSerializer(serializers.Serializer):
         return value
 
     def get_plan(self):
-        """
-        Return the validated SubscriptionPlan instance.
-
-        Must be called after ``is_valid()`` has passed.
-        """
+        """Return the validated SubscriptionPlan instance."""
         return SubscriptionPlan.objects.get(
             slug=self.validated_data['plan_slug'],
             is_active=True,
         )
+
+
+class InvoiceSerializer(serializers.Serializer):
+    """Serializer for Stripe invoice data."""
+
+    id = serializers.CharField(help_text='Stripe invoice ID')
+    number = serializers.CharField(allow_null=True, help_text='Invoice number')
+    amount_due = serializers.IntegerField(help_text='Amount due in cents')
+    amount_paid = serializers.IntegerField(help_text='Amount paid in cents')
+    currency = serializers.CharField(help_text='Currency code')
+    status = serializers.CharField(help_text='Invoice status')
+    period_start = serializers.DateTimeField(allow_null=True)
+    period_end = serializers.DateTimeField(allow_null=True)
+    hosted_invoice_url = serializers.URLField(allow_null=True, allow_blank=True)
+    invoice_pdf = serializers.URLField(allow_null=True, allow_blank=True)
+    created = serializers.DateTimeField()

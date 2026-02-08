@@ -8,7 +8,7 @@ and keeps a single place to manage API keys and error handling.
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import stripe
@@ -105,6 +105,7 @@ class StripeService:
         plan: SubscriptionPlan,
         success_url: str = '',
         cancel_url: str = '',
+        coupon_code: str = '',
     ) -> stripe.checkout.Session:
         """
         Create a Stripe Checkout Session for subscribing to a plan.
@@ -143,30 +144,45 @@ class StripeService:
             'https://app.dreamplanner.com/subscription/cancel',
         )
 
+        # Build subscription_data with optional trial period
+        subscription_data = {
+            'metadata': {
+                'dreamplanner_user_id': str(user.id),
+                'plan_slug': plan.slug,
+            },
+        }
+        if plan.trial_period_days > 0:
+            subscription_data['trial_period_days'] = plan.trial_period_days
+
+        # Build optional discounts from coupon code
+        discounts = []
+        if coupon_code:
+            discounts.append({'coupon': coupon_code})
+
         try:
-            session = stripe.checkout.Session.create(
-                customer=stripe_customer.stripe_customer_id,
-                payment_method_types=['card'],
-                mode='subscription',
-                line_items=[
+            session_kwargs = {
+                'customer': stripe_customer.stripe_customer_id,
+                'payment_method_types': ['card'],
+                'mode': 'subscription',
+                'line_items': [
                     {
                         'price': plan.stripe_price_id,
                         'quantity': 1,
                     }
                 ],
-                success_url=success_url or default_success,
-                cancel_url=cancel_url or default_cancel,
-                metadata={
+                'success_url': success_url or default_success,
+                'cancel_url': cancel_url or default_cancel,
+                'metadata': {
                     'dreamplanner_user_id': str(user.id),
                     'plan_slug': plan.slug,
                 },
-                subscription_data={
-                    'metadata': {
-                        'dreamplanner_user_id': str(user.id),
-                        'plan_slug': plan.slug,
-                    },
-                },
-            )
+                'subscription_data': subscription_data,
+            }
+
+            if discounts:
+                session_kwargs['discounts'] = discounts
+
+            session = stripe.checkout.Session.create(**session_kwargs)
 
             logger.info(
                 "Created checkout session %s for user %s (plan: %s)",
@@ -507,6 +523,19 @@ class StripeService:
         # Sync user model
         _sync_user_subscription(subscription.user, subscription.plan, period_end)
 
+        # Send email receipt asynchronously
+        try:
+            from apps.subscriptions.tasks import send_payment_receipt_email
+            amount_str = f"${invoice.get('amount_paid', 0) / 100:.2f}"
+            send_payment_receipt_email.delay(
+                user_id=str(subscription.user.id),
+                plan_name=subscription.plan.name,
+                amount=amount_str,
+                invoice_url=invoice.get('hosted_invoice_url', ''),
+            )
+        except Exception:
+            logger.exception("Failed to queue payment receipt email")
+
         logger.info(
             "Invoice paid for subscription %s (user: %s)",
             stripe_subscription_id,
@@ -641,6 +670,108 @@ class StripeService:
             stripe_subscription_id,
             user.email,
         )
+
+    # -----------------------------------------------------------------
+    # Invoice & Analytics
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def list_invoices(user: User, limit: int = 10) -> list:
+        """
+        Fetch recent invoices for the user from Stripe.
+
+        Args:
+            user: The user whose invoices to fetch.
+            limit: Maximum number of invoices to return.
+
+        Returns:
+            List of invoice dicts.
+        """
+        stripe_customer = StripeCustomer.objects.filter(user=user).first()
+        if not stripe_customer:
+            return []
+
+        try:
+            invoices = stripe.Invoice.list(
+                customer=stripe_customer.stripe_customer_id,
+                limit=limit,
+            )
+        except stripe.error.StripeError:
+            logger.exception(
+                "Failed to fetch invoices for user %s", user.email
+            )
+            raise
+
+        result = []
+        for inv in invoices.get('data', []):
+            result.append({
+                'id': inv['id'],
+                'number': inv.get('number'),
+                'amount_due': inv.get('amount_due', 0),
+                'amount_paid': inv.get('amount_paid', 0),
+                'currency': inv.get('currency', 'usd'),
+                'status': inv.get('status', ''),
+                'period_start': _timestamp_to_datetime(inv.get('period_start')),
+                'period_end': _timestamp_to_datetime(inv.get('period_end')),
+                'hosted_invoice_url': inv.get('hosted_invoice_url', ''),
+                'invoice_pdf': inv.get('invoice_pdf', ''),
+                'created': _timestamp_to_datetime(inv.get('created')),
+            })
+        return result
+
+    @staticmethod
+    def get_analytics() -> dict:
+        """
+        Compute subscription analytics (MRR, churn rate, conversion rate).
+
+        Returns:
+            Dict with analytics data.
+        """
+        from django.db.models import Sum, Count
+
+        total_users = User.objects.filter(is_active=True).count()
+
+        active_subs = Subscription.objects.filter(
+            status__in=('active', 'trialing')
+        ).select_related('plan')
+
+        active_count = active_subs.count()
+
+        # MRR = sum of all active subscription plan prices
+        mrr = sum(
+            float(sub.plan.price_monthly) for sub in active_subs
+        )
+
+        # Churn: canceled in last 30 days / active at start of period
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        canceled_count = Subscription.objects.filter(
+            status='canceled',
+            updated_at__gte=thirty_days_ago,
+        ).count()
+
+        churn_rate = 0.0
+        if (active_count + canceled_count) > 0:
+            churn_rate = round(
+                canceled_count / (active_count + canceled_count) * 100, 2
+            )
+
+        # Conversion rate: paid / total users
+        conversion_rate = 0.0
+        if total_users > 0:
+            conversion_rate = round(active_count / total_users * 100, 2)
+
+        # Trialing count
+        trialing_count = Subscription.objects.filter(status='trialing').count()
+
+        return {
+            'mrr': round(mrr, 2),
+            'active_subscriptions': active_count,
+            'trialing': trialing_count,
+            'canceled_last_30d': canceled_count,
+            'churn_rate_percent': churn_rate,
+            'conversion_rate_percent': conversion_rate,
+            'total_users': total_users,
+        }
 
     # -----------------------------------------------------------------
     # Synchronization

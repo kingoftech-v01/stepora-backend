@@ -39,6 +39,26 @@ Authorization: Token <auth_token>
 
 Django middleware that skips CSRF checks for all `/api/` routes. The admin panel continues to use CSRF protection. This is necessary because API clients (mobile app, external services) use token authentication rather than cookies.
 
+### Social Authentication Views
+
+`views.py`
+
+Social login endpoints powered by dj-rest-auth `SocialLoginView` and django-allauth social account adapters.
+
+| View | Provider | Description |
+|------|----------|-------------|
+| `GoogleLoginView` | Google | Accepts Google OAuth2 access token, creates/links account via allauth `GoogleOAuth2Adapter` |
+| `AppleLoginView` | Apple | Accepts Apple Sign-In token, creates/links account via allauth `AppleOAuth2Adapter` |
+
+Both views return a DRF Token on successful authentication, following the same token format as email/password login.
+
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `send_email_change_verification` | Sends a verification email when a user requests an email address change. Generates a signed token and sends a confirmation link |
+| `export_user_data` | Exports all user data (profile, dreams, conversations, calendar events, notifications) as a downloadable archive for GDPR compliance |
+
 ## Permissions
 
 `permissions.py`

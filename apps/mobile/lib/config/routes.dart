@@ -27,6 +27,12 @@ import '../screens/profile/edit_profile_screen.dart';
 import '../screens/auth/change_password_screen.dart';
 import '../screens/dreams/edit_dream_screen.dart';
 import '../screens/chat/conversation_list_screen.dart';
+import '../screens/social/friends_screen.dart';
+import '../screens/social/user_search_screen.dart';
+import '../screens/social/friend_requests_screen.dart';
+import '../screens/chat/buddy_chat_screen.dart';
+import '../screens/dreams/dream_templates_screen.dart';
+import '../screens/profile/google_calendar_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -155,6 +161,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/conversations',
         builder: (context, state) => const ConversationListScreen(),
+      ),
+      GoRoute(
+        path: '/friends',
+        builder: (context, state) => const FriendsScreen(),
+      ),
+      GoRoute(
+        path: '/social/search',
+        builder: (context, state) => const UserSearchScreen(),
+      ),
+      GoRoute(
+        path: '/social/requests',
+        builder: (context, state) => const FriendRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/buddy-chat/:id',
+        builder: (context, state) =>
+            BuddyChatScreen(conversationId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/dream-templates',
+        builder: (context, state) => const DreamTemplatesScreen(),
+      ),
+      GoRoute(
+        path: '/google-calendar',
+        builder: (context, state) => const GoogleCalendarScreen(),
       ),
     ],
   );

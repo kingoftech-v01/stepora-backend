@@ -24,6 +24,23 @@ The Calendar app manages task scheduling:
 | location | CharField(255) | Location/context |
 | reminder_minutes_before | Integer | Reminder before (minutes) |
 | status | CharField | scheduled, completed, cancelled, rescheduled |
+| recurrence_rule | CharField | iCal RRULE string for recurring events (e.g., `FREQ=WEEKLY;BYDAY=MO,WE,FR`) |
+| parent_event | FK(CalendarEvent) | Parent event for recurring event instances (nullable, self-referential) |
+
+### GoogleCalendarIntegration
+
+OAuth2 integration for bidirectional Google Calendar sync.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| user | OneToOne(User) | Linked user |
+| google_calendar_id | CharField | Google Calendar ID |
+| access_token | TextField | Encrypted OAuth2 access token |
+| refresh_token | TextField | Encrypted OAuth2 refresh token |
+| token_expiry | DateTime | Token expiration timestamp |
+| sync_enabled | Boolean | Whether sync is active |
+| last_synced_at | DateTime | Last successful sync timestamp |
 
 ### TimeBlock
 
@@ -61,6 +78,15 @@ The Calendar app manages task scheduling:
 - `GET /api/calendar/week/` - This week's events
 - `GET /api/calendar/overdue/` - Overdue tasks
 - `POST /api/calendar/auto-schedule/` - Automatic scheduling
+- `GET /api/calendar/conflicts/` - Detect scheduling conflicts
+- `GET /api/calendar/suggest-slots/` - Smart time slot suggestions based on availability and preferences
+- `GET /api/calendar/ical-feed/` - Export calendar as iCal feed (subscribable URL)
+
+### Google Calendar Integration
+- `POST /api/calendar/google/connect/` - Initiate Google Calendar OAuth2 flow
+- `POST /api/calendar/google/callback/` - Handle OAuth2 callback
+- `POST /api/calendar/google/sync/` - Trigger bidirectional sync
+- `DELETE /api/calendar/google/disconnect/` - Disconnect Google Calendar integration
 
 ### Time Blocks
 - `GET /api/time-blocks/` - List blocks
@@ -110,6 +136,13 @@ pytest apps/calendar/tests.py -v --cov=apps.calendar
 Scheduling uses user preferences:
 - `work_schedule` - Work hours (JSON)
 - `timezone` - Timezone for calculations
+
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `generate_recurring_events` | Creates future event instances from recurrence rules. Runs on a schedule to ensure recurring events are always populated ahead of time |
+| `sync_google_calendar` | Performs bidirectional sync with Google Calendar for all users with active integrations |
 
 ## Integration with Dreams
 

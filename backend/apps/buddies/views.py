@@ -7,6 +7,7 @@ partnerships. All endpoints require authentication.
 """
 
 import random
+from datetime import timedelta
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -27,6 +28,7 @@ from .serializers import (
     BuddyMatchSerializer,
     BuddyPairRequestSerializer,
     BuddyEncourageSerializer,
+    BuddyHistorySerializer,
 )
 
 
@@ -89,12 +91,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['get'], url_path='current')
     def current(self, request):
-        """
-        Get the current active buddy pairing.
-
-        Returns the pairing details including partner info and recent
-        activity stats. Returns null buddy if no active pairing exists.
-        """
+        """Get the current active buddy pairing."""
         pairing = self._get_active_pairing(request.user)
 
         if not pairing:
@@ -103,7 +100,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
         partner = self._get_partner_user(pairing, request.user)
 
         # Calculate recent activity (tasks in last 7 days)
-        from datetime import timedelta
         week_ago = django_timezone.now() - timedelta(days=7)
         recent_tasks = 0
         try:
@@ -122,6 +118,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
             'compatibilityScore': pairing.compatibility_score,
             'status': pairing.status,
             'recentActivity': recent_tasks,
+            'encouragementStreak': pairing.encouragement_streak,
+            'bestEncouragementStreak': pairing.best_encouragement_streak,
             'createdAt': pairing.created_at,
         }
 
@@ -136,12 +134,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     )
     @action(detail=True, methods=['get'], url_path='progress')
     def progress(self, request, pk=None):
-        """
-        Get progress comparison for a buddy pairing.
-
-        Returns side-by-side stats including streak, weekly tasks,
-        and influence score for both users.
-        """
+        """Get progress comparison for a buddy pairing."""
         try:
             pairing = BuddyPairing.objects.select_related(
                 'user1', 'user2'
@@ -155,7 +148,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Verify the user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
                 {'error': 'You are not part of this pairing.'},
@@ -164,8 +156,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         partner = self._get_partner_user(pairing, request.user)
 
-        # Calculate weekly tasks for both users
-        from datetime import timedelta
         week_ago = django_timezone.now() - timedelta(days=7)
 
         user_tasks_week = 0
@@ -204,8 +194,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     @extend_schema(
         summary="Find a buddy match",
         description=(
-            "Find a compatible buddy match based on shared interests and activity level. "
-            "Returns a potential match or null if no suitable match is found."
+            "Find a compatible buddy match based on shared interests and activity level."
         ),
         responses={
             200: BuddyMatchSerializer,
@@ -215,14 +204,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='find-match')
     def find_match(self, request):
-        """
-        Find a compatible buddy match.
-
-        Searches for available users without an active pairing who
-        have similar activity levels and interests. Returns a match
-        suggestion with compatibility score.
-        """
-        # Check if user already has an active pairing
+        """Find a compatible buddy match."""
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
@@ -237,7 +219,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
             active_pairing_user_ids.add(p.user1_id)
             active_pairing_user_ids.add(p.user2_id)
 
-        # Find candidates (active users, not already paired, not self)
         candidates = User.objects.filter(
             is_active=True
         ).exclude(
@@ -249,25 +230,18 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if not candidates.exists():
             return Response({'match': None})
 
-        # Score candidates based on compatibility
         best_match = None
         best_score = 0.0
-
         user_level = request.user.level
         user_xp = request.user.xp
 
         for candidate in candidates:
-            # Calculate compatibility based on level proximity and activity
             level_diff = abs(candidate.level - user_level)
             level_score = max(0.0, 1.0 - (level_diff / 50.0))
-
             xp_diff = abs(candidate.xp - user_xp)
             xp_score = max(0.0, 1.0 - (xp_diff / 10000.0))
-
-            # Activity recency score
             days_since_activity = (django_timezone.now() - candidate.last_activity).days
             activity_score = max(0.0, 1.0 - (days_since_activity / 30.0))
-
             score = (level_score * 0.3) + (xp_score * 0.3) + (activity_score * 0.4)
 
             if score > best_score:
@@ -277,7 +251,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if not best_match:
             return Response({'match': None})
 
-        # Determine shared interests (based on gamification if available)
         shared_interests = []
         try:
             user_gam = request.user.gamification
@@ -314,12 +287,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='pair')
     def pair(self, request):
-        """
-        Create a buddy pairing with a specific user.
-
-        Both users must not have an existing active pairing.
-        The pairing is automatically set to 'active' status.
-        """
+        """Create a buddy pairing with a specific user."""
         serializer = BuddyPairRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -331,7 +299,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check user doesn't already have active pairing
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
@@ -347,7 +314,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check partner doesn't already have active pairing
         partner_pairing = BuddyPairing.objects.filter(
             Q(user1=partner) | Q(user2=partner),
             status='active'
@@ -359,7 +325,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Calculate compatibility score
         level_diff = abs(partner.level - request.user.level)
         level_score = max(0.0, 1.0 - (level_diff / 50.0))
         xp_diff = abs(partner.xp - request.user.xp)
@@ -382,6 +347,61 @@ class BuddyViewSet(viewsets.GenericViewSet):
         )
 
     @extend_schema(
+        summary="Accept buddy pairing",
+        description="Accept a pending buddy pairing request.",
+        responses={
+            200: OpenApiResponse(description="Pairing accepted."),
+            404: OpenApiResponse(description="Pairing not found."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=True, methods=['post'], url_path='accept')
+    def accept(self, request, pk=None):
+        """Accept a pending buddy pairing."""
+        try:
+            pairing = BuddyPairing.objects.get(
+                id=pk, user2=request.user, status='pending'
+            )
+        except BuddyPairing.DoesNotExist:
+            return Response(
+                {'error': 'Pending buddy pairing not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        pairing.status = 'active'
+        pairing.save(update_fields=['status', 'updated_at'])
+
+        return Response({'message': 'Buddy pairing accepted.'})
+
+    @extend_schema(
+        summary="Reject buddy pairing",
+        description="Reject a pending buddy pairing request.",
+        responses={
+            200: OpenApiResponse(description="Pairing rejected."),
+            404: OpenApiResponse(description="Pairing not found."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=True, methods=['post'], url_path='reject')
+    def reject(self, request, pk=None):
+        """Reject a pending buddy pairing."""
+        try:
+            pairing = BuddyPairing.objects.get(
+                id=pk, user2=request.user, status='pending'
+            )
+        except BuddyPairing.DoesNotExist:
+            return Response(
+                {'error': 'Pending buddy pairing not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        pairing.status = 'cancelled'
+        pairing.ended_at = django_timezone.now()
+        pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
+
+        return Response({'message': 'Buddy pairing rejected.'})
+
+    @extend_schema(
         summary="Send encouragement",
         description="Send an encouragement message to your buddy partner.",
         request=BuddyEncourageSerializer,
@@ -393,12 +413,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     )
     @action(detail=True, methods=['post'], url_path='encourage')
     def encourage(self, request, pk=None):
-        """
-        Send encouragement to a buddy.
-
-        Creates an encouragement record and optionally triggers a
-        notification to the partner.
-        """
+        """Send encouragement to a buddy with streak tracking."""
         try:
             pairing = BuddyPairing.objects.get(
                 id=pk,
@@ -410,7 +425,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Verify the user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
                 {'error': 'You are not part of this pairing.'},
@@ -426,6 +440,27 @@ class BuddyViewSet(viewsets.GenericViewSet):
             message=serializer.validated_data.get('message', '')
         )
 
+        # Update encouragement streak
+        now = django_timezone.now()
+        if pairing.last_encouragement_at:
+            days_since = (now.date() - pairing.last_encouragement_at.date()).days
+            if days_since <= 1:
+                if days_since == 1:
+                    pairing.encouragement_streak += 1
+            else:
+                pairing.encouragement_streak = 1
+        else:
+            pairing.encouragement_streak = 1
+
+        pairing.last_encouragement_at = now
+        if pairing.encouragement_streak > pairing.best_encouragement_streak:
+            pairing.best_encouragement_streak = pairing.encouragement_streak
+
+        pairing.save(update_fields=[
+            'encouragement_streak', 'best_encouragement_streak',
+            'last_encouragement_at', 'updated_at'
+        ])
+
         # Determine the partner
         partner = pairing.user2 if pairing.user1_id == request.user.id else pairing.user1
 
@@ -437,14 +472,18 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 title='Buddy Encouragement',
                 body=serializer.validated_data.get('message', '') or
                      f'{request.user.display_name or "Your buddy"} sent you encouragement!',
-                notification_type='buddy_encourage',
+                notification_type='buddy',
+                scheduled_for=now,
+                status='sent',
                 data={'pairing_id': str(pairing.id)},
             )
         except (ImportError, Exception):
             pass
 
         return Response({
-            'message': f'Encouragement sent to {partner.display_name or "your buddy"}.'
+            'message': f'Encouragement sent to {partner.display_name or "your buddy"}.',
+            'encouragement_streak': pairing.encouragement_streak,
+            'best_encouragement_streak': pairing.best_encouragement_streak,
         })
 
     @extend_schema(
@@ -457,12 +496,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         tags=["Buddies"],
     )
     def destroy(self, request, pk=None):
-        """
-        End a buddy pairing.
-
-        Sets the pairing status to 'cancelled' and records the end time.
-        The pairing is not actually deleted from the database.
-        """
+        """End a buddy pairing."""
         try:
             pairing = BuddyPairing.objects.get(
                 id=pk,
@@ -474,7 +508,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Verify the user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
                 {'error': 'You are not part of this pairing.'},
@@ -486,3 +519,40 @@ class BuddyViewSet(viewsets.GenericViewSet):
         pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
 
         return Response({'message': 'Buddy pairing ended.'})
+
+    @extend_schema(
+        summary="Buddy pairing history",
+        description="Get the user's past buddy pairings with stats.",
+        responses={200: BuddyHistorySerializer(many=True)},
+        tags=["Buddies"],
+    )
+    @action(detail=False, methods=['get'], url_path='history')
+    def history(self, request):
+        """Get past buddy pairings with stats."""
+        pairings = BuddyPairing.objects.filter(
+            Q(user1=request.user) | Q(user2=request.user),
+        ).select_related('user1', 'user2').order_by('-created_at')
+
+        results = []
+        for pairing in pairings:
+            partner = self._get_partner_user(pairing, request.user)
+            encouragement_count = pairing.encouragements.count()
+            duration_days = None
+            if pairing.ended_at:
+                duration_days = (pairing.ended_at - pairing.created_at).days
+
+            results.append({
+                'id': pairing.id,
+                'partner': self._get_partner_data(partner),
+                'status': pairing.status,
+                'compatibilityScore': pairing.compatibility_score,
+                'encouragementCount': encouragement_count,
+                'encouragementStreak': pairing.encouragement_streak,
+                'bestEncouragementStreak': pairing.best_encouragement_streak,
+                'durationDays': duration_days,
+                'createdAt': pairing.created_at,
+                'endedAt': pairing.ended_at,
+            })
+
+        serializer = BuddyHistorySerializer(results, many=True)
+        return Response({'pairings': serializer.data})

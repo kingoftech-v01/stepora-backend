@@ -1,9 +1,9 @@
 """
 Models for the Social system.
 
-Implements friendships, follows, and activity feeds for the DreamPlanner
-community. Friendships are bidirectional (require acceptance), while
-follows are unidirectional.
+Implements friendships, follows, activity feeds, blocking, and reporting
+for the DreamPlanner community. Friendships are bidirectional (require
+acceptance), while follows are unidirectional.
 """
 
 import uuid
@@ -11,6 +11,133 @@ import uuid
 from django.db import models
 
 from apps.users.models import User
+
+
+class BlockedUser(models.Model):
+    """
+    Represents a user blocking another user.
+
+    Blocked users are excluded from search results, friend requests,
+    follows, buddy matching, and circle interactions.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    blocker = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='blocked_users',
+        help_text='The user who performed the block.'
+    )
+    blocked = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='blocked_by',
+        help_text='The user who was blocked.'
+    )
+    reason = models.TextField(
+        blank=True,
+        default='',
+        help_text='Optional reason for blocking.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'blocked_users'
+        ordering = ['-created_at']
+        verbose_name = 'Blocked User'
+        verbose_name_plural = 'Blocked Users'
+        unique_together = [['blocker', 'blocked']]
+        indexes = [
+            models.Index(fields=['blocker'], name='idx_blocked_blocker'),
+            models.Index(fields=['blocked'], name='idx_blocked_blocked'),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.blocker.display_name or self.blocker.email} blocked "
+            f"{self.blocked.display_name or self.blocked.email}"
+        )
+
+
+class ReportedUser(models.Model):
+    """
+    Represents a user report for moderation.
+    """
+
+    CATEGORY_CHOICES = [
+        ('spam', 'Spam'),
+        ('harassment', 'Harassment'),
+        ('inappropriate', 'Inappropriate Content'),
+        ('other', 'Other'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('reviewed', 'Reviewed'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    reporter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='reports_made',
+        help_text='The user who filed the report.'
+    )
+    reported = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='reports_received',
+        help_text='The user being reported.'
+    )
+    reason = models.TextField(
+        help_text='Description of why the user is being reported.'
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='other',
+        help_text='Category of the report.'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True,
+    )
+    admin_notes = models.TextField(
+        blank=True,
+        default='',
+        help_text='Internal notes from admin review.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reported_users'
+        ordering = ['-created_at']
+        verbose_name = 'Reported User'
+        verbose_name_plural = 'Reported Users'
+        indexes = [
+            models.Index(fields=['status'], name='idx_report_status'),
+            models.Index(fields=['-created_at'], name='idx_report_created'),
+        ]
+
+    def __str__(self):
+        return (
+            f"Report: {self.reporter.display_name or self.reporter.email} -> "
+            f"{self.reported.display_name or self.reported.email} ({self.category})"
+        )
 
 
 class Friendship(models.Model):

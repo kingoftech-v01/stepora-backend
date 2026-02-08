@@ -199,7 +199,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         their standings ranked by XP.
         """
         from django.db.models import Q
-        from apps.users.models import DreamBuddy
+        from apps.buddies.models import BuddyPairing
 
         limit = min(int(request.query_params.get('limit', 50)), 100)
         season = Season.get_active_season()
@@ -210,8 +210,8 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Get friend IDs from active buddy relationships
-        buddy_relations = DreamBuddy.objects.filter(
+        # Get friend IDs from active buddy pairings
+        buddy_relations = BuddyPairing.objects.filter(
             Q(user1=request.user) | Q(user2=request.user),
             status='active'
         )

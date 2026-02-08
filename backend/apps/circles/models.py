@@ -293,3 +293,171 @@ class CircleChallenge(models.Model):
     def participant_count(self):
         """Return the number of participants in this challenge."""
         return self.participants.count()
+
+
+class PostReaction(models.Model):
+    """
+    Represents a reaction to a circle post.
+
+    Users can react with emoji-style reactions (thumbs_up, fire, clap, heart).
+    Each user can only have one reaction per post.
+    """
+
+    REACTION_CHOICES = [
+        ('thumbs_up', 'Thumbs Up'),
+        ('fire', 'Fire'),
+        ('clap', 'Clap'),
+        ('heart', 'Heart'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    post = models.ForeignKey(
+        CirclePost,
+        on_delete=models.CASCADE,
+        related_name='reactions',
+        help_text='The post this reaction is on.'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='post_reactions',
+        help_text='The user who reacted.'
+    )
+    reaction_type = models.CharField(
+        max_length=20,
+        choices=REACTION_CHOICES,
+        help_text='Type of reaction.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'post_reactions'
+        ordering = ['-created_at']
+        verbose_name = 'Post Reaction'
+        verbose_name_plural = 'Post Reactions'
+        unique_together = [['post', 'user']]
+        indexes = [
+            models.Index(fields=['post', 'reaction_type'], name='idx_reaction_post_type'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} reacted {self.reaction_type} on post"
+
+
+class CircleInvitation(models.Model):
+    """
+    Invitation to join a private circle.
+
+    Supports two modes:
+    - Direct invite: inviter specifies an invitee user
+    - Link invite: generates a shareable invite_code (no specific invitee)
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    circle = models.ForeignKey(
+        Circle,
+        on_delete=models.CASCADE,
+        related_name='invitations',
+    )
+    inviter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='circle_invites_sent',
+    )
+    invitee = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='circle_invites_received',
+        null=True,
+        blank=True,
+        help_text='The user invited (null for link invitations).',
+    )
+    invite_code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text='Shareable code for link-based invitations.',
+    )
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('expired', 'Expired'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+    )
+    expires_at = models.DateTimeField(
+        help_text='When this invitation expires.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'circle_invitations'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['invite_code']),
+            models.Index(fields=['circle', 'invitee', 'status']),
+        ]
+
+    def __str__(self):
+        target = self.invitee.email if self.invitee else f'code:{self.invite_code}'
+        return f"Invite to {self.circle.name} for {target}"
+
+    @property
+    def is_expired(self):
+        return django_timezone.now() > self.expires_at
+
+
+class ChallengeProgress(models.Model):
+    """
+    Tracks a user's progress within a circle challenge.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    challenge = models.ForeignKey(
+        CircleChallenge,
+        on_delete=models.CASCADE,
+        related_name='progress_entries',
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='challenge_progress',
+    )
+    progress_value = models.FloatField(
+        default=0,
+        help_text='Numeric progress value (interpretation depends on challenge).',
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text='Optional notes about this progress update.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'challenge_progress'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['challenge', 'user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email}: {self.progress_value} on {self.challenge.title}"

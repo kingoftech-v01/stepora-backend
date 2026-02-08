@@ -82,7 +82,7 @@ Tracks a user's rank and stats within a league for a season.
 | user | FK(User) | The ranked user (related_name: `league_standings`) |
 | league | FK(League) | Current league (related_name: `standings`) |
 | season | FK(Season) | Season context (related_name: `standings`) |
-| rank | Integer | Current rank within the season (1 = top) |
+| rank | Integer | Current rank within the season (1 = top), uses dense ranking |
 | xp_earned_this_season | Integer | Total XP earned this season |
 | tasks_completed | Integer | Tasks completed this season |
 | dreams_completed | Integer | Dreams completed this season |
@@ -91,6 +91,24 @@ Tracks a user's rank and stats within a league for a season.
 
 **DB table:** `league_standings`
 **Constraint:** `unique_together = [['user', 'season']]`
+
+### RankSnapshot
+
+Daily snapshot of user rankings for historical tracking and trend analysis.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | Tracked user (related_name: `rank_snapshots`) |
+| season | FK(Season) | Season context (related_name: `rank_snapshots`) |
+| league | FK(League) | User's league at snapshot time |
+| rank | Integer | User's rank at snapshot time |
+| xp | Integer | User's XP at snapshot time |
+| snapshot_date | DateField | Date of the snapshot |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `rank_snapshots`
+**Constraint:** `unique_together = [['user', 'season', 'snapshot_date']]`
 
 ### SeasonReward
 
@@ -170,8 +188,9 @@ All ranking business logic is encapsulated in `LeagueService`:
 | `get_user_league(user)` | Determine league based on user's XP |
 | `update_standing(user)` | Recalculate standing after XP change (atomic). Creates standing if needed, recalculates all ranks |
 | `get_leaderboard(league, limit, season)` | Retrieve ranked user list. If league is None, returns global leaderboard |
-| `promote_demote_users()` | End-of-week league tier changes based on current XP (atomic). Returns `{promoted, demoted}` counts |
+| `promote_demote_users()` | End-of-week league tier changes based on current XP (atomic). Returns `{promoted, demoted}` counts. Sends promotion/demotion notifications to affected users |
 | `calculate_season_rewards(season)` | Create reward records for all users when season ends (atomic). Deactivates the season |
+| `take_daily_rank_snapshots()` | Creates a RankSnapshot for every active standing in the current season |
 | `get_nearby_ranks(user, count)` | Users ranked above and below. Returns `{above, current, below}` |
 | `increment_tasks_completed(user)` | Increment tasks_completed counter for active standing |
 | `increment_dreams_completed(user)` | Increment dreams_completed counter for active standing |
@@ -188,3 +207,18 @@ All four models are registered with Django admin:
 - **SeasonAdmin** - Shows `days_remaining` in list. Includes `LeagueStandingInline` for viewing standings within a season
 - **LeagueStandingAdmin** - Filter by league and season. Search by user email/display name
 - **SeasonRewardAdmin** - Filter by claimed status, league achieved, season
+- **RankSnapshotAdmin** - Filter by season, league, date. Search by user email/display name
+
+## Management Commands
+
+| Command | Description |
+|---------|-------------|
+| `seed_leagues` | Seeds the database with the 7 default league tiers (Bronze through Legend) with XP ranges, colors, icons, and descriptions. Idempotent |
+
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `check_season_end` | Runs on a schedule to detect when the active season has ended. Automatically triggers reward calculation and season deactivation |
+| `take_daily_rank_snapshots` | Creates daily RankSnapshot records for all active standings. Runs once per day |
+| `send_promotion_demotion_notifications` | Sends push notifications to users who have been promoted or demoted after weekly league tier changes |

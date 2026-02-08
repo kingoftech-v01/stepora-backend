@@ -6,17 +6,21 @@ import '../models/message.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 
+enum ConnectionStatus { disconnected, connecting, connected, reconnecting }
+
 class ChatState {
   final List<Conversation> conversations;
   final List<Message> messages;
   final bool isLoading;
   final String streamingContent;
+  final ConnectionStatus connectionStatus;
 
   const ChatState({
     this.conversations = const [],
     this.messages = const [],
     this.isLoading = false,
     this.streamingContent = '',
+    this.connectionStatus = ConnectionStatus.disconnected,
   });
 
   ChatState copyWith({
@@ -24,12 +28,14 @@ class ChatState {
     List<Message>? messages,
     bool? isLoading,
     String? streamingContent,
+    ConnectionStatus? connectionStatus,
   }) {
     return ChatState(
       conversations: conversations ?? this.conversations,
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       streamingContent: streamingContent ?? this.streamingContent,
+      connectionStatus: connectionStatus ?? this.connectionStatus,
     );
   }
 }
@@ -82,8 +88,17 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
+  Future<void> deleteConversation(String conversationId) async {
+    await _api.delete(ApiConstants.conversationDetail(conversationId));
+    state = state.copyWith(
+      conversations: state.conversations.where((c) => c.id != conversationId).toList(),
+    );
+  }
+
   void connectWebSocket(String conversationId, String token) {
+    state = state.copyWith(connectionStatus: ConnectionStatus.connecting);
     _ws.connect(conversationId, token);
+    state = state.copyWith(connectionStatus: ConnectionStatus.connected);
     _wsSubscription = _ws.messageStream.listen((data) {
       final type = data['type'];
       if (type == 'chat_message') {
@@ -91,6 +106,7 @@ class ChatNotifier extends Notifier<ChatState> {
         state = state.copyWith(
           messages: [...state.messages, message],
           streamingContent: '',
+          connectionStatus: ConnectionStatus.connected,
         );
       } else if (type == 'stream_chunk') {
         state = state.copyWith(
@@ -103,6 +119,10 @@ class ChatNotifier extends Notifier<ChatState> {
           streamingContent: '',
         );
       }
+    }, onError: (_) {
+      state = state.copyWith(connectionStatus: ConnectionStatus.reconnecting);
+    }, onDone: () {
+      state = state.copyWith(connectionStatus: ConnectionStatus.disconnected);
     });
   }
 
@@ -121,6 +141,13 @@ class ChatNotifier extends Notifier<ChatState> {
   void disconnectWebSocket() {
     _wsSubscription?.cancel();
     _ws.disconnect();
+    state = state.copyWith(connectionStatus: ConnectionStatus.disconnected);
+  }
+
+  void retrySendMessage(String content) {
+    if (state.connectionStatus == ConnectionStatus.connected) {
+      sendMessage(content);
+    }
   }
 }
 

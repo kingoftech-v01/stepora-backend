@@ -14,20 +14,16 @@
 
 - [x] Add @extend_schema decorators for Swagger
 - [x] XSS sanitization for text fields
-
-## Planned - High Priority
-
-- [ ] **Drag & drop reschedule** - API support for reorganization
-- [ ] **Conflict detection** - Detect overlapping events
-- [ ] **Recurring events** - Native recurring events
-- [ ] **Smart suggestions** - Optimal time slot suggestions
-- [ ] Add event creation from Flutter frontend (currently read-only)
-- [ ] Add event editing/deletion from frontend
+- [x] **Conflict detection** - Detect overlapping events (in views)
+- [x] **Recurring events** - Native recurring events (recurrence_rule + Celery task)
+- [x] **Google Calendar sync** - Bidirectional synchronization (OAuth)
+- [x] **Apple Calendar sync** - iCal feed export
+- [x] **Event creation/editing/deletion from frontend**
+- [x] **Smart suggestions** - Optimal time slot suggestions (suggest-time-slots endpoint)
+- [x] **Drag & drop reschedule** - Reschedule API
 
 ## Planned - Medium Priority
 
-- [ ] **Google Calendar sync** - Bidirectional synchronization
-- [ ] **Apple Calendar sync** - iCal integration
 - [ ] **Time zone handling** - Better timezone management
 - [ ] **Buffer time** - Transition time between tasks
 
@@ -36,7 +32,6 @@
 - [ ] **Calendar sharing** - Share your calendar
 - [ ] **Team calendars** - Team calendars
 - [ ] **Availability API** - API to find free time slots
-- [ ] **Calendar export** - iCal/ICS export
 
 ## Known Bugs
 

@@ -3,20 +3,22 @@ Views for Users app.
 Authentication is handled by dj-rest-auth at /api/auth/ endpoints.
 """
 
-from django.db import models
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.parsers import MultiPartParser, FormParser
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import User, FcmToken, GamificationProfile, DreamBuddy
+import secrets
+from datetime import timedelta
+from django.utils import timezone
+
+from .models import User, FcmToken, GamificationProfile, EmailChangeRequest
 from .serializers import (
     UserSerializer, UserProfileSerializer, UserUpdateSerializer,
-    FcmTokenSerializer, GamificationProfileSerializer, DreamBuddySerializer
+    FcmTokenSerializer, GamificationProfileSerializer,
 )
-from .services import BuddyMatchingService
 
 
 @extend_schema_view(
@@ -97,6 +99,48 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = GamificationProfileSerializer(profile)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Upload avatar",
+        description="Upload an avatar image for the current user.",
+        request={'multipart/form-data': {'type': 'object', 'properties': {'avatar': {'type': 'string', 'format': 'binary'}}}},
+        responses={200: UserSerializer},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def upload_avatar(self, request):
+        """Upload avatar image for the current user."""
+        avatar_file = request.FILES.get('avatar')
+        if not avatar_file:
+            return Response(
+                {'error': 'No avatar file provided.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if avatar_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size (5MB max)
+        if avatar_file.size > 5 * 1024 * 1024:
+            return Response(
+                {'error': 'File too large. Maximum size is 5MB.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+        # Delete old avatar image if exists
+        if user.avatar_image:
+            user.avatar_image.delete(save=False)
+
+        user.avatar_image = avatar_file
+        user.save(update_fields=['avatar_image'])
+
+        return Response(UserSerializer(user).data)
+
     @extend_schema(summary="Get user statistics", description="Get comprehensive statistics for the current user", tags=["Users"], responses={200: dict})
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -119,118 +163,192 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(stats)
 
-
-@extend_schema_view(
-    list=extend_schema(summary="List buddy pairings", description="Get all buddy pairings for the current user", tags=["Dream Buddies"]),
-    retrieve=extend_schema(summary="Get buddy pairing", description="Get a specific buddy pairing", tags=["Dream Buddies"]),
-    create=extend_schema(summary="Create buddy pairing", description="Create a new buddy pairing", tags=["Dream Buddies"]),
-    update=extend_schema(summary="Update buddy pairing", description="Update a buddy pairing", tags=["Dream Buddies"]),
-    partial_update=extend_schema(summary="Partial update buddy pairing", description="Partially update a buddy pairing", tags=["Dream Buddies"]),
-    destroy=extend_schema(summary="Delete buddy pairing", description="Delete a buddy pairing", tags=["Dream Buddies"]),
-)
-class DreamBuddyViewSet(viewsets.ModelViewSet):
-    """Dream Buddy pairing endpoints."""
-
-    permission_classes = [IsAuthenticated]
-    serializer_class = DreamBuddySerializer
-
-    def get_queryset(self):
-        """Get buddy pairings for current user."""
-        user = self.request.user
-        return DreamBuddy.objects.filter(
-            user1=user
-        ) | DreamBuddy.objects.filter(
-            user2=user
-        )
-
-    @extend_schema(summary="Find compatible buddy", description="Find a compatible dream buddy using the matching algorithm", tags=["Dream Buddies"], responses={201: dict, 404: dict})
-    @action(detail=False, methods=['post'])
-    def find_buddy(self, request):
-        """Find a compatible dream buddy."""
+    @extend_schema(
+        summary="Delete account",
+        description="Soft-delete the current user's account. Anonymizes personal data and deactivates the account.",
+        responses={200: OpenApiResponse(description="Account scheduled for deletion.")},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['delete'], url_path='delete-account')
+    def delete_account(self, request):
+        """
+        Soft-delete user account (GDPR compliant).
+        Anonymizes personal data and deactivates the account.
+        A background task will hard-delete after 30 days.
+        """
         user = request.user
 
-        # Check if user already has an active buddy
-        existing_active = DreamBuddy.objects.filter(
-            (models.Q(user1=user) | models.Q(user2=user)),
-            status='active'
-        ).first()
+        # Verify password for security
+        password = request.data.get('password')
+        if not password or not user.check_password(password):
+            return Response(
+                {'error': 'Invalid password. Please confirm your password to delete your account.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if existing_active:
-            return Response({
-                'message': 'You already have an active buddy',
-                'buddy': DreamBuddySerializer(existing_active).data
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Anonymize personal data
+        user.display_name = 'Deleted User'
+        user.email = f'deleted_{user.id}@deleted.dreamplanner.app'
+        user.avatar_url = ''
+        if user.avatar_image:
+            user.avatar_image.delete(save=False)
+        user.bio = ''
+        user.location = ''
+        user.social_links = None
+        user.notification_prefs = None
+        user.app_prefs = None
+        user.work_schedule = None
+        user.is_active = False
+        user.save()
 
-        # Check for pending requests
-        pending_request = DreamBuddy.objects.filter(
-            user1=user,
-            status='pending'
-        ).first()
+        # Deactivate FCM tokens
+        FcmToken.objects.filter(user=user).update(is_active=False)
 
-        if pending_request:
-            return Response({
-                'message': 'You have a pending buddy request',
-                'buddy': DreamBuddySerializer(pending_request).data
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Find a compatible buddy
-        service = BuddyMatchingService()
-        result = service.find_compatible_buddy(user)
-
-        if not result:
-            return Response({
-                'message': 'No compatible buddy found at the moment',
-                'suggestion': 'Try again later or update your profile to improve matching'
-            }, status=status.HTTP_404_NOT_FOUND)
-
-        matched_user, compatibility_score, shared_categories = result
-
-        # Create buddy pairing
-        buddy_pair = service.create_buddy_request(
-            requesting_user=user,
-            target_user=matched_user,
-            compatibility_score=compatibility_score,
-            shared_categories=shared_categories
-        )
+        # Delete auth tokens
+        from rest_framework.authtoken.models import Token
+        Token.objects.filter(user=user).delete()
 
         return Response({
-            'message': 'Buddy request sent successfully',
-            'buddy': DreamBuddySerializer(buddy_pair).data,
-            'compatibility_score': round(compatibility_score * 100, 1),
-            'shared_categories': shared_categories
-        }, status=status.HTTP_201_CREATED)
+            'message': 'Account scheduled for deletion. Your data has been anonymized. '
+                       'The account will be permanently deleted in 30 days.',
+        })
 
-    @extend_schema(summary="Accept buddy request", description="Accept a buddy pairing request", tags=["Dream Buddies"], responses={200: DreamBuddySerializer})
-    @action(detail=True, methods=['post'])
-    def accept(self, request, pk=None):
-        """Accept a buddy pairing."""
-        buddy_pair = self.get_object()
+    @extend_schema(
+        summary="Export user data",
+        description="Export all user data as JSON (GDPR data portability).",
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['get'], url_path='export-data')
+    def export_data(self, request):
+        """Export all user data as JSON for GDPR compliance."""
+        user = request.user
 
-        if buddy_pair.user2 != request.user:
+        data = {
+            'profile': {
+                'email': user.email,
+                'display_name': user.display_name,
+                'bio': user.bio,
+                'location': user.location,
+                'timezone': user.timezone,
+                'subscription': user.subscription,
+                'level': user.level,
+                'xp': user.xp,
+                'streak_days': user.streak_days,
+                'created_at': str(user.created_at),
+            },
+            'dreams': [],
+            'notifications': [],
+        }
+
+        # Export dreams with goals and tasks
+        for dream in user.dreams.all():
+            dream_data = {
+                'title': dream.title,
+                'description': dream.description,
+                'category': dream.category,
+                'status': dream.status,
+                'progress_percentage': dream.progress_percentage,
+                'created_at': str(dream.created_at),
+                'goals': [],
+            }
+            for goal in dream.goals.all():
+                goal_data = {
+                    'title': goal.title,
+                    'description': goal.description,
+                    'status': goal.status,
+                    'tasks': list(goal.tasks.values('title', 'description', 'status', 'completed_at')),
+                }
+                dream_data['goals'].append(goal_data)
+            data['dreams'].append(dream_data)
+
+        # Export notifications
+        from apps.notifications.models import Notification
+        for notif in Notification.objects.filter(user=user).order_by('-created_at')[:200]:
+            data['notifications'].append({
+                'type': notif.notification_type,
+                'title': notif.title,
+                'body': notif.body,
+                'created_at': str(notif.created_at),
+            })
+
+        return Response(data)
+
+    @extend_schema(
+        summary="Change email",
+        description="Request to change the user's email address. Sends a verification email to the new address.",
+        responses={200: OpenApiResponse(description="Verification email sent.")},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='change-email')
+    def change_email(self, request):
+        """Request email change with verification."""
+        new_email = request.data.get('new_email', '').strip()
+        password = request.data.get('password', '')
+
+        if not new_email:
             return Response(
-                {'error': 'You can only accept pairings sent to you'},
-                status=status.HTTP_403_FORBIDDEN
+                {'error': 'new_email is required.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        buddy_pair.status = 'active'
-        buddy_pair.started_at = timezone.now()
-        buddy_pair.save()
-
-        return Response(DreamBuddySerializer(buddy_pair).data)
-
-    @extend_schema(summary="Decline buddy request", description="Decline a buddy pairing request", tags=["Dream Buddies"], responses={200: DreamBuddySerializer})
-    @action(detail=True, methods=['post'])
-    def decline(self, request, pk=None):
-        """Decline a buddy pairing."""
-        buddy_pair = self.get_object()
-
-        if buddy_pair.user2 != request.user:
+        if not password or not request.user.check_password(password):
             return Response(
-                {'error': 'You can only decline pairings sent to you'},
-                status=status.HTTP_403_FORBIDDEN
+                {'error': 'Invalid password.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        buddy_pair.status = 'cancelled'
-        buddy_pair.save()
+        # Check if email is already taken
+        if User.objects.filter(email=new_email).exclude(id=request.user.id).exists():
+            return Response(
+                {'error': 'This email is already in use.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        return Response(DreamBuddySerializer(buddy_pair).data)
+        # Invalidate previous requests
+        EmailChangeRequest.objects.filter(
+            user=request.user, is_verified=False
+        ).delete()
+
+        # Create new request
+        token = secrets.token_urlsafe(64)
+        EmailChangeRequest.objects.create(
+            user=request.user,
+            new_email=new_email,
+            token=token,
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+
+        # Send verification email via Celery task
+        from .tasks import send_email_change_verification
+        send_email_change_verification.delay(request.user.id, new_email, token)
+
+        return Response({
+            'message': 'Verification email sent to the new address. Please check your inbox.',
+        })
+
+    @extend_schema(
+        summary="Update notification preferences",
+        description="Update per-type notification preferences (push/email toggles).",
+        responses={200: UserSerializer},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['put'], url_path='notification-preferences')
+    def notification_preferences(self, request):
+        """Update notification preferences."""
+        prefs = request.data
+
+        # Validate structure
+        if not isinstance(prefs, dict):
+            return Response(
+                {'error': 'Expected a JSON object with notification preferences.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+        user.notification_prefs = prefs
+        user.save(update_fields=['notification_prefs'])
+
+        return Response(UserSerializer(user).data)
+
+

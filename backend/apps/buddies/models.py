@@ -61,6 +61,20 @@ class BuddyPairing(models.Model):
         help_text='Compatibility score between 0.0 and 1.0, calculated at match time.'
     )
 
+    encouragement_streak = models.IntegerField(
+        default=0,
+        help_text='Current consecutive-day encouragement streak.'
+    )
+    best_encouragement_streak = models.IntegerField(
+        default=0,
+        help_text='Best-ever consecutive-day encouragement streak.'
+    )
+    last_encouragement_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp of the last encouragement sent in this pairing.'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     ended_at = models.DateTimeField(

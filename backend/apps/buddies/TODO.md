@@ -1,18 +1,18 @@
 # Buddies App - TODO
 
-## Planned Features
+## Completed
 
-- [ ] **Buddy request acceptance flow** - Change the pairing creation to a two-step process: the initiator sends a buddy request (status: `pending`), and the partner must accept before the pairing becomes `active`. Add accept/reject endpoints similar to the friendship system.
+- [x] **Buddy request acceptance flow** - Two-step pairing process: the initiator sends a buddy request (status: `pending`), and the partner must accept before the pairing becomes `active`. Accept/reject endpoints implemented.
 
-- [ ] **Buddy chat** - Add a real-time messaging channel between paired buddies. Integrate with the existing conversations/WebSocket infrastructure or create a dedicated buddy chat model for lightweight messaging.
+- [x] **Buddy chat** - Real-time messaging channel between paired buddies (BuddyChatConsumer WebSocket). Integrated with existing WebSocket infrastructure.
 
-- [ ] **Pairing history** - Add an endpoint to retrieve a user's past buddy pairings (completed and cancelled), including partner info, duration, compatibility score, and encouragement count. Useful for tracking accountability history.
+- [x] **Pairing history** - Endpoint to retrieve a user's past buddy pairings (completed and cancelled), including partner info, duration, compatibility score, and encouragement count.
 
-- [ ] **Check-in reminders** - Implement automated reminder notifications to encourage buddies to check in with each other. Use Celery beat to schedule periodic reminders (e.g., every 3 days if no encouragement has been sent).
+- [x] **Check-in reminders** - Automated reminder notifications to encourage buddies to check in with each other. Celery beat task schedules periodic reminders (e.g., every 3 days if no encouragement has been sent).
 
-- [ ] **Encouragement streak tracking** - Track consecutive days where at least one encouragement was exchanged between buddies. Display the current and best encouragement streak in the pairing detail response.
+- [x] **Encouragement streak tracking** - Tracks consecutive days where at least one encouragement was exchanged between buddies. Displays the current and best encouragement streak in the pairing detail response.
 
-## Improvements
+## Planned Improvements
 
 - [ ] **Improved matching algorithm** - Enhance compatibility scoring with additional signals: shared dream categories, similar goal timelines, timezone compatibility, and preferred check-in frequency.
 

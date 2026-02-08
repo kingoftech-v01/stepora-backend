@@ -20,6 +20,7 @@ class CalendarEventSerializer(serializers.ModelSerializer):
             'id', 'user', 'task', 'title', 'description',
             'start_time', 'end_time', 'location',
             'reminder_minutes_before', 'status',
+            'is_recurring', 'recurrence_rule', 'parent_event',
             'task_title', 'goal_title', 'dream_title',
             'created_at', 'updated_at'
         ]
@@ -29,12 +30,16 @@ class CalendarEventSerializer(serializers.ModelSerializer):
 class CalendarEventCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating calendar events."""
 
+    force = serializers.BooleanField(required=False, default=False, write_only=True)
+
     class Meta:
         model = CalendarEvent
         fields = [
             'task', 'title', 'description',
             'start_time', 'end_time', 'location',
-            'reminder_minutes_before'
+            'reminder_minutes_before',
+            'is_recurring', 'recurrence_rule',
+            'force',
         ]
 
     def validate_title(self, value):
@@ -58,6 +63,26 @@ class CalendarEventCreateSerializer(serializers.ModelSerializer):
         if data['start_time'] >= data['end_time']:
             raise serializers.ValidationError("End time must be after start time")
         return data
+
+
+class CalendarEventRescheduleSerializer(serializers.Serializer):
+    """Serializer for rescheduling a calendar event."""
+
+    start_time = serializers.DateTimeField()
+    end_time = serializers.DateTimeField()
+    force = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, data):
+        if data['start_time'] >= data['end_time']:
+            raise serializers.ValidationError("End time must be after start time")
+        return data
+
+
+class SuggestTimeSlotsSerializer(serializers.Serializer):
+    """Serializer for time slot suggestion request."""
+
+    date = serializers.DateField()
+    duration_mins = serializers.IntegerField(min_value=5, max_value=480)
 
 
 class TimeBlockSerializer(serializers.ModelSerializer):

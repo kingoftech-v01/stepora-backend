@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../providers/social_provider.dart';
 import '../../services/api_service.dart';
 
 class SocialScreen extends ConsumerStatefulWidget {
@@ -19,6 +20,7 @@ class _SocialScreenState extends ConsumerState<SocialScreen> {
   void initState() {
     super.initState();
     _loadFeed();
+    Future.microtask(() => ref.read(socialProvider.notifier).fetchPendingRequests());
   }
 
   Future<void> _loadFeed() async {
@@ -42,13 +44,37 @@ class _SocialScreenState extends ConsumerState<SocialScreen> {
       appBar: AppBar(
         title: const Text('Social'),
         actions: [
+          Builder(builder: (context) {
+            final pendingCount = ref.watch(socialProvider).pendingCount;
+            if (pendingCount > 0) {
+              return Badge(
+                label: Text('$pendingCount'),
+                child: IconButton(
+                  icon: const Icon(Icons.person_add),
+                  tooltip: 'Friend Requests',
+                  onPressed: () => context.push('/social/requests'),
+                ),
+              );
+            }
+            return IconButton(
+              icon: const Icon(Icons.person_add),
+              tooltip: 'Friend Requests',
+              onPressed: () => context.push('/social/requests'),
+            );
+          }),
+          IconButton(
+            icon: const Icon(Icons.people),
+            tooltip: 'Friends',
+            onPressed: () => context.push('/friends'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search Users',
+            onPressed: () => context.push('/social/search'),
+          ),
           IconButton(
             icon: const Icon(Icons.group_outlined),
             onPressed: () => context.push('/circles'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.people_alt_outlined),
-            onPressed: () => context.push('/buddy'),
           ),
         ],
       ),

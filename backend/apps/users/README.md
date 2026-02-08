@@ -9,9 +9,24 @@ The **users** app manages user authentication, profiles, gamification, and socia
 ### Core Features
 - User management with django-allauth + Token authentication
 - Profile management (display name, avatar, timezone, preferences)
+- Enhanced profile fields (bio, location, social_links, avatar_image, profile_visibility)
+- Avatar upload endpoint (POST /upload-avatar/ with file type/size validation)
 - FCM token management for push notifications
 - Subscription management (free, premium, pro)
 - Work schedule and notification preferences
+
+### Account Management
+- Account deletion (soft-delete, GDPR compliant)
+- Email change with verification (Celery task)
+- Data export endpoint (GDPR compliant downloadable archive)
+- Notification preferences endpoint (per-type push/email toggles)
+
+### Two-Factor Authentication (2FA)
+- 2FA setup (TOTP-based)
+- 2FA verify
+- 2FA disable
+- 2FA status check
+- Backup codes generation and management
 
 ### Gamification Features
 - XP and leveling system
@@ -35,6 +50,11 @@ Main user model with django-allauth integration and gamification.
 - `email` (Email, unique) - User email
 - `display_name` (String) - Display name
 - `avatar_url` (URL) - Profile picture
+- `avatar_image` (ImageField) - Uploaded avatar image file
+- `bio` (TextField) - User biography
+- `location` (String) - User location
+- `social_links` (JSONField) - Social media profile links
+- `profile_visibility` (Choice) - Profile visibility setting (public/friends/private)
 - `timezone` (String) - User timezone (default: Europe/Paris)
 - `subscription` (Choice) - Subscription tier (free/premium/pro)
 - `subscription_ends` (DateTime) - Subscription expiration
@@ -98,6 +118,7 @@ Achievement badges system.
 GET    /api/users/me/                      # Get current user profile
 PUT    /api/users/me/                      # Update full profile
 PATCH  /api/users/me/                      # Partial update
+POST   /api/users/me/upload-avatar/        # Upload avatar image (file type/size validation)
 ```
 
 **Response Example**:
@@ -152,6 +173,23 @@ POST   /api/users/me/update-preferences/  # Update user preferences
     "language": "fr"
   }
 }
+```
+
+### Account Management
+```
+POST   /api/users/me/delete-account/       # Soft-delete account (GDPR compliant)
+POST   /api/users/me/change-email/         # Request email change (sends verification via Celery)
+GET    /api/users/me/export-data/          # Export all user data (GDPR compliant)
+POST   /api/users/me/notification-prefs/   # Update notification preferences
+```
+
+### Two-Factor Authentication (2FA)
+```
+POST   /api/users/me/2fa/setup/            # Initialize 2FA setup (returns TOTP secret + QR code)
+POST   /api/users/me/2fa/verify/           # Verify 2FA with TOTP code
+POST   /api/users/me/2fa/disable/          # Disable 2FA
+GET    /api/users/me/2fa/status/           # Check 2FA status
+POST   /api/users/me/2fa/backup-codes/     # Generate backup codes
 ```
 
 ### Statistics
@@ -391,13 +429,17 @@ python manage.py showmigrations users
 - Verify `subscription_ends` is in future
 - Check subscription value is 'premium' or 'pro'
 
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `send_email_change_verification` | Sends a verification email when a user requests an email change. Generates a signed token and sends a confirmation link |
+| `export_user_data` | Collects all user data (profile, dreams, conversations, calendar events, notifications) and packages it as a downloadable archive for GDPR compliance |
+
 ## Future Enhancements
 
 - [ ] Social graph (friends, followers)
 - [ ] Activity feed
-- [ ] User blocking/reporting
-- [ ] Two-factor authentication
-- [ ] Account deletion with data export
 
 ## License
 

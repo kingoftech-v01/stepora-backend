@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -66,6 +67,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
+  void _copyMessage(String content) {
+    Clipboard.setData(ClipboardData(text: content));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Message copied'), duration: Duration(seconds: 1)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
@@ -77,6 +85,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         title: const Text('AI Coach'),
         actions: [
+          _ConnectionIndicator(status: chatState.connectionStatus),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
@@ -89,6 +98,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (chatState.connectionStatus == ConnectionStatus.reconnecting)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.orange.shade100,
+              child: const Text(
+                'Reconnecting...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.orange),
+              ),
+            ),
+          if (chatState.connectionStatus == ConnectionStatus.disconnected &&
+              _activeConversationId != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.red.shade50,
+              child: const Text(
+                'Disconnected',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.red),
+              ),
+            ),
           Expanded(
             child: chatState.messages.isEmpty && !chatState.isLoading
                 ? _buildEmptyChat(context)
@@ -100,10 +132,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemBuilder: (context, index) {
                       if (index < chatState.messages.length) {
                         final message = chatState.messages[index];
-                        return ChatBubble(
-                          content: message.content,
-                          isUser: message.isUser,
-                          timestamp: message.createdAt,
+                        return GestureDetector(
+                          onLongPress: () => _copyMessage(message.content),
+                          child: ChatBubble(
+                            content: message.content,
+                            isUser: message.isUser,
+                            timestamp: message.createdAt,
+                          ),
                         );
                       } else {
                         // Streaming message
@@ -149,6 +184,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ConnectionIndicator extends StatelessWidget {
+  final ConnectionStatus status;
+  const _ConnectionIndicator({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color;
+    final String tooltip;
+    switch (status) {
+      case ConnectionStatus.connected:
+        color = Colors.green;
+        tooltip = 'Connected';
+      case ConnectionStatus.connecting:
+        color = Colors.orange;
+        tooltip = 'Connecting';
+      case ConnectionStatus.reconnecting:
+        color = Colors.orange;
+        tooltip = 'Reconnecting';
+      case ConnectionStatus.disconnected:
+        color = Colors.red;
+        tooltip = 'Disconnected';
+    }
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Icon(Icons.circle, size: 10, color: color),
       ),
     );
   }

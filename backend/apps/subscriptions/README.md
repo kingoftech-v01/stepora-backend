@@ -75,6 +75,8 @@ Tracks an active subscription linking a user to a plan via Stripe.
 | status | CharField(30) | Status: `active`, `past_due`, `canceled`, `incomplete`, `incomplete_expired`, `trialing`, `unpaid`, `paused` |
 | current_period_start | DateTimeField | Start of current billing period (nullable) |
 | current_period_end | DateTimeField | End of current billing period (nullable) |
+| trial_start | DateTimeField | Trial period start (nullable) |
+| trial_end | DateTimeField | Trial period end (nullable) |
 | cancel_at_period_end | Boolean | If True, cancels at end of period (default: False) |
 | canceled_at | DateTimeField | When cancellation was requested (nullable) |
 | created_at | DateTimeField | Auto-set on creation |
@@ -108,6 +110,8 @@ Tracks an active subscription linking a user to a plan via Stripe.
 | POST | `/subscription/cancel/` | Cancel subscription at period end |
 | POST | `/subscription/reactivate/` | Reverse a pending cancellation |
 | POST | `/subscription/sync/` | Force-sync subscription state from Stripe |
+| GET | `/subscription/invoices/` | Get invoice history for current subscription |
+| POST | `/subscription/apply-coupon/` | Apply a coupon or promo code to the subscription |
 
 **ViewSet:** `SubscriptionViewSet` (GenericViewSet)
 - Permission: `IsAuthenticated`
@@ -171,10 +175,35 @@ All Stripe API interactions are encapsulated in `StripeService`:
 | `STRIPE_CANCEL_URL` | Default redirect URL if user cancels checkout |
 | `STRIPE_PORTAL_RETURN_URL` | Default return URL when exiting the billing portal |
 
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `send_subscription_receipt` | Sends an email receipt after each successful payment/invoice |
+| `check_trial_expiry` | Checks for trials about to expire and sends reminder notifications |
+
+## Subscription Analytics
+
+The app tracks key subscription metrics accessible via admin or internal APIs:
+
+- **MRR (Monthly Recurring Revenue)** - Sum of active subscription plan prices
+- **Churn rate** - Percentage of subscriptions canceled over a time period
+- **Conversion rate** - Percentage of free users who upgrade to paid plans
+- **Trial-to-paid conversion** - Percentage of trialing users who convert to active subscriptions
+
+## Coupon/Promo Code Support
+
+Coupons and promo codes are managed through Stripe and can be applied during checkout or to existing subscriptions:
+
+- Percentage-based discounts
+- Fixed-amount discounts
+- Duration-limited promotions (once, repeating, forever)
+- Validated server-side via Stripe API before application
+
 ## Admin
 
 All three models are registered with Django admin:
 
 - **StripeCustomerAdmin** - Search by user email, display name, or Stripe customer ID
 - **SubscriptionPlanAdmin** - Organized fieldsets for pricing, resource limits, feature flags, and display JSON. Slug auto-populated from name
-- **SubscriptionAdmin** - Filter by status, plan, or cancellation state. Organized fieldsets for billing period management
+- **SubscriptionAdmin** - Filter by status, plan, or cancellation state. Organized fieldsets for billing period and trial management

@@ -54,6 +54,33 @@ All core features are implemented and tested. This document tracks future enhanc
 
 ---
 
+## Recently Completed
+
+### Account Management
+- [x] Add DELETE /api/users/me/delete-account/ endpoint (account deletion with GDPR compliance)
+- [x] Add profile photo upload via media storage (POST /upload-avatar/)
+- [x] Add email change with verification flow
+- [x] Export user data (data export functionality)
+- [x] Notification preferences (granular per-type preferences)
+
+### Two-Factor Authentication (2FA)
+- [x] TOTP support
+- [x] Backup codes
+- [x] 2FA setup endpoint
+- [x] 2FA verification
+- [x] 2FA disable with password
+
+### Enhanced Profile
+- [x] Bio field
+- [x] Location field
+- [x] Social links (Twitter, LinkedIn, etc.)
+- [x] Avatar image support
+
+### Stats
+- [x] Stats endpoint (enhanced)
+
+---
+
 ## In Progress
 
 Currently, no tasks in progress. All features are complete.
@@ -63,12 +90,6 @@ Currently, no tasks in progress. All features are complete.
 ## Planned Features
 
 ### High Priority
-
-#### Account Management
-- [ ] Add DELETE /api/users/me/ endpoint (account deletion with GDPR compliance)
-- [ ] Add profile photo upload via media storage
-- [ ] Add email change with verification flow
-- [ ] Wire password change to dj-rest-auth endpoint in frontend
 
 #### Social Graph
 - [ ] Friend model (user-to-user relationships)
@@ -114,8 +135,8 @@ Currently, no tasks in progress. All features are complete.
 
 **Estimated Effort**: 2 days
 
-#### Account Deletion
-- [ ] Data export functionality (GDPR compliance)
+#### Account Deletion (Extended)
+- [x] Data export functionality (GDPR compliance)
 - [ ] Soft delete option
 - [ ] Hard delete with cascade
 - [ ] Anonymization option
@@ -126,21 +147,7 @@ Currently, no tasks in progress. All features are complete.
 
 ### Low Priority
 
-#### Two-Factor Authentication (2FA)
-- [ ] TOTP support
-- [ ] Backup codes
-- [ ] 2FA setup endpoint
-- [ ] 2FA verification
-- [ ] 2FA disable with password
-- [ ] Recovery options
-- [ ] Tests
-
-**Estimated Effort**: 3-4 days
-
-#### Enhanced Profile
-- [ ] Bio field
-- [ ] Location field
-- [ ] Social links (Twitter, LinkedIn, etc.)
+#### Enhanced Profile (Extended)
 - [ ] Profile visibility settings
 - [ ] Profile views counter
 - [ ] Tests
@@ -157,6 +164,9 @@ Currently, no tasks in progress. All features are complete.
 - [ ] Tests
 
 **Estimated Effort**: 3-5 days
+
+#### Password Management
+- [ ] Wire password change to dj-rest-auth endpoint in frontend
 
 ---
 

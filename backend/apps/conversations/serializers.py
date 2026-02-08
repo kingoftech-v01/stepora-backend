@@ -4,7 +4,7 @@ Serializers for Conversations app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Conversation, Message, ConversationSummary
+from .models import Conversation, Message, ConversationSummary, ConversationTemplate
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -14,6 +14,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             'id', 'conversation', 'role', 'content',
+            'audio_url', 'transcription', 'image_url',
             'metadata', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
@@ -101,3 +102,16 @@ class ConversationSummarySerializer(serializers.ModelSerializer):
             'start_message', 'end_message', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class ConversationTemplateSerializer(serializers.ModelSerializer):
+    """Serializer for ConversationTemplate model."""
+
+    class Meta:
+        model = ConversationTemplate
+        fields = [
+            'id', 'name', 'conversation_type', 'description',
+            'icon', 'starter_messages', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

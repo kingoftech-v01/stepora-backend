@@ -70,7 +70,16 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Dream')),
+      appBar: AppBar(
+        title: const Text('Create Dream'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => context.push('/dream-templates'),
+            icon: const Icon(Icons.library_books_outlined),
+            label: const Text('Templates'),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(

@@ -70,6 +70,32 @@ class AuthService {
     });
   }
 
+  Future<AuthResult> loginWithGoogle(String accessToken) async {
+    final response = await _api.post(ApiConstants.googleLogin, data: {
+      'access_token': accessToken,
+    });
+    final token = response.data['key'];
+    await _api.setToken(token);
+    return AuthResult(token: token);
+  }
+
+  Future<AuthResult> loginWithApple({
+    required String identityToken,
+    required String authorizationCode,
+    String? firstName,
+    String? lastName,
+  }) async {
+    final response = await _api.post(ApiConstants.appleLogin, data: {
+      'id_token': identityToken,
+      'code': authorizationCode,
+      if (firstName != null) 'first_name': firstName,
+      if (lastName != null) 'last_name': lastName,
+    });
+    final token = response.data['key'];
+    await _api.setToken(token);
+    return AuthResult(token: token);
+  }
+
   Future<bool> isLoggedIn() async {
     final token = await _api.getToken();
     return token != null;

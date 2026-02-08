@@ -214,3 +214,145 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """Save message to database."""
         conversation = Conversation.objects.get(id=self.conversation_id)
         return conversation.add_message(role, content)
+
+
+class BuddyChatConsumer(AsyncWebsocketConsumer):
+    """WebSocket consumer for buddy-to-buddy real-time chat (no AI response)."""
+
+    async def connect(self):
+        """Handle WebSocket connection."""
+        self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
+        self.room_group_name = f'buddy_chat_{self.conversation_id}'
+        self.user = self.scope['user']
+
+        # Verify user is part of this buddy conversation
+        has_access = await self.check_buddy_access()
+        if not has_access:
+            await self.close(code=4003)
+            return
+
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+        await self.send(text_data=json.dumps({
+            'type': 'connection',
+            'status': 'connected',
+            'conversation_id': self.conversation_id,
+            'user_id': str(self.user.id),
+            'display_name': await self.get_display_name(),
+        }))
+
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection."""
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+
+    async def receive(self, text_data):
+        """Receive message from WebSocket."""
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type', 'message')
+
+            if message_type == 'message':
+                await self.handle_buddy_message(data)
+            elif message_type == 'typing':
+                await self.handle_typing(data)
+
+        except json.JSONDecodeError:
+            await self.send_error('Invalid JSON')
+        except Exception as e:
+            await self.send_error(f'Error: {str(e)}')
+
+    async def handle_buddy_message(self, data):
+        """Handle incoming buddy chat message — no AI response."""
+        content = data.get('message', '').strip()
+        if not content:
+            await self.send_error('Message cannot be empty')
+            return
+
+        message = await self.save_buddy_message(content)
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': {
+                    'id': str(message.id),
+                    'role': 'user',
+                    'content': content,
+                    'sender_id': str(self.user.id),
+                    'sender_name': await self.get_display_name(),
+                    'created_at': message.created_at.isoformat(),
+                }
+            }
+        )
+
+    async def handle_typing(self, data):
+        """Handle typing indicator."""
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'typing_status',
+                'user_id': str(self.user.id),
+                'is_typing': data.get('is_typing', False),
+            }
+        )
+
+    async def chat_message(self, event):
+        """Send message to WebSocket."""
+        await self.send(text_data=json.dumps({
+            'type': 'message',
+            'message': event['message'],
+        }))
+
+    async def typing_status(self, event):
+        """Send typing status to WebSocket (exclude self)."""
+        if str(event['user_id']) != str(self.user.id):
+            await self.send(text_data=json.dumps({
+                'type': 'typing',
+                'user_id': event['user_id'],
+                'is_typing': event['is_typing'],
+            }))
+
+    async def send_error(self, error_message):
+        """Send error message to client."""
+        await self.send(text_data=json.dumps({
+            'type': 'error',
+            'error': error_message,
+        }))
+
+    @database_sync_to_async
+    def check_buddy_access(self):
+        """Check that user is part of this buddy conversation."""
+        try:
+            conversation = Conversation.objects.select_related('buddy_pairing').get(
+                id=self.conversation_id,
+                conversation_type='buddy_chat',
+            )
+            if not conversation.buddy_pairing:
+                return False
+            pairing = conversation.buddy_pairing
+            return self.user in (pairing.user1, pairing.user2)
+        except Conversation.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def save_buddy_message(self, content):
+        """Save a buddy chat message."""
+        conversation = Conversation.objects.get(id=self.conversation_id)
+        return conversation.add_message(
+            'user',
+            content,
+            metadata={'sender_id': str(self.user.id)},
+        )
+
+    @database_sync_to_async
+    def get_display_name(self):
+        """Return display name of the connected user."""
+        return self.user.display_name or self.user.email

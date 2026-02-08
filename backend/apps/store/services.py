@@ -13,7 +13,7 @@ import os
 import stripe
 from django.db import transaction
 
-from .models import StoreItem, UserInventory
+from .models import StoreItem, UserInventory, Gift, RefundRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,11 @@ class PaymentVerificationError(StoreServiceError):
 
 class InventoryNotFoundError(StoreServiceError):
     """Raised when an inventory entry does not exist."""
+    pass
+
+
+class InsufficientXPError(StoreServiceError):
+    """Raised when a user does not have enough XP for a purchase."""
     pass
 
 
@@ -346,3 +351,259 @@ class StoreService:
         )
 
         return inventory_entry
+
+    @staticmethod
+    @transaction.atomic
+    def purchase_with_xp(user, item):
+        """
+        Purchase a store item using XP.
+
+        Deducts XP from the user and creates an inventory entry.
+
+        Args:
+            user: The User instance making the purchase.
+            item: The StoreItem instance to purchase.
+
+        Returns:
+            UserInventory: The newly created inventory entry.
+
+        Raises:
+            ItemNotActiveError: If the item is not currently active.
+            ItemAlreadyOwnedError: If the user already owns this item.
+            InsufficientXPError: If the user doesn't have enough XP.
+        """
+        if not item.is_active:
+            raise ItemNotActiveError(
+                f'Item "{item.name}" is not available for purchase.'
+            )
+
+        if item.xp_price <= 0:
+            raise ItemNotActiveError(
+                f'Item "{item.name}" cannot be purchased with XP.'
+            )
+
+        if UserInventory.objects.filter(user=user, item=item).exists():
+            raise ItemAlreadyOwnedError(
+                f'You already own "{item.name}".'
+            )
+
+        if user.xp < item.xp_price:
+            raise InsufficientXPError(
+                f'Insufficient XP. You have {user.xp} XP but need {item.xp_price} XP.'
+            )
+
+        # Deduct XP
+        user.xp -= item.xp_price
+        user.save(update_fields=['xp'])
+
+        # Create inventory entry
+        inventory_entry = UserInventory.objects.create(
+            user=user,
+            item=item,
+            stripe_payment_intent_id='',
+            is_equipped=False,
+        )
+
+        logger.info(
+            'XP purchase: user %s acquired item %s for %d XP',
+            user.id,
+            item.id,
+            item.xp_price,
+        )
+
+        return inventory_entry
+
+    @staticmethod
+    @transaction.atomic
+    def send_gift(sender, recipient, item, message=''):
+        """
+        Send a store item as a gift to another user.
+
+        Creates a Stripe PaymentIntent for the sender, and a Gift record.
+
+        Args:
+            sender: User sending the gift.
+            recipient: User receiving the gift.
+            item: StoreItem to gift.
+            message: Optional personal message.
+
+        Returns:
+            dict with gift_id and client_secret for Stripe payment.
+        """
+        if not item.is_active:
+            raise ItemNotActiveError(f'Item "{item.name}" is not available.')
+
+        if sender == recipient:
+            raise StoreServiceError('You cannot gift an item to yourself.')
+
+        # Check if recipient already owns the item
+        if UserInventory.objects.filter(user=recipient, item=item).exists():
+            raise ItemAlreadyOwnedError(f'{recipient.display_name or "Recipient"} already owns "{item.name}".')
+
+        amount_cents = int(item.price * 100)
+
+        try:
+            payment_intent = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency='usd',
+                metadata={
+                    'user_id': str(sender.id),
+                    'recipient_id': str(recipient.id),
+                    'item_id': str(item.id),
+                    'type': 'gift',
+                },
+                description=f'DreamPlanner Gift: {item.name} to {recipient.email}',
+                receipt_email=sender.email,
+            )
+        except stripe.error.StripeError as e:
+            raise PaymentVerificationError(f'Payment failed: {str(e)}')
+
+        gift = Gift.objects.create(
+            sender=sender,
+            recipient=recipient,
+            item=item,
+            message=message,
+            stripe_payment_intent_id=payment_intent.id,
+        )
+
+        logger.info(
+            'Gift created: %s from %s to %s (item: %s)',
+            gift.id, sender.id, recipient.id, item.id,
+        )
+
+        return {
+            'gift_id': str(gift.id),
+            'client_secret': payment_intent.client_secret,
+            'payment_intent_id': payment_intent.id,
+            'amount': amount_cents,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def claim_gift(user, gift_id):
+        """
+        Claim a gift and add the item to the recipient's inventory.
+
+        Args:
+            user: User claiming the gift.
+            gift_id: UUID of the Gift to claim.
+
+        Returns:
+            UserInventory entry for the claimed item.
+        """
+        try:
+            gift = Gift.objects.select_related('item').get(
+                id=gift_id, recipient=user, is_claimed=False,
+            )
+        except Gift.DoesNotExist:
+            raise ItemNotFoundError('Gift not found or already claimed.')
+
+        # Check if user already owns the item (edge case)
+        if UserInventory.objects.filter(user=user, item=gift.item).exists():
+            raise ItemAlreadyOwnedError(f'You already own "{gift.item.name}".')
+
+        from django.utils import timezone as tz
+        gift.is_claimed = True
+        gift.claimed_at = tz.now()
+        gift.save(update_fields=['is_claimed', 'claimed_at'])
+
+        inventory_entry = UserInventory.objects.create(
+            user=user,
+            item=gift.item,
+            stripe_payment_intent_id=gift.stripe_payment_intent_id,
+            is_equipped=False,
+        )
+
+        logger.info('Gift %s claimed by user %s', gift_id, user.id)
+        return inventory_entry
+
+    @staticmethod
+    def request_refund(user, inventory_id, reason):
+        """
+        Request a refund for a purchased item.
+
+        Args:
+            user: User requesting the refund.
+            inventory_id: UUID of the UserInventory entry.
+            reason: Reason for the refund.
+
+        Returns:
+            RefundRequest instance.
+        """
+        try:
+            inventory_entry = UserInventory.objects.select_related('item').get(
+                id=inventory_id, user=user,
+            )
+        except UserInventory.DoesNotExist:
+            raise InventoryNotFoundError('Item not found in your inventory.')
+
+        if not inventory_entry.stripe_payment_intent_id:
+            raise StoreServiceError('This item was not purchased with money and cannot be refunded.')
+
+        # Check for existing pending refund
+        existing = RefundRequest.objects.filter(
+            inventory_entry=inventory_entry, status='pending',
+        ).exists()
+        if existing:
+            raise StoreServiceError('A refund request is already pending for this item.')
+
+        refund_request = RefundRequest.objects.create(
+            user=user,
+            inventory_entry=inventory_entry,
+            reason=reason,
+        )
+
+        logger.info(
+            'Refund request created: %s by user %s for item %s',
+            refund_request.id, user.id, inventory_entry.item.name,
+        )
+
+        return refund_request
+
+    @staticmethod
+    @transaction.atomic
+    def process_refund(refund_request_id, approve=True, admin_notes=''):
+        """
+        Process a refund request (admin action).
+
+        If approved, issues Stripe refund and removes item from inventory.
+
+        Args:
+            refund_request_id: UUID of the RefundRequest.
+            approve: Whether to approve or reject.
+            admin_notes: Admin notes for the decision.
+
+        Returns:
+            Updated RefundRequest instance.
+        """
+        try:
+            refund_req = RefundRequest.objects.select_related(
+                'inventory_entry', 'inventory_entry__item',
+            ).get(id=refund_request_id, status='pending')
+        except RefundRequest.DoesNotExist:
+            raise ItemNotFoundError('Refund request not found or already processed.')
+
+        refund_req.admin_notes = admin_notes
+
+        if not approve:
+            refund_req.status = 'rejected'
+            refund_req.save(update_fields=['status', 'admin_notes', 'updated_at'])
+            return refund_req
+
+        # Issue Stripe refund
+        payment_intent_id = refund_req.inventory_entry.stripe_payment_intent_id
+        if payment_intent_id:
+            try:
+                refund = stripe.Refund.create(payment_intent=payment_intent_id)
+                refund_req.stripe_refund_id = refund.id
+            except stripe.error.StripeError as e:
+                logger.error('Stripe refund failed for %s: %s', refund_request_id, e)
+                raise PaymentVerificationError(f'Stripe refund failed: {str(e)}')
+
+        # Remove item from inventory
+        refund_req.inventory_entry.delete()
+        refund_req.status = 'refunded'
+        refund_req.save(update_fields=['status', 'stripe_refund_id', 'admin_notes', 'updated_at'])
+
+        logger.info('Refund processed: %s', refund_request_id)
+        return refund_req

@@ -13,6 +13,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from core.social_auth import GoogleLoginView, AppleLoginView
 
 urlpatterns = [
     # Django Admin
@@ -29,6 +30,10 @@ urlpatterns = [
     # Authentication (dj-rest-auth)
     path('api/auth/', include('dj_rest_auth.urls')),
     path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+
+    # Social authentication (Google, Apple)
+    path('api/auth/google/', GoogleLoginView.as_view(), name='google_login'),
+    path('api/auth/apple/', AppleLoginView.as_view(), name='apple_login'),
 
     # API endpoints
     path('api/users/', include('apps.users.urls')),

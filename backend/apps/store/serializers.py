@@ -8,7 +8,7 @@ and nested serialization for category browsing with embedded items.
 
 from rest_framework import serializers
 
-from .models import StoreCategory, StoreItem, UserInventory
+from .models import StoreCategory, StoreItem, UserInventory, Wishlist, Gift, RefundRequest
 
 
 class StoreItemSerializer(serializers.ModelSerializer):
@@ -48,6 +48,9 @@ class StoreItemSerializer(serializers.ModelSerializer):
             'rarity',
             'rarity_display',
             'metadata',
+            'xp_price',
+            'available_from',
+            'available_until',
             'is_active',
             'created_at',
         ]
@@ -268,3 +271,105 @@ class EquipSerializer(serializers.Serializer):
     equip = serializers.BooleanField(
         help_text='True to equip the item, False to unequip.'
     )
+
+
+class WishlistSerializer(serializers.ModelSerializer):
+    """Serializer for wishlist entries."""
+
+    item = StoreItemSerializer(read_only=True)
+    item_id = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'user', 'item', 'item_id', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+    def validate_item_id(self, value):
+        """Validate that the item exists and is active."""
+        try:
+            item = StoreItem.objects.get(id=value)
+        except StoreItem.DoesNotExist:
+            raise serializers.ValidationError('Store item not found.')
+        if not item.is_active:
+            raise serializers.ValidationError('This item is not available.')
+        return value
+
+    def validate(self, attrs):
+        """Check if already wishlisted."""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            if Wishlist.objects.filter(user=request.user, item_id=attrs['item_id']).exists():
+                raise serializers.ValidationError({'item_id': 'Item already in your wishlist.'})
+        return attrs
+
+
+class XPPurchaseSerializer(serializers.Serializer):
+    """Serializer for purchasing an item with XP."""
+
+    item_id = serializers.UUIDField(
+        help_text='UUID of the store item to purchase with XP.'
+    )
+
+    def validate_item_id(self, value):
+        """Validate that the item exists, is active, and supports XP purchase."""
+        try:
+            item = StoreItem.objects.get(id=value)
+        except StoreItem.DoesNotExist:
+            raise serializers.ValidationError('Store item not found.')
+        if not item.is_active:
+            raise serializers.ValidationError('This item is not available for purchase.')
+        if item.xp_price <= 0:
+            raise serializers.ValidationError('This item cannot be purchased with XP.')
+        return value
+
+
+class GiftSendSerializer(serializers.Serializer):
+    """Serializer for sending a gift to another user."""
+
+    item_id = serializers.UUIDField(help_text='UUID of the store item to gift.')
+    recipient_id = serializers.UUIDField(help_text='UUID of the recipient user.')
+    message = serializers.CharField(
+        max_length=500, required=False, default='',
+        help_text='Optional personal message.',
+    )
+
+
+class GiftSerializer(serializers.ModelSerializer):
+    """Serializer for displaying gift details."""
+
+    item = StoreItemSerializer(read_only=True)
+    sender_name = serializers.CharField(source='sender.display_name', read_only=True)
+    recipient_name = serializers.CharField(source='recipient.display_name', read_only=True)
+
+    class Meta:
+        model = Gift
+        fields = [
+            'id', 'sender', 'sender_name', 'recipient', 'recipient_name',
+            'item', 'message', 'is_claimed', 'claimed_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class RefundRequestSerializer(serializers.Serializer):
+    """Serializer for requesting a refund."""
+
+    inventory_id = serializers.UUIDField(help_text='UUID of the inventory entry to refund.')
+    reason = serializers.CharField(
+        max_length=2000,
+        help_text='Reason for the refund request.',
+    )
+
+
+class RefundRequestDisplaySerializer(serializers.ModelSerializer):
+    """Serializer for displaying refund request details."""
+
+    item_name = serializers.CharField(source='inventory_entry.item.name', read_only=True)
+
+    class Meta:
+        model = RefundRequest
+        fields = [
+            'id', 'user', 'inventory_entry', 'item_name',
+            'reason', 'status', 'admin_notes',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields

@@ -99,6 +99,62 @@ class DreamsNotifier extends Notifier<DreamsState> {
       dreams: state.dreams.where((d) => d.id != id).toList(),
     );
   }
+
+  Future<void> updateDream(String id, Map<String, dynamic> data) async {
+    final response = await _api.patch(ApiConstants.dreamDetail(id), data: data);
+    final updated = Dream.fromJson(response.data);
+    state = state.copyWith(
+      dreams: state.dreams.map((d) => d.id == id ? updated : d).toList(),
+    );
+  }
+
+  // --- Goal CRUD ---
+
+  Future<Goal> createGoal(String dreamId, Map<String, dynamic> data) async {
+    final response = await _api.post(ApiConstants.dreamGoals(dreamId), data: data);
+    return Goal.fromJson(response.data);
+  }
+
+  Future<Goal> updateGoal(String goalId, Map<String, dynamic> data) async {
+    final response = await _api.patch(ApiConstants.goalDetail(goalId), data: data);
+    return Goal.fromJson(response.data);
+  }
+
+  Future<void> deleteGoal(String goalId) async {
+    await _api.delete(ApiConstants.goalDetail(goalId));
+  }
+
+  // --- Task CRUD ---
+
+  Future<Task> createTask(String goalId, Map<String, dynamic> data) async {
+    final response = await _api.post(ApiConstants.goalTasks(goalId), data: data);
+    return Task.fromJson(response.data);
+  }
+
+  Future<Task> updateTask(String taskId, Map<String, dynamic> data) async {
+    final response = await _api.patch(ApiConstants.taskDetail(taskId), data: data);
+    return Task.fromJson(response.data);
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    await _api.delete(ApiConstants.taskDetail(taskId));
+  }
+
+  // --- Dream actions ---
+
+  Future<Dream> duplicateDream(String dreamId) async {
+    final response = await _api.post(ApiConstants.dreamDuplicate(dreamId));
+    final dream = Dream.fromJson(response.data);
+    state = state.copyWith(dreams: [...state.dreams, dream]);
+    return dream;
+  }
+
+  Future<void> shareDream(String dreamId, String userId, {String permission = 'view'}) async {
+    await _api.post(ApiConstants.dreamShare(dreamId), data: {
+      'shared_with': userId,
+      'permission': permission,
+    });
+  }
 }
 
 final dreamsProvider = NotifierProvider<DreamsNotifier, DreamsState>(DreamsNotifier.new);

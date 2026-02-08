@@ -9,6 +9,7 @@ require authentication.
 
 import logging
 
+from django.utils import timezone
 from rest_framework import viewsets, status, views
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -17,7 +18,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import StoreCategory, StoreItem, UserInventory
+from .models import StoreCategory, StoreItem, UserInventory, Wishlist, Gift, RefundRequest
 from .serializers import (
     StoreCategorySerializer,
     StoreCategoryDetailSerializer,
@@ -27,14 +28,22 @@ from .serializers import (
     PurchaseSerializer,
     PurchaseConfirmSerializer,
     EquipSerializer,
+    WishlistSerializer,
+    XPPurchaseSerializer,
+    GiftSendSerializer,
+    GiftSerializer,
+    RefundRequestSerializer,
+    RefundRequestDisplaySerializer,
 )
 from .services import (
     StoreService,
+    StoreServiceError,
     ItemNotFoundError,
     ItemAlreadyOwnedError,
     ItemNotActiveError,
     PaymentVerificationError,
     InventoryNotFoundError,
+    InsufficientXPError,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,6 +110,7 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
     Provides list and detail endpoints for store items with filtering
     by category, item type, and rarity. Includes a custom action for
     featured items. Both endpoints are publicly accessible for browsing.
+    Limited-time items are filtered by availability window.
     """
 
     permission_classes = [AllowAny]
@@ -112,10 +122,17 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['category', 'price']
 
     def get_queryset(self):
-        """Return only active store items with related category."""
-        return StoreItem.objects.filter(
+        """Return only active store items within their availability window."""
+        now = timezone.now()
+        qs = StoreItem.objects.filter(
             is_active=True
         ).select_related('category')
+
+        # Filter out items outside their availability window
+        qs = qs.exclude(available_from__isnull=False, available_from__gt=now)
+        qs = qs.exclude(available_until__isnull=False, available_until__lt=now)
+
+        return qs
 
     def get_serializer_class(self):
         """Return the appropriate serializer based on the action."""
@@ -169,7 +186,8 @@ class UserInventoryViewSet(viewsets.ReadOnlyModelViewSet):
     ViewSet for managing the authenticated user's inventory.
 
     Provides list and detail views for owned items, plus custom
-    actions for equipping and unequipping items. Requires authentication.
+    actions for equipping/unequipping items and purchase history.
+    Requires authentication.
     """
 
     serializer_class = UserInventorySerializer
@@ -235,17 +253,55 @@ class UserInventoryViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+    @extend_schema(
+        summary='Purchase history',
+        description='Retrieve paginated purchase history for the authenticated user.',
+        tags=['Store'],
+        responses={200: UserInventorySerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """Return purchase history ordered by purchase date."""
+        queryset = self.get_queryset().order_by('-purchased_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = UserInventorySerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        serializer = UserInventorySerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class WishlistViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing the user's wishlist.
+
+    Provides list, create, and delete operations for wishlist items.
+    """
+
+    serializer_class = WishlistSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        """Return wishlist items for the authenticated user."""
+        return Wishlist.objects.filter(
+            user=self.request.user
+        ).select_related('item', 'item__category')
+
+    def create(self, request, *args, **kwargs):
+        """Add item to wishlist."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = StoreItem.objects.get(id=serializer.validated_data['item_id'])
+        wishlist_entry = Wishlist.objects.create(user=request.user, item=item)
+        return Response(
+            WishlistSerializer(wishlist_entry, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class PurchaseView(views.APIView):
-    """
-    API view for initiating and confirming store purchases.
-
-    Provides two endpoints:
-    - POST /purchase/ : Create a Stripe PaymentIntent for an item
-    - POST /purchase/confirm/ : Confirm the purchase after payment succeeds
-
-    Both endpoints require authentication.
-    """
+    """API view for initiating store purchases via Stripe."""
 
     permission_classes = [IsAuthenticated]
 
@@ -259,20 +315,13 @@ class PurchaseView(views.APIView):
         tags=['Store'],
         request=PurchaseSerializer,
         responses={
-            201: OpenApiResponse(
-                description='Payment intent created successfully',
-            ),
+            201: OpenApiResponse(description='Payment intent created successfully'),
             400: OpenApiResponse(description='Validation error'),
             409: OpenApiResponse(description='Item already owned'),
         },
     )
     def post(self, request):
-        """
-        Create a Stripe PaymentIntent for a store item purchase.
-
-        The client receives a client_secret to complete the payment
-        flow using Stripe's mobile SDK.
-        """
+        """Create a Stripe PaymentIntent for a store item purchase."""
         serializer = PurchaseSerializer(
             data=request.data,
             context={'request': request},
@@ -297,32 +346,18 @@ class PurchaseView(views.APIView):
             return Response(result, status=status.HTTP_201_CREATED)
 
         except ItemAlreadyOwnedError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_409_CONFLICT,
-            )
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
 
         except ItemNotActiveError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         except PaymentVerificationError as e:
             logger.error('Payment intent creation failed: %s', str(e))
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class PurchaseConfirmView(views.APIView):
-    """
-    API view for confirming a purchase after Stripe payment completion.
-
-    Verifies the payment intent with Stripe and adds the item
-    to the user's inventory upon successful verification.
-    """
+    """API view for confirming a purchase after Stripe payment completion."""
 
     permission_classes = [IsAuthenticated]
 
@@ -343,12 +378,7 @@ class PurchaseConfirmView(views.APIView):
         },
     )
     def post(self, request):
-        """
-        Confirm a purchase and add the item to the user's inventory.
-
-        Verifies the Stripe PaymentIntent status and creates the
-        inventory entry if payment was successful.
-        """
+        """Confirm a purchase and add the item to the user's inventory."""
         serializer = PurchaseConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -379,13 +409,191 @@ class PurchaseConfirmView(views.APIView):
             )
 
         except ItemAlreadyOwnedError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_409_CONFLICT,
-            )
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
 
         except PaymentVerificationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class XPPurchaseView(views.APIView):
+    """API view for purchasing store items with XP."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Purchase with XP',
+        description='Purchase a store item using XP instead of real money.',
+        tags=['Store'],
+        request=XPPurchaseSerializer,
+        responses={
+            200: UserInventorySerializer,
+            400: OpenApiResponse(description='Insufficient XP or item not purchasable with XP'),
+            404: OpenApiResponse(description='Item not found'),
+            409: OpenApiResponse(description='Item already owned'),
+        },
+    )
+    def post(self, request):
+        """Purchase a store item with XP."""
+        serializer = XPPurchaseSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        item_id = serializer.validated_data['item_id']
+
+        try:
+            item = StoreItem.objects.get(id=item_id)
+        except StoreItem.DoesNotExist:
             return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
+                {'error': 'Store item not found.'},
+                status=status.HTTP_404_NOT_FOUND,
             )
+
+        try:
+            inventory_entry = StoreService.purchase_with_xp(
+                user=request.user,
+                item=item,
+            )
+            return Response(
+                UserInventorySerializer(
+                    inventory_entry,
+                    context={'request': request},
+                ).data,
+                status=status.HTTP_200_OK,
+            )
+
+        except ItemAlreadyOwnedError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+
+        except ItemNotActiveError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except InsufficientXPError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GiftSendView(views.APIView):
+    """Send a store item as a gift to another user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Send gift',
+        description='Purchase a store item and gift it to another user.',
+        tags=['Store'],
+        request=GiftSendSerializer,
+        responses={201: dict, 400: OpenApiResponse(description='Error')},
+    )
+    def post(self, request):
+        from apps.users.models import User
+
+        serializer = GiftSendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            item = StoreItem.objects.get(id=serializer.validated_data['item_id'])
+        except StoreItem.DoesNotExist:
+            return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            recipient = User.objects.get(id=serializer.validated_data['recipient_id'])
+        except User.DoesNotExist:
+            return Response({'error': 'Recipient not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            result = StoreService.send_gift(
+                sender=request.user,
+                recipient=recipient,
+                item=item,
+                message=serializer.validated_data.get('message', ''),
+            )
+            return Response(result, status=status.HTTP_201_CREATED)
+
+        except (ItemAlreadyOwnedError, ItemNotActiveError, StoreServiceError) as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except PaymentVerificationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class GiftClaimView(views.APIView):
+    """Claim a received gift."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Claim gift',
+        description='Claim a gift and add the item to your inventory.',
+        tags=['Store'],
+        responses={200: UserInventorySerializer},
+    )
+    def post(self, request, gift_id):
+        try:
+            inventory_entry = StoreService.claim_gift(request.user, gift_id)
+            return Response(
+                UserInventorySerializer(inventory_entry, context={'request': request}).data,
+            )
+        except (ItemNotFoundError, ItemAlreadyOwnedError) as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GiftListView(views.APIView):
+    """List pending gifts for the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='List my gifts',
+        description='List pending (unclaimed) gifts received by the current user.',
+        tags=['Store'],
+        responses={200: GiftSerializer(many=True)},
+    )
+    def get(self, request):
+        gifts = Gift.objects.filter(
+            recipient=request.user, is_claimed=False,
+        ).select_related('sender', 'item', 'item__category')
+        serializer = GiftSerializer(gifts, many=True)
+        return Response(serializer.data)
+
+
+class RefundRequestView(views.APIView):
+    """Request a refund for a purchased item."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Request refund',
+        description='Submit a refund request for a purchased store item.',
+        tags=['Store'],
+        request=RefundRequestSerializer,
+        responses={201: RefundRequestDisplaySerializer},
+    )
+    def post(self, request):
+        serializer = RefundRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            refund_req = StoreService.request_refund(
+                user=request.user,
+                inventory_id=serializer.validated_data['inventory_id'],
+                reason=serializer.validated_data['reason'],
+            )
+            return Response(
+                RefundRequestDisplaySerializer(refund_req).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except (InventoryNotFoundError, StoreServiceError) as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary='List refund requests',
+        description='List all refund requests for the current user.',
+        tags=['Store'],
+        responses={200: RefundRequestDisplaySerializer(many=True)},
+    )
+    def get(self, request):
+        requests_qs = RefundRequest.objects.filter(
+            user=request.user,
+        ).select_related('inventory_entry', 'inventory_entry__item')
+        serializer = RefundRequestDisplaySerializer(requests_qs, many=True)
+        return Response(serializer.data)

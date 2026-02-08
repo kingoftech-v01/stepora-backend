@@ -258,9 +258,13 @@ def update_dream_progress():
 
             # Update if changed
             if dream.progress_percentage != progress:
+                old_progress = dream.progress_percentage
                 dream.progress_percentage = progress
                 dream.save(update_fields=['progress_percentage'])
                 updated_count += 1
+
+                # Check for milestone notifications (25/50/75/100%)
+                _check_milestone(dream, old_progress, progress)
 
                 # Check if dream is complete
                 if progress >= 100.0 and dream.status != 'completed':
@@ -272,9 +276,10 @@ def update_dream_progress():
                     Notification.objects.create(
                         user=dream.user,
                         notification_type='dream_completed',
-                        title='🎉 Dream achieved!',
+                        title='Dream achieved!',
                         body=f'Congratulations! You achieved your dream: {dream.title}',
                         scheduled_for=timezone.now(),
+                        status='sent',
                         data={
                             'action': 'open_dream',
                             'screen': 'DreamDetail',
@@ -505,3 +510,96 @@ def cleanup_abandoned_dreams():
     except Exception as e:
         logger.error(f"Error cleaning up abandoned dreams: {str(e)}")
         raise self.retry(exc=e, countdown=300)
+
+
+@shared_task(bind=True, max_retries=3)
+def smart_archive_dreams():
+    """
+    Auto-pause dreams with no activity for 30+ days and notify the user.
+
+    This is the "smart archive" feature: instead of silently archiving,
+    we first pause the dream and notify the user so they can choose to
+    resume or let it be archived later (at 90 days by cleanup_abandoned_dreams).
+    """
+    try:
+        threshold = timezone.now() - timedelta(days=30)
+        # Only target active dreams (not already paused/archived/completed)
+        inactive_dreams = Dream.objects.filter(
+            status='active',
+            updated_at__lt=threshold,
+        ).select_related('user')
+
+        paused_count = 0
+        for dream in inactive_dreams:
+            # Check if the user has any recent task completions for this dream
+            recent_activity = Task.objects.filter(
+                goal__dream=dream,
+                completed_at__gte=threshold,
+            ).exists()
+
+            if recent_activity:
+                continue  # Dream has recent activity via tasks, skip
+
+            dream.status = 'paused'
+            dream.save(update_fields=['status', 'updated_at'])
+            paused_count += 1
+
+            Notification.objects.create(
+                user=dream.user,
+                notification_type='dream_paused',
+                title='Dream paused due to inactivity',
+                body=(
+                    f'Your dream "{dream.title}" has been paused after 30 days '
+                    f'of inactivity. Open the app to resume it!'
+                ),
+                scheduled_for=timezone.now(),
+                status='sent',
+                data={
+                    'action': 'open_dream',
+                    'screen': 'DreamDetail',
+                    'dream_id': str(dream.id),
+                },
+            )
+
+        logger.info('Smart archive: paused %d inactive dreams.', paused_count)
+        return {'paused': paused_count}
+
+    except Exception as e:
+        logger.error('Error in smart_archive_dreams: %s', str(e))
+        raise self.retry(exc=e, countdown=300)
+
+
+def _check_milestone(dream, old_progress, new_progress):
+    """
+    Check if a dream crossed a milestone boundary and send a notification.
+
+    Milestones: 25%, 50%, 75% (100% is handled separately as dream completion).
+    """
+    milestones = [
+        (25, 'Quarter of the way there!', 'progress'),
+        (50, 'Halfway to your dream!', 'progress'),
+        (75, 'Almost there! Just a little more!', 'progress'),
+    ]
+
+    now = timezone.now()
+
+    for threshold, message, notif_type in milestones:
+        if old_progress < threshold <= new_progress:
+            Notification.objects.create(
+                user=dream.user,
+                notification_type=notif_type,
+                title=f'{threshold}% - {message}',
+                body=f'Your dream "{dream.title}" is now {threshold}% complete. {message}',
+                scheduled_for=now,
+                status='sent',
+                data={
+                    'screen': 'DreamDetail',
+                    'dreamId': str(dream.id),
+                    'milestone': threshold,
+                },
+            )
+            logger.info(
+                'Milestone notification sent: dream %s reached %d%%.',
+                dream.id,
+                threshold,
+            )

@@ -15,19 +15,19 @@
 
 - [x] Add @extend_schema decorators for Swagger
 - [x] XSS sanitization of notification content
+- [x] **Granular notification preferences** - Per notification type
+- [x] **In-app notifications** - Notification center in the app (mark-read, unread-count, grouped)
+- [x] **Analytics** - Open rate tracking (opened_at tracking)
+- [x] **Notification grouping** - Group similar notifications
 
 ## Planned - High Priority
 
-- [ ] **Granular notification preferences** - Per notification type
 - [ ] **Rich notifications** - Images and actions in notifications
 - [ ] **Notification channels** - Distinct Android channels
-- [ ] **Analytics** - Open rate tracking
 
 ## Planned - Medium Priority
 
 - [ ] **Email fallback** - Email if push fails
-- [ ] **In-app notifications** - Notification center in the app
-- [ ] **Notification grouping** - Group similar notifications
 - [ ] **A/B testing** - Test different messages
 
 ## Planned - Low Priority

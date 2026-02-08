@@ -26,6 +26,7 @@ The Notifications app manages all push communications:
 | scheduled_for | DateTime | Scheduled send date |
 | sent_at | DateTime | Actual send date |
 | read_at | DateTime | Read date |
+| opened_at | DateTime | When notification was opened/tapped (analytics tracking) |
 | status | CharField | pending, sent, failed, cancelled |
 | retry_count | Integer | Number of attempts |
 
@@ -64,12 +65,35 @@ The Notifications app manages all push communications:
 
 ## API Endpoints
 
-- `GET /api/notifications/` - List notifications
+- `GET /api/notifications/` - List notifications (supports grouping by type via `?group=true`)
 - `GET /api/notifications/{id}/` - Detail
-- `POST /api/notifications/{id}/read/` - Mark as read
-- `POST /api/notifications/read-all/` - Mark all as read
-- `GET /api/notifications/unread-count/` - Unread count
-- `DELETE /api/notifications/{id}/` - Delete
+- `POST /api/notifications/{id}/read/` - Mark individual notification as read
+- `POST /api/notifications/read-all/` - Mark all notifications as read
+- `GET /api/notifications/unread-count/` - Get unread notification count
+- `DELETE /api/notifications/{id}/` - Delete a notification
+
+### Notification Preferences
+
+- `GET /api/notifications/preferences/` - Get current notification preferences
+- `PUT /api/notifications/preferences/` - Update notification preferences
+
+Granular per-type push and email toggles allow users to control which notification types they receive and through which channel:
+
+```json
+{
+  "reminder": {"push": true, "email": false},
+  "motivation": {"push": true, "email": true},
+  "progress": {"push": true, "email": false},
+  "achievement": {"push": true, "email": true},
+  "buddy": {"push": true, "email": false},
+  "system": {"push": true, "email": true}
+}
+```
+
+### Analytics
+
+- `opened_at` field tracks when a notification was tapped/opened
+- Notification grouping by type for aggregated views (e.g., "5 new achievements")
 
 ### Templates (Admin)
 - `GET /api/notification-templates/` - List templates

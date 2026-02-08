@@ -19,6 +19,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  double _passwordStrength = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_updatePasswordStrength);
+  }
 
   @override
   void dispose() {
@@ -26,6 +33,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _updatePasswordStrength() {
+    final password = _passwordController.text;
+    double strength = 0;
+    if (password.length >= 6) strength += 0.2;
+    if (password.length >= 10) strength += 0.15;
+    if (RegExp(r'[A-Z]').hasMatch(password)) strength += 0.2;
+    if (RegExp(r'[a-z]').hasMatch(password)) strength += 0.15;
+    if (RegExp(r'[0-9]').hasMatch(password)) strength += 0.15;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) strength += 0.15;
+    setState(() => _passwordStrength = strength.clamp(0.0, 1.0));
+  }
+
+  Color _strengthColor() {
+    if (_passwordStrength < 0.3) return Colors.red;
+    if (_passwordStrength < 0.6) return Colors.orange;
+    if (_passwordStrength < 0.8) return Colors.amber;
+    return Colors.green;
+  }
+
+  String _strengthLabel() {
+    if (_passwordStrength < 0.3) return 'Weak';
+    if (_passwordStrength < 0.6) return 'Fair';
+    if (_passwordStrength < 0.8) return 'Good';
+    return 'Strong';
   }
 
   Future<void> _register() async {
@@ -77,6 +110,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       prefixIcon: Icon(Icons.email_outlined),
@@ -104,6 +138,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     validator: Validators.password,
                   ),
+                  if (_passwordController.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _passwordStrength,
+                              backgroundColor: Colors.grey[200],
+                              valueColor: AlwaysStoppedAnimation<Color>(_strengthColor()),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          _strengthLabel(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _strengthColor(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _confirmPasswordController,

@@ -12,7 +12,7 @@ from typing import Optional
 
 from django.db import transaction
 from django.db.models import F, Window, Count
-from django.db.models.functions import RowNumber
+from django.db.models.functions import DenseRank
 from django.utils import timezone as django_timezone
 
 from apps.users.models import User
@@ -146,23 +146,31 @@ class LeagueService:
     @staticmethod
     def _recalculate_ranks(season: Season) -> None:
         """
-        Recalculate ranks for all standings in a season.
+        Recalculate ranks for all standings in a season using dense ranking.
 
-        Ranks are assigned by XP descending. Users with the same XP
-        get sequential ranks (dense ranking is not used).
+        Users with the same XP receive the same rank. The next rank after
+        a tie skips to the next integer (dense rank), so ties don't create
+        gaps in the ranking sequence.
 
         Args:
             season: The Season to recalculate ranks for.
         """
-        standings = (
+        ranked = (
             LeagueStanding.objects
             .filter(season=season)
-            .order_by('-xp_earned_this_season', 'updated_at')
+            .annotate(
+                dense_rank=Window(
+                    expression=DenseRank(),
+                    order_by=F('xp_earned_this_season').desc(),
+                )
+            )
         )
 
-        for rank, standing in enumerate(standings, start=1):
-            if standing.rank != rank:
-                LeagueStanding.objects.filter(pk=standing.pk).update(rank=rank)
+        for standing in ranked:
+            if standing.rank != standing.dense_rank:
+                LeagueStanding.objects.filter(pk=standing.pk).update(
+                    rank=standing.dense_rank
+                )
 
     @staticmethod
     def get_leaderboard(

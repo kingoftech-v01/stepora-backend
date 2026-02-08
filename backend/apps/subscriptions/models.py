@@ -122,6 +122,11 @@ class SubscriptionPlan(models.Model):
         help_text='Whether ads are shown to users on this plan',
     )
 
+    trial_period_days = models.IntegerField(
+        default=0,
+        help_text='Number of free trial days for new subscribers (0 = no trial)',
+    )
+
     is_active = models.BooleanField(
         default=True,
         help_text='Whether this plan is currently available for purchase',

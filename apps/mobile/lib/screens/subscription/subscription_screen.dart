@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
+import '../../config/api_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 
@@ -16,6 +17,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   List<Map<String, dynamic>> _plans = [];
   Map<String, dynamic>? _currentSubscription;
   bool _isLoading = true;
+  bool _isSyncing = false;
 
   @override
   void initState() {
@@ -26,10 +28,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Future<void> _loadData() async {
     try {
       final api = ref.read(apiServiceProvider);
-      final plansResponse = await api.get('/subscriptions/plans/');
+      final plansResponse = await api.get(ApiConstants.subscriptionPlans);
       final results = plansResponse.data['results'] as List? ?? plansResponse.data as List? ?? [];
       try {
-        final currentResponse = await api.get('/subscriptions/current/');
+        final currentResponse = await api.get(ApiConstants.subscriptionCurrent);
         _currentSubscription = currentResponse.data;
       } catch (_) {}
       setState(() {
@@ -41,13 +43,70 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     }
   }
 
+  Future<void> _syncSubscription() async {
+    setState(() => _isSyncing = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.post(ApiConstants.subscriptionSync);
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription synced')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isSyncing = false);
+    }
+  }
+
+  Future<void> _reactivateSubscription() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.post(ApiConstants.subscriptionReactivate);
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription reactivated!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final currentPlan = user?.subscription ?? 'free';
+    final cancelAtPeriodEnd = _currentSubscription?['cancel_at_period_end'] == true;
+    final periodEnd = _currentSubscription?['current_period_end']?.toString();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Subscription')),
+      appBar: AppBar(
+        title: const Text('Subscription'),
+        actions: [
+          IconButton(
+            onPressed: _isSyncing ? null : _syncSubscription,
+            icon: _isSyncing
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            tooltip: 'Sync subscription',
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -76,11 +135,33 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Current Subscription', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                const Text('Current Subscription', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: cancelAtPeriodEnd ? Colors.orange.shade100 : Colors.green.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    cancelAtPeriodEnd ? 'Cancelling' : 'Active',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: cancelAtPeriodEnd ? Colors.orange.shade800 : Colors.green.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 8),
                             Text('Plan: ${_currentSubscription!['plan_name'] ?? currentPlan}'),
-                            if (_currentSubscription!['current_period_end'] != null)
-                              Text('Renews: ${_currentSubscription!['current_period_end'].toString().substring(0, 10)}'),
+                            if (periodEnd != null)
+                              Text(cancelAtPeriodEnd
+                                  ? 'Cancels on: ${periodEnd.substring(0, 10)}'
+                                  : 'Renews: ${periodEnd.substring(0, 10)}'),
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 8,
@@ -89,7 +170,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                                   onPressed: () async {
                                     try {
                                       final api = ref.read(apiServiceProvider);
-                                      final response = await api.post('/subscriptions/portal/');
+                                      final response = await api.post(ApiConstants.subscriptionPortal);
                                       final url = response.data['url'];
                                       if (url != null) {
                                         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -104,48 +185,55 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                                   },
                                   child: const Text('Manage Billing'),
                                 ),
-                                OutlinedButton(
-                                  onPressed: () async {
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Cancel Subscription?'),
-                                        content: const Text(
-                                          'You will lose premium features at the end of your billing period.',
+                                if (cancelAtPeriodEnd)
+                                  FilledButton(
+                                    onPressed: _reactivateSubscription,
+                                    style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                                    child: const Text('Reactivate'),
+                                  )
+                                else
+                                  OutlinedButton(
+                                    onPressed: () async {
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Cancel Subscription?'),
+                                          content: const Text(
+                                            'You will lose premium features at the end of your billing period.',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, false),
+                                              child: const Text('Keep'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, true),
+                                              child: const Text('Cancel', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ],
                                         ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx, false),
-                                            child: const Text('Keep'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx, true),
-                                            child: const Text('Cancel', style: TextStyle(color: Colors.red)),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirmed != true) return;
-                                    try {
-                                      final api = ref.read(apiServiceProvider);
-                                      await api.post('/subscriptions/cancel/');
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Subscription cancelled')),
-                                        );
-                                        _loadData();
+                                      );
+                                      if (confirmed != true) return;
+                                      try {
+                                        final api = ref.read(apiServiceProvider);
+                                        await api.post(ApiConstants.subscriptionCancel);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Subscription cancelled')),
+                                          );
+                                          _loadData();
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Error: $e')),
+                                          );
+                                        }
                                       }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Error: $e')),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                                  child: const Text('Cancel'),
-                                ),
+                                    },
+                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                                    child: const Text('Cancel'),
+                                  ),
                               ],
                             ),
                           ],
@@ -211,7 +299,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                                     try {
                                       final api = ref.read(apiServiceProvider);
                                       final response = await api.post(
-                                        '/subscriptions/checkout/',
+                                        ApiConstants.subscriptionCheckout,
                                         data: {'plan': plan['slug']},
                                       );
                                       final url = response.data['checkout_url'];

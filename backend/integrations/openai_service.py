@@ -14,8 +14,22 @@ Handles all OpenAI API interactions including:
 import openai
 import json
 import asyncio
+import logging
 from django.conf import settings
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from core.exceptions import OpenAIError
+
+logger = logging.getLogger(__name__)
+
+# Retry decorator for OpenAI calls
+openai_retry = retry(
+    retry=retry_if_exception_type(openai.error.OpenAIError),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    before_sleep=lambda retry_state: logger.warning(
+        f"OpenAI call failed, retrying (attempt {retry_state.attempt_number})..."
+    ),
+)
 
 openai.api_key = settings.OPENAI_API_KEY
 if hasattr(settings, 'OPENAI_ORGANIZATION_ID'):
@@ -116,36 +130,97 @@ IMPORTANT: Respond in the user's language.""",
         self.model = settings.OPENAI_MODEL
         self.timeout = getattr(settings, 'OPENAI_TIMEOUT', 30)
 
-    def chat(self, messages, conversation_type='general', temperature=0.7, max_tokens=1000):
+    # --- Function definitions for AI-powered task creation ---
+    FUNCTION_DEFINITIONS = [
+        {
+            "name": "create_task",
+            "description": "Create a new task for the user's active goal",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Task title"},
+                    "description": {"type": "string", "description": "Task description"},
+                    "duration_mins": {"type": "integer", "description": "Estimated duration in minutes"},
+                    "scheduled_date": {"type": "string", "description": "ISO date string for when to do it"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "complete_task",
+            "description": "Mark a task as completed",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "UUID of the task to complete"},
+                },
+                "required": ["task_id"],
+            },
+        },
+        {
+            "name": "create_goal",
+            "description": "Create a new goal within a dream",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dream_id": {"type": "string", "description": "UUID of the dream"},
+                    "title": {"type": "string", "description": "Goal title"},
+                    "description": {"type": "string", "description": "Goal description"},
+                    "order": {"type": "integer", "description": "Goal order number"},
+                },
+                "required": ["dream_id", "title"],
+            },
+        },
+    ]
+
+    @openai_retry
+    def chat(self, messages, conversation_type='general', temperature=0.7, max_tokens=1000, functions=None):
         """
-        Synchronous chat completion.
+        Synchronous chat completion with optional function calling.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             conversation_type: Key for system prompt selection
             temperature: Randomness (0-1)
             max_tokens: Maximum response tokens
+            functions: Optional list of function definitions for function calling
 
         Returns:
-            Dict with 'content', 'tokens_used', and 'model'
+            Dict with 'content', 'tokens_used', 'model', and optionally 'function_call'
         """
         try:
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
             full_messages = [{'role': 'system', 'content': system_prompt}] + messages
 
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=full_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=self.timeout,
-            )
+            kwargs = {
+                'model': self.model,
+                'messages': full_messages,
+                'temperature': temperature,
+                'max_tokens': max_tokens,
+                'timeout': self.timeout,
+            }
 
-            return {
-                'content': response.choices[0].message.content,
+            if functions:
+                kwargs['functions'] = functions
+                kwargs['function_call'] = 'auto'
+
+            response = openai.ChatCompletion.create(**kwargs)
+
+            result = {
+                'content': response.choices[0].message.get('content', ''),
                 'tokens_used': response.usage.total_tokens,
                 'model': response.model,
             }
+
+            # Check for function call
+            if response.choices[0].message.get('function_call'):
+                fc = response.choices[0].message['function_call']
+                result['function_call'] = {
+                    'name': fc['name'],
+                    'arguments': json.loads(fc['arguments']),
+                }
+
+            return result
 
         except openai.error.OpenAIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
@@ -205,6 +280,7 @@ IMPORTANT: Respond in the user's language.""",
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
+    @openai_retry
     def generate_plan(self, dream_title, dream_description, user_context):
         """
         Generate a complete structured plan for a dream.
@@ -466,6 +542,7 @@ Create a structured JSON profile that captures everything needed for a highly pe
         except (json.JSONDecodeError, openai.error.OpenAIError) as e:
             raise OpenAIError(f"Calibration summary generation failed: {str(e)}")
 
+    @openai_retry
     def analyze_dream(self, dream_title, dream_description):
         """
         Analyze a dream and extract category, difficulty, and recommendations.
@@ -579,6 +656,87 @@ Generate an empathetic message (2-3 sentences) that:
 
         except openai.error.OpenAIError:
             return f"Hey {user_name}, we're still here! Life is full of surprises, and that's okay. How about starting fresh with just 5 minutes today?"
+
+    @openai_retry
+    def transcribe_audio(self, audio_file_path):
+        """
+        Transcribe an audio file using OpenAI Whisper API.
+
+        Args:
+            audio_file_path: Path to the audio file on disk.
+
+        Returns:
+            Dict with 'text' (transcription) and 'language'.
+        """
+        try:
+            with open(audio_file_path, 'rb') as audio_file:
+                response = openai.Audio.transcribe(
+                    model='whisper-1',
+                    file=audio_file,
+                    response_format='verbose_json',
+                    timeout=self.timeout,
+                )
+
+            return {
+                'text': response.get('text', ''),
+                'language': response.get('language', ''),
+            }
+
+        except openai.error.OpenAIError as e:
+            raise OpenAIError(f"Audio transcription failed: {str(e)}")
+        except FileNotFoundError:
+            raise OpenAIError(f"Audio file not found: {audio_file_path}")
+
+    @openai_retry
+    def analyze_image(self, image_url, user_prompt=''):
+        """
+        Analyze an image using GPT-4 Vision.
+
+        Args:
+            image_url: URL of the image to analyze.
+            user_prompt: Optional user message to accompany the image.
+
+        Returns:
+            Dict with 'content' and 'tokens_used'.
+        """
+        try:
+            user_content = [
+                {
+                    'type': 'image_url',
+                    'image_url': {'url': image_url},
+                },
+            ]
+            if user_prompt:
+                user_content.insert(0, {'type': 'text', 'text': user_prompt})
+            else:
+                user_content.insert(0, {
+                    'type': 'text',
+                    'text': 'Describe this image and how it relates to the user\'s goals or dreams. Provide motivational insights if relevant.',
+                })
+
+            response = openai.ChatCompletion.create(
+                model='gpt-4-vision-preview',
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': 'You are DreamPlanner, a helpful assistant. Analyze images the user shares and relate them to their personal goals and dreams.',
+                    },
+                    {
+                        'role': 'user',
+                        'content': user_content,
+                    },
+                ],
+                max_tokens=500,
+                timeout=self.timeout,
+            )
+
+            return {
+                'content': response.choices[0].message.content,
+                'tokens_used': response.usage.total_tokens,
+            }
+
+        except openai.error.OpenAIError as e:
+            raise OpenAIError(f"Image analysis failed: {str(e)}")
 
     def generate_vision_image(self, dream_title, dream_description):
         """

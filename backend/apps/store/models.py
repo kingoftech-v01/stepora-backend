@@ -162,6 +162,21 @@ class StoreItem(models.Model):
         blank=True,
         help_text='Additional item metadata (e.g., colors, animation settings, duration).'
     )
+    xp_price = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Price in XP for XP-based purchasing (0 = not purchasable with XP).'
+    )
+    available_from = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Start of availability window (null = always available).'
+    )
+    available_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='End of availability window (null = always available).'
+    )
     is_active = models.BooleanField(
         default=True,
         help_text='Whether the item is available for purchase.'
@@ -247,3 +262,119 @@ class UserInventory(models.Model):
     def __str__(self):
         equipped_str = ' [EQUIPPED]' if self.is_equipped else ''
         return f"{self.user.email} - {self.item.name}{equipped_str}"
+
+
+class Wishlist(models.Model):
+    """
+    Tracks items a user has wishlisted for future purchase.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='wishlist',
+    )
+    item = models.ForeignKey(
+        StoreItem,
+        on_delete=models.CASCADE,
+        related_name='wishlisted_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'store_wishlist'
+        unique_together = [['user', 'item']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.item.name} (wishlisted)"
+
+
+class Gift(models.Model):
+    """
+    Represents a store item gifted from one user to another.
+
+    The sender purchases the item and the recipient can claim it.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='gifts_sent',
+        help_text='User who sent the gift.',
+    )
+    recipient = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='gifts_received',
+        help_text='User who receives the gift.',
+    )
+    item = models.ForeignKey(
+        StoreItem, on_delete=models.CASCADE, related_name='gifts',
+        help_text='The gifted store item.',
+    )
+    message = models.TextField(
+        blank=True, default='',
+        help_text='Optional personal message from the sender.',
+    )
+    stripe_payment_intent_id = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Stripe PaymentIntent ID for the gift purchase.',
+    )
+    is_claimed = models.BooleanField(default=False)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'store_gifts'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_claimed']),
+            models.Index(fields=['sender']),
+        ]
+
+    def __str__(self):
+        status_str = 'claimed' if self.is_claimed else 'pending'
+        return f"Gift: {self.item.name} from {self.sender.email} to {self.recipient.email} ({status_str})"
+
+
+class RefundRequest(models.Model):
+    """Tracks refund requests for store purchases."""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('refunded', 'Refunded'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='refund_requests',
+    )
+    inventory_entry = models.ForeignKey(
+        UserInventory, on_delete=models.CASCADE, related_name='refund_requests',
+    )
+    reason = models.TextField(
+        help_text='User-provided reason for the refund.',
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending',
+    )
+    stripe_refund_id = models.CharField(
+        max_length=255, blank=True, default='',
+    )
+    admin_notes = models.TextField(blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'store_refund_requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Refund: {self.user.email} - {self.inventory_entry.item.name} ({self.status})"

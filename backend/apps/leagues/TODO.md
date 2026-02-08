@@ -1,18 +1,18 @@
 # Leagues App - TODO
 
-## Planned Features
+## Completed
 
-- [ ] **Promotion/demotion notifications** - Send push notifications to users when they are promoted to a higher league or demoted to a lower one. Include the old and new league names and any rewards unlocked.
+- [x] **Promotion/demotion notifications** - Push notifications sent to users when they are promoted to a higher league or demoted to a lower one. Includes the old and new league names and any rewards unlocked (Celery task).
 
-- [ ] **Historical rank tracking** - Store historical rank snapshots (daily or weekly) so users can view their rank progression over time. Add an API endpoint to retrieve rank history as a time series for charting in the mobile app.
+- [x] **Historical rank tracking** - Historical rank snapshots stored (RankSnapshot model + daily snapshots) so users can view their rank progression over time. API endpoint to retrieve rank history as a time series for charting in the mobile app.
 
-- [ ] **Season transition automation** - Implement automated season transitions via Celery beat: detect when the active season's `end_date` has passed, call `calculate_season_rewards()`, deactivate the old season, and optionally activate the next season.
+- [x] **Season transition automation** - Automated season transitions via Celery beat (check_season_end task): detects when the active season's `end_date` has passed, calls `calculate_season_rewards()`, deactivates the old season, and activates the next season.
 
-- [ ] **Seed data management command** - Create a Django management command (`python manage.py seed_leagues`) to populate the 7 default leagues with their XP ranges, colors, and icons. Make it idempotent for safe re-runs.
+- [x] **Seed data management command** - Django management command (`python manage.py seed_leagues`) to populate the 7 default leagues with their XP ranges, colors, and icons. Idempotent for safe re-runs.
 
-## Improvements
+- [x] **Dense ranking** - Dense ranking so users with the same XP share the same rank position rather than receiving arbitrarily ordered sequential ranks.
 
-- [ ] **Dense ranking** - Switch from sequential ranking to dense ranking so users with the same XP share the same rank position rather than receiving arbitrarily ordered sequential ranks.
+## Planned Improvements
 
 - [ ] **League-specific rewards** - Define and distribute concrete rewards (store items, XP bonuses, badges) when users reach each league tier, beyond just the JSON `rewards` field.
 

@@ -170,3 +170,49 @@ class FollowUserSerializer(serializers.Serializer):
     targetUserId = serializers.UUIDField(
         help_text='The UUID of the user to follow.'
     )
+
+
+class BlockUserSerializer(serializers.Serializer):
+    """Serializer for blocking a user."""
+
+    targetUserId = serializers.UUIDField(
+        help_text='The UUID of the user to block.'
+    )
+    reason = serializers.CharField(
+        required=False,
+        default='',
+        help_text='Optional reason for blocking.'
+    )
+
+
+class ReportUserSerializer(serializers.Serializer):
+    """Serializer for reporting a user."""
+
+    targetUserId = serializers.UUIDField(
+        help_text='The UUID of the user to report.'
+    )
+    reason = serializers.CharField(
+        help_text='Description of why the user is being reported.'
+    )
+    category = serializers.ChoiceField(
+        choices=['spam', 'harassment', 'inappropriate', 'other'],
+        default='other',
+        help_text='Category of the report.'
+    )
+
+
+class BlockedUserSerializer(serializers.Serializer):
+    """Serializer for blocked user list items."""
+
+    id = serializers.UUIDField(help_text='Block record ID.')
+    user = serializers.SerializerMethodField()
+    reason = serializers.CharField(help_text='Reason for blocking.')
+    created_at = serializers.DateTimeField(help_text='When the block was created.')
+
+    def get_user(self, obj):
+        blocked = obj.blocked
+        return {
+            'id': str(blocked.id),
+            'username': blocked.display_name or 'Anonymous',
+            'avatar': blocked.avatar_url or '',
+        }

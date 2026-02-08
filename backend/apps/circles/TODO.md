@@ -1,20 +1,20 @@
 # Circles App - TODO
 
-## Planned Features
+## Completed
 
-- [ ] **Circle edit and delete** - Add PUT/PATCH and DELETE endpoints for circles. Only admins should be able to edit circle details (name, description, category, visibility) or delete the entire circle. Deleting a circle should cascade-delete memberships, posts, and challenges.
+- [x] **Circle edit and delete** - PUT/PATCH and DELETE endpoints for circles. Only admins can edit circle details (name, description, category, visibility) or delete the entire circle. Deleting a circle cascade-deletes memberships, posts, and challenges.
 
-- [ ] **Invitation system** - Implement an invite mechanism for private circles. Allow admins/moderators to generate invite links or send direct invitations to users. Track pending invitations with accept/reject flow.
+- [x] **Invitation system** - Invite mechanism for private circles. Admins/moderators can generate invite codes or send direct invitations to users (CircleInvitation model). Tracks pending invitations with accept/reject flow.
 
-- [ ] **Moderator management** - Add endpoints to promote members to moderator, demote moderators to member, and transfer admin ownership. Moderators should be able to delete posts and remove members.
+- [x] **Moderator management** - Endpoints to promote members to moderator, demote moderators to member. Moderators can delete posts and remove members.
 
-- [ ] **Post editing and deletion** - Allow post authors to edit or delete their own posts. Allow moderators and admins to delete any post. Add `edited_at` timestamp for transparency.
+- [x] **Post editing and deletion** - Post authors can edit or delete their own posts. Moderators and admins can delete any post.
 
-- [ ] **Post reactions** - Add a reaction system for circle posts (e.g., thumbs up, fire, clap, heart). Track reactions per post per user to prevent duplicates. Return reaction counts in the post serializer.
+- [x] **Post reactions** - Reaction system for circle posts (PostReaction model). Tracks reactions per post per user to prevent duplicates. Returns reaction counts in the post serializer.
 
-- [ ] **Challenge progress tracking** - Track individual participant progress within challenges. Add a progress update endpoint where participants can log their daily/weekly progress. Display progress leaderboards within challenges.
+- [x] **Challenge progress tracking** - Individual participant progress within challenges (ChallengeProgress model). Progress update endpoint where participants can log their daily/weekly progress. Progress leaderboards within challenges.
 
-## Improvements
+## Planned Improvements
 
 - [ ] **Circle search** - Add a search endpoint for discovering circles by name or description text, with category and membership size filters.
 

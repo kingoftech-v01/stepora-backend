@@ -171,36 +171,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildQuickActions(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.chat_bubble_outline,
-            label: 'AI Coach',
-            color: AppTheme.primaryPurple,
-            onTap: () async {
-              // Navigate to general chat
-              context.push('/chat/new');
-            },
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.chat_bubble_outline,
+                label: 'AI Coach',
+                color: AppTheme.primaryPurple,
+                onTap: () => context.push('/chat/new'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.forum_outlined,
+                label: 'Conversations',
+                color: Colors.teal,
+                onTap: () => context.push('/conversations'),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.emoji_events_outlined,
-            label: 'Leaderboard',
-            color: AppTheme.accent,
-            onTap: () => context.push('/leaderboard'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.store_outlined,
-            label: 'Store',
-            color: AppTheme.success,
-            onTap: () => context.push('/store'),
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.emoji_events_outlined,
+                label: 'Leaderboard',
+                color: AppTheme.accent,
+                onTap: () => context.push('/leaderboard'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.store_outlined,
+                label: 'Store',
+                color: AppTheme.success,
+                onTap: () => context.push('/store'),
+              ),
+            ),
+          ],
         ),
       ],
     );

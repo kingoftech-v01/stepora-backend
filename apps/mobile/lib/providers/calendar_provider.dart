@@ -78,6 +78,55 @@ class CalendarNotifier extends Notifier<CalendarState> {
 
   Future<void> createEvent(Map<String, dynamic> data) async {
     await _api.post(ApiConstants.calendarEvents, data: data);
+    await _refetchCurrentMonth();
+  }
+
+  Future<void> updateEvent(String eventId, Map<String, dynamic> data) async {
+    await _api.put(ApiConstants.calendarEventDetail(eventId), data: data);
+    await _refetchCurrentMonth();
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    await _api.delete(ApiConstants.calendarEventDetail(eventId));
+    await _refetchCurrentMonth();
+  }
+
+  Future<void> rescheduleEvent(String eventId, DateTime newStart, DateTime newEnd) async {
+    await _api.patch(ApiConstants.calendarReschedule(eventId), data: {
+      'start_time': newStart.toIso8601String(),
+      'end_time': newEnd.toIso8601String(),
+    });
+    await _refetchCurrentMonth();
+  }
+
+  Future<void> autoSchedule() async {
+    await _api.post(ApiConstants.autoSchedule);
+    await _refetchCurrentMonth();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchTimeBlocks() async {
+    final response = await _api.get(ApiConstants.timeBlocks);
+    final results = response.data['results'] as List? ?? response.data as List? ?? [];
+    return List<Map<String, dynamic>>.from(results);
+  }
+
+  Future<void> createTimeBlock(Map<String, dynamic> data) async {
+    await _api.post(ApiConstants.timeBlocks, data: data);
+  }
+
+  Future<void> deleteTimeBlock(String id) async {
+    await _api.delete('${ApiConstants.timeBlocks}$id/');
+  }
+
+  Future<List<Map<String, dynamic>>> suggestTimeSlots({int? durationMins}) async {
+    final response = await _api.get(ApiConstants.suggestTimeSlots, queryParams: {
+      if (durationMins != null) 'duration_mins': durationMins.toString(),
+    });
+    final results = response.data['slots'] as List? ?? response.data as List? ?? [];
+    return List<Map<String, dynamic>>.from(results);
+  }
+
+  Future<void> _refetchCurrentMonth() async {
     await fetchEvents(
       DateTime(state.focusedDay.year, state.focusedDay.month, 1),
       DateTime(state.focusedDay.year, state.focusedDay.month + 1, 0),

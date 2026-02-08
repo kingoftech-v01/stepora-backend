@@ -46,6 +46,21 @@ class Notification(models.Model):
     scheduled_for = models.DateTimeField(db_index=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    opened_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the user opened/interacted with this notification.'
+    )
+    image_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text='Optional image URL for rich notifications.'
+    )
+    action_url = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Deep link URL for the notification action.'
+    )
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -89,6 +104,13 @@ class Notification(models.Model):
         """Mark notification as read by user."""
         self.read_at = timezone.now()
         self.save(update_fields=['read_at'])
+
+    def mark_opened(self):
+        """Mark notification as opened/interacted with."""
+        self.opened_at = timezone.now()
+        if not self.read_at:
+            self.read_at = self.opened_at
+        self.save(update_fields=['opened_at', 'read_at'])
 
     def mark_failed(self, error_message=''):
         """Mark notification as failed."""

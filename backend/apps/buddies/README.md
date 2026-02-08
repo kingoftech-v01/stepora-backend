@@ -45,8 +45,11 @@ An encouragement message sent between buddies.
 |--------|------|-------------|
 | GET | `/current` | Get current active buddy pairing (returns `null` if none) |
 | GET | `/{id}/progress` | Get progress comparison between user and buddy |
+| GET | `/history` | Get pairing history (all past and current pairings) |
 | POST | `/find-match` | Find a compatible buddy match |
-| POST | `/pair` | Create a pairing with a specific user (body: `{"partnerId": "UUID"}`) |
+| POST | `/pair` | Create a pairing with a specific user (body: `{"partnerId": "UUID"}`, status: `pending`) |
+| POST | `/{id}/accept` | Accept a pending buddy request |
+| POST | `/{id}/reject` | Reject a pending buddy request |
 | POST | `/{id}/encourage` | Send encouragement to buddy (body: `{"message": "text"}`) |
 | DELETE | `/{id}/` | End an active buddy pairing (soft-delete: sets status to `cancelled`) |
 
@@ -85,7 +88,19 @@ Searches for available users (no active pairing, active account) and scores them
 
 #### POST /pair
 
-Creates a pairing directly (status set to `active` immediately). Both users must not have an existing active pairing.
+Creates a buddy pairing request (status set to `pending`). Both users must not have an existing active pairing. The target user must accept the request before the pairing becomes active.
+
+#### POST /{id}/accept
+
+Accepts a pending buddy request. Sets the pairing status to `active`. Only the invited user (user2) can accept.
+
+#### POST /{id}/reject
+
+Rejects a pending buddy request. Sets the pairing status to `cancelled`. Only the invited user (user2) can reject.
+
+#### GET /history
+
+Returns all past and current pairings for the authenticated user, ordered by creation date (newest first).
 
 #### POST /{id}/encourage
 
@@ -119,6 +134,23 @@ The `find_match` endpoint scores candidates based on three factors:
 | `BuddyMatchSerializer` | Match result: `userId`, `username`, `avatar`, `compatibilityScore`, `sharedInterests` |
 | `BuddyPairRequestSerializer` | Input: `partnerId` (UUID) |
 | `BuddyEncourageSerializer` | Input: `message` (optional, max 1000 chars) |
+
+## WebSocket Integration
+
+### BuddyChatConsumer
+
+Real-time messaging between paired buddies is handled via the `BuddyChatConsumer` WebSocket consumer (defined in the conversations app).
+
+**Connection:** `ws://host/ws/buddy-chat/{pairing_id}/?token=<auth_token>`
+
+Both users in an active pairing can exchange real-time messages, with typing indicators and read receipts.
+
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `send_checkin_reminders` | Periodic task (Celery beat) that sends check-in reminder notifications to active buddy pairs who haven't interacted recently |
+| `track_encouragement_streaks` | Tracks consecutive days where buddies have exchanged encouragements, awarding bonus XP for sustained engagement |
 
 ## Admin
 

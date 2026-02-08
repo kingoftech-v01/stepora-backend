@@ -76,12 +76,62 @@ app.conf.beat_schedule = {
         'task': 'apps.dreams.tasks.cleanup_abandoned_dreams',
         'schedule': crontab(day_of_week=0, hour=3, minute=0),
     },
+
+    # Smart archive: pause inactive dreams daily at 4 AM
+    'smart-archive-dreams': {
+        'task': 'apps.dreams.tasks.smart_archive_dreams',
+        'schedule': crontab(hour=4, minute=0),
+    },
+
+    # === Calendar Tasks ===
+
+    # Generate recurring event instances nightly at 1 AM
+    'generate-recurring-events': {
+        'task': 'apps.calendar.tasks.generate_recurring_events',
+        'schedule': crontab(hour=1, minute=0),
+    },
+
+    # === Buddy Tasks ===
+
+    # Send buddy check-in reminders daily at 11 AM
+    'send-buddy-checkin-reminders': {
+        'task': 'apps.buddies.tasks.send_buddy_checkin_reminders',
+        'schedule': crontab(hour=11, minute=0),
+    },
+
+    # === League Tasks ===
+
+    # Check if the active season has ended (daily at 12:05 AM)
+    'check-season-end': {
+        'task': 'apps.leagues.tasks.check_season_end',
+        'schedule': crontab(hour=0, minute=5),
+    },
+
+    # Create daily rank snapshots at 11:55 PM
+    'create-daily-rank-snapshots': {
+        'task': 'apps.leagues.tasks.create_daily_rank_snapshots',
+        'schedule': crontab(hour=23, minute=55),
+    },
+
+    # Weekly promotion/demotion cycle on Sunday at 11 PM
+    'weekly-league-promotions': {
+        'task': 'apps.leagues.tasks.send_league_change_notifications',
+        'schedule': crontab(day_of_week=0, hour=23, minute=0),
+    },
 }
 
 # Task configuration
 app.conf.task_routes = {
     'apps.notifications.tasks.*': {'queue': 'notifications'},
     'apps.dreams.tasks.*': {'queue': 'dreams'},
+    'apps.social.tasks.*': {'queue': 'social'},
+    'apps.buddies.tasks.*': {'queue': 'social'},
+    'apps.leagues.tasks.*': {'queue': 'social'},
+    'apps.circles.tasks.*': {'queue': 'social'},
+    'apps.calendar.tasks.*': {'queue': 'dreams'},
+    'apps.subscriptions.tasks.*': {'queue': 'notifications'},
+    'apps.conversations.tasks.*': {'queue': 'integrations'},
+    'apps.users.tasks.*': {'queue': 'notifications'},
     'integrations.*': {'queue': 'integrations'},
 }
 

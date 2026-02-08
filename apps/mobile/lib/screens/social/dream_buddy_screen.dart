@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -96,30 +97,62 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
                             icon: const Icon(Icons.chat_outlined),
                             tooltip: 'Chat with buddy',
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Buddy chat coming soon!')),
-                              );
+                              final convId = _currentBuddy!['conversation_id']?.toString();
+                              if (convId != null) {
+                                context.push('/buddy-chat/$convId');
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('No chat available yet')),
+                                );
+                              }
                             },
                           ),
                           IconButton(
                             icon: const Icon(Icons.favorite_outline),
                             tooltip: 'Send encouragement',
-                            onPressed: () async {
-                              try {
-                                final api = ref.read(apiServiceProvider);
-                                await api.post('/buddies/${_currentBuddy!['id']}/encourage/');
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Encouragement sent!')),
-                                  );
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error: $e')),
-                                  );
-                                }
-                              }
+                            onPressed: () {
+                              final msgController = TextEditingController(text: 'Keep going, you got this!');
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Send Encouragement'),
+                                  content: TextField(
+                                    controller: msgController,
+                                    maxLines: 3,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Message',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                    FilledButton(
+                                      onPressed: () async {
+                                        Navigator.pop(ctx);
+                                        try {
+                                          final api = ref.read(apiServiceProvider);
+                                          await api.post(
+                                            '/buddies/${_currentBuddy!['id']}/encourage/',
+                                            data: {'message': msgController.text.trim()},
+                                          );
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Encouragement sent!')),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Error: $e')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      child: const Text('Send'),
+                                    ),
+                                  ],
+                                ),
+                              );
                             },
                           ),
                         ],

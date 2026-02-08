@@ -88,6 +88,38 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  Future<void> loginWithGoogle(String accessToken) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final result = await _authService.loginWithGoogle(accessToken);
+      final user = await _authService.getUserProfile();
+      state = state.copyWith(token: result.token, user: user, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: _extractError(e));
+    }
+  }
+
+  Future<void> loginWithApple({
+    required String identityToken,
+    required String authorizationCode,
+    String? firstName,
+    String? lastName,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final result = await _authService.loginWithApple(
+        identityToken: identityToken,
+        authorizationCode: authorizationCode,
+        firstName: firstName,
+        lastName: lastName,
+      );
+      final user = await _authService.getUserProfile();
+      state = state.copyWith(token: result.token, user: user, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: _extractError(e));
+    }
+  }
+
   Future<void> logout() async {
     await _authService.logout();
     state = const AuthState();

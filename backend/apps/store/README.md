@@ -38,10 +38,13 @@ Individual purchasable cosmetic item.
 | image_url | URLField(500) | Preview image URL |
 | stripe_price_id | CharField(255) | Stripe Price ID for one-time payment |
 | price | Decimal(10,2) | Price in USD (min: 0.00) |
+| xp_price | Integer | Price in XP for XP-based purchasing (nullable, 0 = not purchasable with XP) |
 | item_type | CharField(30) | One of: `badge_frame`, `theme_skin`, `avatar_decoration`, `chat_bubble`, `streak_shield`, `xp_booster` |
 | rarity | CharField(20) | One of: `common`, `rare`, `epic`, `legendary` (default: `common`) |
 | metadata | JSONField | Additional item data (colors, animation settings, duration) |
 | is_active | Boolean | Whether available for purchase (default: True) |
+| available_from | DateTimeField | Start of limited-time availability window (nullable) |
+| available_until | DateTimeField | End of limited-time availability window (nullable) |
 | created_at | DateTimeField | Auto-set on creation |
 
 **DB table:** `store_items`
@@ -81,6 +84,54 @@ Tracks items purchased and owned by a user.
 
 **DB table:** `user_inventory`
 **Constraint:** `unique_together = [['user', 'item']]` (each user can own an item only once)
+
+### Wishlist
+
+Tracks items a user has saved for later.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | User (related_name: `wishlist`) |
+| item | FK(StoreItem) | Wishlisted item (related_name: `wishlisted_by`) |
+| added_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `store_wishlists`
+**Constraint:** `unique_together = [['user', 'item']]`
+
+### Gift
+
+Allows users to purchase and send items to other users.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| sender | FK(User) | Gift sender (related_name: `gifts_sent`) |
+| recipient | FK(User) | Gift recipient (related_name: `gifts_received`) |
+| item | FK(StoreItem) | Gifted item |
+| message | TextField | Optional gift message |
+| claimed | Boolean | Whether recipient has claimed the gift (default: False) |
+| claimed_at | DateTimeField | Claim timestamp (nullable) |
+| stripe_payment_intent_id | CharField(255) | Stripe PaymentIntent ID |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `store_gifts`
+
+### RefundRequest
+
+Tracks refund requests for purchased items.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | Requesting user (related_name: `refund_requests`) |
+| inventory_item | FK(UserInventory) | Item to refund |
+| reason | TextField | Refund reason |
+| status | CharField(20) | `pending`, `approved`, `rejected` (default: `pending`) |
+| reviewed_at | DateTimeField | Review timestamp (nullable) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `store_refund_requests`
 
 ## API Endpoints
 
@@ -125,12 +176,37 @@ Tracks items purchased and owned by a user.
 - Filter fields: `is_equipped`, `item__item_type`
 - Ordering fields: `purchased_at`, `is_equipped`
 
+### Wishlist (Authenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/wishlist/` | List wishlisted items |
+| POST | `/wishlist/` | Add item to wishlist (body: `{"item_id": "UUID"}`) |
+| DELETE | `/wishlist/{id}/` | Remove item from wishlist |
+
+### Gifts (Authenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/gifts/send/` | Purchase and send an item as a gift (body: `{"item_id": "UUID", "recipient_id": "UUID", "message": "text"}`) |
+| GET | `/gifts/received/` | List received gifts |
+| POST | `/gifts/{id}/claim/` | Claim a received gift (adds to inventory) |
+
+### Refunds (Authenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/refunds/` | Request a refund (body: `{"inventory_item_id": "UUID", "reason": "text"}`) |
+| GET | `/refunds/` | List user's refund requests |
+
 ### Purchase Flow (Authenticated)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/purchase/` | Create Stripe PaymentIntent for an item |
 | POST | `/purchase/confirm/` | Confirm purchase after payment succeeds |
+| POST | `/purchase/xp/` | Purchase an item using XP (body: `{"item_id": "UUID"}`) |
+| GET | `/purchase/history/` | Get purchase history |
 
 **Views:** `PurchaseView`, `PurchaseConfirmView` (APIView)
 - Permission: `IsAuthenticated`

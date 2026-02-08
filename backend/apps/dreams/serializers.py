@@ -4,7 +4,7 @@ Serializers for Dreams app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -66,6 +66,7 @@ class DreamSerializer(serializers.ModelSerializer):
 
     goals_count = serializers.SerializerMethodField()
     tasks_count = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
 
     class Meta:
         model = Dream
@@ -75,7 +76,7 @@ class DreamSerializer(serializers.ModelSerializer):
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'vision_image_url',
             'calibration_status',
-            'goals_count', 'tasks_count',
+            'goals_count', 'tasks_count', 'tags',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'progress_percentage', 'created_at', 'updated_at', 'completed_at']
@@ -88,6 +89,9 @@ class DreamSerializer(serializers.ModelSerializer):
         for goal in obj.goals.all():
             total += goal.tasks.count()
         return total
+
+    def get_tags(self, obj):
+        return list(obj.taggings.values_list('tag__name', flat=True))
 
 
 class CalibrationResponseSerializer(serializers.ModelSerializer):
@@ -191,6 +195,100 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     def validate_description(self, value):
         """Sanitize description."""
         return sanitize_text(value)
+
+
+class DreamTagSerializer(serializers.ModelSerializer):
+    """Serializer for DreamTag model."""
+
+    class Meta:
+        model = DreamTag
+        fields = ['id', 'name', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class SharedDreamSerializer(serializers.ModelSerializer):
+    """Serializer for SharedDream model."""
+
+    dream_title = serializers.CharField(source='dream.title', read_only=True)
+    shared_by_name = serializers.CharField(source='shared_by.display_name', read_only=True)
+    shared_with_name = serializers.CharField(source='shared_with.display_name', read_only=True)
+
+    class Meta:
+        model = SharedDream
+        fields = [
+            'id', 'dream', 'dream_title',
+            'shared_by', 'shared_by_name',
+            'shared_with', 'shared_with_name',
+            'permission', 'created_at'
+        ]
+        read_only_fields = ['id', 'shared_by', 'created_at']
+
+
+class ShareDreamRequestSerializer(serializers.Serializer):
+    """Serializer for sharing a dream."""
+
+    shared_with_id = serializers.UUIDField(
+        help_text='UUID of the user to share the dream with.'
+    )
+    permission = serializers.ChoiceField(
+        choices=['view', 'comment'],
+        default='view',
+    )
+
+
+class AddTagSerializer(serializers.Serializer):
+    """Serializer for adding a tag to a dream."""
+
+    tag_name = serializers.CharField(
+        max_length=50,
+        help_text='Name of the tag to add.'
+    )
+
+
+class DreamTemplateSerializer(serializers.ModelSerializer):
+    """Serializer for DreamTemplate model."""
+
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    difficulty_display = serializers.CharField(source='get_difficulty_display', read_only=True)
+
+    class Meta:
+        model = DreamTemplate
+        fields = [
+            'id', 'title', 'description', 'category', 'category_display',
+            'template_goals', 'estimated_duration_days',
+            'difficulty', 'difficulty_display',
+            'icon', 'is_featured', 'usage_count',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'usage_count', 'created_at', 'updated_at']
+
+
+class DreamCollaboratorSerializer(serializers.ModelSerializer):
+    """Serializer for DreamCollaborator model."""
+
+    user_display_name = serializers.CharField(source='user.display_name', read_only=True)
+    user_avatar = serializers.CharField(source='user.avatar_url', read_only=True)
+    dream_title = serializers.CharField(source='dream.title', read_only=True)
+
+    class Meta:
+        model = DreamCollaborator
+        fields = [
+            'id', 'dream', 'dream_title',
+            'user', 'user_display_name', 'user_avatar',
+            'role', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class AddCollaboratorSerializer(serializers.Serializer):
+    """Serializer for adding a collaborator to a dream."""
+
+    user_id = serializers.UUIDField(help_text='UUID of the user to add as collaborator.')
+    role = serializers.ChoiceField(
+        choices=['collaborator', 'viewer'],
+        default='viewer',
+        help_text='Role for the collaborator.',
+    )
 
 
 class GoalCreateSerializer(serializers.ModelSerializer):

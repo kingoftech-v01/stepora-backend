@@ -17,23 +17,20 @@
 
 - [x] Add @extend_schema decorators for Swagger
 - [x] XSS sanitization for text fields
+- [x] **Dream sharing** - Allow sharing between users (SharedDream model + endpoints)
+- [x] **Dream templates** - Pre-configured dreams by category (DreamTemplate model + viewset)
+- [x] **PDF export** - Export a dream with its complete plan
+- [x] **Milestone notifications** - Notifications at each important milestone
+- [x] **Collaborative dreams** - Multiple users on the same dream (DreamCollaborator model)
+- [x] **Custom tags** - Flexible tag system (DreamTag + M2M)
+- [x] **Smart archive** - Automatic archiving of inactive dreams (Celery task)
+- [x] **Dream duplication** - Copy an existing dream
 
 ## Planned - High Priority
 
-- [ ] **Dream sharing** - Allow sharing between users
-- [ ] **Dream templates** - Pre-configured dreams by category
-- [ ] **PDF export** - Export a dream with its complete plan
-- [ ] **Milestone notifications** - Notifications at each important milestone
 - [ ] Add PUT /api/dreams/{id}/ usage in frontend (edit dream screen missing)
 - [ ] Add manual goal creation endpoint in frontend (currently AI-only)
 - [ ] Add manual task creation endpoint in frontend (currently AI-only)
-
-## Planned - Medium Priority
-
-- [ ] **Collaborative dreams** - Multiple users on the same dream
-- [ ] **Custom tags** - Flexible tag system
-- [ ] **Smart archive** - Automatic archiving of inactive dreams
-- [ ] **Dream duplication** - Copy an existing dream
 
 ## Planned - Low Priority
 

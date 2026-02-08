@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../config/api_constants.dart';
 
 class ConversationListScreen extends ConsumerStatefulWidget {
   const ConversationListScreen({super.key});
@@ -25,7 +26,7 @@ class _ConversationListScreenState extends ConsumerState<ConversationListScreen>
     setState(() => _isLoading = true);
     try {
       final api = ref.read(apiServiceProvider);
-      final response = await api.get('/conversations/');
+      final response = await api.get(ApiConstants.conversations);
       final results = response.data['results'] as List? ?? response.data as List? ?? [];
       setState(() {
         _conversations = List<Map<String, dynamic>>.from(results);
@@ -33,6 +34,29 @@ class _ConversationListScreenState extends ConsumerState<ConversationListScreen>
       });
     } catch (_) {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteConversation(String id, int index) async {
+    final removed = _conversations[index];
+    setState(() => _conversations.removeAt(index));
+
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.delete(ApiConstants.conversationDetail(id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conversation deleted')),
+        );
+      }
+    } catch (e) {
+      // Restore on failure
+      setState(() => _conversations.insert(index, removed));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete: $e')),
+        );
+      }
     }
   }
 
@@ -69,23 +93,58 @@ class _ConversationListScreenState extends ConsumerState<ConversationListScreen>
                     itemBuilder: (context, index) {
                       final conv = _conversations[index];
                       final type = conv['conversation_type'] ?? conv['type'] ?? 'dream_coaching';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                            child: Icon(
-                              _getTypeIcon(type),
-                              color: AppTheme.primaryPurple,
+                      final id = conv['id'].toString();
+                      return Dismissible(
+                        key: Key(id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (_) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Delete Conversation?'),
+                              content: const Text('This action cannot be undone.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
                             ),
+                          ) ?? false;
+                        },
+                        onDismissed: (_) => _deleteConversation(id, index),
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
+                              child: Icon(
+                                _getTypeIcon(type),
+                                color: AppTheme.primaryPurple,
+                              ),
+                            ),
+                            title: Text(
+                              conv['title'] ?? _getTypeLabel(type),
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text('${conv['total_messages'] ?? conv['message_count'] ?? 0} messages'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/chat/$id'),
                           ),
-                          title: Text(
-                            conv['title'] ?? _getTypeLabel(type),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text('${conv['message_count'] ?? 0} messages'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => context.push('/chat/${conv['id']}'),
                         ),
                       );
                     },
@@ -96,20 +155,22 @@ class _ConversationListScreenState extends ConsumerState<ConversationListScreen>
 
   IconData _getTypeIcon(String type) {
     switch (type) {
-      case 'dream_coaching': return Icons.auto_awesome;
-      case 'goal_planning': return Icons.flag;
+      case 'dream_creation': return Icons.auto_awesome;
+      case 'planning': return Icons.flag;
       case 'motivation': return Icons.favorite;
-      case 'reflection': return Icons.psychology;
+      case 'check_in': return Icons.psychology;
+      case 'buddy_chat': return Icons.people;
       default: return Icons.chat;
     }
   }
 
   String _getTypeLabel(String type) {
     switch (type) {
-      case 'dream_coaching': return 'Dream Coaching';
-      case 'goal_planning': return 'Goal Planning';
+      case 'dream_creation': return 'Dream Creation';
+      case 'planning': return 'Goal Planning';
       case 'motivation': return 'Motivation';
-      case 'reflection': return 'Reflection';
+      case 'check_in': return 'Check In';
+      case 'buddy_chat': return 'Buddy Chat';
       default: return 'Conversation';
     }
   }

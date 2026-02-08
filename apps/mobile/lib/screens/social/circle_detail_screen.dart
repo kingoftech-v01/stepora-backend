@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
@@ -100,6 +101,124 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> with Si
     }
   }
 
+  Future<void> _showInviteDialog() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Invite to Circle',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Generate Invite Link'),
+              subtitle: const Text('Share a link anyone can use to join'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  final response = await api.post('/circles/${widget.circleId}/invite-link/');
+                  final link = response.data['invite_link'] ?? response.data['invite_url'] ?? '';
+                  if (mounted && link.toString().isNotEmpty) {
+                    showDialog(
+                      context: context,
+                      builder: (dlgCtx) => AlertDialog(
+                        title: const Text('Invite Link'),
+                        content: SelectableText(link.toString()),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: link.toString()));
+                              Navigator.pop(dlgCtx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Link copied to clipboard!')),
+                              );
+                            },
+                            child: const Text('Copy'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(dlgCtx),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_add),
+              title: const Text('Invite by Username'),
+              subtitle: const Text('Send a direct invitation'),
+              onTap: () {
+                Navigator.pop(ctx);
+                final controller = TextEditingController();
+                showDialog(
+                  context: context,
+                  builder: (dlgCtx) => AlertDialog(
+                    title: const Text('Invite User'),
+                    content: TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(
+                        labelText: 'Username or Email',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dlgCtx),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () async {
+                          final value = controller.text.trim();
+                          if (value.isEmpty) return;
+                          Navigator.pop(dlgCtx);
+                          try {
+                            final api = ref.read(apiServiceProvider);
+                            await api.post('/circles/${widget.circleId}/invite/', data: {
+                              'username': value,
+                            });
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Invitation sent!')),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: $e')),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Invite'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _submitPost() async {
     if (_postController.text.trim().isEmpty) return;
     try {
@@ -126,13 +245,18 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> with Si
       appBar: AppBar(
         title: Text(_circle?['name'] ?? 'Circle'),
         actions: [
-          if (_isMember)
+          if (_isMember) ...[
+            IconButton(
+              icon: const Icon(Icons.person_add),
+              tooltip: 'Invite',
+              onPressed: _showInviteDialog,
+            ),
             IconButton(
               icon: const Icon(Icons.exit_to_app),
               tooltip: 'Leave Circle',
               onPressed: _leaveCircle,
-            )
-          else
+            ),
+          ] else
             TextButton(
               onPressed: _joinCircle,
               child: const Text('Join'),

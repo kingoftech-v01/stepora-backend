@@ -8,7 +8,10 @@ representations optimized for the mobile app's needs.
 
 from rest_framework import serializers
 
-from .models import Circle, CircleMembership, CirclePost, CircleChallenge
+from .models import (
+    Circle, CircleMembership, CirclePost, CircleChallenge,
+    PostReaction, CircleInvitation, ChallengeProgress,
+)
 
 
 class CircleMemberSerializer(serializers.ModelSerializer):
@@ -211,6 +214,7 @@ class CirclePostSerializer(serializers.ModelSerializer):
 
     user = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = CirclePost
@@ -218,9 +222,10 @@ class CirclePostSerializer(serializers.ModelSerializer):
             'id',
             'user',
             'content',
+            'reactions',
             'createdAt',
         ]
-        read_only_fields = ['id', 'user', 'createdAt']
+        read_only_fields = ['id', 'user', 'reactions', 'createdAt']
 
     def get_user(self, obj):
         """Return author display info."""
@@ -230,6 +235,14 @@ class CirclePostSerializer(serializers.ModelSerializer):
             'avatar': obj.author.avatar_url or '',
         }
 
+    def get_reactions(self, obj):
+        """Return reaction counts grouped by type."""
+        from django.db.models import Count
+        counts = obj.reactions.values('reaction_type').annotate(
+            count=Count('id')
+        )
+        return {item['reaction_type']: item['count'] for item in counts}
+
 
 class CirclePostCreateSerializer(serializers.Serializer):
     """Serializer for creating a new post in a circle."""
@@ -237,4 +250,136 @@ class CirclePostCreateSerializer(serializers.Serializer):
     content = serializers.CharField(
         max_length=5000,
         help_text='The text content of the post.'
+    )
+
+
+class CircleUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating a circle (admin only)."""
+
+    isPublic = serializers.BooleanField(
+        source='is_public',
+        required=False,
+    )
+
+    class Meta:
+        model = Circle
+        fields = [
+            'name',
+            'description',
+            'category',
+            'isPublic',
+            'max_members',
+        ]
+        extra_kwargs = {
+            'name': {'required': False},
+            'description': {'required': False},
+            'category': {'required': False},
+            'max_members': {'required': False},
+        }
+
+
+class PostReactionSerializer(serializers.Serializer):
+    """Serializer for reacting to a post."""
+
+    reaction_type = serializers.ChoiceField(
+        choices=['thumbs_up', 'fire', 'clap', 'heart'],
+        help_text='Type of reaction.'
+    )
+
+
+class PostReactionDisplaySerializer(serializers.ModelSerializer):
+    """Serializer for displaying reactions on a post."""
+
+    username = serializers.CharField(source='user.display_name', read_only=True)
+
+    class Meta:
+        model = PostReaction
+        fields = ['id', 'user', 'username', 'reaction_type', 'created_at']
+        read_only_fields = fields
+
+
+class CirclePostUpdateSerializer(serializers.Serializer):
+    """Serializer for updating a circle post."""
+
+    content = serializers.CharField(
+        max_length=5000,
+        help_text='The updated text content of the post.'
+    )
+
+
+class MemberRoleSerializer(serializers.Serializer):
+    """Serializer for promoting/demoting a member."""
+
+    role = serializers.ChoiceField(
+        choices=['member', 'moderator'],
+        help_text='New role for the member.'
+    )
+
+
+class CircleInvitationSerializer(serializers.ModelSerializer):
+    """Serializer for circle invitations."""
+
+    inviterName = serializers.CharField(source='inviter.display_name', read_only=True)
+    inviteeName = serializers.SerializerMethodField()
+    circleName = serializers.CharField(source='circle.name', read_only=True)
+    isExpired = serializers.BooleanField(source='is_expired', read_only=True)
+
+    class Meta:
+        model = CircleInvitation
+        fields = [
+            'id', 'circle', 'circleName',
+            'inviter', 'inviterName',
+            'invitee', 'inviteeName',
+            'invite_code', 'status', 'expires_at',
+            'isExpired', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_inviteeName(self, obj):
+        if obj.invitee:
+            return obj.invitee.display_name or 'Anonymous'
+        return None
+
+
+class DirectInviteSerializer(serializers.Serializer):
+    """Serializer for sending a direct invitation to a user."""
+
+    user_id = serializers.UUIDField(help_text='UUID of the user to invite.')
+
+
+class ChallengeProgressSerializer(serializers.ModelSerializer):
+    """Serializer for challenge progress entries."""
+
+    userName = serializers.SerializerMethodField()
+    userAvatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChallengeProgress
+        fields = [
+            'id', 'challenge', 'user',
+            'userName', 'userAvatar',
+            'progress_value', 'notes',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'challenge', 'user', 'created_at']
+
+    def get_userName(self, obj):
+        return obj.user.display_name or 'Anonymous'
+
+    def get_userAvatar(self, obj):
+        return obj.user.avatar_url or ''
+
+
+class ChallengeProgressCreateSerializer(serializers.Serializer):
+    """Serializer for submitting challenge progress."""
+
+    progress_value = serializers.FloatField(
+        min_value=0,
+        help_text='Numeric progress value.',
+    )
+    notes = serializers.CharField(
+        max_length=2000,
+        required=False,
+        default='',
+        help_text='Optional notes about this progress update.',
     )

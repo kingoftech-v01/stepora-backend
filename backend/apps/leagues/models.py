@@ -388,3 +388,61 @@ class SeasonReward(models.Model):
             self.save(update_fields=['rewards_claimed', 'claimed_at'])
             return True
         return False
+
+
+class RankSnapshot(models.Model):
+    """
+    Periodic snapshot of a user's rank for historical tracking.
+
+    Created daily by a Celery beat task to enable rank history
+    charts and trend analysis.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='rank_snapshots',
+    )
+    season = models.ForeignKey(
+        Season,
+        on_delete=models.CASCADE,
+        related_name='rank_snapshots',
+    )
+    league = models.ForeignKey(
+        League,
+        on_delete=models.CASCADE,
+        related_name='rank_snapshots',
+    )
+    rank = models.IntegerField(
+        help_text='Rank at the time of snapshot.',
+    )
+    xp = models.IntegerField(
+        help_text='XP earned this season at the time of snapshot.',
+    )
+    snapshot_date = models.DateField(
+        db_index=True,
+        help_text='Date of this snapshot.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'rank_snapshots'
+        ordering = ['-snapshot_date']
+        unique_together = [['user', 'season', 'snapshot_date']]
+        indexes = [
+            models.Index(
+                fields=['user', 'season', '-snapshot_date'],
+                name='idx_snapshot_user_season_date',
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user.display_name or self.user.email} - "
+            f"Rank #{self.rank} on {self.snapshot_date}"
+        )

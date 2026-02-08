@@ -63,25 +63,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           CircleAvatar(
                             radius: 40,
                             backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                            child: Text(
-                              (user.displayName.isNotEmpty ? user.displayName[0] : user.email[0]).toUpperCase(),
-                              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primaryPurple),
-                            ),
+                            backgroundImage: user.avatarUrl != null
+                                ? NetworkImage(user.avatarUrl!)
+                                : null,
+                            child: user.avatarUrl == null
+                                ? Text(
+                                    (user.displayName.isNotEmpty ? user.displayName[0] : user.email[0]).toUpperCase(),
+                                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primaryPurple),
+                                  )
+                                : null,
                           ),
                           const SizedBox(height: 12),
-                          Text(
-                            user.displayName.isNotEmpty ? user.displayName : user.email,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                user.displayName.isNotEmpty ? user.displayName : user.email,
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              if (user.isPremium) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.accent.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star, color: AppTheme.accent, size: 14),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        user.subscription.toUpperCase(),
+                                        style: TextStyle(
+                                          color: AppTheme.accent,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           Text(user.email, style: TextStyle(color: Colors.grey[600])),
-                          const SizedBox(height: 8),
-                          if (user.isPremium)
-                            Chip(
-                              label: Text(user.subscription.toUpperCase()),
-                              backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
-                              labelStyle: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold),
-                              avatar: Icon(Icons.star, color: AppTheme.accent, size: 16),
+                          if (user.isPremium && user.subscriptionEnds != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Renews ${_formatDate(user.subscriptionEnds!)}',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
                             ),
+                          ],
                         ],
                       ),
                     ),
@@ -112,6 +146,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Card(
                     child: Column(
                       children: [
+                        _MenuTile(icon: Icons.chat_outlined, label: 'Conversations', onTap: () => context.push('/conversations')),
+                        const Divider(height: 1),
                         _MenuTile(icon: Icons.workspace_premium, label: 'Subscription', onTap: () => context.push('/subscription')),
                         const Divider(height: 1),
                         _MenuTile(icon: Icons.store, label: 'Store', onTap: () => context.push('/store')),
@@ -136,6 +172,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
 

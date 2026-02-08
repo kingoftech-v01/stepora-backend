@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
@@ -17,6 +20,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberMe = true;
+  bool _isSocialLoading = false;
 
   @override
   void dispose() {
@@ -33,9 +38,79 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isSocialLoading = true);
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        setState(() => _isSocialLoading = false);
+        return;
+      }
+      final auth = await account.authentication;
+      final accessToken = auth.accessToken;
+      if (accessToken == null) {
+        setState(() => _isSocialLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to get Google access token')),
+          );
+        }
+        return;
+      }
+      await ref.read(authProvider.notifier).loginWithGoogle(accessToken);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google sign-in failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSocialLoading = false);
+    }
+  }
+
+  Future<void> _loginWithApple() async {
+    setState(() => _isSocialLoading = true);
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+      final identityToken = credential.identityToken;
+      final authorizationCode = credential.authorizationCode;
+      if (identityToken == null) {
+        setState(() => _isSocialLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to get Apple identity token')),
+          );
+        }
+        return;
+      }
+      await ref.read(authProvider.notifier).loginWithApple(
+        identityToken: identityToken,
+        authorizationCode: authorizationCode,
+        firstName: credential.givenName,
+        lastName: credential.familyName,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Apple sign-in failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSocialLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final isLoading = authState.isLoading || _isSocialLoading;
 
     return Scaffold(
       body: SafeArea(
@@ -104,12 +179,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     validator: Validators.password,
                   ),
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => context.push('/forgot-password'),
-                      child: const Text('Forgot Password?'),
-                    ),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                        activeColor: AppTheme.primaryPurple,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      const Text('Remember me'),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => context.push('/forgot-password'),
+                        child: const Text('Forgot Password?'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   if (authState.error != null)
@@ -122,12 +206,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   FilledButton(
-                    onPressed: authState.isLoading ? null : _login,
+                    onPressed: isLoading ? null : _login,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: AppTheme.primaryPurple,
                     ),
-                    child: authState.isLoading
+                    child: isLoading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
@@ -141,6 +225,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                   ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('or', style: TextStyle(color: Colors.grey[500])),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: isLoading ? null : _loginWithGoogle,
+                    icon: const Icon(Icons.g_mobiledata, size: 24),
+                    label: const Text('Continue with Google'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (Platform.isIOS)
+                    OutlinedButton.icon(
+                      onPressed: isLoading ? null : _loginWithApple,
+                      icon: const Icon(Icons.apple, size: 20),
+                      label: const Text('Continue with Apple'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

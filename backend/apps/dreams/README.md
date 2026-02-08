@@ -12,6 +12,60 @@ The Dreams app is the core of DreamPlanner. It manages the complete hierarchy:
 
 ## Models
 
+### DreamTemplate
+
+Reusable dream templates for common dream types. Users can browse and use templates to quickly create new dreams.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| title | CharField(255) | Template title |
+| description | TextField | Template description |
+| category | CharField(50) | Category (career, health, etc.) |
+| is_featured | Boolean | Whether shown in featured templates |
+| template_data | JSONField | Pre-filled dream data (goals, tasks, etc.) |
+
+### DreamTag
+
+Custom tags for organizing and filtering dreams.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| name | CharField(100) | Tag name |
+| slug | SlugField(100) | URL-friendly slug |
+
+### DreamTagging
+
+Association between dreams and tags (many-to-many through model).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| dream | FK(Dream) | Tagged dream |
+| tag | FK(DreamTag) | Applied tag |
+
+### SharedDream
+
+Tracks dream sharing with granular permissions.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| dream | FK(Dream) | Shared dream |
+| shared_with | FK(User) | User the dream is shared with |
+| permission | CharField | `view` or `comment` |
+
+### DreamCollaborator
+
+Collaboration roles for shared dreams.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| dream | FK(Dream) | Collaborative dream |
+| user | FK(User) | Collaborator |
+| role | CharField | `owner`, `collaborator`, or `viewer` |
+
 ### Dream
 
 | Field | Type | Description |
@@ -84,6 +138,26 @@ The Dreams app is the core of DreamPlanner. It manages the complete hierarchy:
 - `POST /api/dreams/{id}/generate-plan/` - Generate a GPT-4 plan
 - `POST /api/dreams/{id}/generate-vision/` - Generate DALL-E vision board
 - `POST /api/dreams/{id}/generate-two-minute-start/` - Generate micro-action
+- `POST /api/dreams/{id}/duplicate/` - Duplicate a dream with all its goals and tasks
+- `GET /api/dreams/{id}/export-pdf/` - Export dream as PDF (includes goals, tasks, progress)
+
+### Dream Templates
+- `GET /api/dream-templates/` - Browse available dream templates
+- `GET /api/dream-templates/featured/` - Get featured templates
+- `POST /api/dream-templates/{id}/use/` - Create a new dream from a template
+
+### Dream Tags
+- `GET /api/dream-tags/` - List custom tags
+- `POST /api/dream-tags/` - Create a custom tag
+- `POST /api/dreams/{id}/tag/` - Add a tag to a dream
+- `DELETE /api/dreams/{id}/tag/{tag_id}/` - Remove a tag from a dream
+
+### Dream Sharing
+- `POST /api/dreams/{id}/share/` - Share a dream with another user (view/comment permissions)
+- `GET /api/dreams/shared-with-me/` - List dreams shared with the current user
+- `POST /api/dreams/{id}/collaborators/` - Add a collaborator (owner/collaborator/viewer roles)
+- `GET /api/dreams/{id}/collaborators/` - List collaborators on a dream
+- `DELETE /api/dreams/{id}/collaborators/{user_id}/` - Remove a collaborator
 
 ### Goals
 - `GET /api/dreams/{dream_id}/goals/` - List goals
@@ -150,3 +224,5 @@ Environment variables used:
 - `analyze_dream` - AI analysis of the dream (async)
 - `predict_obstacles` - Obstacle prediction (async)
 - `auto_schedule_tasks` - Automatic task scheduling
+- `smart_archive_dreams` - Automatically archives stale/inactive dreams based on configurable criteria
+- `send_milestone_notifications` - Sends notifications when users reach dream milestones (25%, 50%, 75%, 100% completion)

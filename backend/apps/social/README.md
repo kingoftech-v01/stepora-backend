@@ -13,6 +13,38 @@ User search is also provided so users can discover and connect with others.
 
 ## Models
 
+### BlockedUser
+
+Tracks user blocking relationships. Blocked users cannot send friend requests, follow, or view content.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| blocker | FK(User) | User performing the block (related_name: `blocked_users`) |
+| blocked | FK(User) | User being blocked (related_name: `blocked_by`) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `blocked_users`
+**Constraint:** `unique_together = [['blocker', 'blocked']]`
+
+### ReportedUser
+
+User reporting system for moderation.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| reporter | FK(User) | User filing the report (related_name: `reports_filed`) |
+| reported_user | FK(User) | User being reported (related_name: `reports_received`) |
+| reason | CharField(50) | Report reason (harassment, spam, inappropriate_content, other) |
+| description | TextField | Detailed description (optional) |
+| status | CharField(20) | `pending`, `reviewed`, `resolved`, `dismissed` (default: `pending`) |
+| reviewed_by | FK(User) | Admin who reviewed (nullable) |
+| created_at | DateTimeField | Auto-set on creation |
+| resolved_at | DateTimeField | Resolution timestamp (nullable) |
+
+**DB table:** `reported_users`
+
 ### Friendship
 
 Bidirectional friendship between two users requiring acceptance.
@@ -82,9 +114,12 @@ An item in the social activity feed.
 |--------|------|-------------|
 | GET | `/friends` | List accepted friends |
 | GET | `/friends/requests/pending` | List pending received requests |
+| GET | `/friends/requests/sent` | List sent friend requests |
+| GET | `/friends/mutual/{user_id}` | List mutual friends with a specific user |
 | POST | `/friends/request` | Send a friend request (body: `{"targetUserId": "UUID"}`) |
 | POST | `/friends/accept/{request_id}` | Accept a pending request |
 | POST | `/friends/reject/{request_id}` | Reject a pending request |
+| DELETE | `/friends/{friendship_id}` | Unfriend a user |
 
 **ViewSet:** `FriendshipViewSet` (GenericViewSet)
 - Permission: `IsAuthenticated`
@@ -94,15 +129,29 @@ An item in the social activity feed.
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/follow` | Follow a user (body: `{"targetUserId": "UUID"}`) |
+| DELETE | `/follow/{user_id}` | Unfollow a user |
+| GET | `/follow/suggestions` | Get follow suggestions based on mutual connections and activity |
+| GET | `/follow/counts/{user_id}` | Get follower and following counts for a user |
 
 **ViewSet:** `FriendshipViewSet` (same viewset, different action)
 - Permission: `IsAuthenticated`
+
+### Blocking and Reporting
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/block` | Block a user (body: `{"targetUserId": "UUID"}`) |
+| DELETE | `/block/{user_id}` | Unblock a user |
+| GET | `/blocked` | List blocked users |
+| POST | `/report` | Report a user (body: `{"targetUserId": "UUID", "reason": "harassment", "description": "..."}`) |
 
 ### Activity Feed
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/feed/friends` | Activity feed from friends + followed users + self |
+| GET | `/feed/friends?type={activity_type}` | Filter feed by activity type |
+| GET | `/feed/friends?from={date}&to={date}` | Filter feed by date range |
 
 **View:** `ActivityFeedView` (ListAPIView)
 - Permission: `IsAuthenticated`
@@ -149,3 +198,5 @@ All three models are registered with Django admin:
 - **FriendshipAdmin** - Filter by status. Search by user email/display name. Shows both users, status, and timestamps
 - **UserFollowAdmin** - Filter by date. Search by follower/following email/display name
 - **ActivityFeedItemAdmin** - Filter by activity type. Shows `content_preview` (truncated). Search by user email/display name
+- **BlockedUserAdmin** - Filter by date. Search by blocker/blocked email/display name
+- **ReportedUserAdmin** - Filter by status, reason. Search by reporter/reported email/display name

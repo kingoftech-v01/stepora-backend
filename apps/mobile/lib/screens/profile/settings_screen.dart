@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -30,6 +32,9 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
+    final currentTheme = ref.watch(themeProvider);
+    final currentLocale = ref.watch(localeProvider);
+    final currentLangCode = currentLocale?.languageCode ?? 'en';
 
     return Scaffold(
       appBar: AppBar(
@@ -76,11 +81,17 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/change-password'),
           ),
 
+          _SectionHeader(title: 'Appearance'),
+          _ThemeTile(
+            currentTheme: currentTheme,
+            onChanged: (mode) => ref.read(themeProvider.notifier).setThemeMode(mode),
+          ),
+
           _SectionHeader(title: 'Preferences'),
           _SettingsTile(
             icon: Icons.language,
             title: 'Language',
-            subtitle: 'English',
+            subtitle: _languages[currentLangCode] ?? 'English',
             onTap: () {
               showModalBottomSheet(
                 context: context,
@@ -97,10 +108,11 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       ..._languages.entries.map((entry) => ListTile(
                         title: Text(entry.value),
-                        trailing: entry.key == 'en'
+                        trailing: entry.key == currentLangCode
                             ? const Icon(Icons.check, color: AppTheme.primaryPurple)
                             : null,
                         onTap: () {
+                          ref.read(localeProvider.notifier).setLocale(entry.key);
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Language set to ${entry.value}')),
@@ -162,6 +174,12 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Notifications',
             onTap: () => context.push('/notifications'),
           ),
+          _SettingsTile(
+            icon: Icons.calendar_month,
+            title: 'Google Calendar',
+            subtitle: 'Sync your events',
+            onTap: () => context.push('/google-calendar'),
+          ),
 
           _SectionHeader(title: 'Subscription'),
           _SettingsTile(
@@ -215,9 +233,216 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          _DeleteAccountTile(ref: ref),
+
           const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+}
+
+class _ThemeTile extends StatelessWidget {
+  final ThemeMode currentTheme;
+  final ValueChanged<ThemeMode> onChanged;
+
+  const _ThemeTile({required this.currentTheme, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        currentTheme == ThemeMode.dark
+            ? Icons.dark_mode
+            : currentTheme == ThemeMode.light
+                ? Icons.light_mode
+                : Icons.brightness_auto,
+        color: AppTheme.primaryPurple,
+      ),
+      title: const Text('Theme'),
+      subtitle: Text(
+        currentTheme == ThemeMode.dark
+            ? 'Dark'
+            : currentTheme == ThemeMode.light
+                ? 'Light'
+                : 'System default',
+      ),
+      trailing: const Icon(Icons.chevron_right, size: 20),
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Choose Theme',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.brightness_auto),
+                  title: const Text('System default'),
+                  trailing: currentTheme == ThemeMode.system
+                      ? const Icon(Icons.check, color: AppTheme.primaryPurple)
+                      : null,
+                  onTap: () {
+                    onChanged(ThemeMode.system);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.light_mode),
+                  title: const Text('Light'),
+                  trailing: currentTheme == ThemeMode.light
+                      ? const Icon(Icons.check, color: AppTheme.primaryPurple)
+                      : null,
+                  onTap: () {
+                    onChanged(ThemeMode.light);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.dark_mode),
+                  title: const Text('Dark'),
+                  trailing: currentTheme == ThemeMode.dark
+                      ? const Icon(Icons.check, color: AppTheme.primaryPurple)
+                      : null,
+                  onTap: () {
+                    onChanged(ThemeMode.dark);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DeleteAccountTile extends StatelessWidget {
+  final WidgetRef ref;
+  const _DeleteAccountTile({required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: OutlinedButton.icon(
+        onPressed: () => _showDeleteAccountDialog(context),
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+        label: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Colors.red),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Account'),
+          ],
+        ),
+        content: const Text(
+          'This will permanently delete your account and all associated data. '
+          'This action cannot be undone.\n\n'
+          'Type DELETE to confirm.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          _DeleteConfirmButton(ref: ref, parentContext: context),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteConfirmButton extends StatefulWidget {
+  final WidgetRef ref;
+  final BuildContext parentContext;
+  const _DeleteConfirmButton({required this.ref, required this.parentContext});
+
+  @override
+  State<_DeleteConfirmButton> createState() => _DeleteConfirmButtonState();
+}
+
+class _DeleteConfirmButtonState extends State<_DeleteConfirmButton> {
+  final _controller = TextEditingController();
+  bool _isDeleting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 200,
+          child: TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              hintText: 'Type DELETE',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _controller.text == 'DELETE' && !_isDeleting
+              ? () async {
+                  setState(() => _isDeleting = true);
+                  try {
+                    final api = widget.ref.read(apiServiceProvider);
+                    await api.delete('/users/me/');
+                    await widget.ref.read(authProvider.notifier).logout();
+                  } catch (e) {
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+                        SnackBar(content: Text('Error deleting account: $e')),
+                      );
+                    }
+                  }
+                }
+              : null,
+          child: _isDeleting
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text(
+                  'Delete Forever',
+                  style: TextStyle(color: Colors.red),
+                ),
+        ),
+      ],
     );
   }
 }

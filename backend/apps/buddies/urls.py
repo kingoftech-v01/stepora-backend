@@ -6,7 +6,10 @@ Routes:
     /<id>/progress          - Get progress comparison
     /find-match             - Find a compatible buddy
     /pair                   - Create a pairing
+    /<id>/accept            - Accept a pending pairing
+    /<id>/reject            - Reject a pending pairing
     /<id>/encourage         - Send encouragement
+    /history                - Get pairing history
     /<id>/                  - End (DELETE) a pairing
 """
 

@@ -2,7 +2,7 @@
 Views for Dreams app.
 """
 
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -11,12 +11,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
     TaskSerializer, TaskCreateSerializer,
-    ObstacleSerializer, CalibrationResponseSerializer
+    ObstacleSerializer, CalibrationResponseSerializer,
+    DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
+    DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
 )
 from core.permissions import IsOwner, CanCreateDream
 from integrations.openai_service import OpenAIService
@@ -42,10 +44,14 @@ class DreamViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """Get dreams for current user."""
-        return Dream.objects.filter(user=self.request.user).prefetch_related(
-            'goals__tasks'
-        )
+        """Get dreams for current user, including those they collaborate on."""
+        from django.db.models import Q
+        collab_dream_ids = DreamCollaborator.objects.filter(
+            user=self.request.user
+        ).values_list('dream_id', flat=True)
+        return Dream.objects.filter(
+            Q(user=self.request.user) | Q(id__in=collab_dream_ids)
+        ).prefetch_related('goals__tasks').distinct()
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -439,6 +445,488 @@ class DreamViewSet(viewsets.ModelViewSet):
         dream.complete()
 
         return Response(DreamSerializer(dream).data)
+
+    @extend_schema(summary="Duplicate dream", description="Create a deep copy of a dream with all goals and tasks", tags=["Dreams"], responses={201: DreamDetailSerializer})
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        """Deep-copy a dream including goals and tasks."""
+        original = self.get_object()
+
+        # Create the dream copy
+        new_dream = Dream.objects.create(
+            user=request.user,
+            title=f"{original.title} (Copy)",
+            description=original.description,
+            category=original.category,
+            target_date=original.target_date,
+            priority=original.priority,
+            status='active',
+        )
+
+        # Copy goals and tasks
+        for goal in original.goals.all():
+            new_goal = Goal.objects.create(
+                dream=new_dream,
+                title=goal.title,
+                description=goal.description,
+                order=goal.order,
+                estimated_minutes=goal.estimated_minutes,
+                reminder_enabled=goal.reminder_enabled,
+            )
+            for task in goal.tasks.all():
+                Task.objects.create(
+                    goal=new_goal,
+                    title=task.title,
+                    description=task.description,
+                    order=task.order,
+                    duration_mins=task.duration_mins,
+                    recurrence=task.recurrence,
+                )
+
+        # Copy tags
+        for tagging in original.taggings.all():
+            DreamTagging.objects.create(dream=new_dream, tag=tagging.tag)
+
+        return Response(
+            DreamDetailSerializer(new_dream).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @extend_schema(summary="Share dream", description="Share a dream with another user", tags=["Dreams"], request=ShareDreamRequestSerializer, responses={201: SharedDreamSerializer})
+    @action(detail=True, methods=['post'])
+    def share(self, request, pk=None):
+        """Share a dream with another user."""
+        dream = self.get_object()
+        serializer = ShareDreamRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        shared_with_id = serializer.validated_data['shared_with_id']
+        permission = serializer.validated_data.get('permission', 'view')
+
+        if shared_with_id == request.user.id:
+            return Response(
+                {'error': 'You cannot share a dream with yourself.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.users.models import User
+        try:
+            target_user = User.objects.get(id=shared_with_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if SharedDream.objects.filter(dream=dream, shared_with=target_user).exists():
+            return Response(
+                {'error': 'Dream already shared with this user.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        shared = SharedDream.objects.create(
+            dream=dream,
+            shared_by=request.user,
+            shared_with=target_user,
+            permission=permission,
+        )
+
+        return Response(
+            SharedDreamSerializer(shared).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @extend_schema(summary="Unshare dream", description="Remove sharing of a dream with a user", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['delete'], url_path=r'unshare/(?P<user_id>[0-9a-f-]+)')
+    def unshare(self, request, pk=None, user_id=None):
+        """Remove a dream share."""
+        dream = self.get_object()
+        deleted_count, _ = SharedDream.objects.filter(
+            dream=dream,
+            shared_by=request.user,
+            shared_with_id=user_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {'error': 'Share not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({'message': 'Dream unshared.'})
+
+    @extend_schema(summary="Add tag to dream", description="Add a tag to a dream", tags=["Dreams"], request=AddTagSerializer, responses={200: DreamSerializer})
+    @action(detail=True, methods=['post'], url_path='tags')
+    def add_tag(self, request, pk=None):
+        """Add a tag to a dream. Creates the tag if it doesn't exist."""
+        dream = self.get_object()
+        serializer = AddTagSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        tag_name = serializer.validated_data['tag_name'].strip().lower()
+        tag, _ = DreamTag.objects.get_or_create(name=tag_name)
+
+        DreamTagging.objects.get_or_create(dream=dream, tag=tag)
+
+        return Response(DreamSerializer(dream).data)
+
+    @extend_schema(summary="Remove tag from dream", description="Remove a tag from a dream", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['delete'], url_path=r'tags/(?P<tag_name>[^/]+)')
+    def remove_tag(self, request, pk=None, tag_name=None):
+        """Remove a tag from a dream."""
+        dream = self.get_object()
+        deleted_count, _ = DreamTagging.objects.filter(
+            dream=dream,
+            tag__name=tag_name.lower(),
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {'error': 'Tag not found on this dream.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({'message': 'Tag removed.'})
+
+    @extend_schema(
+        summary="Add collaborator",
+        description="Add a collaborator to a dream. Only the dream owner can add collaborators.",
+        request=AddCollaboratorSerializer,
+        responses={201: DreamCollaboratorSerializer},
+        tags=["Dreams"],
+    )
+    @action(detail=True, methods=['post'], url_path='collaborators')
+    def add_collaborator(self, request, pk=None):
+        """Add a collaborator to a dream."""
+        dream = self.get_object()
+
+        if dream.user != request.user:
+            return Response(
+                {'error': 'Only the dream owner can add collaborators.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = AddCollaboratorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        target_user_id = serializer.validated_data['user_id']
+        role = serializer.validated_data.get('role', 'viewer')
+
+        if target_user_id == request.user.id:
+            return Response(
+                {'error': 'You cannot add yourself as a collaborator.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.users.models import User
+        try:
+            target_user = User.objects.get(id=target_user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if DreamCollaborator.objects.filter(dream=dream, user=target_user).exists():
+            return Response(
+                {'error': 'User is already a collaborator on this dream.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        collab = DreamCollaborator.objects.create(
+            dream=dream,
+            user=target_user,
+            role=role,
+        )
+
+        return Response(
+            DreamCollaboratorSerializer(collab).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="List collaborators",
+        description="List all collaborators on a dream.",
+        responses={200: DreamCollaboratorSerializer(many=True)},
+        tags=["Dreams"],
+    )
+    @action(detail=True, methods=['get'], url_path='collaborators/list')
+    def list_collaborators(self, request, pk=None):
+        """List collaborators on a dream."""
+        dream = self.get_object()
+        collabs = DreamCollaborator.objects.filter(
+            dream=dream,
+        ).select_related('user')
+        serializer = DreamCollaboratorSerializer(collabs, many=True)
+        return Response({'collaborators': serializer.data})
+
+    @extend_schema(
+        summary="Remove collaborator",
+        description="Remove a collaborator from a dream. Only the owner can remove.",
+        responses={200: dict},
+        tags=["Dreams"],
+    )
+    @action(detail=True, methods=['delete'], url_path=r'collaborators/(?P<user_id>[0-9a-f-]+)')
+    def remove_collaborator(self, request, pk=None, user_id=None):
+        """Remove a collaborator from a dream."""
+        dream = self.get_object()
+
+        if dream.user != request.user:
+            return Response(
+                {'error': 'Only the dream owner can remove collaborators.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        deleted_count, _ = DreamCollaborator.objects.filter(
+            dream=dream,
+            user_id=user_id,
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {'error': 'Collaborator not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({'message': 'Collaborator removed.'})
+
+
+class SharedWithMeView(generics.ListAPIView):
+    """List dreams shared with the current user."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = SharedDreamSerializer
+
+    def get_queryset(self):
+        return SharedDream.objects.filter(
+            shared_with=self.request.user
+        ).select_related('dream', 'shared_by', 'shared_with')
+
+    @extend_schema(
+        summary="Dreams shared with me",
+        description="Get all dreams that other users have shared with the current user.",
+        tags=["Dreams"],
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'shared_dreams': serializer.data})
+
+
+class DreamTagListView(generics.ListAPIView):
+    """List all available dream tags."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DreamTagSerializer
+    queryset = DreamTag.objects.all()
+
+    @extend_schema(
+        summary="List dream tags",
+        description="Get all available dream tags.",
+        tags=["Dreams"],
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'tags': serializer.data})
+
+
+@extend_schema_view(
+    list=extend_schema(summary="List dream templates", description="Get all active dream templates", tags=["Dream Templates"]),
+    retrieve=extend_schema(summary="Get dream template", description="Get a specific dream template", tags=["Dream Templates"]),
+)
+class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for browsing and using dream templates."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DreamTemplateSerializer
+
+    def get_queryset(self):
+        """Return active templates, optionally filtered by category."""
+        qs = DreamTemplate.objects.filter(is_active=True)
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return qs
+
+    @extend_schema(
+        summary="Use dream template",
+        description="Create a new dream from a template with pre-built goals and tasks.",
+        tags=["Dream Templates"],
+        responses={201: DreamDetailSerializer},
+    )
+    @action(detail=True, methods=['post'])
+    def use(self, request, pk=None):
+        """Create a new dream from a template."""
+        template = self.get_object()
+
+        # Create dream from template
+        dream = Dream.objects.create(
+            user=request.user,
+            title=template.title,
+            description=template.description,
+            category=template.category,
+            status='active',
+        )
+
+        # Create goals and tasks from template
+        for goal_data in template.template_goals:
+            goal = Goal.objects.create(
+                dream=dream,
+                title=goal_data.get('title', ''),
+                description=goal_data.get('description', ''),
+                order=goal_data.get('order', 0),
+                estimated_minutes=goal_data.get('estimated_minutes'),
+            )
+
+            for task_data in goal_data.get('tasks', []):
+                Task.objects.create(
+                    goal=goal,
+                    title=task_data.get('title', ''),
+                    description=task_data.get('description', ''),
+                    order=task_data.get('order', 0),
+                    duration_mins=task_data.get('duration_mins', 30),
+                )
+
+        # Increment usage count
+        DreamTemplate.objects.filter(pk=template.pk).update(
+            usage_count=template.usage_count + 1
+        )
+
+        return Response(
+            DreamDetailSerializer(dream).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="Featured templates",
+        description="Get featured dream templates.",
+        tags=["Dream Templates"],
+        responses={200: DreamTemplateSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Return featured templates."""
+        templates = DreamTemplate.objects.filter(
+            is_active=True,
+            is_featured=True,
+        )[:10]
+        serializer = DreamTemplateSerializer(templates, many=True)
+        return Response(serializer.data)
+
+
+class DreamPDFExportView(views.APIView):
+    """Export a dream as PDF."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Export dream as PDF",
+        description="Generate and download a PDF of the dream with goals and tasks.",
+        tags=["Dreams"],
+    )
+    def get(self, request, dream_id):
+        """Generate PDF for a dream."""
+        from django.http import HttpResponse
+
+        try:
+            dream = Dream.objects.prefetch_related(
+                'goals__tasks', 'obstacles'
+            ).get(id=dream_id, user=request.user)
+        except Dream.DoesNotExist:
+            return Response(
+                {'error': 'Dream not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib import colors
+            from reportlab.lib.units import inch
+            import io
+
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4)
+            styles = getSampleStyleSheet()
+            elements = []
+
+            # Title
+            title_style = ParagraphStyle(
+                'DreamTitle',
+                parent=styles['Title'],
+                fontSize=24,
+                spaceAfter=12,
+            )
+            elements.append(Paragraph(dream.title, title_style))
+            elements.append(Spacer(1, 12))
+
+            # Description
+            elements.append(Paragraph(dream.description, styles['Normal']))
+            elements.append(Spacer(1, 12))
+
+            # Progress
+            elements.append(Paragraph(
+                f"<b>Progress:</b> {dream.progress_percentage:.0f}%",
+                styles['Normal'],
+            ))
+            elements.append(Paragraph(
+                f"<b>Status:</b> {dream.get_status_display()}",
+                styles['Normal'],
+            ))
+            if dream.target_date:
+                elements.append(Paragraph(
+                    f"<b>Target Date:</b> {dream.target_date.strftime('%B %d, %Y')}",
+                    styles['Normal'],
+                ))
+            elements.append(Spacer(1, 24))
+
+            # Goals and Tasks
+            for goal in dream.goals.all().order_by('order'):
+                goal_status = 'Completed' if goal.status == 'completed' else goal.get_status_display()
+                elements.append(Paragraph(
+                    f"<b>Goal {goal.order}:</b> {goal.title} [{goal_status}]",
+                    styles['Heading2'],
+                ))
+                if goal.description:
+                    elements.append(Paragraph(goal.description, styles['Normal']))
+
+                for task in goal.tasks.all().order_by('order'):
+                    check = '[x]' if task.status == 'completed' else '[ ]'
+                    duration = f" ({task.duration_mins}min)" if task.duration_mins else ""
+                    elements.append(Paragraph(
+                        f"&nbsp;&nbsp;&nbsp;&nbsp;{check} {task.title}{duration}",
+                        styles['Normal'],
+                    ))
+
+                elements.append(Spacer(1, 12))
+
+            # Obstacles
+            obstacles = dream.obstacles.all()
+            if obstacles:
+                elements.append(Paragraph("Obstacles", styles['Heading2']))
+                for obs in obstacles:
+                    elements.append(Paragraph(
+                        f"<b>{obs.title}</b> ({obs.get_status_display()})",
+                        styles['Normal'],
+                    ))
+                    if obs.solution:
+                        elements.append(Paragraph(
+                            f"<i>Solution:</i> {obs.solution}",
+                            styles['Normal'],
+                        ))
+                    elements.append(Spacer(1, 6))
+
+            doc.build(elements)
+            buffer.seek(0)
+
+            response = HttpResponse(buffer, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="dream-{dream.id}.pdf"'
+            return response
+
+        except ImportError:
+            return Response(
+                {'error': 'PDF generation requires the reportlab package.'},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
 
 
 @extend_schema_view(

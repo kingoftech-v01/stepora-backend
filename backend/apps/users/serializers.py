@@ -4,7 +4,7 @@ Serializers for Users app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text, sanitize_url
-from .models import User, FcmToken, GamificationProfile, DreamBuddy
+from .models import User, FcmToken, GamificationProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -16,7 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'display_name', 'avatar_url',
+            'id', 'email', 'display_name', 'avatar_url', 'avatar_image',
+            'bio', 'location', 'social_links', 'profile_visibility',
             'timezone', 'subscription', 'subscription_ends',
             'work_schedule', 'notification_prefs', 'app_prefs',
             'xp', 'level', 'streak_days', 'last_activity',
@@ -39,8 +40,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'display_name', 'avatar_url', 'timezone',
-            'subscription', 'subscription_ends',
+            'id', 'email', 'display_name', 'avatar_url', 'avatar_image',
+            'bio', 'location', 'social_links', 'profile_visibility',
+            'timezone', 'subscription', 'subscription_ends',
             'xp', 'level', 'streak_days',
             'is_premium', 'active_dreams_count', 'completed_dreams_count',
             'created_at'
@@ -63,7 +65,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'display_name', 'avatar_url', 'timezone',
+            'display_name', 'avatar_url', 'bio', 'location',
+            'social_links', 'profile_visibility', 'timezone',
             'work_schedule', 'notification_prefs', 'app_prefs'
         ]
 
@@ -116,21 +119,3 @@ class GamificationProfileSerializer(serializers.ModelSerializer):
         return obj.get_attribute_level('personal_growth')
 
 
-class DreamBuddySerializer(serializers.ModelSerializer):
-    """Serializer for Dream Buddy pairings."""
-
-    user1_email = serializers.EmailField(source='user1.email', read_only=True)
-    user1_name = serializers.CharField(source='user1.display_name', read_only=True)
-    user2_email = serializers.EmailField(source='user2.email', read_only=True)
-    user2_name = serializers.CharField(source='user2.display_name', read_only=True)
-
-    class Meta:
-        model = DreamBuddy
-        fields = [
-            'id', 'user1', 'user2',
-            'user1_email', 'user1_name',
-            'user2_email', 'user2_name',
-            'status', 'compatibility_score', 'shared_categories',
-            'started_at', 'ended_at', 'created_at'
-        ]
-        read_only_fields = ['id', 'compatibility_score', 'created_at']

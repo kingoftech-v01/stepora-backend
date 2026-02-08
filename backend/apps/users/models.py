@@ -43,6 +43,38 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, db_index=True)
     display_name = models.CharField(max_length=255, blank=True)
     avatar_url = models.URLField(max_length=500, blank=True)
+    avatar_image = models.ImageField(
+        upload_to='avatars/',
+        blank=True,
+        help_text='Uploaded avatar image file.'
+    )
+    bio = models.TextField(
+        blank=True,
+        default='',
+        help_text='Short user biography.'
+    )
+    location = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text='User location (city, country).'
+    )
+    social_links = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Social media links: {twitter: "", instagram: "", ...}'
+    )
+    VISIBILITY_CHOICES = [
+        ('public', 'Public'),
+        ('friends', 'Friends Only'),
+        ('private', 'Private'),
+    ]
+    profile_visibility = models.CharField(
+        max_length=20,
+        choices=VISIBILITY_CHOICES,
+        default='public',
+        help_text='Who can see this profile.'
+    )
     timezone = models.CharField(max_length=50, default='Europe/Paris')
 
     # Subscription
@@ -141,6 +173,29 @@ class User(AbstractBaseUser, PermissionsMixin):
         return new_level > self.level  # Return True if leveled up
 
 
+class EmailChangeRequest(models.Model):
+    """Stores pending email change requests."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_change_requests')
+    new_email = models.EmailField()
+    token = models.CharField(max_length=128, unique=True, db_index=True)
+    is_verified = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'email_change_requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.new_email}"
+
+    @property
+    def is_expired(self):
+        return django_timezone.now() > self.expires_at
+
+
 class FcmToken(models.Model):
     """Firebase Cloud Messaging tokens for push notifications."""
 
@@ -211,35 +266,3 @@ class GamificationProfile(models.Model):
         self.save()
 
 
-class DreamBuddy(models.Model):
-    """Dream Buddy pairing for accountability."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='buddy_as_user1')
-    user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='buddy_as_user2')
-
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-
-    # Matching criteria
-    compatibility_score = models.FloatField(default=0.0)
-    shared_categories = models.JSONField(default=list)
-
-    started_at = models.DateTimeField(null=True, blank=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'dream_buddies'
-        ordering = ['-created_at']
-        unique_together = [['user1', 'user2']]
-
-    def __str__(self):
-        return f"Buddy: {self.user1.email} <-> {self.user2.email} ({self.status})"

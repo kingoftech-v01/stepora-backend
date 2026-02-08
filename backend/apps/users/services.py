@@ -6,7 +6,8 @@ from typing import Optional, List, Tuple
 from datetime import timedelta
 from django.db.models import Q, Count
 from django.utils import timezone
-from .models import User, DreamBuddy
+from .models import User
+from apps.buddies.models import BuddyPairing
 
 
 class BuddyMatchingService:
@@ -82,7 +83,7 @@ class BuddyMatchingService:
         thirty_days_ago = timezone.now() - timedelta(days=30)
 
         # Get users already paired with this user
-        existing_pairs = DreamBuddy.objects.filter(
+        existing_pairs = BuddyPairing.objects.filter(
             Q(user1=user) | Q(user2=user),
             status__in=['pending', 'active']
         ).values_list('user1_id', 'user2_id')
@@ -221,7 +222,7 @@ class BuddyMatchingService:
         target_user: User,
         compatibility_score: float,
         shared_categories: List[str]
-    ) -> DreamBuddy:
+    ) -> BuddyPairing:
         """
         Create a new buddy pairing request.
 
@@ -232,14 +233,13 @@ class BuddyMatchingService:
             shared_categories: List of shared dream categories
 
         Returns:
-            Created DreamBuddy instance
+            Created BuddyPairing instance
         """
-        buddy_pair = DreamBuddy.objects.create(
+        buddy_pair = BuddyPairing.objects.create(
             user1=requesting_user,
             user2=target_user,
             status='pending',
             compatibility_score=compatibility_score,
-            shared_categories=shared_categories
         )
 
         # Send notification to target_user about buddy request

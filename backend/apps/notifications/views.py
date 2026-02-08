@@ -7,8 +7,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
 from .models import Notification, NotificationTemplate
 from .serializers import (
@@ -78,6 +79,47 @@ class NotificationViewSet(viewsets.ModelViewSet):
         ).count()
 
         return Response({'unread_count': count})
+
+    @extend_schema(summary="Mark as opened", description="Mark a notification as opened/interacted with", tags=["Notifications"], responses={200: NotificationSerializer})
+    @action(detail=True, methods=['post'])
+    def opened(self, request, pk=None):
+        """Mark notification as opened (for analytics tracking)."""
+        notification = self.get_object()
+        notification.mark_opened()
+        return Response(NotificationSerializer(notification).data)
+
+    @extend_schema(summary="Grouped notifications", description="Get notifications grouped by type with counts", tags=["Notifications"], responses={200: dict})
+    @action(detail=False, methods=['get'])
+    def grouped(self, request):
+        """Get notifications grouped by type."""
+        groups = Notification.objects.filter(
+            user=request.user,
+            status='sent',
+        ).values('notification_type').annotate(
+            total=Count('id'),
+            unread=Count('id', filter=Count('id', filter=None) if False else None),
+        ).order_by('-total')
+
+        # Build proper grouped response
+        result = []
+        for g in Notification.objects.filter(
+            user=request.user, status='sent'
+        ).values('notification_type').annotate(
+            total=Count('id'),
+        ).order_by('-total'):
+            unread = Notification.objects.filter(
+                user=request.user,
+                status='sent',
+                notification_type=g['notification_type'],
+                read_at__isnull=True,
+            ).count()
+            result.append({
+                'type': g['notification_type'],
+                'total': g['total'],
+                'unread': unread,
+            })
+
+        return Response({'groups': result})
 
 
 @extend_schema_view(

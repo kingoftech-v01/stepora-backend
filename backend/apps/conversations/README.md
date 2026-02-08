@@ -11,6 +11,19 @@ The Conversations app manages interactions between the user and the AI coach:
 
 ## Models
 
+### ConversationTemplate
+
+Reusable conversation templates for common AI coaching scenarios.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier |
+| name | CharField(200) | Template name |
+| description | TextField | Template description |
+| conversation_type | CharField | Type of conversation this template creates |
+| system_prompt | TextField | Pre-configured system prompt |
+| is_active | Boolean | Whether template is available |
+
 ### Conversation
 
 | Field | Type | Description |
@@ -62,9 +75,17 @@ The Conversations app manages interactions between the user and the AI coach:
 - `DELETE /api/conversations/{id}/` - Delete
 - `GET /api/conversations/{id}/messages/` - List messages
 - `POST /api/conversations/{id}/messages/` - Send a message (non-streaming)
+- `POST /api/conversations/{id}/send-voice/` - Send a voice message (audio file upload, transcribed via OpenAI Whisper)
+- `POST /api/conversations/{id}/send-image/` - Send an image for analysis (processed via GPT-4V)
+- `GET /api/conversations/{id}/export/` - Export conversation (supports PDF and JSON formats)
+
+### Conversation Templates
+- `GET /api/conversation-templates/` - List available conversation templates
+- `POST /api/conversation-templates/{id}/use/` - Start a new conversation from a template
 
 ### WebSocket
-- `ws://host/ws/conversations/{id}/` - Real-time chat
+- `ws://host/ws/conversations/{id}/` - Real-time AI chat
+- `ws://host/ws/buddy-chat/{pairing_id}/` - Real-time buddy-to-buddy chat (BuddyChatConsumer)
 
 **WebSocket actions:**
 ```json
@@ -87,14 +108,25 @@ The Conversations app manages interactions between the user and the AI coach:
 - `ConversationListSerializer` - Lightweight version
 - `MessageSerializer` - Full message
 
-## WebSocket Consumer
+## WebSocket Consumers
 
-The `ChatConsumer` handles:
+### ChatConsumer
+
+The `ChatConsumer` handles AI-powered conversations:
 1. Authentication via DRF Token (query param for WebSocket, header for REST)
 2. Receiving user messages
 3. Streaming GPT-4 responses
 4. Typing indicators
 5. Error handling
+
+### BuddyChatConsumer
+
+The `BuddyChatConsumer` handles real-time messaging between Dream Buddies:
+1. Authentication via DRF Token (query param)
+2. Buddy pairing verification (both users must be in an active pairing)
+3. Real-time message delivery between paired users
+4. Typing indicators
+5. Read receipts
 
 ## OpenAI Integration
 
@@ -139,8 +171,14 @@ websocket_urlpatterns = [
 ]
 ```
 
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `auto_summarize_conversation` | Automatically generates a ConversationSummary when a conversation exceeds a configurable message threshold, preserving key points for long-term context |
+
 ## Dependencies
 
 - `channels` - WebSocket support
 - `channels-redis` - Redis channel layer
-- `openai` - OpenAI API
+- `openai` - OpenAI API (GPT-4, GPT-4V, Whisper)

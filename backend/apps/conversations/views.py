@@ -6,14 +6,19 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from .models import Conversation, Message
+from django.conf import settings
+from django.http import JsonResponse
+
+from .models import Conversation, Message, ConversationTemplate
 from .serializers import (
     ConversationSerializer, ConversationDetailSerializer, ConversationCreateSerializer,
-    MessageSerializer, MessageCreateSerializer
+    MessageSerializer, MessageCreateSerializer, ConversationTemplateSerializer
 )
+from .tasks import transcribe_voice_message, summarize_conversation
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 
@@ -89,6 +94,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 metadata={'tokens_used': response['tokens_used']}
             )
 
+            # Handle function calls from AI
+            if response.get('function_call'):
+                fc = response['function_call']
+                assistant_message.metadata['function_call'] = fc
+                assistant_message.save(update_fields=['metadata'])
+
+            # Trigger summarization if threshold reached
+            if conversation.total_messages % 20 == 0 and conversation.total_messages > 0:
+                summarize_conversation.delay(str(conversation.id))
+
             return Response({
                 'user_message': {
                     'role': 'user',
@@ -103,6 +118,95 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @extend_schema(summary="Send voice message", description="Upload audio for transcription and AI response", tags=["Conversations"])
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='send-voice')
+    def send_voice(self, request, pk=None):
+        """Send a voice message. Audio is transcribed via Whisper and AI responds."""
+        import os
+        from django.core.files.storage import default_storage
+
+        conversation = self.get_object()
+        audio_file = request.FILES.get('audio')
+        if not audio_file:
+            return Response({'error': 'No audio file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate file size (max 25MB — Whisper limit)
+        if audio_file.size > 25 * 1024 * 1024:
+            return Response({'error': 'Audio file too large. Max 25MB.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save audio file
+        file_path = f'voice_messages/{conversation.id}/{audio_file.name}'
+        saved_path = default_storage.save(file_path, audio_file)
+        audio_url = default_storage.url(saved_path)
+
+        # Create message with audio_url
+        message = conversation.add_message(
+            'user',
+            '[Voice message]',
+            metadata={'type': 'voice'},
+        )
+        Message.objects.filter(id=message.id).update(audio_url=audio_url)
+
+        # Queue async transcription
+        transcribe_voice_message.delay(str(message.id))
+
+        # Trigger summarization if threshold reached
+        if conversation.total_messages % 20 == 0 and conversation.total_messages > 0:
+            summarize_conversation.delay(str(conversation.id))
+
+        return Response({
+            'message': MessageSerializer(Message.objects.get(id=message.id)).data,
+            'status': 'transcription_queued',
+        }, status=status.HTTP_201_CREATED)
+
+    @extend_schema(summary="Send image message", description="Upload image for GPT-4 Vision analysis", tags=["Conversations"])
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='send-image')
+    def send_image(self, request, pk=None):
+        """Send an image for GPT-4 Vision analysis in the conversation context."""
+        from django.core.files.storage import default_storage
+
+        conversation = self.get_object()
+        image_file = request.FILES.get('image')
+        user_prompt = request.data.get('prompt', '')
+
+        if not image_file:
+            return Response({'error': 'No image file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate file size (max 20MB)
+        if image_file.size > 20 * 1024 * 1024:
+            return Response({'error': 'Image too large. Max 20MB.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save image
+        file_path = f'chat_images/{conversation.id}/{image_file.name}'
+        saved_path = default_storage.save(file_path, image_file)
+        image_url = default_storage.url(saved_path)
+
+        # Save user message with image
+        user_content = user_prompt if user_prompt else '[Image shared]'
+        user_message = conversation.add_message(
+            'user', user_content,
+            metadata={'type': 'image'},
+        )
+        Message.objects.filter(id=user_message.id).update(image_url=image_url)
+
+        # Analyze image with GPT-4 Vision
+        ai_service = OpenAIService()
+        try:
+            result = ai_service.analyze_image(image_url, user_prompt)
+            assistant_message = conversation.add_message(
+                'assistant',
+                result['content'],
+                metadata={'tokens_used': result['tokens_used'], 'type': 'image_analysis'},
+            )
+
+            return Response({
+                'user_message': MessageSerializer(Message.objects.get(id=user_message.id)).data,
+                'assistant_message': MessageSerializer(assistant_message).data,
+            })
+
+        except OpenAIError as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(summary="Get messages", description="Get all messages for a conversation", tags=["Conversations"], responses={200: MessageSerializer(many=True)})
     @action(detail=True, methods=['get'])
@@ -119,6 +223,80 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data)
 
+    @extend_schema(summary="Export conversation", description="Export a conversation as JSON or PDF", tags=["Conversations"], responses={200: dict})
+    @action(detail=True, methods=['get'])
+    def export(self, request, pk=None):
+        """Export conversation in JSON or PDF format."""
+        conversation = self.get_object()
+        export_format = request.query_params.get('format', 'json')
+
+        messages = conversation.messages.order_by('created_at')
+
+        if export_format == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import letter
+                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+                from reportlab.lib.styles import getSampleStyleSheet
+                import io
+                from django.http import HttpResponse
+
+                buffer = io.BytesIO()
+                doc = SimpleDocTemplate(buffer, pagesize=letter)
+                styles = getSampleStyleSheet()
+                story = []
+
+                # Title
+                story.append(Paragraph(
+                    f"Conversation: {conversation.conversation_type}",
+                    styles['Title']
+                ))
+                story.append(Spacer(1, 12))
+
+                # Messages
+                for msg in messages:
+                    role_label = "You" if msg.role == 'user' else "DreamPlanner"
+                    story.append(Paragraph(
+                        f"<b>{role_label}</b> ({msg.created_at.strftime('%Y-%m-%d %H:%M')})",
+                        styles['Heading4']
+                    ))
+                    # Escape special chars for reportlab
+                    content = msg.content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    story.append(Paragraph(content, styles['Normal']))
+                    story.append(Spacer(1, 8))
+
+                doc.build(story)
+                buffer.seek(0)
+
+                response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="conversation_{conversation.id}.pdf"'
+                return response
+
+            except ImportError:
+                return Response(
+                    {'error': 'PDF export is not available. Install reportlab.'},
+                    status=status.HTTP_501_NOT_IMPLEMENTED
+                )
+
+        # Default: JSON export
+        data = {
+            'conversation': {
+                'id': str(conversation.id),
+                'type': conversation.conversation_type,
+                'created_at': conversation.created_at.isoformat(),
+                'total_messages': conversation.total_messages,
+            },
+            'messages': [
+                {
+                    'role': msg.role,
+                    'content': msg.content,
+                    'created_at': msg.created_at.isoformat(),
+                }
+                for msg in messages
+            ],
+        }
+
+        return Response(data)
+
 
 @extend_schema_view(
     list=extend_schema(summary="List messages", description="Get all messages for the current user", tags=["Messages"]),
@@ -133,3 +311,15 @@ class MessageViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Get messages for current user's conversations."""
         return Message.objects.filter(conversation__user=self.request.user)
+
+
+@extend_schema_view(
+    list=extend_schema(summary="List conversation templates", description="Get all available conversation templates", tags=["Conversations"]),
+    retrieve=extend_schema(summary="Get template", description="Get a specific conversation template", tags=["Conversations"]),
+)
+class ConversationTemplateViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only access to conversation templates."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ConversationTemplateSerializer
+    queryset = ConversationTemplate.objects.filter(is_active=True)

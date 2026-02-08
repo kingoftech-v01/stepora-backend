@@ -85,6 +85,53 @@ A time-bounded challenge within a circle.
 - `is_active` - True if within date range and status is `active`
 - `participant_count` - Number of participants
 
+### PostReaction
+
+Reactions on circle posts (emoji-style).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| post | FK(CirclePost) | Reacted post (related_name: `reactions`) |
+| user | FK(User) | Reacting user (related_name: `post_reactions`) |
+| reaction_type | CharField(20) | `thumbs_up`, `fire`, `clap`, `heart` |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `post_reactions`
+**Constraint:** `unique_together = [['post', 'user', 'reaction_type']]`
+
+### CircleInvitation
+
+Invitation system for private circles, supporting both direct and link-based invites.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| circle | FK(Circle) | Target circle (related_name: `invitations`) |
+| invited_by | FK(User) | Inviting user (related_name: `sent_circle_invitations`) |
+| invited_user | FK(User) | Invited user (nullable, for direct invites) |
+| invite_code | CharField(50) | Unique invite code (for link-based invites) |
+| status | CharField(20) | `pending`, `accepted`, `declined`, `expired` (default: `pending`) |
+| expires_at | DateTimeField | Invitation expiry (nullable) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `circle_invitations`
+
+### ChallengeProgress
+
+Tracks individual user progress within a challenge.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| challenge | FK(CircleChallenge) | Parent challenge (related_name: `progress_entries`) |
+| user | FK(User) | Participant (related_name: `challenge_progress`) |
+| progress_data | JSONField | Structured progress data |
+| updated_at | DateTimeField | Auto-set on update |
+
+**DB table:** `challenge_progress`
+**Constraint:** `unique_together = [['challenge', 'user']]`
+
 ## API Endpoints
 
 ### Circles
@@ -94,11 +141,30 @@ A time-bounded challenge within a circle.
 | GET | `/circles/?filter={my\|public\|recommended}` | List circles with filtering |
 | POST | `/circles/` | Create a circle (creator auto-added as admin) |
 | GET | `/circles/{id}/` | Circle detail with members and challenges |
+| PUT | `/circles/{id}/` | Edit circle details (admin only) |
+| DELETE | `/circles/{id}/` | Delete a circle (admin only) |
 | POST | `/circles/{id}/join/` | Join a public circle |
 | POST | `/circles/{id}/leave/` | Leave a circle |
 | GET | `/circles/{id}/feed/` | Get circle post feed (members only) |
 | POST | `/circles/{id}/posts/` | Create a post in the circle (members only) |
+| PUT | `/circles/{id}/posts/{post_id}/` | Edit a post (author only) |
+| DELETE | `/circles/{id}/posts/{post_id}/` | Delete a post (author or moderator+) |
+| POST | `/circles/{id}/posts/{post_id}/react/` | React to a post (body: `{"reaction_type": "fire"}`) |
 | GET | `/circles/{id}/challenges/` | List active/upcoming challenges |
+| POST | `/circles/{id}/members/{user_id}/promote/` | Promote member to moderator (admin only) |
+| POST | `/circles/{id}/members/{user_id}/demote/` | Demote moderator to member (admin only) |
+| DELETE | `/circles/{id}/members/{user_id}/` | Remove a member from the circle (moderator+ only) |
+
+### Invitations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/circles/{id}/invite/` | Send a direct invitation to a user |
+| POST | `/circles/{id}/invite-link/` | Generate an invite code/link for the circle |
+| POST | `/circles/join-by-code/` | Join a circle using an invite code |
+| GET | `/circles/invitations/` | List pending invitations for the current user |
+| POST | `/circles/invitations/{id}/accept/` | Accept an invitation |
+| POST | `/circles/invitations/{id}/decline/` | Decline an invitation |
 
 **ViewSet:** `CircleViewSet` (ModelViewSet)
 - Permission: `IsAuthenticated`
@@ -137,8 +203,12 @@ A time-bounded challenge within a circle.
 - All endpoints require `IsAuthenticated`
 - Feed viewing and posting require circle membership (checked in view logic)
 - Leaving as the last admin is blocked if other members exist
-- Joining private circles returns 403 (invite system not yet implemented)
+- Joining private circles requires an invitation (direct or via invite code)
 - Challenge joining requires circle membership
+- Post editing restricted to the original author
+- Post deletion allowed for the author, moderators, and admins
+- Member removal requires moderator or admin role
+- Moderator promotion/demotion requires admin role
 
 ## Admin
 
