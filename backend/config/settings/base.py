@@ -95,30 +95,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-# Database
-# Set USE_SQLITE=1 in environment to use SQLite for local development without PostgreSQL
-if os.getenv('USE_SQLITE'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+# Database (overridden per environment in development.py / production.py)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'dreamplanner'),
+        'USER': os.getenv('DB_USER', 'dreamplanner'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'dreamplanner'),
-            'USER': os.getenv('DB_USER', 'dreamplanner'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-            'CONN_MAX_AGE': 600,
-            'OPTIONS': {
-                'connect_timeout': 10,
-            },
-        }
-    }
+}
 
 # Custom user model
 AUTH_USER_MODEL = 'users.User'

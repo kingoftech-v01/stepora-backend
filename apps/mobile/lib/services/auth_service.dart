@@ -56,6 +56,12 @@ class AuthService {
     return User.fromJson(response.data);
   }
 
+  Future<void> resetPassword(String email) async {
+    await _api.post(ApiConstants.passwordReset, data: {
+      'email': email,
+    });
+  }
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await _api.post(ApiConstants.passwordChange, data: {
       'old_password': oldPassword,

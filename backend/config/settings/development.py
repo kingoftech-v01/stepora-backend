@@ -1,24 +1,55 @@
 """
-Development settings
+Development settings - DEBUG=True
+Uses SQLite, in-memory channels, local cache. No Docker/Redis/Postgres needed.
 """
 
 from .base import *
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
-# CORS - Allow all origins in development
+# --- Database: SQLite for local development ---
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# --- Channels: in-memory (no Redis needed) ---
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+# --- Cache: local memory (no Redis needed) ---
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'dreamplanner-dev',
+    }
+}
+
+# --- Celery: run tasks synchronously (no Redis/worker needed) ---
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+
+# --- CORS: allow all origins ---
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Email backend (console in development)
+# --- Email: print to console ---
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Disable SSL redirect in development
+# --- Security: disabled for local dev ---
 SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
-# Optional: Django Debug Toolbar
+# --- Optional dev tools ---
 try:
     import debug_toolbar  # noqa: F401
     INSTALLED_APPS += ['debug_toolbar']
@@ -27,17 +58,12 @@ try:
 except ImportError:
     pass
 
-# Optional: Django Extensions
 try:
     import django_extensions  # noqa: F401
     INSTALLED_APPS += ['django_extensions']
 except ImportError:
     pass
 
-# Logging level
+# --- Logging ---
 LOGGING['root']['level'] = 'DEBUG'
 LOGGING['loggers']['apps']['level'] = 'DEBUG'
-
-# Celery eager execution in development (synchronous)
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
