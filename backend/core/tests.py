@@ -50,7 +50,6 @@ class TestPermissions:
 
         # Create another user
         other_user = User.objects.create(
-            firebase_uid=f'other_{user_data["firebase_uid"]}',
             email=f'other_{user_data["email"]}'
         )
 

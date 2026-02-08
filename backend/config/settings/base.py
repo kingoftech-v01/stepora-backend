@@ -27,13 +27,24 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # Sites framework (required by allauth)
+    'django.contrib.sites',
+
     # Third party apps
     'rest_framework',
+    'rest_framework.authtoken',
     'django_filters',
     'corsheaders',
     'channels',
     'django_celery_beat',
     'drf_spectacular',
+
+    # Authentication
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
 
     # Local apps
     'apps.users',
@@ -60,6 +71,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -101,6 +113,15 @@ DATABASES = {
 
 # Custom user model
 AUTH_USER_MODEL = 'users.User'
+
+# Sites framework
+SITE_ID = 1
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -154,7 +175,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'core.authentication.FirebaseAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -255,14 +277,19 @@ OPENAI_ORGANIZATION_ID = os.getenv('OPENAI_ORGANIZATION_ID')
 OPENAI_MODEL = 'gpt-4-turbo-preview'
 OPENAI_TIMEOUT = 30
 
-# Firebase Configuration
-FIREBASE_CONFIG = {
-    'type': 'service_account',
-    'project_id': os.getenv('FIREBASE_PROJECT_ID'),
-    'private_key_id': os.getenv('FIREBASE_PRIVATE_KEY_ID'),
-    'private_key': os.getenv('FIREBASE_PRIVATE_KEY', '').replace('\\n', '\n'),
-    'client_email': os.getenv('FIREBASE_CLIENT_EMAIL'),
-    'client_id': os.getenv('FIREBASE_CLIENT_ID'),
+# django-allauth Configuration
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+
+# dj-rest-auth Configuration
+REST_AUTH = {
+    'USE_JWT': False,
+    'TOKEN_MODEL': 'rest_framework.authtoken.models.Token',
+    'USER_DETAILS_SERIALIZER': 'apps.users.serializers.UserSerializer',
 }
 
 # CORS Configuration

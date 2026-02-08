@@ -107,7 +107,6 @@ def test_user(db):
     """Create a test user without triggering the Stripe signal."""
     with patch('apps.subscriptions.signals.StripeService'):
         user = User.objects.create(
-            firebase_uid=f'test_uid_{uuid.uuid4().hex[:8]}',
             email=f'test_{uuid.uuid4().hex[:8]}@example.com',
             display_name='Test User',
         )
@@ -677,7 +676,6 @@ class TestSignals:
         mock_stripe_create.return_value = Mock(id='cus_signal_test')
 
         user = User.objects.create(
-            firebase_uid=f'signal_test_{uuid.uuid4().hex[:8]}',
             email=f'signal_{uuid.uuid4().hex[:8]}@example.com',
             display_name='Signal Test',
         )
@@ -692,7 +690,6 @@ class TestSignals:
         mock_stripe_create.side_effect = Exception('Stripe is down')
 
         user = User.objects.create(
-            firebase_uid=f'signal_fail_{uuid.uuid4().hex[:8]}',
             email=f'sigfail_{uuid.uuid4().hex[:8]}@example.com',
             display_name='Signal Fail Test',
         )

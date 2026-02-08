@@ -83,7 +83,6 @@ def ended_season(db):
 def league_user(db):
     """Create a test user for league tests."""
     return User.objects.create(
-        firebase_uid=f'league_test_{uuid.uuid4().hex[:8]}',
         email=f'league_{uuid.uuid4().hex[:8]}@example.com',
         display_name='League Tester',
         xp=0,
@@ -110,7 +109,6 @@ def multiple_league_users(db):
     xp_values = [100, 500, 1500, 3500, 7000, 12000, 25000, 200, 800, 2000]
     for i, xp in enumerate(xp_values):
         user = User.objects.create(
-            firebase_uid=f'lb_user_{i}_{uuid.uuid4().hex[:8]}',
             email=f'lb_user_{i}_{uuid.uuid4().hex[:8]}@example.com',
             display_name=f'User {i}',
             xp=xp,

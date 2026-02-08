@@ -22,7 +22,6 @@ def matching_service():
 def user_with_dreams(db):
     """Create a user with active dreams."""
     user = User.objects.create(
-        firebase_uid='test-user-1',
         email='user1@test.com',
         display_name='Test User 1',
         timezone='Europe/Paris',
@@ -51,7 +50,6 @@ def user_with_dreams(db):
 def potential_buddy(db):
     """Create a potential buddy user."""
     user = User.objects.create(
-        firebase_uid='test-user-2',
         email='user2@test.com',
         display_name='Test User 2',
         timezone='Europe/Paris',
@@ -73,7 +71,6 @@ def potential_buddy(db):
 def incompatible_user(db):
     """Create an incompatible user (inactive, different categories)."""
     user = User.objects.create(
-        firebase_uid='test-user-3',
         email='user3@test.com',
         display_name='Test User 3',
         timezone='America/New_York',
@@ -171,7 +168,6 @@ class TestBuddyMatchingService:
         """Test activity similarity with same streak."""
         # Create user with same streak
         similar_user = User.objects.create(
-            firebase_uid='similar-streak',
             email='similar@test.com',
             streak_days=user_with_dreams.streak_days
         )
@@ -187,7 +183,6 @@ class TestBuddyMatchingService:
     ):
         """Test activity similarity with different streaks."""
         different_user = User.objects.create(
-            firebase_uid='different-streak',
             email='different@test.com',
             streak_days=user_with_dreams.streak_days + 50
         )
@@ -213,7 +208,6 @@ class TestBuddyMatchingService:
     ):
         """Test timezone proximity with different region."""
         different_tz_user = User.objects.create(
-            firebase_uid='different-tz',
             email='differenttz@test.com',
             timezone='America/New_York'
         )
@@ -229,7 +223,6 @@ class TestBuddyMatchingService:
     ):
         """Test level similarity with same level."""
         same_level_user = User.objects.create(
-            firebase_uid='same-level',
             email='samelevel@test.com',
             level=user_with_dreams.level
         )

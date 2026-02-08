@@ -15,15 +15,15 @@ django_asgi_app = get_asgi_application()
 
 # Import routing after Django setup
 from apps.conversations.routing import websocket_urlpatterns
-from core.websocket_auth import FirebaseAuthMiddlewareStack
+from core.websocket_auth import TokenAuthMiddlewareStack
 
 application = ProtocolTypeRouter({
     # HTTP
     "http": django_asgi_app,
 
-    # WebSocket - Using Firebase authentication
+    # WebSocket - Using Token authentication
     "websocket": AllowedHostsOriginValidator(
-        FirebaseAuthMiddlewareStack(
+        TokenAuthMiddlewareStack(
             URLRouter(websocket_urlpatterns)
         )
     ),

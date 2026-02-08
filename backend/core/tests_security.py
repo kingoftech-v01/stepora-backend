@@ -3,8 +3,9 @@ Tests for security features: sanitization and WebSocket authentication.
 """
 
 import pytest
-from unittest.mock import patch, Mock, AsyncMock
+from unittest.mock import AsyncMock
 from django.contrib.auth.models import AnonymousUser
+from rest_framework.authtoken.models import Token
 
 from .sanitizers import (
     sanitize_text,
@@ -13,9 +14,8 @@ from .sanitizers import (
     sanitize_json_values
 )
 from .websocket_auth import (
-    get_user_from_firebase_token,
-    FirebaseWebSocketMiddleware,
-    FirebaseWebSocketAuthMiddleware
+    get_user_from_token,
+    TokenWebSocketMiddleware,
 )
 
 
@@ -205,115 +205,92 @@ class TestSanitizeJsonValues:
 
 
 class TestWebSocketAuth:
-    """Tests for WebSocket authentication."""
+    """Tests for Token-based WebSocket authentication."""
 
     @pytest.mark.asyncio
-    async def test_get_user_anonymous_when_no_token(self, db):
-        """Test returns AnonymousUser when no token provided."""
-        user = await get_user_from_firebase_token(None)
+    async def test_get_user_none_token(self, db):
+        """Test returns AnonymousUser when None token provided."""
+        user = await get_user_from_token(None)
         assert isinstance(user, AnonymousUser)
 
     @pytest.mark.asyncio
-    async def test_get_user_anonymous_when_empty_token(self, db):
-        """Test returns AnonymousUser when empty token."""
-        user = await get_user_from_firebase_token('')
+    async def test_get_user_empty_token(self, db):
+        """Test returns AnonymousUser when empty string token provided."""
+        user = await get_user_from_token('')
         assert isinstance(user, AnonymousUser)
 
     @pytest.mark.asyncio
-    @patch('core.websocket_auth.firebase_auth')
-    async def test_get_user_success(self, mock_firebase, db):
-        """Test successful user retrieval."""
+    async def test_get_user_success(self, db):
+        """Test successful user retrieval with a valid DRF token."""
         from apps.users.models import User
 
         # Create test user
-        test_user = User.objects.create(
-            firebase_uid='test-firebase-uid',
-            email='test@test.com'
+        test_user = User.objects.create_user(
+            email='test@test.com',
+            password='testpass123'
         )
 
-        # Mock Firebase verification
-        mock_firebase.verify_id_token.return_value = {
-            'uid': 'test-firebase-uid',
-            'email': 'test@test.com'
-        }
+        # Create a DRF token for the user
+        token = Token.objects.create(user=test_user)
 
-        user = await get_user_from_firebase_token('valid-token')
+        user = await get_user_from_token(token.key)
 
-        assert user.firebase_uid == 'test-firebase-uid'
+        assert user.pk == test_user.pk
         assert user.email == 'test@test.com'
 
     @pytest.mark.asyncio
-    @patch('core.websocket_auth.firebase_auth')
-    async def test_get_user_invalid_token(self, mock_firebase, db):
-        """Test returns AnonymousUser for invalid token."""
-        from firebase_admin.auth import InvalidIdTokenError
-
-        mock_firebase.verify_id_token.side_effect = InvalidIdTokenError('Invalid')
-        mock_firebase.InvalidIdTokenError = InvalidIdTokenError
-
-        user = await get_user_from_firebase_token('invalid-token')
+    async def test_get_user_invalid_token(self, db):
+        """Test returns AnonymousUser for a non-existent token key."""
+        user = await get_user_from_token('nonexistent-token-key-12345')
         assert isinstance(user, AnonymousUser)
 
-    @pytest.mark.asyncio
-    @patch('core.websocket_auth.firebase_auth')
-    async def test_get_user_expired_token(self, mock_firebase, db):
-        """Test returns AnonymousUser for expired token."""
-        from firebase_admin.auth import ExpiredIdTokenError
 
-        mock_firebase.verify_id_token.side_effect = ExpiredIdTokenError('Expired', 'cause')
-        mock_firebase.ExpiredIdTokenError = ExpiredIdTokenError
-
-        user = await get_user_from_firebase_token('expired-token')
-        assert isinstance(user, AnonymousUser)
-
-    @pytest.mark.asyncio
-    @patch('core.websocket_auth.firebase_auth')
-    async def test_creates_user_if_not_exists(self, mock_firebase, db):
-        """Test creates user if doesn't exist."""
-        from apps.users.models import User
-
-        mock_firebase.verify_id_token.return_value = {
-            'uid': 'new-firebase-uid',
-            'email': 'new@test.com',
-            'name': 'New User'
-        }
-
-        user = await get_user_from_firebase_token('valid-token')
-
-        assert user.firebase_uid == 'new-firebase-uid'
-        assert user.email == 'new@test.com'
-        assert User.objects.filter(firebase_uid='new-firebase-uid').exists()
-
-
-class TestFirebaseWebSocketMiddleware:
-    """Tests for Firebase WebSocket Middleware."""
+class TestTokenWebSocketMiddleware:
+    """Tests for Token WebSocket Middleware."""
 
     @pytest.mark.asyncio
     async def test_extracts_token_from_query_string(self, db):
-        """Test token extraction from query string."""
-        middleware = FirebaseWebSocketMiddleware(inner=AsyncMock())
+        """Test middleware extracts token from query string and authenticates user."""
+        from apps.users.models import User
+
+        # Create user and token
+        test_user = User.objects.create_user(
+            email='ws@test.com',
+            password='testpass123'
+        )
+        token = Token.objects.create(user=test_user)
+
+        inner = AsyncMock()
+        middleware = TokenWebSocketMiddleware(inner)
 
         scope = {
             'type': 'websocket',
-            'query_string': b'token=test-token',
+            'query_string': f'token={token.key}'.encode(),
         }
 
-        with patch('core.websocket_auth.get_user_from_firebase_token') as mock_get_user:
-            mock_get_user.return_value = AnonymousUser()
-            await middleware(scope, AsyncMock(), AsyncMock())
-            mock_get_user.assert_called_once_with('test-token')
+        receive = AsyncMock()
+        send = AsyncMock()
+
+        await middleware(scope, receive, send)
+
+        # Verify the user was set on the scope
+        assert scope['user'].pk == test_user.pk
+        assert scope['user'].email == 'ws@test.com'
 
     @pytest.mark.asyncio
-    async def test_handles_empty_query_string(self, db):
-        """Test handling empty query string."""
-        middleware = FirebaseWebSocketMiddleware(inner=AsyncMock())
+    async def test_handles_missing_token(self, db):
+        """Test middleware sets AnonymousUser when no token in query string."""
+        inner = AsyncMock()
+        middleware = TokenWebSocketMiddleware(inner)
 
         scope = {
             'type': 'websocket',
             'query_string': b'',
         }
 
-        with patch('core.websocket_auth.get_user_from_firebase_token') as mock_get_user:
-            mock_get_user.return_value = AnonymousUser()
-            await middleware(scope, AsyncMock(), AsyncMock())
-            mock_get_user.assert_called_once_with(None)
+        receive = AsyncMock()
+        send = AsyncMock()
+
+        await middleware(scope, receive, send)
+
+        assert isinstance(scope['user'], AnonymousUser)

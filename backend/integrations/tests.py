@@ -1,5 +1,5 @@
 """
-Tests for integration services (OpenAI, FCM, Firebase).
+Tests for integration services (OpenAI, FCM).
 """
 
 import pytest
@@ -8,7 +8,6 @@ import json
 
 from .openai_service import OpenAIService
 from .fcm_service import FCMService
-from .firebase_admin_service import FirebaseAdminService
 from core.exceptions import OpenAIError, FCMError
 
 
@@ -394,68 +393,3 @@ class TestFCMService:
                 service.send_notification(notif)
 
             assert mock_send.call_count == len(multiple_users)
-
-
-class TestFirebaseAdminService:
-    """Test Firebase Admin service"""
-
-    def test_init_firebase_admin(self):
-        """Test Firebase Admin initialization"""
-        with patch('firebase_admin.initialize_app') as mock_init:
-            service = FirebaseAdminService()
-
-            # Firebase Admin should be initialized
-            # This depends on implementation
-
-    def test_verify_token(self, mock_firebase_auth):
-        """Test verifying Firebase ID token"""
-        service = FirebaseAdminService()
-
-        with patch('firebase_admin.auth.verify_id_token') as mock_verify:
-            mock_verify.return_value = {
-                'uid': 'test_uid',
-                'email': 'test@example.com'
-            }
-
-            result = service.verify_token('valid_token')
-
-            assert result['uid'] == 'test_uid'
-            assert result['email'] == 'test@example.com'
-
-    def test_verify_invalid_token(self):
-        """Test verifying invalid token"""
-        service = FirebaseAdminService()
-
-        with patch('firebase_admin.auth.verify_id_token') as mock_verify:
-            mock_verify.side_effect = Exception('Invalid token')
-
-            with pytest.raises(Exception):
-                service.verify_token('invalid_token')
-
-    def test_get_user_by_uid(self):
-        """Test getting user by Firebase UID"""
-        service = FirebaseAdminService()
-
-        with patch('firebase_admin.auth.get_user') as mock_get:
-            mock_get.return_value = Mock(
-                uid='test_uid',
-                email='test@example.com',
-                display_name='Test User'
-            )
-
-            user = service.get_user('test_uid')
-
-            assert user.uid == 'test_uid'
-            assert user.email == 'test@example.com'
-
-    def test_create_custom_token(self):
-        """Test creating custom Firebase token"""
-        service = FirebaseAdminService()
-
-        with patch('firebase_admin.auth.create_custom_token') as mock_create:
-            mock_create.return_value = b'custom_token_bytes'
-
-            token = service.create_custom_token('test_uid')
-
-            assert token == b'custom_token_bytes'
-            mock_create.assert_called_once_with('test_uid')

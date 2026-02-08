@@ -38,18 +38,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/development.txt
+        DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_web
     command: >
-      sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn --bind 0.0.0.0:8000
-                      --workers 4
-                      --worker-class gthread
-                      --threads 2
-                      --reload
-                      --access-logfile -
-                      --error-logfile -
-                      config.wsgi:application"
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -59,7 +54,12 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
+      - DB_HOST=db
+      - DB_NAME=dreamplanner
+      - DB_USER=dreamplanner
+      - DB_PASSWORD=dreamplanner_dev_password
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
@@ -79,6 +79,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/development.txt
+        DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_celery
     command: celery -A config worker --loglevel=info --concurrency=4
     volumes:
@@ -86,7 +89,12 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
+      - DB_HOST=db
+      - DB_NAME=dreamplanner
+      - DB_USER=dreamplanner
+      - DB_PASSWORD=dreamplanner_dev_password
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
@@ -99,6 +107,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/development.txt
+        DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_celery_beat
     command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
@@ -106,7 +117,12 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
+      - DB_HOST=db
+      - DB_NAME=dreamplanner
+      - DB_USER=dreamplanner
+      - DB_PASSWORD=dreamplanner_dev_password
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
@@ -119,6 +135,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/development.txt
+        DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_flower
     command: celery -A config flower --port=5555
     ports:
@@ -127,6 +146,7 @@ services:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_HOST=redis
     depends_on:
       - redis
       - celery
@@ -136,6 +156,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/development.txt
+        DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_daphne
     command: daphne -b 0.0.0.0 -p 9000 config.asgi:application
     volumes:
@@ -145,7 +168,12 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
       - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
+      - DB_HOST=db
+      - DB_NAME=dreamplanner
+      - DB_USER=dreamplanner
+      - DB_PASSWORD=dreamplanner_dev_password
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
     depends_on:
       - db
       - redis

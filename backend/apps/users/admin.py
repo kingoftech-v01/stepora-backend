@@ -13,11 +13,11 @@ class UserAdmin(BaseUserAdmin):
 
     list_display = ['email', 'display_name', 'subscription', 'level', 'xp', 'streak_days', 'is_staff', 'created_at']
     list_filter = ['subscription', 'is_staff', 'is_active', 'created_at']
-    search_fields = ['email', 'display_name', 'firebase_uid']
+    search_fields = ['email', 'display_name']
     ordering = ['-created_at']
 
     fieldsets = (
-        (None, {'fields': ('firebase_uid', 'email', 'display_name', 'avatar_url')}),
+        (None, {'fields': ('email', 'display_name', 'avatar_url')}),
         ('Subscription', {'fields': ('subscription', 'subscription_ends')}),
         ('Preferences', {'fields': ('timezone', 'work_schedule', 'notification_prefs', 'app_prefs')}),
         ('Gamification', {'fields': ('xp', 'level', 'streak_days', 'last_activity')}),
@@ -30,7 +30,7 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('firebase_uid', 'email', 'display_name', 'subscription'),
+            'fields': ('email', 'password1', 'password2', 'display_name', 'subscription'),
         }),
     )
 

@@ -16,14 +16,14 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'firebase_uid', 'email', 'display_name', 'avatar_url',
+            'id', 'email', 'display_name', 'avatar_url',
             'timezone', 'subscription', 'subscription_ends',
             'work_schedule', 'notification_prefs', 'app_prefs',
             'xp', 'level', 'streak_days', 'last_activity',
             'can_create_dream', 'is_premium',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'firebase_uid', 'xp', 'level', 'streak_days', 'last_activity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'email', 'xp', 'level', 'streak_days', 'last_activity', 'created_at', 'updated_at']
 
     def get_is_premium(self, obj):
         return obj.is_premium()

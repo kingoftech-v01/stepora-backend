@@ -44,7 +44,6 @@ from apps.store.serializers import (
 def store_user(db):
     """Create and return a test user for store tests."""
     return User.objects.create(
-        firebase_uid=f'store_test_{uuid.uuid4().hex[:8]}',
         email=f'store_{uuid.uuid4().hex[:8]}@example.com',
         display_name='Store Test User',
     )
@@ -54,7 +53,6 @@ def store_user(db):
 def other_user(db):
     """Create a second test user for ownership tests."""
     return User.objects.create(
-        firebase_uid=f'other_test_{uuid.uuid4().hex[:8]}',
         email=f'other_{uuid.uuid4().hex[:8]}@example.com',
         display_name='Other Test User',
     )

@@ -1,0 +1,23 @@
+# Flutter/Dart
+*.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Generated
+*.g.dart
+*.freezed.dart
+lib/l10n/app_localizations*.dart
+
+# Platform
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/

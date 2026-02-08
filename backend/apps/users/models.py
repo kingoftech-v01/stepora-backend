@@ -9,21 +9,21 @@ from django.utils import timezone as django_timezone
 
 
 class UserManager(BaseUserManager):
-    """Custom user manager for Firebase UID authentication."""
+    """Custom user manager for email-based authentication."""
 
-    def create_user(self, firebase_uid, email, **extra_fields):
+    def create_user(self, email, password=None, **extra_fields):
         """Create and save a regular user."""
-        if not firebase_uid:
-            raise ValueError('Firebase UID is required')
         if not email:
             raise ValueError('Email is required')
 
         email = self.normalize_email(email)
-        user = self.model(firebase_uid=firebase_uid, email=email, **extra_fields)
+        user = self.model(email=email, **extra_fields)
+        if password:
+            user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, firebase_uid, email, **extra_fields):
+    def create_superuser(self, email, password=None, **extra_fields):
         """Create and save a superuser."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
@@ -33,14 +33,13 @@ class UserManager(BaseUserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
-        return self.create_user(firebase_uid, email, **extra_fields)
+        return self.create_user(email, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    """Custom user model using Firebase UID for authentication."""
+    """Custom user model using email for authentication."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    firebase_uid = models.CharField(max_length=128, unique=True, db_index=True)
     email = models.EmailField(unique=True, db_index=True)
     display_name = models.CharField(max_length=255, blank=True)
     avatar_url = models.URLField(max_length=500, blank=True)
@@ -93,14 +92,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    USERNAME_FIELD = 'firebase_uid'
-    REQUIRED_FIELDS = ['email']
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
 
     class Meta:
         db_table = 'users'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['firebase_uid']),
             models.Index(fields=['email']),
             models.Index(fields=['subscription']),
             models.Index(fields=['last_activity']),

@@ -32,8 +32,7 @@ def api_client():
 def user_data():
     """Return sample user data"""
     return {
-        'firebase_uid': f'test_firebase_uid_{uuid.uuid4().hex[:8]}',
-        'email': f'test_{uuid.uuid4().hex[:8]}@example.com',
+        'email': 'testuser@example.com',
         'display_name': 'Test User',
         'timezone': 'Europe/Paris',
     }
@@ -42,32 +41,35 @@ def user_data():
 @pytest.fixture
 def user(db, user_data):
     """Create and return a test user"""
-    user = User.objects.create(**user_data)
-    user.set_unusable_password()
+    password = user_data.pop('password', 'testpassword123')
+    user = User.objects.create_user(**user_data, password=password)
     return user
 
 
 @pytest.fixture
-def premium_user(db, user_data):
+def premium_user(db):
     """Create and return a premium user"""
-    user_data['subscription'] = 'premium'
-    user_data['subscription_ends'] = timezone.now() + timedelta(days=30)
-    user = User.objects.create(**user_data)
-    user.set_unusable_password()
+    user = User.objects.create_user(
+        email='premium@example.com',
+        password='testpassword123',
+        display_name='Premium User',
+        timezone='Europe/Paris',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
     return user
 
 
 @pytest.fixture
 def pro_user(db):
     """Create and return a pro user"""
-    user = User.objects.create(
-        firebase_uid=f'pro_firebase_uid_{uuid.uuid4().hex[:8]}',
-        email=f'pro_{uuid.uuid4().hex[:8]}@example.com',
+    user = User.objects.create_user(
+        email='prouser@example.com',
+        password='testpassword123',
         display_name='Pro User',
         subscription='pro',
         subscription_ends=timezone.now() + timedelta(days=30),
     )
-    user.set_unusable_password()
     return user
 
 
@@ -76,24 +78,6 @@ def authenticated_client(api_client, user):
     """Return authenticated API client"""
     api_client.force_authenticate(user=user)
     return api_client
-
-
-@pytest.fixture
-def firebase_token():
-    """Return mock Firebase token"""
-    return f'mock_firebase_token_{uuid.uuid4().hex}'
-
-
-@pytest.fixture
-def mock_firebase_auth():
-    """Mock Firebase authentication"""
-    with patch('firebase_admin.auth.verify_id_token') as mock:
-        mock.return_value = {
-            'uid': f'test_firebase_uid_{uuid.uuid4().hex[:8]}',
-            'email': f'test_{uuid.uuid4().hex[:8]}@example.com',
-            'name': 'Test User'
-        }
-        yield mock
 
 
 @pytest.fixture
@@ -309,12 +293,11 @@ def multiple_users(db):
     """Create multiple test users"""
     users = []
     for i in range(3):
-        user = User.objects.create(
-            firebase_uid=f'test_user_{i}_{uuid.uuid4().hex[:8]}',
-            email=f'user{i}_{uuid.uuid4().hex[:8]}@example.com',
+        user = User.objects.create_user(
+            email=f'user{i}@example.com',
+            password='testpassword123',
             display_name=f'Test User {i}'
         )
-        user.set_unusable_password()
         users.append(user)
     return users
 

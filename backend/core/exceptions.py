@@ -37,8 +37,13 @@ class OpenAIError(Exception):
     pass
 
 
-class FirebaseError(Exception):
-    """Custom exception for Firebase errors."""
+class FCMError(Exception):
+    """Custom exception for Firebase Cloud Messaging errors."""
+    pass
+
+
+class ValidationError(Exception):
+    """Custom exception for validation errors."""
     pass
 
 

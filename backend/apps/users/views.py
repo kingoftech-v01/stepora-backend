@@ -1,12 +1,13 @@
 """
 Views for Users app.
+Authentication is handled by dj-rest-auth at /api/auth/ endpoints.
 """
 
 from django.db import models
-from rest_framework import viewsets, status, views
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
@@ -16,55 +17,6 @@ from .serializers import (
     FcmTokenSerializer, GamificationProfileSerializer, DreamBuddySerializer
 )
 from .services import BuddyMatchingService
-
-
-@extend_schema_view()
-class AuthViewSet(viewsets.ViewSet):
-    """Authentication endpoints."""
-
-    permission_classes = [AllowAny]
-
-    @extend_schema(summary="Register user", description="Register a new user with Firebase credentials", tags=["Authentication"], responses={201: UserSerializer})
-    @action(detail=False, methods=['post'])
-    def register(self, request):
-        """Register a new user."""
-        firebase_uid = request.data.get('firebase_uid')
-        email = request.data.get('email')
-
-        if not firebase_uid or not email:
-            return Response(
-                {'error': 'firebase_uid and email are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Create or get user
-        user, created = User.objects.get_or_create(
-            firebase_uid=firebase_uid,
-            defaults={
-                'email': email,
-                'display_name': request.data.get('display_name', ''),
-                'timezone': request.data.get('timezone', 'Europe/Paris'),
-            }
-        )
-
-        # Create gamification profile
-        if created:
-            GamificationProfile.objects.create(user=user)
-
-        # Register FCM token if provided
-        fcm_token = request.data.get('fcm_token')
-        if fcm_token:
-            FcmToken.objects.get_or_create(
-                user=user,
-                token=fcm_token,
-                defaults={'platform': request.data.get('platform', 'android')}
-            )
-
-        serializer = UserSerializer(user)
-        return Response(
-            serializer.data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        )
 
 
 @extend_schema_view(

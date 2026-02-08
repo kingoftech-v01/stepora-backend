@@ -74,7 +74,6 @@ class StripeService:
                 name=user.display_name or user.email,
                 metadata={
                     'dreamplanner_user_id': str(user.id),
-                    'firebase_uid': user.firebase_uid,
                 },
             )
 

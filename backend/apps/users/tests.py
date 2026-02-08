@@ -6,12 +6,13 @@ import pytest
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import status
-from unittest.mock import patch, Mock
+from rest_framework.test import APIRequestFactory
+from rest_framework.authtoken.models import Token
+from unittest.mock import Mock
 import uuid
 
 from .models import User, FcmToken, GamificationProfile, DreamBuddy, Badge
-from core.authentication import FirebaseAuthenticationBackend, FirebaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
+from core.authentication import BearerTokenAuthentication
 
 
 class TestUserModel:
@@ -20,7 +21,6 @@ class TestUserModel:
     def test_create_user(self, db, user_data):
         """Test creating a user"""
         user = User.objects.create(**user_data)
-        assert user.firebase_uid == user_data['firebase_uid']
         assert user.email == user_data['email']
         assert user.display_name == user_data['display_name']
         assert user.subscription == 'free'
@@ -168,88 +168,56 @@ class TestGamificationProfile:
         assert gamification_profile.attributes['health'] == initial_health + 10
 
 
-class TestFirebaseAuthentication:
-    """Test Firebase authentication backend"""
+class TestTokenAuthentication:
+    """Test Token authentication backend"""
 
-    def test_verify_token_success(self, db, mock_firebase_auth, user_data):
-        """Test successful Firebase token verification"""
-        backend = FirebaseAuthenticationBackend()
+    def test_token_auth_success(self, db, user):
+        """Test successful Token authentication with 'Token' keyword"""
+        token = Token.objects.create(user=user)
+        authenticator = BearerTokenAuthentication()
 
-        # Create user with matching firebase_uid
-        user = User.objects.create(
-            firebase_uid=mock_firebase_auth.return_value['uid'],
-            email=mock_firebase_auth.return_value['email']
-        )
+        factory = APIRequestFactory()
+        request = factory.get('/', HTTP_AUTHORIZATION=f'Token {token.key}')
 
-        # Test authentication
-        authenticated_user = backend.authenticate(
-            request=Mock(),
-            firebase_token='valid_token'
-        )
-
-        assert authenticated_user is not None
-        assert authenticated_user.firebase_uid == mock_firebase_auth.return_value['uid']
-
-    def test_verify_token_creates_user(self, db, mock_firebase_auth):
-        """Test Firebase auth creates user if doesn't exist"""
-        backend = FirebaseAuthenticationBackend()
-
-        authenticated_user = backend.authenticate(
-            request=Mock(),
-            firebase_token='valid_token'
-        )
-
-        assert authenticated_user is not None
-        assert User.objects.filter(firebase_uid=mock_firebase_auth.return_value['uid']).exists()
-
-    def test_verify_token_invalid(self, db):
-        """Test invalid Firebase token"""
-        with patch('firebase_admin.auth.verify_id_token') as mock:
-            mock.side_effect = Exception('Invalid token')
-
-            backend = FirebaseAuthenticationBackend()
-            result = backend.authenticate(request=Mock(), firebase_token='invalid_token')
-
-            assert result is None
-
-    def test_drf_authentication_success(self, db, mock_firebase_auth, user):
-        """Test DRF Firebase authentication success"""
-        authenticator = FirebaseAuthentication()
-
-        request = Mock()
-        request.META = {'HTTP_AUTHORIZATION': 'Bearer valid_token'}
-
-        # Update user to match mock return value
-        user.firebase_uid = mock_firebase_auth.return_value['uid']
-        user.save()
-
-        authenticated_user, token = authenticator.authenticate(request)
+        authenticated_user, auth_token = authenticator.authenticate(request)
 
         assert authenticated_user == user
-        assert token == 'valid_token'
+        assert auth_token == token
 
-    def test_drf_authentication_no_header(self, db):
-        """Test DRF authentication with no auth header"""
-        authenticator = FirebaseAuthentication()
+    def test_bearer_keyword_auth(self, db, user):
+        """Test BearerTokenAuthentication converts 'Bearer' to 'Token' and authenticates"""
+        token = Token.objects.create(user=user)
+        authenticator = BearerTokenAuthentication()
 
-        request = Mock()
-        request.META = {}
+        factory = APIRequestFactory()
+        request = factory.get('/', HTTP_AUTHORIZATION=f'Bearer {token.key}')
+
+        authenticated_user, auth_token = authenticator.authenticate(request)
+
+        assert authenticated_user == user
+        assert auth_token == token
+
+    def test_missing_token_returns_none(self, db):
+        """Test missing auth header returns None"""
+        authenticator = BearerTokenAuthentication()
+
+        factory = APIRequestFactory()
+        request = factory.get('/')
 
         result = authenticator.authenticate(request)
         assert result is None
 
-    def test_drf_authentication_invalid_token(self, db):
-        """Test DRF authentication with invalid token"""
-        with patch('firebase_admin.auth.verify_id_token') as mock:
-            mock.side_effect = Exception('Invalid token')
+    def test_invalid_token_raises_error(self, db):
+        """Test invalid token raises AuthenticationFailed"""
+        from rest_framework.exceptions import AuthenticationFailed
 
-            authenticator = FirebaseAuthentication()
+        authenticator = BearerTokenAuthentication()
 
-            request = Mock()
-            request.META = {'HTTP_AUTHORIZATION': 'Bearer invalid_token'}
+        factory = APIRequestFactory()
+        request = factory.get('/', HTTP_AUTHORIZATION='Token invalidtokenkey123')
 
-            with pytest.raises(AuthenticationFailed):
-                authenticator.authenticate(request)
+        with pytest.raises(AuthenticationFailed):
+            authenticator.authenticate(request)
 
 
 class TestUserViewSet:

@@ -3,7 +3,7 @@
 DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
 **Backend Status**: ✅ **100% Complete** - Django 5.0.1 production-ready
-**Mobile Status**: ✅ **100% Complete** - React Native 0.73 with 16 screens
+**Mobile Status**: ✅ **100% Complete** - Flutter 3.24 with 16 screens
 
 ---
 
@@ -91,23 +91,21 @@ dreamplanner/
 │   │   ├── social/               # Friendships, follows, activity feed
 │   │   └── buddies/              # Buddy pairing, encouragement
 │   ├── core/                     # Auth, permissions, pagination
-│   ├── integrations/             # OpenAI, FCM, Firebase
+│   ├── integrations/             # OpenAI, FCM
 │   ├── config/                   # Django settings & Celery
 │   ├── docker/                   # Docker + Nginx configs
 │   └── tests/                    # 2000+ lines of tests
 │
-├── apps/mobile/                  # ✅ React Native app (COMPLETE)
-│   ├── src/
-│   │   ├── screens/              # 16 screens (auth, main, features)
-│   │   ├── components/           # Reusable components
-│   │   ├── services/             # API client (all endpoints)
-│   │   ├── stores/               # State management (Zustand)
-│   │   ├── navigation/           # React Navigation (5 tabs)
-│   │   ├── hooks/                # Custom hooks (dreams, tasks, chat)
-│   │   ├── i18n/                 # 15 languages
-│   │   └── theme/                # Light/dark theme system
-│   ├── android/                  # Android native
-│   └── ios/                      # iOS native
+├── apps/mobile/                  # ✅ Flutter app (COMPLETE)
+│   └── lib/
+│       ├── screens/              # 16 screens (auth, main, features)
+│       ├── widgets/              # Reusable widgets
+│       ├── services/             # API client + WebSocket
+│       ├── providers/            # State management (Riverpod)
+│       ├── config/               # Routes (GoRouter), API constants
+│       ├── models/               # Data models
+│       ├── core/                 # Theme, validators
+│       └── l10n/                 # 15 languages (.arb files)
 │
 ├── docs/                         # 📚 Complete documentation
 │   ├── TECHNICAL_ARCHITECTURE.md  # Technical architecture
@@ -137,7 +135,7 @@ dreamplanner/
 | **Background Jobs** | Celery 5.3.4 | ✅ |
 | **Database** | PostgreSQL 15 | ✅ |
 | **Cache/Broker** | Redis 7 | ✅ |
-| **Authentication** | Firebase Admin SDK | ✅ |
+| **Authentication** | django-allauth + dj-rest-auth | ✅ |
 | **AI** | OpenAI GPT-4 + DALL-E 3 | ✅ |
 | **Push Notifications** | Firebase Cloud Messaging | ✅ |
 | **Server** | Gunicorn + Daphne | ✅ |
@@ -146,19 +144,19 @@ dreamplanner/
 | **Testing** | pytest + pytest-django | ✅ |
 | **Language** | Python 3.11 | ✅ |
 
-### Mobile (React Native) ✅ Complete
+### Mobile (Flutter) ✅ Complete
 
 | Component | Technology | Status |
 |-----------|-----------|---------|
-| **Framework** | React Native 0.73.2 | ✅ |
-| **Language** | TypeScript | ✅ |
-| **State Management** | Zustand | ✅ |
-| **Navigation** | React Navigation 6 | ✅ |
-| **API Client** | Axios + React Query | ✅ |
-| **Storage** | React Native MMKV | ✅ |
-| **Notifications** | Notifee + Firebase | ✅ |
-| **UI Components** | React Native Paper | ✅ |
-| **i18n** | Custom (15 languages) | ✅ |
+| **Framework** | Flutter 3.24 | ✅ |
+| **Language** | Dart | ✅ |
+| **State Management** | Riverpod | ✅ |
+| **Navigation** | GoRouter | ✅ |
+| **API Client** | Dio | ✅ |
+| **Storage** | Flutter Secure Storage | ✅ |
+| **Notifications** | Flutter Local Notifications | ✅ |
+| **UI** | Material 3 + Google Fonts | ✅ |
+| **i18n** | Flutter Localizations (15 langs) | ✅ |
 | **Payments** | Stripe (via backend) | ✅ |
 
 ---
@@ -206,19 +204,20 @@ celery -A config beat -l info
 daphne -b 0.0.0.0 -p 9000 config.asgi:application
 ```
 
-### Mobile (React Native)
+### Mobile (Flutter)
 
 ```bash
 cd apps/mobile
 
 # Install dependencies
-npm install
+flutter pub get
 
-# iOS
-npm run ios
+# Run on connected device/emulator
+flutter run
 
-# Android
-npm run android
+# Build
+flutter build apk      # Android
+flutter build ios       # iOS
 ```
 
 ### Environment Variables
@@ -238,9 +237,6 @@ DATABASE_URL=postgresql://dreamplanner:password@localhost:5432/dreamplanner
 REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/0
 
-# Firebase
-FIREBASE_CREDENTIALS=path/to/firebase-credentials.json
-
 # OpenAI
 OPENAI_API_KEY=your-openai-api-key
 
@@ -257,9 +253,9 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8081
 - **Production**: `https://api.dreamplanner.app/api`
 
 ### Authentication
-All endpoints require Firebase authentication:
+All endpoints require Token authentication (via dj-rest-auth):
 ```
-Authorization: Bearer <firebase_id_token>
+Authorization: Token <auth_token>
 ```
 
 ### Core Endpoints
@@ -484,10 +480,10 @@ pytest -m asyncio       # Async tests (WebSocket)
 cd apps/mobile
 
 # Run tests
-npm test
+flutter test
 
 # With coverage
-npm test -- --coverage
+flutter test --coverage
 ```
 
 ---
@@ -536,11 +532,10 @@ aws ecs run-task \
 cd apps/mobile
 
 # Build for stores
-eas build --platform all --profile production
+flutter build appbundle    # Android (AAB)
+flutter build ipa          # iOS
 
-# Submit to stores
-eas submit --platform ios
-eas submit --platform android
+# Or using CI/CD (Codemagic, Fastlane, etc.)
 ```
 
 ---
@@ -561,16 +556,16 @@ Test Coverage: 80%+
 Documentation: 5,000+ lines
 ```
 
-### Mobile (React Native)
+### Mobile (Flutter)
 
 ```yaml
-Total Lines of Code: 10,000+
-TypeScript Files: 50+
+Total Lines of Code: 8,000+
+Dart Files: 50+
 Screens: 16
-Navigation: 5 bottom tabs + 3 nested stacks
-Languages: 15 (i18n)
-State Stores: 2 (auth, app)
-Custom Hooks: 5+
+Navigation: GoRouter with 4 bottom tabs + nested routes
+Languages: 15 (i18n via ARB files)
+Providers: 6 (Riverpod)
+Services: 4 (API, Auth, WebSocket, Notifications)
 API Endpoints Wired: All backend endpoints
 ```
 
@@ -578,7 +573,7 @@ API Endpoints Wired: All backend endpoints
 
 ```yaml
 Core Features: ✅ 15/15
-  ✅ User management with Firebase auth
+  ✅ User management with django-allauth
   ✅ Dreams/Goals/Tasks CRUD
   ✅ AI planning (GPT-4)
   ✅ Real-time chat (WebSocket streaming)
@@ -638,7 +633,7 @@ Access at: `http://localhost:5555`
 
 ### Implemented Security Measures
 
-- ✅ **Firebase Authentication**: Server-side token verification
+- ✅ **Token Authentication**: django-allauth + DRF Token auth
 - ✅ **HTTPS Enforcement**: TLS 1.2+ in production
 - ✅ **CORS Configuration**: Whitelist allowed origins
 - ✅ **SQL Injection Protection**: Django ORM
@@ -685,9 +680,9 @@ make lint
 
 # Mobile
 cd apps/mobile
-npm install
-npm test
-npm run lint
+flutter pub get
+flutter test
+flutter analyze
 ```
 
 ---
@@ -706,10 +701,10 @@ make migrate        # Run migrations
 make test           # Run tests
 
 # Mobile
-npm start           # Start Metro
-npm run ios         # Run iOS
-npm run android     # Run Android
-npm test            # Run tests
+flutter run         # Run on device/emulator
+flutter build apk   # Build Android
+flutter build ios    # Build iOS
+flutter test         # Run tests
 ```
 
 ### Resources
@@ -730,13 +725,13 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## 🎉 Status
 
 **Backend**: ✅ **100% Complete** - Production-ready Django 5.0.1 API (11 apps, 80+ endpoints)
-**Mobile**: ✅ **100% Complete** - React Native 0.73 (16 screens, 15 languages)
+**Mobile**: ✅ **100% Complete** - Flutter 3.24 (16 screens, 15 languages)
 **Documentation**: ✅ **Complete** - 5,000+ lines
 **Tests**: ✅ **Complete** - 80%+ coverage (backend + mobile)
 **Deployment**: ✅ **Ready** - Docker + AWS configuration complete
 
 ---
 
-**Built with ❤️ using Django, React Native, GPT-4, and a lot of coffee** ☕
+**Built with ❤️ using Django, Flutter, GPT-4, and a lot of coffee** ☕
 
 **Made with Claude Code** 🤖 | *Helping dreamers turn aspirations into achievements*

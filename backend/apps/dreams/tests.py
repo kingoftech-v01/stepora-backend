@@ -345,7 +345,6 @@ class TestDreamViewSet:
         """Test user cannot access another user's dream"""
         # Create another user and their dream
         other_user = User.objects.create(
-            firebase_uid=f'other_{user_data["firebase_uid"]}',
             email=f'other_{user_data["email"]}'
         )
         other_dream = Dream.objects.create(

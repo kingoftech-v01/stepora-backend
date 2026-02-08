@@ -177,7 +177,6 @@ class TestConversationViewSet:
         from apps.users.models import User
 
         other_user = User.objects.create(
-            firebase_uid=f'other_{user_data["firebase_uid"]}',
             email=f'other_{user_data["email"]}'
         )
         other_conversation = Conversation.objects.create(
