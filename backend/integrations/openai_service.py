@@ -12,6 +12,7 @@ Handles all OpenAI API interactions including:
 """
 
 import openai
+from openai import OpenAI, AsyncOpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
 import json
 import asyncio
 import logging
@@ -21,9 +22,9 @@ from core.exceptions import OpenAIError
 
 logger = logging.getLogger(__name__)
 
-# Retry decorator for OpenAI calls
+# Retry decorator for OpenAI calls (openai v1+ exceptions)
 openai_retry = retry(
-    retry=retry_if_exception_type(openai.error.OpenAIError),
+    retry=retry_if_exception_type((APIError, APIConnectionError, RateLimitError, APITimeoutError)),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     before_sleep=lambda retry_state: logger.warning(
@@ -31,9 +32,16 @@ openai_retry = retry(
     ),
 )
 
-openai.api_key = settings.OPENAI_API_KEY
-if hasattr(settings, 'OPENAI_ORGANIZATION_ID'):
-    openai.organization = settings.OPENAI_ORGANIZATION_ID
+# Initialize OpenAI client (v1+ style)
+_client = OpenAI(
+    api_key=settings.OPENAI_API_KEY or 'sk-placeholder',
+    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+)
+
+_async_client = AsyncOpenAI(
+    api_key=settings.OPENAI_API_KEY or 'sk-placeholder',
+    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+)
 
 
 class OpenAIService:
@@ -204,25 +212,25 @@ IMPORTANT: Respond in the user's language.""",
                 kwargs['functions'] = functions
                 kwargs['function_call'] = 'auto'
 
-            response = openai.ChatCompletion.create(**kwargs)
+            response = _client.chat.completions.create(**kwargs)
 
             result = {
-                'content': response.choices[0].message.get('content', ''),
+                'content': response.choices[0].message.content or '',
                 'tokens_used': response.usage.total_tokens,
                 'model': response.model,
             }
 
             # Check for function call
-            if response.choices[0].message.get('function_call'):
-                fc = response.choices[0].message['function_call']
+            if response.choices[0].message.function_call:
+                fc = response.choices[0].message.function_call
                 result['function_call'] = {
-                    'name': fc['name'],
-                    'arguments': json.loads(fc['arguments']),
+                    'name': fc.name,
+                    'arguments': json.loads(fc.arguments),
                 }
 
             return result
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
@@ -233,7 +241,7 @@ IMPORTANT: Respond in the user's language.""",
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
             full_messages = [{'role': 'system', 'content': system_prompt}] + messages
 
-            response = await openai.ChatCompletion.acreate(
+            response = await _async_client.chat.completions.create(
                 model=self.model,
                 messages=full_messages,
                 temperature=temperature,
@@ -247,7 +255,7 @@ IMPORTANT: Respond in the user's language.""",
                 'model': response.model,
             }
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
@@ -263,7 +271,7 @@ IMPORTANT: Respond in the user's language.""",
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
             full_messages = [{'role': 'system', 'content': system_prompt}] + messages
 
-            response = await openai.ChatCompletion.acreate(
+            response = await _async_client.chat.completions.create(
                 model=self.model,
                 messages=full_messages,
                 temperature=temperature,
@@ -272,10 +280,10 @@ IMPORTANT: Respond in the user's language.""",
             )
 
             async for chunk in response:
-                if chunk.choices[0].delta.get('content'):
+                if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
@@ -347,7 +355,7 @@ USER CONTEXT:
 Respond ONLY with the plan JSON."""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
@@ -366,7 +374,7 @@ Respond ONLY with the plan JSON."""
 
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Failed to parse JSON response: {str(e)}")
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
@@ -448,7 +456,7 @@ Respond ONLY with JSON:
 }}"""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -466,7 +474,7 @@ Respond ONLY with JSON:
             result = json.loads(response.choices[0].message.content)
             return result
 
-        except (json.JSONDecodeError, openai.error.OpenAIError) as e:
+        except (json.JSONDecodeError, openai.APIError) as e:
             raise OpenAIError(f"Calibration question generation failed: {str(e)}")
 
     def generate_calibration_summary(self, dream_title, dream_description, qa_pairs):
@@ -522,7 +530,7 @@ Create a structured JSON profile that captures everything needed for a highly pe
 }}"""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -539,7 +547,7 @@ Create a structured JSON profile that captures everything needed for a highly pe
 
             return json.loads(response.choices[0].message.content)
 
-        except (json.JSONDecodeError, openai.error.OpenAIError) as e:
+        except (json.JSONDecodeError, openai.APIError) as e:
             raise OpenAIError(f"Calibration summary generation failed: {str(e)}")
 
     @openai_retry
@@ -565,7 +573,7 @@ Required JSON format:
 }}"""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {'role': 'system', 'content': 'You analyze goals and respond only in JSON.'},
@@ -579,7 +587,7 @@ Required JSON format:
 
             return json.loads(response.choices[0].message.content)
 
-        except (json.JSONDecodeError, openai.error.OpenAIError) as e:
+        except (json.JSONDecodeError, openai.APIError) as e:
             raise OpenAIError(f"Analysis failed: {str(e)}")
 
     def generate_motivational_message(self, user_name, goal_title, progress_percentage, streak_days):
@@ -592,7 +600,7 @@ Streak: {streak_days} days
 Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model='gpt-3.5-turbo',  # Use cheaper model for short messages
                 messages=[
                     {'role': 'system', 'content': self.SYSTEM_PROMPTS['motivation']},
@@ -605,7 +613,7 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
             return response.choices[0].message.content
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             # Fallback message if API fails
             return f"Great job {user_name}! Keep going!"
 
@@ -614,7 +622,7 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
         prompt = f"""For the goal "{dream_title}" ({dream_description}), generate ONE very simple micro-action that takes 30 seconds to 2 minutes maximum. Respond with just the action, no explanation."""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model='gpt-3.5-turbo',
                 messages=[
                     {'role': 'system', 'content': 'You generate quick micro-actions (30s-2min).'},
@@ -627,7 +635,7 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
             return response.choices[0].message.content
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             # Fallback
             return "Take 2 minutes to write down 3 reasons why this goal is important to you"
 
@@ -641,7 +649,7 @@ Generate an empathetic message (2-3 sentences) that:
 3. Proposes ONE simple micro-action to restart"""
 
         try:
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model='gpt-3.5-turbo',
                 messages=[
                     {'role': 'system', 'content': self.SYSTEM_PROMPTS['rescue']},
@@ -654,7 +662,7 @@ Generate an empathetic message (2-3 sentences) that:
 
             return response.choices[0].message.content
 
-        except openai.error.OpenAIError:
+        except openai.APIError:
             return f"Hey {user_name}, we're still here! Life is full of surprises, and that's okay. How about starting fresh with just 5 minutes today?"
 
     @openai_retry
@@ -670,7 +678,7 @@ Generate an empathetic message (2-3 sentences) that:
         """
         try:
             with open(audio_file_path, 'rb') as audio_file:
-                response = openai.Audio.transcribe(
+                response = _client.audio.transcriptions.create(
                     model='whisper-1',
                     file=audio_file,
                     response_format='verbose_json',
@@ -678,11 +686,11 @@ Generate an empathetic message (2-3 sentences) that:
                 )
 
             return {
-                'text': response.get('text', ''),
-                'language': response.get('language', ''),
+                'text': response.text if hasattr(response, 'text') else '',
+                'language': response.language if hasattr(response, 'language') else '',
             }
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"Audio transcription failed: {str(e)}")
         except FileNotFoundError:
             raise OpenAIError(f"Audio file not found: {audio_file_path}")
@@ -714,7 +722,7 @@ Generate an empathetic message (2-3 sentences) that:
                     'text': 'Describe this image and how it relates to the user\'s goals or dreams. Provide motivational insights if relevant.',
                 })
 
-            response = openai.ChatCompletion.create(
+            response = _client.chat.completions.create(
                 model='gpt-4-vision-preview',
                 messages=[
                     {
@@ -735,7 +743,7 @@ Generate an empathetic message (2-3 sentences) that:
                 'tokens_used': response.usage.total_tokens,
             }
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"Image analysis failed: {str(e)}")
 
     def generate_vision_image(self, dream_title, dream_description):
@@ -750,7 +758,7 @@ Generate an empathetic message (2-3 sentences) that:
 The image should be positive, motivating, and show the end result/success state. Photorealistic style, bright and inspiring."""
 
         try:
-            response = openai.Image.create(
+            response = _client.images.generate(
                 model="dall-e-3",
                 prompt=prompt,
                 size="1024x1024",
@@ -760,5 +768,5 @@ The image should be positive, motivating, and show the end result/success state.
 
             return response.data[0].url
 
-        except openai.error.OpenAIError as e:
+        except openai.APIError as e:
             raise OpenAIError(f"Image generation failed: {str(e)}")

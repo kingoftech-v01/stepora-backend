@@ -4,7 +4,7 @@ Django admin configuration for Users app.
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, FcmToken, GamificationProfile, DreamBuddy
+from .models import User, FcmToken, GamificationProfile, EmailChangeRequest
 
 
 @admin.register(User)
@@ -64,11 +64,11 @@ class GamificationProfileAdmin(admin.ModelAdmin):
         return obj.get_attribute_level('relationships')
 
 
-@admin.register(DreamBuddy)
-class DreamBuddyAdmin(admin.ModelAdmin):
-    """Admin interface for Dream Buddy pairings."""
+@admin.register(EmailChangeRequest)
+class EmailChangeRequestAdmin(admin.ModelAdmin):
+    """Admin interface for email change requests."""
 
-    list_display = ['user1', 'user2', 'status', 'compatibility_score', 'created_at']
-    list_filter = ['status', 'created_at']
-    search_fields = ['user1__email', 'user2__email']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['user', 'new_email', 'is_verified', 'expires_at', 'created_at']
+    list_filter = ['is_verified', 'created_at']
+    search_fields = ['user__email', 'new_email']
+    readonly_fields = ['created_at', 'token']
