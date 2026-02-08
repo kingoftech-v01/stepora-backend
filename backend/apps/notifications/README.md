@@ -1,136 +1,138 @@
 # Notifications App
 
-Application Django pour les notifications push et rappels.
+Django application for push notifications and reminders.
+
+> **Note:** FCM is used purely as a push notification delivery channel. Authentication is handled by django-allauth + Token auth.
 
 ## Overview
 
-L'app Notifications gere toutes les communications push:
-- **Notification** - Notification individuelle
-- **NotificationTemplate** - Templates reutilisables
-- **NotificationBatch** - Envois groupes
+The Notifications app manages all push communications:
+- **Notification** - Individual notification
+- **NotificationTemplate** - Reusable templates
+- **NotificationBatch** - Grouped sends
 
 ## Models
 
 ### Notification
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| user | FK(User) | Destinataire |
-| notification_type | CharField | Type de notification |
-| title | CharField(255) | Titre |
-| body | TextField | Corps du message |
-| data | JSONField | Donnees deep linking |
-| scheduled_for | DateTime | Date d'envoi prevue |
-| sent_at | DateTime | Date d'envoi reel |
-| read_at | DateTime | Date de lecture |
+| id | UUID | Unique identifier |
+| user | FK(User) | Recipient |
+| notification_type | CharField | Notification type |
+| title | CharField(255) | Title |
+| body | TextField | Message body |
+| data | JSONField | Deep linking data |
+| scheduled_for | DateTime | Scheduled send date |
+| sent_at | DateTime | Actual send date |
+| read_at | DateTime | Read date |
 | status | CharField | pending, sent, failed, cancelled |
-| retry_count | Integer | Nombre de tentatives |
+| retry_count | Integer | Number of attempts |
 
-**Types de notification:**
-- `reminder` - Rappel de tache
-- `motivation` - Message motivationnel
-- `progress` - Mise a jour de progression
-- `achievement` - Badge/achievement debloque
-- `check_in` - Point de suivi
-- `rescue` - Mode sauvetage
-- `buddy` - Message de buddy
-- `system` - Notification systeme
+**Notification types:**
+- `reminder` - Task reminder
+- `motivation` - Motivational message
+- `progress` - Progress update
+- `achievement` - Badge/achievement unlocked
+- `check_in` - Progress check-in
+- `rescue` - Rescue mode
+- `buddy` - Buddy message
+- `system` - System notification
 
 ### NotificationTemplate
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| name | CharField(100) | Nom unique |
+| id | UUID | Unique identifier |
+| name | CharField(100) | Unique name |
 | notification_type | CharField | Type |
-| title_template | CharField(255) | Template titre |
-| body_template | TextField | Template corps |
-| available_variables | JSONField | Variables disponibles |
-| is_active | Boolean | Template actif |
+| title_template | CharField(255) | Title template |
+| body_template | TextField | Body template |
+| available_variables | JSONField | Available variables |
+| is_active | Boolean | Active template |
 
 ### NotificationBatch
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| name | CharField(255) | Nom du batch |
-| total_scheduled | Integer | Notifications planifiees |
-| total_sent | Integer | Notifications envoyees |
-| total_failed | Integer | Notifications echouees |
+| id | UUID | Unique identifier |
+| name | CharField(255) | Batch name |
+| total_scheduled | Integer | Scheduled notifications |
+| total_sent | Integer | Sent notifications |
+| total_failed | Integer | Failed notifications |
 | status | CharField | scheduled, processing, completed, failed |
 
 ## API Endpoints
 
-- `GET /api/notifications/` - Liste des notifications
+- `GET /api/notifications/` - List notifications
 - `GET /api/notifications/{id}/` - Detail
-- `POST /api/notifications/{id}/read/` - Marquer comme lu
-- `POST /api/notifications/read-all/` - Tout marquer comme lu
-- `GET /api/notifications/unread-count/` - Nombre de non-lus
-- `DELETE /api/notifications/{id}/` - Supprimer
+- `POST /api/notifications/{id}/read/` - Mark as read
+- `POST /api/notifications/read-all/` - Mark all as read
+- `GET /api/notifications/unread-count/` - Unread count
+- `DELETE /api/notifications/{id}/` - Delete
 
 ### Templates (Admin)
-- `GET /api/notification-templates/` - Liste des templates
-- `POST /api/notification-templates/` - Creer un template
+- `GET /api/notification-templates/` - List templates
+- `POST /api/notification-templates/` - Create a template
 
 ## Serializers
 
-- `NotificationSerializer` - Notification complete
-- `NotificationListSerializer` - Version liste
-- `NotificationTemplateSerializer` - Template complet
+- `NotificationSerializer` - Full notification
+- `NotificationListSerializer` - List version
+- `NotificationTemplateSerializer` - Full template
 
 ## Firebase Cloud Messaging
 
-L'integration FCM gere:
-1. Envoi de notifications individuelles
-2. Envoi en batch (jusqu'a 500)
-3. Gestion des tokens expires
-4. Retry automatique sur echec
+The FCM integration handles:
+1. Sending individual notifications
+2. Batch sending (up to 500)
+3. Managing expired tokens
+4. Automatic retry on failure
 
 ## Do Not Disturb (DND)
 
-Les notifications respectent les preferences DND:
-- `dndEnabled` - DND active
-- `dndStart` - Heure de debut (0-23)
-- `dndEnd` - Heure de fin (0-23)
+Notifications respect DND preferences:
+- `dndEnabled` - DND enabled
+- `dndStart` - Start time (0-23)
+- `dndEnd` - End time (0-23)
 
-Les notifications sont reportees si envoyees pendant DND.
+Notifications are deferred if sent during DND.
 
 ## Celery Tasks
 
-| Task | Frequence | Description |
+| Task | Frequency | Description |
 |------|-----------|-------------|
-| `process_pending_notifications` | 1 min | Envoie les notifications en attente |
-| `send_reminder_notifications` | 15 min | Rappels de taches |
-| `generate_daily_motivation` | 8h00 | Messages motivationnels |
-| `send_weekly_report` | Dim 10h | Rapport hebdomadaire |
-| `check_overdue_tasks` | 10h00 | Detection taches en retard |
-| `cleanup_old_notifications` | Lun 2h | Nettoyage anciennes notifications |
+| `process_pending_notifications` | 1 min | Sends pending notifications |
+| `send_reminder_notifications` | 15 min | Task reminders |
+| `generate_daily_motivation` | 8:00 AM | Motivational messages |
+| `send_weekly_report` | Sun 10:00 AM | Weekly report |
+| `check_overdue_tasks` | 10:00 AM | Overdue task detection |
+| `cleanup_old_notifications` | Mon 2:00 AM | Old notification cleanup |
 
 ## Template Variables
 
-Variables disponibles dans les templates:
-- `{user_name}` - Nom de l'utilisateur
-- `{dream_title}` - Titre du reve
-- `{goal_title}` - Titre de l'objectif
-- `{task_title}` - Titre de la tache
-- `{progress}` - Pourcentage de progression
-- `{streak_days}` - Jours de streak
-- `{xp_gained}` - XP gagne
+Variables available in templates:
+- `{user_name}` - User name
+- `{dream_title}` - Dream title
+- `{goal_title}` - Goal title
+- `{task_title}` - Task title
+- `{progress}` - Progress percentage
+- `{streak_days}` - Streak days
+- `{xp_gained}` - XP gained
 
 ## Testing
 
 ```bash
-# Tests unitaires
+# Unit tests
 python manage.py test apps.notifications
 
-# Avec coverage
+# With coverage
 pytest apps/notifications/tests.py -v --cov=apps.notifications
 ```
 
 ## Configuration
 
-Variables d'environnement:
-- `FIREBASE_PROJECT_ID` - ID projet Firebase
-- `FIREBASE_PRIVATE_KEY` - Cle privee
-- `FIREBASE_CLIENT_EMAIL` - Email client
+Environment variables:
+- `FIREBASE_PROJECT_ID` - Firebase project ID
+- `FIREBASE_PRIVATE_KEY` - Private key
+- `FIREBASE_CLIENT_EMAIL` - Client email

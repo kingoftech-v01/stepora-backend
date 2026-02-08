@@ -26,10 +26,14 @@ class NotificationsState {
   }
 }
 
-class NotificationsNotifier extends StateNotifier<NotificationsState> {
-  final NotificationService _service;
+class NotificationsNotifier extends Notifier<NotificationsState> {
+  late NotificationService _service;
 
-  NotificationsNotifier(this._service) : super(const NotificationsState());
+  @override
+  NotificationsState build() {
+    _service = ref.read(notificationServiceProvider);
+    return const NotificationsState();
+  }
 
   Future<void> fetchNotifications() async {
     state = state.copyWith(isLoading: true);
@@ -89,6 +93,4 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
 }
 
 final notificationsProvider =
-    StateNotifierProvider<NotificationsNotifier, NotificationsState>((ref) {
-  return NotificationsNotifier(ref.read(notificationServiceProvider));
-});
+    NotifierProvider<NotificationsNotifier, NotificationsState>(NotificationsNotifier.new);

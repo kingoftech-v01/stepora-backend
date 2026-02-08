@@ -19,3 +19,15 @@ class BearerTokenAuthentication(TokenAuthentication):
             request.META['HTTP_AUTHORIZATION'] = 'Token ' + auth_header[7:]
 
         return super().authenticate(request)
+
+
+class CsrfExemptAPIMiddleware:
+    """Skip CSRF checks for /api/ routes. Admin still uses CSRF."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path.startswith('/api/'):
+            setattr(request, '_dont_enforce_csrf_checks', True)
+        return self.get_response(request)

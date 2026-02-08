@@ -1,15 +1,15 @@
 # Users App - TODO
 
-## Current Status: ✅ Production Ready
+## Current Status: Production Ready
 
 All core features are implemented and tested. This document tracks future enhancements and maintenance tasks.
 
 ---
 
-## Completed ✅
+## Completed
 
 ### Core Features
-- [x] User model with Firebase authentication
+- [x] User model with django-allauth + Token authentication
 - [x] Profile management (CRUD)
 - [x] FCM token management
 - [x] Subscription system (free/premium/pro)
@@ -40,7 +40,7 @@ All core features are implemented and tested. This document tracks future enhanc
 - [x] Gamification tests
 
 ### Security
-- [x] Firebase authentication backend
+- [x] django-allauth authentication backend
 - [x] Token verification
 - [x] IsOwner permission on all endpoints
 - [x] Input validation
@@ -54,15 +54,21 @@ All core features are implemented and tested. This document tracks future enhanc
 
 ---
 
-## In Progress 🚧
+## In Progress
 
 Currently, no tasks in progress. All features are complete.
 
 ---
 
-## Planned Features 📋
+## Planned Features
 
 ### High Priority
+
+#### Account Management
+- [ ] Add DELETE /api/users/me/ endpoint (account deletion with GDPR compliance)
+- [ ] Add profile photo upload via media storage
+- [ ] Add email change with verification flow
+- [ ] Wire password change to dj-rest-auth endpoint in frontend
 
 #### Social Graph
 - [ ] Friend model (user-to-user relationships)
@@ -154,7 +160,7 @@ Currently, no tasks in progress. All features are complete.
 
 ---
 
-## Bugs 🐛
+## Bugs
 
 ### Known Issues
 
@@ -168,7 +174,7 @@ None currently reported.
 
 ---
 
-## Performance Optimizations ⚡
+## Performance Optimizations
 
 ### Database
 - [ ] Add composite index on (subscription, subscription_ends)
@@ -182,7 +188,7 @@ None currently reported.
 
 ---
 
-## Technical Debt 🔧
+## Technical Debt
 
 ### Code Quality
 - [ ] Add type hints to all methods
@@ -191,7 +197,7 @@ None currently reported.
 - [ ] Add docstrings to all public methods
 
 ### Testing
-- [ ] Add integration tests for Firebase auth flow
+- [ ] Add integration tests for django-allauth auth flow
 - [ ] Add load testing for high XP users
 - [ ] Test timezone edge cases
 
@@ -202,7 +208,7 @@ None currently reported.
 
 ---
 
-## Maintenance 🛠️
+## Maintenance
 
 ### Regular Tasks
 
@@ -223,7 +229,7 @@ None currently reported.
 
 ---
 
-## Ideas / Discussion 💡
+## Ideas / Discussion
 
 ### Potential Features
 
@@ -265,7 +271,7 @@ None currently reported.
 
 ---
 
-## Breaking Changes ⚠️
+## Breaking Changes
 
 No planned breaking changes.
 
@@ -280,5 +286,5 @@ No planned breaking changes.
 
 ---
 
-**Last Updated**: 2026-01-28
-**Next Review**: 2026-02-28
+**Last Updated**: 2026-02-08
+**Next Review**: 2026-03-08

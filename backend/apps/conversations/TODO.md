@@ -4,56 +4,56 @@
 
 - [x] Models: Conversation, Message, ConversationSummary
 - [x] REST API endpoints
-- [x] WebSocket consumer avec streaming
-- [x] Integration GPT-4
-- [x] System prompts dynamiques par type
-- [x] Rate limiting par tier
-- [x] Tests unitaires et WebSocket
-- [x] Gestion du contexte conversation
+- [x] WebSocket consumer with streaming
+- [x] GPT-4 integration
+- [x] Dynamic system prompts by type
+- [x] Rate limiting by tier
+- [x] Unit and WebSocket tests
+- [x] Conversation context management
 
 ## Recently Completed
 
-- [x] Ajouter decorateurs @extend_schema pour Swagger
-- [x] Implementer authentification WebSocket Firebase
-- [x] Sanitization XSS du contenu des messages
+- [x] Add @extend_schema decorators for Swagger
+- [x] Implement WebSocket Token authentication
+- [x] XSS sanitization of message content
 
 ## Planned - High Priority
 
-- [ ] **Fonction calling** - Permettre a l'IA de creer des taches directement
-- [ ] **Summarization automatique** - Resume des conversations longues
-- [ ] **Context window management** - Gestion intelligente du contexte
-- [ ] **Retry logic** - Gestion des erreurs OpenAI avec retry
+- [ ] **Function calling** - Allow AI to create tasks directly
+- [ ] **Automatic summarization** - Summarize long conversations
+- [ ] **Context window management** - Intelligent context management
+- [ ] **Retry logic** - OpenAI error handling with retry
 
 ## Planned - Medium Priority
 
-- [ ] **Voice messages** - Support audio avec Whisper
-- [ ] **Image analysis** - Analyser des images avec GPT-4V
-- [ ] **Export conversations** - Exporter en PDF/JSON
-- [ ] **Conversation templates** - Templates de coaching pre-definis
+- [ ] **Voice messages** - Audio support with Whisper
+- [ ] **Image analysis** - Analyze images with GPT-4V
+- [ ] **Export conversations** - Export as PDF/JSON
+- [ ] **Conversation templates** - Pre-defined coaching templates
 
 ## Planned - Low Priority
 
-- [ ] **Multi-language** - Support multilingue dynamique
-- [ ] **Sentiment analysis** - Detecter l'humeur de l'utilisateur
-- [ ] **Proactive messaging** - L'IA initie des conversations
+- [ ] **Multi-language** - Dynamic multilingual support
+- [ ] **Sentiment analysis** - Detect user mood
+- [ ] **Proactive messaging** - AI initiates conversations
 
 ## Known Bugs
 
-- [ ] WebSocket peut perdre la connexion sans reconnexion automatique
-- [ ] Le streaming peut se bloquer sur des reponses tres longues
-- [ ] Les tokens ne sont pas comptes precisement pour le rate limiting
+- [ ] WebSocket can lose connection without automatic reconnection
+- [ ] Streaming can stall on very long responses
+- [ ] Tokens are not counted precisely for rate limiting
 
 ## Technical Debt
 
-- [ ] Refactorer le consumer en classes plus petites
-- [ ] Ajouter type hints
-- [ ] Implementer circuit breaker pour OpenAI
-- [ ] Centraliser la gestion des prompts
-- [ ] Ajouter tests de charge pour WebSocket
+- [ ] Refactor the consumer into smaller classes
+- [ ] Add type hints
+- [ ] Implement circuit breaker for OpenAI
+- [ ] Centralize prompt management
+- [ ] Add load tests for WebSocket
 
 ## Performance Optimizations
 
-- [ ] Cache Redis pour les prompts systeme
-- [ ] Pagination des messages (actuellement limite a 20)
-- [ ] Compression des messages archives
-- [ ] Connection pooling pour WebSocket
+- [ ] Redis cache for system prompts
+- [ ] Message pagination (currently limited to 20)
+- [ ] Archive message compression
+- [ ] Connection pooling for WebSocket

@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from .views import UserViewSet, DreamBuddyViewSet
 
 router = DefaultRouter()
-router.register(r'users', UserViewSet, basename='user')
+router.register(r'', UserViewSet, basename='user')
 router.register(r'buddies', DreamBuddyViewSet, basename='dream-buddy')
 
 urlpatterns = [

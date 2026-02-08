@@ -5,7 +5,7 @@ Complete Django REST API backend for DreamPlanner mobile application.
 ## 🎯 Features
 
 ### Core Features
-- **User Management**: Firebase authentication with custom Django backend
+- **User Management**: django-allauth + dj-rest-auth Token authentication
 - **Dreams System**: Create, manage, and track life goals
 - **AI Integration**: GPT-4 powered planning, motivation, and coaching
 - **Real-time Chat**: WebSocket support for AI conversations
@@ -28,7 +28,7 @@ Complete Django REST API backend for DreamPlanner mobile application.
 - **Caching**: Redis 7
 - **Real-time**: Django Channels 4.0.0 (WebSocket)
 - **Background Jobs**: Celery 5.3.4 + Redis
-- **Authentication**: Firebase Admin SDK
+- **Authentication**: django-allauth + dj-rest-auth (Token auth)
 - **AI**: OpenAI GPT-4 + DALL-E 3
 - **Push Notifications**: Firebase Cloud Messaging
 - **Testing**: pytest + pytest-django + pytest-cov
@@ -50,22 +50,27 @@ backend/
 │   └── celery.py               # Celery configuration
 │
 ├── apps/                        # Django applications
-│   ├── users/                  # User management
-│   ├── dreams/                 # Dreams, Goals, Tasks
+│   ├── users/                  # User management + gamification
+│   ├── dreams/                 # Dreams, Goals, Tasks, Obstacles
 │   ├── conversations/          # AI chat (WebSocket)
 │   ├── notifications/          # Push notifications
-│   └── calendar/               # Calendar views & scheduling
+│   ├── calendar/               # Calendar views & scheduling
+│   ├── subscriptions/          # Stripe plans, checkout, webhooks
+│   ├── store/                  # Cosmetic items, purchases
+│   ├── leagues/                # Leagues, seasons, leaderboards
+│   ├── circles/                # Dream circles, posts, challenges
+│   ├── social/                 # Friendships, follows, activity feed
+│   └── buddies/                # Buddy pairing, encouragement
 │
 ├── core/                        # Core utilities
-│   ├── authentication.py       # Firebase auth backend
+│   ├── authentication.py       # Token auth (BearerTokenAuthentication)
 │   ├── permissions.py          # DRF permissions
 │   ├── exceptions.py           # Custom exceptions
 │   └── pagination.py           # Pagination classes
 │
 ├── integrations/                # External services
 │   ├── openai_service.py       # OpenAI GPT-4 integration
-│   ├── fcm_service.py          # Firebase Cloud Messaging
-│   └── firebase_admin_service.py
+│   └── fcm_service.py          # Firebase Cloud Messaging (push only)
 │
 ├── requirements/                # Python dependencies
 │   ├── base.txt
@@ -90,7 +95,7 @@ backend/
 
 - Docker & Docker Compose
 - Python 3.11+ (for local development)
-- Firebase project (for authentication)
+- Firebase project (for FCM push notifications only)
 - OpenAI API key
 - PostgreSQL 15 (if not using Docker)
 - Redis 7 (if not using Docker)
@@ -119,9 +124,6 @@ DATABASE_URL=postgresql://dreamplanner:password@localhost:5432/dreamplanner
 REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/0
-
-# Firebase
-FIREBASE_CREDENTIALS=path/to/firebase-credentials.json
 
 # OpenAI
 OPENAI_API_KEY=your-openai-api-key
@@ -220,10 +222,16 @@ Coverage reports are generated in `htmlcov/index.html`.
 
 ### Authentication
 
-All API requests (except authentication endpoints) require Firebase ID token:
+All API requests (except authentication endpoints) require Token authentication:
 
 ```
-Authorization: Bearer <firebase_id_token>
+Authorization: Token <auth_token>
+```
+
+Or using the Bearer variant:
+
+```
+Authorization: Bearer <auth_token>
 ```
 
 ### Main Endpoints
@@ -461,7 +469,6 @@ Required for production:
 - `SECRET_KEY` - Django secret key
 - `DATABASE_URL` - PostgreSQL connection string
 - `REDIS_URL` - Redis connection string
-- `FIREBASE_CREDENTIALS` - Firebase service account JSON
 - `OPENAI_API_KEY` - OpenAI API key
 - `ALLOWED_HOSTS` - Comma-separated hostnames
 - `CORS_ALLOWED_ORIGINS` - Allowed origins for CORS
@@ -474,7 +481,7 @@ Required for production:
 
 ### Best Practices Implemented
 
-- ✅ Firebase authentication with token verification
+- ✅ django-allauth + DRF Token authentication
 - ✅ HTTPS enforced (production)
 - ✅ CORS configured
 - ✅ SQL injection protection (ORM)

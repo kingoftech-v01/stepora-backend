@@ -1,80 +1,80 @@
 # Conversations App
 
-Application Django pour le chat IA en temps reel avec WebSocket.
+Django application for real-time AI chat with WebSocket.
 
 ## Overview
 
-L'app Conversations gere les interactions entre l'utilisateur et le coach IA:
-- **Conversation** - Session de chat avec contexte
-- **Message** - Message individuel (user/assistant/system)
-- **ConversationSummary** - Resume pour le contexte long terme
+The Conversations app manages interactions between the user and the AI coach:
+- **Conversation** - Chat session with context
+- **Message** - Individual message (user/assistant/system)
+- **ConversationSummary** - Summary for long-term context
 
 ## Models
 
 ### Conversation
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| user | FK(User) | Proprietaire |
-| dream | FK(Dream) | Reve associe (optionnel) |
-| conversation_type | CharField | Type de conversation |
-| total_messages | Integer | Nombre total de messages |
-| total_tokens_used | Integer | Tokens OpenAI utilises |
-| is_active | Boolean | Conversation active |
+| id | UUID | Unique identifier |
+| user | FK(User) | Owner |
+| dream | FK(Dream) | Associated dream (optional) |
+| conversation_type | CharField | Conversation type |
+| total_messages | Integer | Total number of messages |
+| total_tokens_used | Integer | OpenAI tokens used |
+| is_active | Boolean | Active conversation |
 
-**Types de conversation:**
-- `dream_creation` - Creation de reve guide
-- `planning` - Planification d'objectifs
-- `check_in` - Point de suivi
-- `adjustment` - Ajustement de plan
-- `general` - Discussion generale
-- `motivation` - Boost de motivation
-- `rescue` - Mode sauvetage (utilisateur en difficulte)
+**Conversation types:**
+- `dream_creation` - Guided dream creation
+- `planning` - Goal planning
+- `check_in` - Progress check-in
+- `adjustment` - Plan adjustment
+- `general` - General discussion
+- `motivation` - Motivation boost
+- `rescue` - Rescue mode (user struggling)
 
 ### Message
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| conversation | FK(Conversation) | Conversation parente |
+| id | UUID | Unique identifier |
+| conversation | FK(Conversation) | Parent conversation |
 | role | CharField | user, assistant, system |
-| content | TextField | Contenu du message |
-| metadata | JSONField | Tokens utilises, modele, etc. |
+| content | TextField | Message content |
+| metadata | JSONField | Tokens used, model, etc. |
 
 ### ConversationSummary
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
+| id | UUID | Unique identifier |
 | conversation | FK(Conversation) | Conversation |
-| summary | TextField | Resume textuel |
-| key_points | JSONField | Points cles extraits |
-| start_message | FK(Message) | Premier message couvert |
-| end_message | FK(Message) | Dernier message couvert |
+| summary | TextField | Text summary |
+| key_points | JSONField | Extracted key points |
+| start_message | FK(Message) | First message covered |
+| end_message | FK(Message) | Last message covered |
 
 ## API Endpoints
 
 ### REST API
-- `GET /api/conversations/` - Liste des conversations
-- `POST /api/conversations/` - Creer une conversation
-- `GET /api/conversations/{id}/` - Detail avec messages
-- `DELETE /api/conversations/{id}/` - Supprimer
-- `GET /api/conversations/{id}/messages/` - Liste des messages
-- `POST /api/conversations/{id}/messages/` - Envoyer un message (non-streaming)
+- `GET /api/conversations/` - List conversations
+- `POST /api/conversations/` - Create a conversation
+- `GET /api/conversations/{id}/` - Detail with messages
+- `DELETE /api/conversations/{id}/` - Delete
+- `GET /api/conversations/{id}/messages/` - List messages
+- `POST /api/conversations/{id}/messages/` - Send a message (non-streaming)
 
 ### WebSocket
-- `ws://host/ws/conversations/{id}/` - Chat temps reel
+- `ws://host/ws/conversations/{id}/` - Real-time chat
 
-**Actions WebSocket:**
+**WebSocket actions:**
 ```json
-// Envoyer un message
-{"type": "message", "content": "Bonjour!"}
+// Send a message
+{"type": "message", "content": "Hello!"}
 
-// Recevoir une reponse (streaming)
+// Receive a response (streaming)
 {"type": "assistant_start"}
-{"type": "assistant_chunk", "content": "Bon"}
-{"type": "assistant_chunk", "content": "jour"}
+{"type": "assistant_chunk", "content": "Hel"}
+{"type": "assistant_chunk", "content": "lo"}
 {"type": "assistant_end", "message_id": "uuid"}
 
 // Typing indicator
@@ -83,54 +83,54 @@ L'app Conversations gere les interactions entre l'utilisateur et le coach IA:
 
 ## Serializers
 
-- `ConversationSerializer` - Avec messages recents
-- `ConversationListSerializer` - Version legere
-- `MessageSerializer` - Message complet
+- `ConversationSerializer` - With recent messages
+- `ConversationListSerializer` - Lightweight version
+- `MessageSerializer` - Full message
 
 ## WebSocket Consumer
 
-Le `ChatConsumer` gere:
-1. Authentification via Firebase JWT
-2. Reception des messages utilisateur
-3. Streaming des reponses GPT-4
-4. Indicateurs de frappe
-5. Gestion des erreurs
+The `ChatConsumer` handles:
+1. Authentication via DRF Token (query param for WebSocket, header for REST)
+2. Receiving user messages
+3. Streaming GPT-4 responses
+4. Typing indicators
+5. Error handling
 
-## Integration OpenAI
+## OpenAI Integration
 
-**Modele utilise:** GPT-4 Turbo (configurable)
+**Model used:** GPT-4 Turbo (configurable)
 
-**System prompt dynamique selon le type:**
-- `dream_creation`: Guide la creation de reve
-- `planning`: Aide a planifier les etapes
-- `motivation`: Encourage et motive
-- `rescue`: Mode empathique pour utilisateurs en difficulte
+**Dynamic system prompt by type:**
+- `dream_creation`: Guides dream creation
+- `planning`: Helps plan steps
+- `motivation`: Encourages and motivates
+- `rescue`: Empathetic mode for struggling users
 
 ## Rate Limiting
 
-Les conversations sont soumises au rate limiting:
-- **Free**: 10 messages/heure
-- **Premium**: 100 messages/heure
-- **Pro**: 1000 messages/heure
+Conversations are subject to rate limiting:
+- **Free**: 10 messages/hour
+- **Premium**: 100 messages/hour
+- **Pro**: 1000 messages/hour
 
 ## Testing
 
 ```bash
-# Tests unitaires
+# Unit tests
 python manage.py test apps.conversations
 
-# Tests WebSocket
+# WebSocket tests
 pytest apps/conversations/tests.py -v -k websocket
 ```
 
 ## Configuration
 
-Variables d'environnement:
-- `OPENAI_API_KEY` - Cle API OpenAI
-- `OPENAI_MODEL` - Modele (default: gpt-4-turbo-preview)
-- `OPENAI_TIMEOUT` - Timeout en secondes (default: 30)
+Environment variables:
+- `OPENAI_API_KEY` - OpenAI API key
+- `OPENAI_MODEL` - Model (default: gpt-4-turbo-preview)
+- `OPENAI_TIMEOUT` - Timeout in seconds (default: 30)
 
-## Routing WebSocket
+## WebSocket Routing
 
 ```python
 # routing.py
@@ -143,4 +143,4 @@ websocket_urlpatterns = [
 
 - `channels` - WebSocket support
 - `channels-redis` - Redis channel layer
-- `openai` - API OpenAI
+- `openai` - OpenAI API

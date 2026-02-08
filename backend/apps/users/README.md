@@ -7,32 +7,31 @@ The **users** app manages user authentication, profiles, gamification, and socia
 ## Features
 
 ### Core Features
-- ✅ User management with Firebase authentication
-- ✅ Profile management (display name, avatar, timezone, preferences)
-- ✅ FCM token management for push notifications
-- ✅ Subscription management (free, premium, pro)
-- ✅ Work schedule and notification preferences
+- User management with django-allauth + Token authentication
+- Profile management (display name, avatar, timezone, preferences)
+- FCM token management for push notifications
+- Subscription management (free, premium, pro)
+- Work schedule and notification preferences
 
 ### Gamification Features
-- ✅ XP and leveling system
-- ✅ Streak tracking (daily activity)
-- ✅ RPG-style attributes (health, career, education, etc.)
-- ✅ Badge/achievement system
-- ✅ Rank tiers (Rêveur → Légende)
+- XP and leveling system
+- Streak tracking (daily activity)
+- RPG-style attributes (health, career, education, etc.)
+- Badge/achievement system
+- Rank tiers (Dreamer -> Legend)
 
 ### Social Features
-- ✅ Dream Buddy matching system
-- ✅ Accountability partnerships
-- ✅ User statistics and progress tracking
+- Dream Buddy matching system
+- Accountability partnerships
+- User statistics and progress tracking
 
 ## Models
 
 ### User
-Main user model with Firebase integration and gamification.
+Main user model with django-allauth integration and gamification.
 
 **Fields**:
 - `id` (UUID) - Primary key
-- `firebase_uid` (String, unique) - Firebase authentication ID
 - `email` (Email, unique) - User email
 - `display_name` (String) - Display name
 - `avatar_url` (URL) - Profile picture
@@ -212,14 +211,22 @@ Checks if user has active premium subscription.
 
 ## Authentication
 
-Uses Firebase authentication with custom Django backend.
+Uses django-allauth + Token authentication via dj-rest-auth.
 
 **Authentication Flow**:
-1. Client authenticates with Firebase
-2. Client sends Firebase ID token in header: `Authorization: Bearer <token>`
-3. Backend verifies token with Firebase Admin SDK
-4. Backend retrieves or creates Django User with `firebase_uid`
+1. Client registers or logs in via dj-rest-auth endpoints (email/password)
+2. Server returns a DRF Token on successful authentication
+3. Client sends Token in header: `Authorization: Token <key>` or `Authorization: Bearer <key>`
+4. Backend validates the Token and retrieves the associated Django User
 5. Request proceeds with authenticated user
+
+**Registration/Login Endpoints** (provided by dj-rest-auth):
+```
+POST /api/auth/registration/    # Register new user (email + password)
+POST /api/auth/login/           # Login (returns Token)
+POST /api/auth/logout/          # Logout (invalidates Token)
+POST /api/auth/password/reset/  # Password reset via email
+```
 
 ## Testing
 
@@ -227,11 +234,11 @@ Uses Firebase authentication with custom Django backend.
 - `tests.py` - Complete test suite (300+ lines)
 
 ### Test Coverage
-- ✅ Model tests (User, FcmToken, GamificationProfile, Badge)
-- ✅ Authentication tests (Firebase backend, DRF auth)
-- ✅ ViewSet tests (all CRUD operations)
-- ✅ Permission tests (IsOwner, IsPremiumUser)
-- ✅ Gamification tests (XP, levels, streaks)
+- Model tests (User, FcmToken, GamificationProfile, Badge)
+- Authentication tests (django-allauth backend, DRF Token auth)
+- ViewSet tests (all CRUD operations)
+- Permission tests (IsOwner, IsPremiumUser)
+- Gamification tests (XP, levels, streaks)
 
 ### Run Tests
 ```bash
@@ -248,15 +255,14 @@ pytest apps/users/tests.py::TestUserModel -v
 ## Security
 
 ### Implemented Security
-- ✅ Firebase token verification on every request
-- ✅ IsOwner permission on all user endpoints
-- ✅ Sensitive fields excluded from serializers (password, firebase_uid)
-- ✅ Rate limiting via Nginx (10 req/s)
-- ✅ CORS whitelist configured
-- ✅ Input validation via DRF serializers
+- Token verification on every request via DRF TokenAuthentication
+- IsOwner permission on all user endpoints
+- Sensitive fields excluded from serializers (password)
+- Rate limiting via Nginx (10 req/s)
+- CORS whitelist configured
+- Input validation via DRF serializers
 
 ### Security Best Practices
-- Never expose `firebase_uid` in API responses
 - Always use IsOwner permission for user-specific endpoints
 - Validate FCM tokens before storing
 - Sanitize user-generated content (display_name, avatar_url)
@@ -277,12 +283,13 @@ pytest apps/users/tests.py::TestUserModel -v
 ## Dependencies
 
 ### Internal
-- `core.authentication` - Firebase authentication backend
+- `core.authentication` - Token authentication backend
 - `core.permissions` - Custom permissions
 - `core.pagination` - Pagination classes
 
 ### External
-- `firebase-admin` - Firebase Admin SDK
+- `django-allauth==65.3.0` - Authentication and account management
+- `dj-rest-auth[with-social]==7.0.2` - REST API auth endpoints
 - `djangorestframework` - REST API
 - `django-filter` - API filtering
 
@@ -290,8 +297,17 @@ pytest apps/users/tests.py::TestUserModel -v
 
 ### Settings
 ```python
-# Firebase Admin SDK
-FIREBASE_CREDENTIALS = env('FIREBASE_CREDENTIALS')
+# django-allauth settings
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
+
+# DRF Token Authentication
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
 
 # Subscription tiers
 SUBSCRIPTION_CHOICES = [
@@ -304,15 +320,9 @@ SUBSCRIPTION_CHOICES = [
 XP_PER_LEVEL = 100  # XP required per level
 ```
 
-### Environment Variables
-```bash
-FIREBASE_CREDENTIALS=path/to/firebase-credentials.json
-```
-
 ## Database Indexes
 
 Optimized indexes for performance:
-- `firebase_uid` - Unique index for authentication
 - `email` - Unique index
 - `last_activity` - Index for streak calculations
 - `subscription` + `subscription_ends` - Compound index for premium checks
@@ -366,10 +376,11 @@ python manage.py showmigrations users
 
 ### Common Issues
 
-**Firebase authentication fails**:
-- Check `FIREBASE_CREDENTIALS` path
-- Verify Firebase project configuration
-- Ensure token is not expired
+**Token authentication fails**:
+- Verify the Token exists in the database (`authtoken_token` table)
+- Ensure the header format is correct: `Authorization: Token <key>`
+- Check that `rest_framework.authentication.TokenAuthentication` is in `DEFAULT_AUTHENTICATION_CLASSES`
+- Confirm dj-rest-auth endpoints are included in URL config
 
 **Streak not updating**:
 - Check `last_activity` field
@@ -385,8 +396,6 @@ python manage.py showmigrations users
 - [ ] Social graph (friends, followers)
 - [ ] Activity feed
 - [ ] User blocking/reporting
-- [ ] Email verification
-- [ ] Password reset (if adding email/password auth)
 - [ ] Two-factor authentication
 - [ ] Account deletion with data export
 
@@ -396,6 +405,6 @@ Proprietary - DreamPlanner
 
 ---
 
-**Last Updated**: 2026-01-28
+**Last Updated**: 2026-02-08
 **Maintained By**: Backend Team
-**Status**: ✅ Production Ready
+**Status**: Production Ready

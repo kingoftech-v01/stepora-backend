@@ -17,11 +17,16 @@ import '../screens/social/circle_detail_screen.dart';
 import '../screens/social/dream_buddy_screen.dart';
 import '../screens/social/leaderboard_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/profile/settings_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/store/store_screen.dart';
 import '../screens/subscription/subscription_screen.dart';
 import '../screens/vision_board/vision_board_screen.dart';
 import '../screens/micro_start/micro_start_screen.dart';
+import '../screens/profile/edit_profile_screen.dart';
+import '../screens/auth/change_password_screen.dart';
+import '../screens/dreams/edit_dream_screen.dart';
+import '../screens/chat/conversation_list_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -105,6 +110,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DreamBuddyScreen(),
       ),
       GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
         path: '/leaderboard',
         builder: (context, state) => const LeaderboardScreen(),
       ),
@@ -129,6 +138,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/micro-start/:id',
         builder: (context, state) =>
             MicroStartScreen(taskId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
+        path: '/dreams/:id/edit',
+        builder: (context, state) =>
+            EditDreamScreen(dreamId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/conversations',
+        builder: (context, state) => const ConversationListScreen(),
       ),
     ],
   );

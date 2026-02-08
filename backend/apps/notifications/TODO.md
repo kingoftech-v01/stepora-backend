@@ -3,56 +3,56 @@
 ## Completed
 
 - [x] Models: Notification, NotificationTemplate, NotificationBatch
-- [x] Integration Firebase Cloud Messaging
-- [x] Systeme de templates avec variables
-- [x] Support Do Not Disturb (DND)
-- [x] Celery tasks pour envoi automatique
-- [x] API REST complete
-- [x] Retry logic sur echec d'envoi
-- [x] Tests unitaires
+- [x] Firebase Cloud Messaging integration
+- [x] Template system with variables
+- [x] Do Not Disturb (DND) support
+- [x] Celery tasks for automatic sending
+- [x] Full REST API
+- [x] Retry logic on send failure
+- [x] Unit tests
 
 ## Recently Completed
 
-- [x] Ajouter decorateurs @extend_schema pour Swagger
-- [x] Sanitization XSS du contenu des notifications
+- [x] Add @extend_schema decorators for Swagger
+- [x] XSS sanitization of notification content
 
 ## Planned - High Priority
 
-- [ ] **Notification preferences granulaires** - Par type de notification
-- [ ] **Rich notifications** - Images et actions dans les notifications
-- [ ] **Notification channels** - Canaux Android distincts
-- [ ] **Analytics** - Tracking des taux d'ouverture
+- [ ] **Granular notification preferences** - Per notification type
+- [ ] **Rich notifications** - Images and actions in notifications
+- [ ] **Notification channels** - Distinct Android channels
+- [ ] **Analytics** - Open rate tracking
 
 ## Planned - Medium Priority
 
-- [ ] **Email fallback** - Email si push echoue
-- [ ] **In-app notifications** - Centre de notifications dans l'app
-- [ ] **Notification grouping** - Regrouper les notifications similaires
-- [ ] **A/B testing** - Tester differents messages
+- [ ] **Email fallback** - Email if push fails
+- [ ] **In-app notifications** - Notification center in the app
+- [ ] **Notification grouping** - Group similar notifications
+- [ ] **A/B testing** - Test different messages
 
 ## Planned - Low Priority
 
-- [ ] **SMS notifications** - Pour les rappels critiques
-- [ ] **Webhook notifications** - Pour integrations tierces
-- [ ] **Notification scheduling UI** - Interface admin avancee
+- [ ] **SMS notifications** - For critical reminders
+- [ ] **Webhook notifications** - For third-party integrations
+- [ ] **Notification scheduling UI** - Advanced admin interface
 
 ## Known Bugs
 
-- [ ] Les tokens FCM expires ne sont pas nettoyes automatiquement
-- [ ] Le DND peut avoir des problemes aux changements d'heure ete/hiver
-- [ ] Les batch de plus de 500 ne sont pas geres
+- [ ] Expired FCM tokens are not cleaned up automatically
+- [ ] DND can have issues during daylight saving time changes
+- [ ] Batches over 500 are not handled
 
 ## Technical Debt
 
-- [ ] Refactorer FCM service en classe
-- [ ] Ajouter type hints
-- [ ] Implementer circuit breaker pour Firebase
-- [ ] Centraliser la gestion des erreurs FCM
-- [ ] Ajouter metriques Prometheus
+- [ ] Refactor FCM service into a class
+- [ ] Add type hints
+- [ ] Implement circuit breaker for Firebase
+- [ ] Centralize FCM error handling
+- [ ] Add Prometheus metrics
 
 ## Performance Optimizations
 
-- [ ] Batch processing pour gros volumes
-- [ ] Queue prioritaire pour notifications urgentes
-- [ ] Cache des templates frequemment utilises
-- [ ] Index sur scheduled_for pour les requetes
+- [ ] Batch processing for high volumes
+- [ ] Priority queue for urgent notifications
+- [ ] Cache frequently used templates
+- [ ] Index on scheduled_for for queries

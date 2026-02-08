@@ -30,10 +30,14 @@ class DreamsState {
   }
 }
 
-class DreamsNotifier extends StateNotifier<DreamsState> {
-  final ApiService _api;
+class DreamsNotifier extends Notifier<DreamsState> {
+  late ApiService _api;
 
-  DreamsNotifier(this._api) : super(const DreamsState());
+  @override
+  DreamsState build() {
+    _api = ref.read(apiServiceProvider);
+    return const DreamsState();
+  }
 
   Future<void> fetchDreams() async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -97,6 +101,4 @@ class DreamsNotifier extends StateNotifier<DreamsState> {
   }
 }
 
-final dreamsProvider = StateNotifierProvider<DreamsNotifier, DreamsState>((ref) {
-  return DreamsNotifier(ref.read(apiServiceProvider));
-});
+final dreamsProvider = NotifierProvider<DreamsNotifier, DreamsState>(DreamsNotifier.new);

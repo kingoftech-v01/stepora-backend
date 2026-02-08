@@ -93,15 +93,37 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                             const SizedBox(height: 8),
                             FilledButton(
                               onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Confirm Purchase'),
+                                    content: Text('Buy "${item['name']}" for ${item['price'] ?? 0} XP?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Buy'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed != true) return;
                                 try {
                                   final api = ref.read(apiServiceProvider);
                                   await api.post('/store/purchase/', data: {'item_id': item['id']});
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Purchased!')));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Purchased!')),
+                                    );
                                   }
                                 } catch (e) {
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error: $e')),
+                                    );
                                   }
                                 }
                               },

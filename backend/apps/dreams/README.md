@@ -1,152 +1,152 @@
 # Dreams App
 
-Application Django pour la gestion des reves, objectifs, taches et obstacles.
+Django application for managing dreams, goals, tasks, and obstacles.
 
 ## Overview
 
-L'app Dreams est le coeur de DreamPlanner. Elle gere la hierarchie complete:
-- **Dream** - L'objectif principal/vision de l'utilisateur
-- **Goal** - Les etapes intermediaires pour atteindre le reve
-- **Task** - Les actions concretes a realiser
-- **Obstacle** - Les defis et blocages (predits ou reels)
+The Dreams app is the core of DreamPlanner. It manages the complete hierarchy:
+- **Dream** - The user's main objective/vision
+- **Goal** - Intermediate steps to achieve the dream
+- **Task** - Concrete actions to complete
+- **Obstacle** - Challenges and blockers (predicted or actual)
 
 ## Models
 
 ### Dream
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| user | FK(User) | Proprietaire du reve |
-| title | CharField(255) | Titre du reve |
-| description | TextField | Description detaillee |
-| category | CharField(50) | Categorie (carriere, sante, etc.) |
-| target_date | DateTime | Date cible d'achevement |
-| priority | Integer | Niveau de priorite (1-5) |
+| id | UUID | Unique identifier |
+| user | FK(User) | Dream owner |
+| title | CharField(255) | Dream title |
+| description | TextField | Detailed description |
+| category | CharField(50) | Category (career, health, etc.) |
+| target_date | DateTime | Target completion date |
+| priority | Integer | Priority level (1-5) |
 | status | CharField | active, completed, paused, archived |
-| ai_analysis | JSONField | Analyse IA du reve |
-| vision_image_url | URLField | Image du vision board (DALL-E) |
-| progress_percentage | Float | Pourcentage de progression |
-| has_two_minute_start | Boolean | Si un 2-minute start existe |
+| ai_analysis | JSONField | AI analysis of the dream |
+| vision_image_url | URLField | Vision board image (DALL-E) |
+| progress_percentage | Float | Progress percentage |
+| has_two_minute_start | Boolean | Whether a 2-minute start exists |
 
 ### Goal
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| dream | FK(Dream) | Reve parent |
-| title | CharField(255) | Titre de l'objectif |
+| id | UUID | Unique identifier |
+| dream | FK(Dream) | Parent dream |
+| title | CharField(255) | Goal title |
 | description | TextField | Description |
-| order | Integer | Ordre dans la sequence |
-| estimated_minutes | Integer | Duree estimee |
-| scheduled_start/end | DateTime | Planification |
+| order | Integer | Order in the sequence |
+| estimated_minutes | Integer | Estimated duration |
+| scheduled_start/end | DateTime | Scheduling |
 | status | CharField | pending, in_progress, completed, skipped |
-| reminder_enabled | Boolean | Rappels actives |
-| progress_percentage | Float | Progression |
+| reminder_enabled | Boolean | Reminders enabled |
+| progress_percentage | Float | Progress |
 
 ### Task
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| goal | FK(Goal) | Objectif parent |
-| title | CharField(255) | Titre de la tache |
+| id | UUID | Unique identifier |
+| goal | FK(Goal) | Parent goal |
+| title | CharField(255) | Task title |
 | description | TextField | Description |
-| order | Integer | Ordre dans l'objectif |
-| scheduled_date | DateTime | Date planifiee |
-| scheduled_time | CharField(5) | Heure (HH:MM) |
-| duration_mins | Integer | Duree en minutes |
-| recurrence | JSONField | Pattern de recurrence |
+| order | Integer | Order within the goal |
+| scheduled_date | DateTime | Scheduled date |
+| scheduled_time | CharField(5) | Time (HH:MM) |
+| duration_mins | Integer | Duration in minutes |
+| recurrence | JSONField | Recurrence pattern |
 | status | CharField | pending, completed, skipped |
-| is_two_minute_start | Boolean | Tache 2-minute start |
+| is_two_minute_start | Boolean | 2-minute start task |
 
 ### Obstacle
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| dream | FK(Dream) | Reve associe |
-| title | CharField(255) | Titre de l'obstacle |
+| id | UUID | Unique identifier |
+| dream | FK(Dream) | Associated dream |
+| title | CharField(255) | Obstacle title |
 | description | TextField | Description |
 | obstacle_type | CharField | predicted, actual |
-| solution | TextField | Solution IA |
+| solution | TextField | AI solution |
 | status | CharField | active, resolved, ignored |
 
 ## API Endpoints
 
 ### Dreams
-- `GET /api/dreams/` - Liste des reves
-- `POST /api/dreams/` - Creer un reve
-- `GET /api/dreams/{id}/` - Detail d'un reve
-- `PUT /api/dreams/{id}/` - Modifier un reve
-- `DELETE /api/dreams/{id}/` - Supprimer un reve
-- `POST /api/dreams/{id}/analyze/` - Analyse IA du reve
-- `POST /api/dreams/{id}/generate-plan/` - Generer un plan GPT-4
-- `POST /api/dreams/{id}/generate-vision/` - Generer vision board DALL-E
-- `POST /api/dreams/{id}/generate-two-minute-start/` - Generer micro-action
+- `GET /api/dreams/` - List dreams
+- `POST /api/dreams/` - Create a dream
+- `GET /api/dreams/{id}/` - Dream detail
+- `PUT /api/dreams/{id}/` - Update a dream
+- `DELETE /api/dreams/{id}/` - Delete a dream
+- `POST /api/dreams/{id}/analyze/` - AI analysis of the dream
+- `POST /api/dreams/{id}/generate-plan/` - Generate a GPT-4 plan
+- `POST /api/dreams/{id}/generate-vision/` - Generate DALL-E vision board
+- `POST /api/dreams/{id}/generate-two-minute-start/` - Generate micro-action
 
 ### Goals
-- `GET /api/dreams/{dream_id}/goals/` - Liste des objectifs
-- `POST /api/dreams/{dream_id}/goals/` - Creer un objectif
-- `GET /api/goals/{id}/` - Detail d'un objectif
-- `PUT /api/goals/{id}/` - Modifier un objectif
-- `DELETE /api/goals/{id}/` - Supprimer un objectif
-- `POST /api/goals/{id}/complete/` - Marquer comme complete
+- `GET /api/dreams/{dream_id}/goals/` - List goals
+- `POST /api/dreams/{dream_id}/goals/` - Create a goal
+- `GET /api/goals/{id}/` - Goal detail
+- `PUT /api/goals/{id}/` - Update a goal
+- `DELETE /api/goals/{id}/` - Delete a goal
+- `POST /api/goals/{id}/complete/` - Mark as completed
 
 ### Tasks
-- `GET /api/goals/{goal_id}/tasks/` - Liste des taches
-- `POST /api/goals/{goal_id}/tasks/` - Creer une tache
-- `GET /api/tasks/{id}/` - Detail d'une tache
-- `PUT /api/tasks/{id}/` - Modifier une tache
-- `DELETE /api/tasks/{id}/` - Supprimer une tache
-- `POST /api/tasks/{id}/complete/` - Marquer comme complete (donne XP)
+- `GET /api/goals/{goal_id}/tasks/` - List tasks
+- `POST /api/goals/{goal_id}/tasks/` - Create a task
+- `GET /api/tasks/{id}/` - Task detail
+- `PUT /api/tasks/{id}/` - Update a task
+- `DELETE /api/tasks/{id}/` - Delete a task
+- `POST /api/tasks/{id}/complete/` - Mark as completed (awards XP)
 
 ### Obstacles
-- `GET /api/dreams/{dream_id}/obstacles/` - Liste des obstacles
-- `POST /api/dreams/{dream_id}/obstacles/` - Creer un obstacle
-- `POST /api/obstacles/{id}/resolve/` - Marquer comme resolu
+- `GET /api/dreams/{dream_id}/obstacles/` - List obstacles
+- `POST /api/dreams/{dream_id}/obstacles/` - Create an obstacle
+- `POST /api/obstacles/{id}/resolve/` - Mark as resolved
 
 ## Serializers
 
-- `DreamSerializer` - Serialisation complete avec goals imbriques
-- `DreamListSerializer` - Version legere pour les listes
-- `GoalSerializer` - Avec tasks imbriques
-- `TaskSerializer` - Serialisation complete
-- `ObstacleSerializer` - Avec solution IA
+- `DreamSerializer` - Full serialization with nested goals
+- `DreamListSerializer` - Lightweight version for lists
+- `GoalSerializer` - With nested tasks
+- `TaskSerializer` - Full serialization
+- `ObstacleSerializer` - With AI solution
 
 ## Permissions
 
-- `IsAuthenticated` - Toutes les vues requierent l'authentification
-- `IsOwner` - Verification que l'utilisateur est proprietaire du reve
+- `IsAuthenticated` - All views require authentication
+- `IsOwner` - Verifies the user owns the dream
 
 ## Gamification
 
-- Completer une **Task** : 10-100 XP (selon duree)
-- Completer un **Goal** : 100 XP
-- Completer un **Dream** : 500 XP
-- Les streaks sont mis a jour a chaque completion de tache
+- Completing a **Task**: 10-100 XP (based on duration)
+- Completing a **Goal**: 100 XP
+- Completing a **Dream**: 500 XP
+- Streaks are updated on each task completion
 
 ## Testing
 
 ```bash
-# Lancer les tests de l'app
+# Run app tests
 python manage.py test apps.dreams
 
-# Avec coverage
+# With coverage
 pytest apps/dreams/tests.py -v --cov=apps.dreams
 ```
 
 ## Configuration
 
-Variables d'environnement utilisees:
-- `OPENAI_API_KEY` - Pour generation de plans et analyse
-- `OPENAI_MODEL` - Modele GPT a utiliser (default: gpt-4-turbo-preview)
+Environment variables used:
+- `OPENAI_API_KEY` - For plan generation and analysis
+- `OPENAI_MODEL` - GPT model to use (default: gpt-4-turbo-preview)
 
 ## Celery Tasks
 
-- `generate_dream_plan` - Generation de plan IA (async)
-- `generate_two_minute_start` - Generation de micro-action (async)
-- `generate_vision_board` - Generation d'image DALL-E (async)
-- `analyze_dream` - Analyse IA du reve (async)
-- `predict_obstacles` - Prediction d'obstacles (async)
-- `auto_schedule_tasks` - Planification automatique des taches
+- `generate_dream_plan` - AI plan generation (async)
+- `generate_two_minute_start` - Micro-action generation (async)
+- `generate_vision_board` - DALL-E image generation (async)
+- `analyze_dream` - AI analysis of the dream (async)
+- `predict_obstacles` - Obstacle prediction (async)
+- `auto_schedule_tasks` - Automatic task scheduling

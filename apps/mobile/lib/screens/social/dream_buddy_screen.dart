@@ -31,7 +31,6 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
         final active = results.where((b) => b['status'] == 'active').toList();
         if (active.isNotEmpty) _currentBuddy = active.first;
       }
-      // Load suggestions
       try {
         final sugResponse = await api.get('/buddies/find_match/');
         _suggestions = List<Map<String, dynamic>>.from(sugResponse.data['suggestions'] ?? []);
@@ -45,104 +44,173 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(appBar: AppBar(title: const Text('Dream Buddy')), body: const Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Dream Buddy')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dream Buddy')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_currentBuddy != null) ...[
-            Text('Your Buddy', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: AppTheme.primaryPurple,
-                      child: const Icon(Icons.person, color: Colors.white, size: 30),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (_currentBuddy != null) ...[
+              Text(
+                'Your Buddy',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: AppTheme.primaryPurple,
+                        child: const Icon(Icons.person, color: Colors.white, size: 30),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _currentBuddy!['user2_name'] ?? _currentBuddy!['user1_name'] ?? 'Buddy',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Compatibility: ${(_currentBuddy!['compatibility_score'] ?? 0)}%',
+                              style: TextStyle(color: AppTheme.accent),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
                         children: [
-                          Text(
-                            _currentBuddy!['user2_name'] ?? _currentBuddy!['user1_name'] ?? 'Buddy',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          IconButton(
+                            icon: const Icon(Icons.chat_outlined),
+                            tooltip: 'Chat with buddy',
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Buddy chat coming soon!')),
+                              );
+                            },
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Compatibility: ${(_currentBuddy!['compatibility_score'] ?? 0)}%',
-                            style: TextStyle(color: AppTheme.accent),
+                          IconButton(
+                            icon: const Icon(Icons.favorite_outline),
+                            tooltip: 'Send encouragement',
+                            onPressed: () async {
+                              try {
+                                final api = ref.read(apiServiceProvider);
+                                await api.post('/buddies/${_currentBuddy!['id']}/encourage/');
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Encouragement sent!')),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')),
+                                  );
+                                }
+                              }
+                            },
                           ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chat_outlined),
-                      onPressed: () {},
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ] else ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Icon(Icons.people_outline, size: 64, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
-                    const SizedBox(height: 16),
-                    Text('Find Your Dream Buddy', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text('Get matched with someone who shares your goals!', style: TextStyle(color: Colors.grey[600]), textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () async {
+              const SizedBox(height: 24),
+            ] else ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.people_outline, size: 64, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Find Your Dream Buddy',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Get matched with someone who shares your goals!',
+                        style: TextStyle(color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final api = ref.read(apiServiceProvider);
+                          try {
+                            await api.post('/buddies/find_match/');
+                            _loadData();
+                          } catch (_) {}
+                        },
+                        icon: const Icon(Icons.search),
+                        label: const Text('Find Match'),
+                        style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (_suggestions.isNotEmpty) ...[
+              Text(
+                'Suggested Buddies',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ..._suggestions.map((s) => Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
+                    child: Text(
+                      (s['display_name'] ?? 'U')[0].toUpperCase(),
+                      style: TextStyle(color: AppTheme.primaryPurple),
+                    ),
+                  ),
+                  title: Text(s['display_name'] ?? ''),
+                  subtitle: Text('${s['shared_categories']?.join(', ') ?? 'Common interests'}'),
+                  trailing: FilledButton(
+                    onPressed: () async {
+                      try {
                         final api = ref.read(apiServiceProvider);
-                        try {
-                          await api.post('/buddies/find_match/');
+                        await api.post('/buddies/pair/', data: {'partner_id': s['id']});
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Buddy request sent!')),
+                          );
                           _loadData();
-                        } catch (_) {}
-                      },
-                      icon: const Icon(Icons.search),
-                      label: const Text('Find Match'),
-                      style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-                    ),
-                  ],
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $e')),
+                          );
+                        }
+                      }
+                    },
+                    style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                    child: const Text('Request'),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
+              )),
+            ],
           ],
-          if (_suggestions.isNotEmpty) ...[
-            Text('Suggested Buddies', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            ..._suggestions.map((s) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                  child: Text((s['display_name'] ?? 'U')[0].toUpperCase(), style: TextStyle(color: AppTheme.primaryPurple)),
-                ),
-                title: Text(s['display_name'] ?? ''),
-                subtitle: Text('${s['shared_categories']?.join(', ') ?? 'Common interests'}'),
-                trailing: FilledButton(
-                  onPressed: () {},
-                  style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-                  child: const Text('Request'),
-                ),
-              ),
-            )),
-          ],
-        ],
+        ),
       ),
     );
   }

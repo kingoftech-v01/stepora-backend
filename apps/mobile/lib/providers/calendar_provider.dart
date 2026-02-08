@@ -37,10 +37,14 @@ class CalendarState {
   }
 }
 
-class CalendarNotifier extends StateNotifier<CalendarState> {
-  final ApiService _api;
+class CalendarNotifier extends Notifier<CalendarState> {
+  late ApiService _api;
 
-  CalendarNotifier(this._api) : super(CalendarState());
+  @override
+  CalendarState build() {
+    _api = ref.read(apiServiceProvider);
+    return CalendarState();
+  }
 
   Future<void> fetchEvents(DateTime start, DateTime end) async {
     state = state.copyWith(isLoading: true);
@@ -81,6 +85,4 @@ class CalendarNotifier extends StateNotifier<CalendarState> {
   }
 }
 
-final calendarProvider = StateNotifierProvider<CalendarNotifier, CalendarState>((ref) {
-  return CalendarNotifier(ref.read(apiServiceProvider));
-});
+final calendarProvider = NotifierProvider<CalendarNotifier, CalendarState>(CalendarNotifier.new);

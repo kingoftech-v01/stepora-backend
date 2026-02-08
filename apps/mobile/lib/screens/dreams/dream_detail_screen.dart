@@ -75,12 +75,15 @@ class _DreamDetailScreenState extends ConsumerState<DreamDetailScreen> {
           ),
           PopupMenuButton(
             itemBuilder: (context) => [
+              const PopupMenuItem(value: 'edit', child: Text('Edit Dream')),
               const PopupMenuItem(value: 'calibrate', child: Text('Calibration')),
               const PopupMenuItem(value: 'generate', child: Text('Generate Plan')),
               const PopupMenuItem(value: 'delete', child: Text('Delete Dream')),
             ],
             onSelected: (value) async {
-              if (value == 'calibrate') {
+              if (value == 'edit') {
+                context.push('/dreams/${dream.id}/edit');
+              } else if (value == 'calibrate') {
                 context.push('/dreams/${dream.id}/calibration');
               } else if (value == 'generate') {
                 await ref.read(dreamsProvider.notifier).generatePlan(dream.id);

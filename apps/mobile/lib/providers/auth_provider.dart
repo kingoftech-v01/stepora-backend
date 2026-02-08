@@ -34,12 +34,16 @@ class AuthState {
   }
 }
 
-class AuthNotifier extends StateNotifier<AuthState> {
-  final AuthService _authService;
-  final ApiService _apiService;
+class AuthNotifier extends Notifier<AuthState> {
+  late AuthService _authService;
+  late ApiService _apiService;
 
-  AuthNotifier(this._authService, this._apiService) : super(const AuthState()) {
+  @override
+  AuthState build() {
+    _authService = ref.read(authServiceProvider);
+    _apiService = ref.read(apiServiceProvider);
     _checkAuth();
+    return const AuthState();
   }
 
   Future<void> _checkAuth() async {
@@ -104,9 +108,4 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(
-    ref.read(authServiceProvider),
-    ref.read(apiServiceProvider),
-  );
-});
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);

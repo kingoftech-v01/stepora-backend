@@ -34,12 +34,21 @@ class ChatState {
   }
 }
 
-class ChatNotifier extends StateNotifier<ChatState> {
-  final ApiService _api;
+class ChatNotifier extends Notifier<ChatState> {
+  late ApiService _api;
   final WebSocketService _ws = WebSocketService();
   StreamSubscription? _wsSubscription;
 
-  ChatNotifier(this._api) : super(const ChatState());
+  @override
+  ChatState build() {
+    _api = ref.read(apiServiceProvider);
+    ref.onDispose(() {
+      _wsSubscription?.cancel();
+      _ws.disconnect();
+      _ws.dispose();
+    });
+    return const ChatState();
+  }
 
   Future<void> fetchConversations() async {
     state = state.copyWith(isLoading: true);
@@ -113,15 +122,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _wsSubscription?.cancel();
     _ws.disconnect();
   }
-
-  @override
-  void dispose() {
-    disconnectWebSocket();
-    _ws.dispose();
-    super.dispose();
-  }
 }
 
-final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
-  return ChatNotifier(ref.read(apiServiceProvider));
-});
+final chatProvider = NotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);

@@ -17,10 +17,14 @@ class TasksState {
   }
 }
 
-class TasksNotifier extends StateNotifier<TasksState> {
-  final ApiService _api;
+class TasksNotifier extends Notifier<TasksState> {
+  late ApiService _api;
 
-  TasksNotifier(this._api) : super(const TasksState());
+  @override
+  TasksState build() {
+    _api = ref.read(apiServiceProvider);
+    return const TasksState();
+  }
 
   Future<void> fetchTasks({String? date}) async {
     state = state.copyWith(isLoading: true);
@@ -71,6 +75,4 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 }
 
-final tasksProvider = StateNotifierProvider<TasksNotifier, TasksState>((ref) {
-  return TasksNotifier(ref.read(apiServiceProvider));
-});
+final tasksProvider = NotifierProvider<TasksNotifier, TasksState>(TasksNotifier.new);

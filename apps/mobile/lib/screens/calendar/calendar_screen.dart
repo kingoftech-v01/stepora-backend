@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/calendar_event.dart';
 import '../../providers/calendar_provider.dart';
 import '../../providers/tasks_provider.dart';
+import '../../services/api_service.dart';
 import '../../widgets/task_tile.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -30,6 +31,121 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         date: now.toIso8601String().split('T').first,
       );
     });
+  }
+
+  void _showCreateEventDialog() {
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    final calState = ref.read(calendarProvider);
+    DateTime selectedDate = calState.selectedDay;
+    TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
+    TimeOfDay endTime = const TimeOfDay(hour: 10, minute: 0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('New Event'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Date'),
+                  subtitle: Text(
+                    '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) setDialogState(() => selectedDate = picked);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Start Time'),
+                  subtitle: Text(startTime.format(ctx)),
+                  trailing: const Icon(Icons.access_time),
+                  onTap: () async {
+                    final picked = await showTimePicker(context: ctx, initialTime: startTime);
+                    if (picked != null) setDialogState(() => startTime = picked);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('End Time'),
+                  subtitle: Text(endTime.format(ctx)),
+                  trailing: const Icon(Icons.access_time),
+                  onTap: () async {
+                    final picked = await showTimePicker(context: ctx, initialTime: endTime);
+                    if (picked != null) setDialogState(() => endTime = picked);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) return;
+                final startDateTime = DateTime(
+                  selectedDate.year, selectedDate.month, selectedDate.day,
+                  startTime.hour, startTime.minute,
+                );
+                final endDateTime = DateTime(
+                  selectedDate.year, selectedDate.month, selectedDate.day,
+                  endTime.hour, endTime.minute,
+                );
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.post('/calendar/', data: {
+                    'title': titleController.text.trim(),
+                    'description': descController.text.trim(),
+                    'start_time': startDateTime.toIso8601String(),
+                    'end_time': endDateTime.toIso8601String(),
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  final focusedDay = ref.read(calendarProvider).focusedDay;
+                  ref.read(calendarProvider.notifier).fetchEvents(
+                    DateTime(focusedDay.year, focusedDay.month, 1),
+                    DateTime(focusedDay.year, focusedDay.month + 1, 0),
+                  );
+                  ref.read(tasksProvider.notifier).fetchTasks(
+                    date: selectedDate.toIso8601String().split('T').first,
+                  );
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                }
+              },
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -130,6 +246,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreateEventDialog,
+        backgroundColor: AppTheme.primaryPurple,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }

@@ -1,120 +1,120 @@
 # Calendar App
 
-Application Django pour la gestion du calendrier et la planification.
+Django application for calendar management and scheduling.
 
 ## Overview
 
-L'app Calendar gere la planification des taches:
-- **CalendarEvent** - Evenement dans le calendrier
-- **TimeBlock** - Blocs de temps recurents (preferences)
+The Calendar app manages task scheduling:
+- **CalendarEvent** - Calendar event
+- **TimeBlock** - Recurring time blocks (preferences)
 
 ## Models
 
 ### CalendarEvent
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| user | FK(User) | Proprietaire |
-| task | FK(Task) | Tache associee (optionnel) |
-| title | CharField(255) | Titre de l'evenement |
+| id | UUID | Unique identifier |
+| user | FK(User) | Owner |
+| task | FK(Task) | Associated task (optional) |
+| title | CharField(255) | Event title |
 | description | TextField | Description |
-| start_time | DateTime | Debut |
-| end_time | DateTime | Fin |
-| location | CharField(255) | Lieu/contexte |
-| reminder_minutes_before | Integer | Rappel avant (minutes) |
+| start_time | DateTime | Start |
+| end_time | DateTime | End |
+| location | CharField(255) | Location/context |
+| reminder_minutes_before | Integer | Reminder before (minutes) |
 | status | CharField | scheduled, completed, cancelled, rescheduled |
 
 ### TimeBlock
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| id | UUID | Identifiant unique |
-| user | FK(User) | Proprietaire |
-| block_type | CharField | Type de bloc |
-| day_of_week | Integer | 0=Lundi, 6=Dimanche |
-| start_time | TimeField | Heure de debut |
-| end_time | TimeField | Heure de fin |
-| is_active | Boolean | Bloc actif |
+| id | UUID | Unique identifier |
+| user | FK(User) | Owner |
+| block_type | CharField | Block type |
+| day_of_week | Integer | 0=Monday, 6=Sunday |
+| start_time | TimeField | Start time |
+| end_time | TimeField | End time |
+| is_active | Boolean | Active block |
 
-**Types de blocs:**
-- `work` - Travail
-- `personal` - Personnel
-- `family` - Famille
-- `exercise` - Exercice
-- `blocked` - Bloque (indisponible)
+**Block types:**
+- `work` - Work
+- `personal` - Personal
+- `family` - Family
+- `exercise` - Exercise
+- `blocked` - Blocked (unavailable)
 
 ## API Endpoints
 
 ### Events
-- `GET /api/calendar/` - Liste des evenements
-- `GET /api/calendar/?date=2024-01-15` - Evenements d'un jour
-- `GET /api/calendar/?start=2024-01-01&end=2024-01-31` - Plage de dates
-- `POST /api/calendar/` - Creer un evenement
+- `GET /api/calendar/` - List events
+- `GET /api/calendar/?date=2024-01-15` - Events for a specific day
+- `GET /api/calendar/?start=2024-01-01&end=2024-01-31` - Date range
+- `POST /api/calendar/` - Create an event
 - `GET /api/calendar/{id}/` - Detail
-- `PUT /api/calendar/{id}/` - Modifier
-- `DELETE /api/calendar/{id}/` - Supprimer
-- `POST /api/calendar/{id}/reschedule/` - Replanifier
+- `PUT /api/calendar/{id}/` - Update
+- `DELETE /api/calendar/{id}/` - Delete
+- `POST /api/calendar/{id}/reschedule/` - Reschedule
 
-### Vues speciales
-- `GET /api/calendar/today/` - Evenements d'aujourd'hui
-- `GET /api/calendar/week/` - Evenements de la semaine
-- `GET /api/calendar/overdue/` - Taches en retard
-- `POST /api/calendar/auto-schedule/` - Planification automatique
+### Special Views
+- `GET /api/calendar/today/` - Today's events
+- `GET /api/calendar/week/` - This week's events
+- `GET /api/calendar/overdue/` - Overdue tasks
+- `POST /api/calendar/auto-schedule/` - Automatic scheduling
 
 ### Time Blocks
-- `GET /api/time-blocks/` - Liste des blocs
-- `POST /api/time-blocks/` - Creer un bloc
-- `PUT /api/time-blocks/{id}/` - Modifier
-- `DELETE /api/time-blocks/{id}/` - Supprimer
+- `GET /api/time-blocks/` - List blocks
+- `POST /api/time-blocks/` - Create a block
+- `PUT /api/time-blocks/{id}/` - Update
+- `DELETE /api/time-blocks/{id}/` - Delete
 
 ## Serializers
 
-- `CalendarEventSerializer` - Evenement complet avec tache
-- `CalendarEventListSerializer` - Version liste
-- `TimeBlockSerializer` - Bloc de temps
+- `CalendarEventSerializer` - Full event with task
+- `CalendarEventListSerializer` - List version
+- `TimeBlockSerializer` - Time block
 
-## Planification Intelligente
+## Smart Scheduling
 
-L'auto-scheduling prend en compte:
-1. **TimeBlocks** - Respecte les blocs de disponibilite
-2. **Preferences utilisateur** - Horaires de travail dans le profil
-3. **Duree des taches** - Ne depasse pas les blocs disponibles
-4. **Priorite** - Planifie d'abord les taches prioritaires
-5. **Deadlines** - Respecte les dates limites des reves
+Auto-scheduling takes into account:
+1. **TimeBlocks** - Respects availability blocks
+2. **User preferences** - Work hours from profile
+3. **Task duration** - Does not exceed available blocks
+4. **Priority** - Schedules high-priority tasks first
+5. **Deadlines** - Respects dream deadlines
 
-## Algorithme de Planification
+## Scheduling Algorithm
 
 ```python
 def auto_schedule_tasks(user, tasks):
-    1. Recuperer les TimeBlocks actifs
-    2. Pour chaque jour dans la plage:
-       - Identifier les creneaux disponibles
-       - Filtrer les taches non planifiees
-       - Attribuer les taches aux creneaux
-    3. Creer les CalendarEvents correspondants
+    1. Retrieve active TimeBlocks
+    2. For each day in the range:
+       - Identify available slots
+       - Filter unscheduled tasks
+       - Assign tasks to slots
+    3. Create corresponding CalendarEvents
 ```
 
 ## Testing
 
 ```bash
-# Tests unitaires
+# Unit tests
 python manage.py test apps.calendar
 
-# Avec coverage
+# With coverage
 pytest apps/calendar/tests.py -v --cov=apps.calendar
 ```
 
 ## Configuration
 
-La planification utilise les preferences utilisateur:
-- `work_schedule` - Horaires de travail (JSON)
-- `timezone` - Fuseau horaire pour les calculs
+Scheduling uses user preferences:
+- `work_schedule` - Work hours (JSON)
+- `timezone` - Timezone for calculations
 
-## Integration avec Dreams
+## Integration with Dreams
 
-Quand une tache est completee:
-1. Le CalendarEvent passe en status `completed`
-2. La Task sous-jacente est marquee complete
-3. L'XP est attribue a l'utilisateur
-4. Le streak est mis a jour
+When a task is completed:
+1. The CalendarEvent status changes to `completed`
+2. The underlying Task is marked as completed
+3. XP is awarded to the user
+4. The streak is updated

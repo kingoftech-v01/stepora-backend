@@ -2,25 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/utils/validators.dart';
 import '../../providers/dreams_provider.dart';
+import '../../services/api_service.dart';
 
-class CreateDreamScreen extends ConsumerStatefulWidget {
-  const CreateDreamScreen({super.key});
+class EditDreamScreen extends ConsumerStatefulWidget {
+  final String dreamId;
+  const EditDreamScreen({super.key, required this.dreamId});
 
   @override
-  ConsumerState<CreateDreamScreen> createState() => _CreateDreamScreenState();
+  ConsumerState<EditDreamScreen> createState() => _EditDreamScreenState();
 }
 
-class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
+class _EditDreamScreenState extends ConsumerState<EditDreamScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   String _category = 'personal_growth';
   String _timeframe = '6_months';
-  bool _isLoading = false;
+  String _status = 'active';
+  bool _isLoading = true;
+  bool _isSaving = false;
 
-  final _categories = const {
+  static const _categories = {
     'health': 'Health & Fitness',
     'career': 'Career',
     'relationships': 'Relationships',
@@ -29,7 +32,7 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
     'hobbies': 'Hobbies & Fun',
   };
 
-  final _timeframes = const {
+  static const _timeframes = {
     '1_month': '1 Month',
     '3_months': '3 Months',
     '6_months': '6 Months',
@@ -38,6 +41,19 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
     '5_years': '5 Years',
   };
 
+  static const _statuses = {
+    'active': 'Active',
+    'paused': 'Paused',
+    'archived': 'Archived',
+    'completed': 'Completed',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDream();
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -45,17 +61,35 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
     super.dispose();
   }
 
-  Future<void> _create() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+  Future<void> _loadDream() async {
     try {
-      final dream = await ref.read(dreamsProvider.notifier).createDream({
+      final dream = await ref.read(dreamsProvider.notifier).getDreamDetail(widget.dreamId);
+      _titleController.text = dream.title;
+      _descriptionController.text = dream.description;
+      setState(() {
+        _category = _categories.containsKey(dream.category) ? dream.category : 'personal_growth';
+        _timeframe = _timeframes.containsKey(dream.timeframe) ? dream.timeframe : '6_months';
+        _status = _statuses.containsKey(dream.status) ? dream.status : 'active';
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.put('/dreams/${widget.dreamId}/', data: {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'category': _category,
         'timeframe': _timeframe,
+        'status': _status,
       });
-      if (mounted) context.go('/dreams/${dream.id}');
+      if (mounted) context.pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,14 +97,21 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Dream')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Dream')),
+      appBar: AppBar(title: const Text('Edit Dream')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -78,33 +119,21 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.auto_awesome, size: 48, color: AppTheme.primaryPurple),
-              const SizedBox(height: 16),
-              Text(
-                'What do you dream of achieving?',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
               TextFormField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Dream Title',
-                  hintText: 'e.g., Run a marathon',
                   prefixIcon: Icon(Icons.lightbulb_outline),
                 ),
-                validator: (v) => Validators.required(v, 'Title'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Title is required' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  hintText: 'Describe your dream in detail...',
+                  labelText: 'Description',
                   prefixIcon: Icon(Icons.description_outlined),
                   alignLabelWithHint: true,
                 ),
@@ -135,19 +164,32 @@ class _CreateDreamScreenState extends ConsumerState<CreateDreamScreen> {
                 )).toList(),
                 onChanged: (v) => setState(() => _timeframe = v!),
               ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _status,
+                decoration: const InputDecoration(
+                  labelText: 'Status',
+                  prefixIcon: Icon(Icons.flag_outlined),
+                ),
+                items: _statuses.entries.map((e) => DropdownMenuItem(
+                  value: e.key,
+                  child: Text(e.value),
+                )).toList(),
+                onChanged: (v) => setState(() => _status = v!),
+              ),
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: _isLoading ? null : _create,
+                onPressed: _isSaving ? null : _save,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppTheme.primaryPurple,
                 ),
-                child: _isLoading
+                child: _isSaving
                     ? const SizedBox(
                         height: 20, width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Create Dream', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
