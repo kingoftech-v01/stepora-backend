@@ -9,16 +9,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
-# Database (development uses local PostgreSQL)
-DATABASES['default']['NAME'] = os.getenv('DB_NAME', 'dreamplanner_dev')
-
 # CORS - Allow all origins in development
 CORS_ALLOW_ALL_ORIGINS = True
-
-# Django Debug Toolbar
-INSTALLED_APPS += ['debug_toolbar']
-MIDDLEWARE.insert(0, 'debug_toolbar.middleware.DebugToolbarMiddleware')
-INTERNAL_IPS = ['127.0.0.1', 'localhost']
 
 # Email backend (console in development)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -26,8 +18,21 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Disable SSL redirect in development
 SECURE_SSL_REDIRECT = False
 
-# Django Extensions
-INSTALLED_APPS += ['django_extensions']
+# Optional: Django Debug Toolbar
+try:
+    import debug_toolbar  # noqa: F401
+    INSTALLED_APPS += ['debug_toolbar']
+    MIDDLEWARE.insert(0, 'debug_toolbar.middleware.DebugToolbarMiddleware')
+    INTERNAL_IPS = ['127.0.0.1', 'localhost']
+except ImportError:
+    pass
+
+# Optional: Django Extensions
+try:
+    import django_extensions  # noqa: F401
+    INSTALLED_APPS += ['django_extensions']
+except ImportError:
+    pass
 
 # Logging level
 LOGGING['root']['level'] = 'DEBUG'

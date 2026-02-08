@@ -24,7 +24,7 @@ django-celery-beat==2.6.0
 
 # Authentication
 django-allauth==65.3.0
-dj-rest-auth[with-social]==7.0.0
+dj-rest-auth[with-social]==7.0.2
 
 # Firebase (FCM push notifications only)
 firebase-admin==6.3.0
