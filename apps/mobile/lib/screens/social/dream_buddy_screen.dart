@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../widgets/gradient_background.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/glass_app_bar.dart';
+import '../../widgets/glass_button.dart';
+import '../../widgets/glass_text_field.dart';
+import '../../widgets/animated_list_item.dart';
+import '../../widgets/loading_shimmer.dart';
 
 class DreamBuddyScreen extends ConsumerStatefulWidget {
   const DreamBuddyScreen({super.key});
@@ -17,10 +25,7 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
   bool _isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
+  void initState() { super.initState(); _loadData(); }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
@@ -37,213 +42,194 @@ class _DreamBuddyScreenState extends ConsumerState<DreamBuddyScreen> {
         _suggestions = List<Map<String, dynamic>>.from(sugResponse.data['suggestions'] ?? []);
       } catch (_) {}
       setState(() => _isLoading = false);
-    } catch (_) {
-      setState(() => _isLoading = false);
-    }
+    } catch (_) { setState(() => _isLoading = false); }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Dream Buddy')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dream Buddy')),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (_currentBuddy != null) ...[
-              Text(
-                'Your Buddy',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: AppTheme.primaryPurple,
-                        child: const Icon(Icons.person, color: Colors.white, size: 30),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _currentBuddy!['user2_name'] ?? _currentBuddy!['user1_name'] ?? 'Buddy',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    return GradientBackground(
+      colors: isDark ? AppTheme.gradientSocial : AppTheme.gradientSocialLight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: const GlassAppBar(title: 'Dream Buddy'),
+        body: _isLoading
+            ? const Center(child: LoadingShimmer())
+            : RefreshIndicator(
+                onRefresh: _loadData,
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + kToolbarHeight + 8, 16, 32),
+                  children: [
+                    if (_currentBuddy != null) ...[
+                      Text('Your Buddy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : const Color(0xFF1E1B4B)))
+                        .animate().fadeIn(duration: 400.ms),
+                      const SizedBox(height: 10),
+                      GlassContainer(
+                        padding: const EdgeInsets.all(20),
+                        opacity: isDark ? 0.15 : 0.3,
+                        border: Border.all(color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
+                        child: Row(children: [
+                          Container(
+                            width: 60, height: 60,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [AppTheme.primaryPurple, Color(0xFF8B5CF6)]),
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [BoxShadow(color: AppTheme.primaryPurple.withValues(alpha: 0.3), blurRadius: 10)],
                             ),
+                            child: const Icon(Icons.person, color: Colors.white, size: 30),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(_currentBuddy!['user2_name'] ?? _currentBuddy!['user1_name'] ?? 'Buddy',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : const Color(0xFF1E1B4B))),
                             const SizedBox(height: 4),
-                            Text(
-                              'Compatibility: ${(_currentBuddy!['compatibility_score'] ?? 0)}%',
-                              style: TextStyle(color: AppTheme.accent),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chat_outlined),
-                            tooltip: 'Chat with buddy',
-                            onPressed: () {
+                            Row(children: [
+                              Icon(Icons.favorite, size: 14, color: AppTheme.accent),
+                              const SizedBox(width: 4),
+                              Text('Compatibility: ${_currentBuddy!['compatibility_score'] ?? 0}%',
+                                style: TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ]),
+                          ])),
+                          Column(children: [
+                            _glassIconButton(Icons.chat_outlined, 'Chat', () {
                               final convId = _currentBuddy!['conversation_id']?.toString();
                               if (convId != null) {
                                 context.push('/buddy-chat/$convId');
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No chat available yet')),
-                                );
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No chat available yet')));
                               }
+                            }),
+                            const SizedBox(height: 8),
+                            _glassIconButton(Icons.favorite_outline, 'Encourage', () => _showEncourageDialog()),
+                          ]),
+                        ]),
+                      ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.05, end: 0),
+                      const SizedBox(height: 24),
+                    ] else ...[
+                      GlassContainer(
+                        padding: const EdgeInsets.all(32),
+                        opacity: isDark ? 0.12 : 0.25,
+                        child: Column(children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryPurple.withValues(alpha: 0.1)),
+                            child: Icon(Icons.people_outline, size: 48, color: AppTheme.primaryPurple.withValues(alpha: 0.5)),
+                          ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+                          const SizedBox(height: 16),
+                          Text('Find Your Dream Buddy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : const Color(0xFF1E1B4B)))
+                            .animate().fadeIn(duration: 500.ms, delay: 100.ms),
+                          const SizedBox(height: 8),
+                          Text('Get matched with someone who shares your goals!', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600]), textAlign: TextAlign.center)
+                            .animate().fadeIn(duration: 500.ms, delay: 200.ms),
+                          const SizedBox(height: 20),
+                          GlassButton(
+                            label: 'Find Match',
+                            icon: Icons.search,
+                            onPressed: () async {
+                              final api = ref.read(apiServiceProvider);
+                              try { await api.post('/buddies/find_match/'); _loadData(); } catch (_) {}
                             },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.favorite_outline),
-                            tooltip: 'Send encouragement',
-                            onPressed: () {
-                              final msgController = TextEditingController(text: 'Keep going, you got this!');
-                              showDialog(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Send Encouragement'),
-                                  content: TextField(
-                                    controller: msgController,
-                                    maxLines: 3,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Message',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                                    FilledButton(
-                                      onPressed: () async {
-                                        Navigator.pop(ctx);
-                                        try {
-                                          final api = ref.read(apiServiceProvider);
-                                          await api.post(
-                                            '/buddies/${_currentBuddy!['id']}/encourage/',
-                                            data: {'message': msgController.text.trim()},
-                                          );
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Encouragement sent!')),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Error: $e')),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      child: const Text('Send'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                          ).animate().fadeIn(duration: 500.ms, delay: 300.ms),
+                        ]),
+                      ).animate().fadeIn(duration: 400.ms),
+                      const SizedBox(height: 24),
                     ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ] else ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Icon(Icons.people_outline, size: 64, color: AppTheme.primaryPurple.withValues(alpha: 0.3)),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Find Your Dream Buddy',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Get matched with someone who shares your goals!',
-                        style: TextStyle(color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: () async {
-                          final api = ref.read(apiServiceProvider);
-                          try {
-                            await api.post('/buddies/find_match/');
-                            _loadData();
-                          } catch (_) {}
-                        },
-                        icon: const Icon(Icons.search),
-                        label: const Text('Find Match'),
-                        style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-                      ),
+
+                    if (_suggestions.isNotEmpty) ...[
+                      Text('Suggested Buddies', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : const Color(0xFF1E1B4B)))
+                        .animate().fadeIn(duration: 400.ms),
+                      const SizedBox(height: 10),
+                      ..._suggestions.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final s = entry.value;
+                        return AnimatedListItem(
+                          index: index,
+                          child: GlassContainer(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            opacity: isDark ? 0.12 : 0.25,
+                            child: Row(children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.15),
+                                child: Text((s['display_name'] ?? 'U')[0].toUpperCase(), style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(s['display_name'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : const Color(0xFF1E1B4B))),
+                                Text('${s['shared_categories']?.join(', ') ?? 'Common interests'}', style: TextStyle(fontSize: 13, color: isDark ? Colors.white54 : Colors.grey[600])),
+                              ])),
+                              GlassButton(
+                                label: 'Request',
+                                onPressed: () async {
+                                  try {
+                                    final api = ref.read(apiServiceProvider);
+                                    await api.post('/buddies/pair/', data: {'partner_id': s['id']});
+                                    if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buddy request sent!'))); _loadData(); }
+                                  } catch (e) {
+                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                  }
+                                },
+                              ),
+                            ]),
+                          ),
+                        );
+                      }),
                     ],
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 24),
-            ],
-            if (_suggestions.isNotEmpty) ...[
-              Text(
-                'Suggested Buddies',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ..._suggestions.map((s) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                    child: Text(
-                      (s['display_name'] ?? 'U')[0].toUpperCase(),
-                      style: TextStyle(color: AppTheme.primaryPurple),
-                    ),
-                  ),
-                  title: Text(s['display_name'] ?? ''),
-                  subtitle: Text('${s['shared_categories']?.join(', ') ?? 'Common interests'}'),
-                  trailing: FilledButton(
-                    onPressed: () async {
-                      try {
-                        final api = ref.read(apiServiceProvider);
-                        await api.post('/buddies/pair/', data: {'partner_id': s['id']});
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Buddy request sent!')),
-                          );
-                          _loadData();
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e')),
-                          );
-                        }
-                      }
-                    },
-                    style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-                    child: const Text('Request'),
-                  ),
-                ),
-              )),
-            ],
-          ],
+      ),
+    );
+  }
+
+  Widget _glassIconButton(IconData icon, String tooltip, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppTheme.primaryPurple, size: 20),
         ),
+      ),
+    );
+  }
+
+  void _showEncourageDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final msgController = TextEditingController(text: 'Keep going, you got this!');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1B4B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Send Encouragement', style: TextStyle(color: isDark ? Colors.white : const Color(0xFF1E1B4B))),
+        content: GlassTextField(controller: msgController, label: 'Message', maxLines: 3),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey))),
+          GlassButton(
+            label: 'Send',
+            icon: Icons.favorite,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = ref.read(apiServiceProvider);
+                await api.post('/buddies/${_currentBuddy!['id']}/encourage/', data: {'message': msgController.text.trim()});
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Encouragement sent!')));
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+          ),
+        ],
       ),
     );
   }

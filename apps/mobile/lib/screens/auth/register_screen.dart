@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/gradient_background.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/glass_text_field.dart';
+import '../../widgets/glass_button.dart';
+import '../../widgets/animated_progress_bar.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -48,10 +54,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Color _strengthColor() {
-    if (_passwordStrength < 0.3) return Colors.red;
-    if (_passwordStrength < 0.6) return Colors.orange;
+    if (_passwordStrength < 0.3) return AppTheme.error;
+    if (_passwordStrength < 0.6) return AppTheme.warning;
     if (_passwordStrength < 0.8) return Colors.amber;
-    return Colors.green;
+    return AppTheme.success;
   }
 
   String _strengthLabel() {
@@ -64,176 +70,200 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     await ref.read(authProvider.notifier).register(
-      _emailController.text.trim(),
-      _passwordController.text,
-      _confirmPasswordController.text,
-    );
+          _emailController.text.trim(),
+          _passwordController.text,
+          _confirmPasswordController.text,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/login'),
+    return GradientBackground(
+      colors: isDark ? AppTheme.gradientAuth : AppTheme.gradientAuthLight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back,
+                color: isDark ? Colors.white : const Color(0xFF1E1B4B)),
+            onPressed: () => context.go('/login'),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Create Account',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Start your journey to achieving your dreams',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    validator: Validators.email,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outlined),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
-                        },
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Create Account',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1E1B4B),
                       ),
-                    ),
-                    validator: Validators.password,
-                  ),
-                  if (_passwordController.text.isNotEmpty) ...[
+                      textAlign: TextAlign.center,
+                    )
+                        .animate()
+                        .fadeIn(duration: 500.ms)
+                        .slideY(begin: -0.2, end: 0),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: _passwordStrength,
-                              backgroundColor: Colors.grey[200],
-                              valueColor: AlwaysStoppedAnimation<Color>(_strengthColor()),
-                              minHeight: 6,
+                    Text(
+                      'Start your journey to achieving your dreams',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDark ? Colors.white60 : Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ).animate().fadeIn(duration: 500.ms, delay: 100.ms),
+                    const SizedBox(height: 32),
+                    GlassContainer(
+                      padding: const EdgeInsets.all(24),
+                      opacity: isDark ? 0.12 : 0.25,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          GlassTextField(
+                            controller: _emailController,
+                            label: 'Email',
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            prefixIcon: Icon(Icons.email_outlined,
+                                color: isDark ? Colors.white54 : Colors.grey),
+                            validator: Validators.email,
+                          ),
+                          const SizedBox(height: 16),
+                          GlassTextField(
+                            controller: _passwordController,
+                            label: 'Password',
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.next,
+                            prefixIcon: Icon(Icons.lock_outlined,
+                                color: isDark ? Colors.white54 : Colors.grey),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: isDark ? Colors.white54 : Colors.grey,
+                              ),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
                             ),
+                            validator: Validators.password,
+                          ),
+                          if (_passwordController.text.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AnimatedProgressBar(
+                                    progress: _passwordStrength,
+                                    height: 4,
+                                    color: _strengthColor(),
+                                    duration: const Duration(milliseconds: 300),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _strengthLabel(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: _strengthColor(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          GlassTextField(
+                            controller: _confirmPasswordController,
+                            label: 'Confirm Password',
+                            obscureText: _obscureConfirm,
+                            textInputAction: TextInputAction.done,
+                            prefixIcon: Icon(Icons.lock_outlined,
+                                color: isDark ? Colors.white54 : Colors.grey),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirm
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: isDark ? Colors.white54 : Colors.grey,
+                              ),
+                              onPressed: () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm),
+                            ),
+                            validator: (value) {
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return Validators.password(value);
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          if (authState.error != null)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.error.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color:
+                                        AppTheme.error.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                authState.error!,
+                                style: TextStyle(
+                                    color: AppTheme.error, fontSize: 13),
+                                textAlign: TextAlign.center,
+                              ),
+                            ).animate().shake(duration: 500.ms),
+                          GlassButton(
+                            label: 'Create Account',
+                            onPressed: authState.isLoading ? null : _register,
+                            isLoading: authState.isLoading,
+                          ),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 500.ms, delay: 200.ms)
+                        .slideY(begin: 0.1, end: 0),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Already have an account?',
+                          style: TextStyle(
+                            color: isDark ? Colors.white60 : Colors.grey[600],
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Text(
-                          _strengthLabel(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _strengthColor(),
+                        TextButton(
+                          onPressed: () => context.go('/login'),
+                          child: Text(
+                            'Sign In',
+                            style: TextStyle(
+                              color: AppTheme.primaryPurple,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
-                    ),
+                    ).animate().fadeIn(duration: 400.ms, delay: 350.ms),
                   ],
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _confirmPasswordController,
-                    obscureText: _obscureConfirm,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _register(),
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password',
-                      prefixIcon: const Icon(Icons.lock_outlined),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirm
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () {
-                          setState(() => _obscureConfirm = !_obscureConfirm);
-                        },
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value != _passwordController.text) {
-                        return 'Passwords do not match';
-                      }
-                      return Validators.password(value);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  if (authState.error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        authState.error!,
-                        style: TextStyle(color: AppTheme.error),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  FilledButton(
-                    onPressed: authState.isLoading ? null : _register,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: AppTheme.primaryPurple,
-                    ),
-                    child: authState.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Create Account',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Already have an account?'),
-                      TextButton(
-                        onPressed: () => context.go('/login'),
-                        child: const Text('Sign In'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ),

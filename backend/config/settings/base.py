@@ -293,6 +293,7 @@ REST_AUTH = {
     'USE_JWT': False,
     'TOKEN_MODEL': 'rest_framework.authtoken.models.Token',
     'USER_DETAILS_SERIALIZER': 'apps.users.serializers.UserSerializer',
+    'REGISTER_SERIALIZER': 'core.serializers.RegisterSerializer',
 }
 
 # Social Account Providers

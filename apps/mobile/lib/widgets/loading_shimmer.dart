@@ -13,20 +13,30 @@ class LoadingShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: isDark
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.white.withValues(alpha: 0.3),
+      highlightColor: isDark
+          ? Colors.white.withValues(alpha: 0.15)
+          : Colors.white.withValues(alpha: 0.6),
       child: Column(
-        children: List.generate(itemCount, (index) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Container(
-            height: height,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        )),
+        children: List.generate(
+            itemCount,
+            (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                )),
       ),
     );
   }
@@ -44,14 +54,19 @@ class ShimmerLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: isDark
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.white.withValues(alpha: 0.3),
+      highlightColor: isDark
+          ? Colors.white.withValues(alpha: 0.15)
+          : Colors.white.withValues(alpha: 0.6),
       child: Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(4),
         ),
       ),

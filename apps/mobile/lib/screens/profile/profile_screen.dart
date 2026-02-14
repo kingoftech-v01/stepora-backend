@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../models/user.dart';
+import '../../widgets/gradient_background.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/glass_app_bar.dart';
+import '../../widgets/glass_button.dart';
+import '../../widgets/animated_list_item.dart';
+import '../../widgets/animated_counter.dart';
+import '../../widgets/loading_shimmer.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -33,61 +41,86 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
-          ),
-        ],
-      ),
-      body: user == null
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                await ref.read(authProvider.notifier).refreshUser();
-                await _loadGamification();
-              },
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // Profile Header
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
+    return GradientBackground(
+      colors: isDark ? AppTheme.gradientProfile : AppTheme.gradientProfileLight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: GlassAppBar(
+          title: 'Profile',
+          actions: [
+            IconButton(
+              icon: Icon(Icons.settings_outlined, color: isDark ? Colors.white70 : const Color(0xFF1E1B4B)),
+              onPressed: () => context.push('/settings'),
+            ),
+          ],
+        ),
+        body: user == null
+            ? const Center(child: LoadingShimmer())
+            : RefreshIndicator(
+                onRefresh: () async {
+                  await ref.read(authProvider.notifier).refreshUser();
+                  await _loadGamification();
+                },
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + kToolbarHeight + 8, 16, 32),
+                  children: [
+                    // Profile Header
+                    GlassContainer(
+                      padding: const EdgeInsets.all(24),
+                      opacity: isDark ? 0.15 : 0.3,
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                            backgroundImage: user.avatarUrl != null
-                                ? NetworkImage(user.avatarUrl!)
-                                : null,
-                            child: user.avatarUrl == null
-                                ? Text(
-                                    (user.displayName.isNotEmpty ? user.displayName[0] : user.email[0]).toUpperCase(),
-                                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primaryPurple),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(height: 12),
+                          // Avatar with glow ring
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [AppTheme.primaryPurple, Color(0xFF8B5CF6), AppTheme.accent],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryPurple.withValues(alpha: 0.4),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              radius: 44,
+                              backgroundColor: isDark ? const Color(0xFF1E1B4B) : Colors.white,
+                              backgroundImage: user.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
+                              child: user.avatarUrl == null
+                                  ? Text(
+                                      (user.displayName.isNotEmpty ? user.displayName[0] : user.email[0]).toUpperCase(),
+                                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.primaryPurple),
+                                    )
+                                  : null,
+                            ),
+                          ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+                          const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 user.displayName.isNotEmpty ? user.displayName : user.email,
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                                ),
                               ),
                               if (user.isPremium) ...[
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.accent.withValues(alpha: 0.15),
+                                    gradient: LinearGradient(colors: [AppTheme.accent.withValues(alpha: 0.2), AppTheme.accent.withValues(alpha: 0.1)]),
                                     borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -96,81 +129,111 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       const SizedBox(width: 2),
                                       Text(
                                         user.subscription.toUpperCase(),
-                                        style: TextStyle(
-                                          color: AppTheme.accent,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 11,
-                                        ),
+                                        style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold, fontSize: 11),
                                       ),
                                     ],
                                   ),
-                                ),
+                                ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(duration: 2000.ms, color: AppTheme.accent.withValues(alpha: 0.3)),
                               ],
                             ],
-                          ),
-                          Text(user.email, style: TextStyle(color: Colors.grey[600])),
+                          ).animate().fadeIn(duration: 500.ms, delay: 100.ms),
+                          const SizedBox(height: 4),
+                          Text(user.email, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600]))
+                            .animate().fadeIn(duration: 500.ms, delay: 150.ms),
                           if (user.isPremium && user.subscriptionEnds != null) ...[
                             const SizedBox(height: 4),
                             Text(
                               'Renews ${_formatDate(user.subscriptionEnds!)}',
-                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                            ),
+                              style: TextStyle(color: isDark ? Colors.white38 : Colors.grey[700], fontSize: 12),
+                            ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
                           ],
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Stats
-                  Row(
-                    children: [
-                      Expanded(child: _StatCard(label: 'Level', value: '${user.level}', icon: Icons.star, color: AppTheme.primaryPurple)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _StatCard(label: 'XP', value: '${user.xp}', icon: Icons.bolt, color: AppTheme.accent)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _StatCard(label: 'Streak', value: '${user.streakDays}', icon: Icons.local_fire_department, color: AppTheme.error)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Gamification
-                  if (_gamification != null) ...[
-                    Text('Skill Levels', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    _SkillBar(label: 'Health', level: _gamification!.healthLevel, xp: _gamification!.healthXp, color: Colors.green),
-                    _SkillBar(label: 'Career', level: _gamification!.careerLevel, xp: _gamification!.careerXp, color: Colors.blue),
-                    _SkillBar(label: 'Relationships', level: _gamification!.relationshipsLevel, xp: _gamification!.relationshipsXp, color: Colors.pink),
-                    _SkillBar(label: 'Growth', level: _gamification!.personalGrowthLevel, xp: _gamification!.personalGrowthXp, color: AppTheme.primaryPurple),
+                    ).animate().fadeIn(duration: 400.ms),
                     const SizedBox(height: 16),
-                  ],
-                  // Menu Items
-                  Card(
-                    child: Column(
+
+                    // Stats Row
+                    Row(
                       children: [
-                        _MenuTile(icon: Icons.chat_outlined, label: 'Conversations', onTap: () => context.push('/conversations')),
-                        const Divider(height: 1),
-                        _MenuTile(icon: Icons.workspace_premium, label: 'Subscription', onTap: () => context.push('/subscription')),
-                        const Divider(height: 1),
-                        _MenuTile(icon: Icons.store, label: 'Store', onTap: () => context.push('/store')),
-                        const Divider(height: 1),
-                        _MenuTile(icon: Icons.emoji_events, label: 'Leaderboard', onTap: () => context.push('/leaderboard')),
-                        const Divider(height: 1),
-                        _MenuTile(icon: Icons.notifications_outlined, label: 'Notifications', onTap: () => context.push('/notifications')),
+                        Expanded(
+                          child: _GlassStatCard(
+                            label: 'Level',
+                            value: user.level,
+                            icon: Icons.star,
+                            color: AppTheme.primaryPurple,
+                            isDark: isDark,
+                            index: 0,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _GlassStatCard(
+                            label: 'XP',
+                            value: user.xp,
+                            icon: Icons.bolt,
+                            color: AppTheme.accent,
+                            isDark: isDark,
+                            index: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _GlassStatCard(
+                            label: 'Streak',
+                            value: user.streakDays,
+                            icon: Icons.local_fire_department,
+                            color: AppTheme.error,
+                            isDark: isDark,
+                            index: 2,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => ref.read(authProvider.notifier).logout(),
-                    icon: const Icon(Icons.logout, color: AppTheme.error),
-                    label: const Text('Sign Out', style: TextStyle(color: AppTheme.error)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.error),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+
+                    // Gamification / Skill Levels
+                    if (_gamification != null) ...[
+                      Text('Skill Levels', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : const Color(0xFF1E1B4B)))
+                        .animate().fadeIn(duration: 400.ms),
+                      const SizedBox(height: 10),
+                      GlassContainer(
+                        padding: const EdgeInsets.all(16),
+                        opacity: isDark ? 0.12 : 0.25,
+                        child: Column(
+                          children: [
+                            _GlassSkillBar(label: 'Health', level: _gamification!.healthLevel, xp: _gamification!.healthXp, color: Colors.green, isDark: isDark),
+                            _GlassSkillBar(label: 'Career', level: _gamification!.careerLevel, xp: _gamification!.careerXp, color: Colors.blue, isDark: isDark),
+                            _GlassSkillBar(label: 'Relations', level: _gamification!.relationshipsLevel, xp: _gamification!.relationshipsXp, color: Colors.pink, isDark: isDark),
+                            _GlassSkillBar(label: 'Growth', level: _gamification!.personalGrowthLevel, xp: _gamification!.personalGrowthXp, color: AppTheme.primaryPurple, isDark: isDark),
+                          ],
+                        ),
+                      ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Menu Items
+                    ...[
+                      _GlassMenuTile(icon: Icons.chat_outlined, label: 'Conversations', isDark: isDark, onTap: () => context.push('/conversations')),
+                      _GlassMenuTile(icon: Icons.workspace_premium, label: 'Subscription', isDark: isDark, onTap: () => context.push('/subscription')),
+                      _GlassMenuTile(icon: Icons.store, label: 'Store', isDark: isDark, onTap: () => context.push('/store')),
+                      _GlassMenuTile(icon: Icons.emoji_events, label: 'Leaderboard', isDark: isDark, onTap: () => context.push('/leaderboard')),
+                      _GlassMenuTile(icon: Icons.notifications_outlined, label: 'Notifications', isDark: isDark, onTap: () => context.push('/notifications')),
+                    ].asMap().entries.map((entry) => AnimatedListItem(
+                      index: entry.key + 4,
+                      child: entry.value,
+                    )).toList(),
+
+                    const SizedBox(height: 16),
+                    GlassButton(
+                      label: 'Sign Out',
+                      icon: Icons.logout,
+                      style: GlassButtonStyle.danger,
+                      onPressed: () => ref.read(authProvider.notifier).logout(),
+                    ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
@@ -179,79 +242,145 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-class _StatCard extends StatelessWidget {
+class _GlassStatCard extends StatelessWidget {
   final String label;
-  final String value;
+  final int value;
   final IconData icon;
   final Color color;
-  const _StatCard({required this.label, required this.value, required this.icon, required this.color});
+  final bool isDark;
+  final int index;
+  const _GlassStatCard({required this.label, required this.value, required this.icon, required this.color, required this.isDark, required this.index});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
+    return GlassContainer(
+      padding: const EdgeInsets.all(14),
+      opacity: isDark ? 0.12 : 0.25,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 8),
+          AnimatedCounter(value: value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey[600])),
+        ],
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms, delay: Duration(milliseconds: 100 + index * 80)).slideY(begin: 0.1, end: 0);
   }
 }
 
-class _SkillBar extends StatelessWidget {
+class _GlassSkillBar extends StatelessWidget {
   final String label;
   final int level;
   final int xp;
   final Color color;
-  const _SkillBar({required this.label, required this.level, required this.xp, required this.color});
+  final bool isDark;
+  const _GlassSkillBar({required this.label, required this.level, required this.xp, required this.color, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
+    final progress = (xp % 1000) / 1000;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500))),
-          Text('Lv.$level', style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (xp % 1000) / 1000,
-                backgroundColor: color.withValues(alpha: 0.1),
-                color: color,
-                minHeight: 8,
+          Row(
+            children: [
+              Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF1E1B4B))),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text('Lv.$level', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 11)),
+              ),
+              const SizedBox(width: 8),
+              Text('${xp % 1000}/1000', style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.grey[700])),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => Stack(
+                children: [
+                  Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: value,
+                    child: Container(
+                      height: 6,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [color.withValues(alpha: 0.7), color]),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 4)],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Text('${xp % 1000}/1000', style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
   }
 }
 
-class _MenuTile extends StatelessWidget {
+class _GlassMenuTile extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool isDark;
   final VoidCallback onTap;
-  const _MenuTile({required this.icon, required this.label, required this.onTap});
+  const _GlassMenuTile({required this.icon, required this.label, required this.isDark, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: AppTheme.primaryPurple),
-      title: Text(label),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GlassContainer(
+        opacity: isDark ? 0.1 : 0.2,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryPurple.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: AppTheme.primaryPurple, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : const Color(0xFF1E1B4B)))),
+                  Icon(Icons.chevron_right, color: isDark ? Colors.white24 : Colors.grey[600], size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

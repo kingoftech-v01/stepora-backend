@@ -1,111 +1,157 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import '../models/dream.dart';
+import 'glass_container.dart';
+import 'animated_progress_bar.dart';
 
-class DreamCard extends StatelessWidget {
+class DreamCard extends StatefulWidget {
   final Dream dream;
   final VoidCallback? onTap;
 
   const DreamCard({super.key, required this.dream, this.onTap});
 
   @override
+  State<DreamCard> createState() => _DreamCardState();
+}
+
+class _DreamCardState extends State<DreamCard> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_getCategoryIcon(), color: AppTheme.primaryPurple, size: 24),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      dream.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap?.call();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: Hero(
+          tag: 'dream-${widget.dream.id}',
+          child: GlassContainer(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            opacity: isDark ? 0.12 : 0.25,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      child: Icon(
+                        _getCategoryIcon(),
+                        color: AppTheme.primaryPurple,
+                        size: 20,
+                      ),
                     ),
-                  ),
-                  Chip(
-                    label: Text(
-                      dream.categoryLabel,
-                      style: const TextStyle(fontSize: 11),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.dream.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                    labelStyle: TextStyle(color: AppTheme.primaryPurple),
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppTheme.primaryPurple.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Text(
+                        widget.dream.categoryLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.white70 : AppTheme.primaryPurple,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.dream.description.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.dream.description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white60 : Colors.grey[600],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
-              ),
-              if (dream.description.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  dream.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: dream.progress / 100,
-                        minHeight: 8,
-                        backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                        color: dream.progress >= 100
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedProgressBar(
+                        progress: widget.dream.progress / 100,
+                        height: 6,
+                        color: widget.dream.progress >= 100
                             ? AppTheme.success
                             : AppTheme.primaryPurple,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${dream.progress.toInt()}%',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryPurple,
-                      fontSize: 13,
+                    const SizedBox(width: 10),
+                    Text(
+                      '${widget.dream.progress.toInt()}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppTheme.primaryPurple,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.flag_outlined, size: 14, color: Colors.grey[500]),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${dream.completedGoalCount}/${dream.goalCount} goals',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[500],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.flag_outlined,
+                        size: 14,
+                        color: isDark ? Colors.white38 : Colors.grey[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${widget.dream.completedGoalCount}/${widget.dream.goalCount} goals',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white38 : Colors.grey[700],
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.schedule, size: 14, color: Colors.grey[500]),
-                  const SizedBox(width: 4),
-                  Text(
-                    dream.timeframe.replaceAll('_', ' '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[500],
+                    const Spacer(),
+                    Icon(Icons.schedule,
+                        size: 14,
+                        color: isDark ? Colors.white38 : Colors.grey[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.dream.timeframe.replaceAll('_', ' '),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white38 : Colors.grey[700],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -113,7 +159,7 @@ class DreamCard extends StatelessWidget {
   }
 
   IconData _getCategoryIcon() {
-    switch (dream.category) {
+    switch (widget.dream.category) {
       case 'health': return Icons.favorite;
       case 'career': return Icons.work;
       case 'relationships': return Icons.people;

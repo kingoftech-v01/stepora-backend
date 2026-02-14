@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/dreams_provider.dart';
+import '../../widgets/gradient_background.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/glass_app_bar.dart';
+import '../../widgets/glass_button.dart';
+import '../../widgets/animated_counter.dart';
+import '../../widgets/animated_progress_ring.dart';
+import '../../widgets/loading_shimmer.dart';
 
 class MicroStartScreen extends ConsumerStatefulWidget {
   final String taskId;
@@ -12,25 +20,31 @@ class MicroStartScreen extends ConsumerStatefulWidget {
   ConsumerState<MicroStartScreen> createState() => _MicroStartScreenState();
 }
 
-class _MicroStartScreenState extends ConsumerState<MicroStartScreen> {
+class _MicroStartScreenState extends ConsumerState<MicroStartScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
   bool _started = false;
   int _seconds = 120; // 2 minutes
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
     _loadMicroStart();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMicroStart() async {
     try {
       final data = await ref.read(dreamsProvider.notifier).startMicroStart(widget.taskId);
-      setState(() {
-        _data = data;
-        _isLoading = false;
-      });
+      setState(() { _data = data; _isLoading = false; });
     } catch (_) {
       setState(() => _isLoading = false);
     }
@@ -48,108 +62,222 @@ class _MicroStartScreenState extends ConsumerState<MicroStartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (_isLoading) {
-      return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
+      return GradientBackground(
+        colors: isDark ? AppTheme.gradientDreams : AppTheme.gradientDreamsLight,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
+          appBar: const GlassAppBar(title: '2-Minute Start'),
+          body: const Center(child: LoadingShimmer()),
+        ),
+      );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('2-Minute Start')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Icon(
-              _started ? Icons.timer : Icons.rocket_launch,
-              size: 80,
-              color: AppTheme.primaryPurple,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              _started ? 'Keep going!' : 'Ready to start?',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+    final progress = 1 - (_seconds / 120);
+    final timerColor = _seconds <= 10 ? AppTheme.error : AppTheme.primaryPurple;
+
+    return GradientBackground(
+      colors: isDark ? AppTheme.gradientDreams : AppTheme.gradientDreamsLight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: const GlassAppBar(title: '2-Minute Start'),
+        body: Padding(
+          padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + kToolbarHeight + 16, 24, 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Main icon / timer area
+              if (_started) ...[
+                // Animated progress ring with timer
+                Center(
+                  child: SizedBox(
+                    width: 200, height: 200,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedProgressRing(
+                          progress: progress,
+                          size: 200,
+                          strokeWidth: 10,
+                          color: timerColor,
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedCounter(
+                              value: _seconds ~/ 60,
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                                color: timerColor,
+                              ),
+                            ),
+                            Text(
+                              ':${(_seconds % 60).toString().padLeft(2, '0')}',
+                              style: TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: timerColor),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 500.ms),
+                const SizedBox(height: 24),
+                Text(
+                  _seconds <= 0 ? 'Time\'s up!' : 'Keep going!',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1B4B)),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(duration: 400.ms),
+              ] else ...[
+                // Pre-start rocket icon with pulse
+                Center(
+                  child: AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      final scale = 1.0 + 0.05 * _pulseController.value;
+                      return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          padding: const EdgeInsets.all(28),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.primaryPurple.withValues(alpha: 0.1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryPurple.withValues(alpha: 0.2 * _pulseController.value),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Icon(Icons.rocket_launch, size: 64, color: AppTheme.primaryPurple),
+                        ),
+                      );
+                    },
+                  ),
+                ).animate().fadeIn(duration: 600.ms).scale(begin: const Offset(0.7, 0.7), end: const Offset(1, 1)),
+                const SizedBox(height: 28),
+                Text(
+                  'Ready to start?',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1B4B)),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(duration: 500.ms, delay: 150.ms),
+              ],
+
+              const SizedBox(height: 20),
+
+              // Task info card
+              GlassContainer(
+                padding: const EdgeInsets.all(18),
+                opacity: isDark ? 0.15 : 0.3,
                 child: Column(
                   children: [
                     Text(
                       _data?['task_title'] ?? 'Task',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : const Color(0xFF1E1B4B)),
                       textAlign: TextAlign.center,
                     ),
                     if (_data?['two_minute_action'] != null) ...[
                       const SizedBox(height: 8),
                       Text(
                         _data!['two_minute_action'],
-                        style: TextStyle(color: Colors.grey[600]),
+                        style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600]),
                         textAlign: TextAlign.center,
                       ),
                     ],
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (_started) ...[
-              Text(
-                '${_seconds ~/ 60}:${(_seconds % 60).toString().padLeft(2, '0')}',
-                style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: _seconds <= 10 ? AppTheme.error : AppTheme.primaryPurple,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: 1 - (_seconds / 120),
-                backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.1),
-                color: AppTheme.primaryPurple,
-                minHeight: 8,
-              ),
-              const SizedBox(height: 32),
-              if (_seconds <= 0) ...[
-                const Icon(Icons.celebration, size: 48, color: AppTheme.accent),
-                const SizedBox(height: 8),
-                const Text('Great job! You did it!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => context.pop(),
-                        child: const Text('Done'),
-                      ),
+              ).animate().fadeIn(duration: 500.ms, delay: 200.ms).slideY(begin: 0.05, end: 0),
+
+              const SizedBox(height: 28),
+
+              // Actions
+              if (_started) ...[
+                // Animated progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: progress),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => Stack(
+                      children: [
+                        Container(
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: timerColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: value,
+                          child: Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: [timerColor.withValues(alpha: 0.7), timerColor]),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [BoxShadow(color: timerColor.withValues(alpha: 0.3), blurRadius: 6)],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () async {
-                          await ref.read(dreamsProvider.notifier).completeTask(widget.taskId);
-                          if (context.mounted) context.pop();
-                        },
-                        style: FilledButton.styleFrom(backgroundColor: AppTheme.success),
-                        child: const Text('Complete Task'),
+                  ),
+                ).animate().fadeIn(duration: 400.ms),
+
+                if (_seconds <= 0) ...[
+                  const SizedBox(height: 28),
+                  // Celebration
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.celebration, size: 36, color: AppTheme.accent)
+                        .animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1)),
+                      const SizedBox(width: 8),
+                      Text('Great job!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.accent))
+                        .animate().fadeIn(duration: 400.ms, delay: 100.ms),
+                      const SizedBox(width: 8),
+                      Icon(Icons.celebration, size: 36, color: AppTheme.accent)
+                        .animate().fadeIn(duration: 400.ms, delay: 200.ms).scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GlassButton(
+                          label: 'Done',
+                          style: GlassButtonStyle.secondary,
+                          onPressed: () => context.pop(),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ] else
-              FilledButton.icon(
-                onPressed: _startTimer,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Start 2-Minute Timer', style: TextStyle(fontSize: 16)),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primaryPurple,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-          ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GlassButton(
+                          label: 'Complete Task',
+                          icon: Icons.check,
+                          onPressed: () async {
+                            await ref.read(dreamsProvider.notifier).completeTask(widget.taskId);
+                            if (context.mounted) context.pop();
+                          },
+                        ),
+                      ),
+                    ],
+                  ).animate().fadeIn(duration: 500.ms, delay: 300.ms),
+                ],
+              ] else
+                GlassButton(
+                  label: 'Start 2-Minute Timer',
+                  icon: Icons.play_arrow,
+                  onPressed: _startTimer,
+                ).animate().fadeIn(duration: 500.ms, delay: 300.ms).scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1)),
+            ],
+          ),
         ),
       ),
     );

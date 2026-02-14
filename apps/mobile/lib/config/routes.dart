@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/glass_bottom_nav.dart';
+import '../widgets/gradient_background.dart';
+import '../core/theme/app_theme.dart';
+import '../core/theme/page_transitions.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -50,142 +54,172 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Auth routes (no glass nav)
       GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const LoginScreen()),
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) => const RegisterScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const RegisterScreen()),
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const ForgotPasswordScreen()),
       ),
+      // Main shell with glass bottom nav
       ShellRoute(
         builder: (context, state, child) => ScaffoldWithNav(child: child),
         routes: [
           GoRoute(
             path: '/',
-            builder: (context, state) => const HomeScreen(),
+            pageBuilder: (context, state) =>
+                glassPageBuilder(context, state, const HomeScreen()),
           ),
           GoRoute(
             path: '/calendar',
-            builder: (context, state) => const CalendarScreen(),
+            pageBuilder: (context, state) =>
+                glassPageBuilder(context, state, const CalendarScreen()),
           ),
           GoRoute(
             path: '/social',
-            builder: (context, state) => const SocialScreen(),
+            pageBuilder: (context, state) =>
+                glassPageBuilder(context, state, const SocialScreen()),
           ),
           GoRoute(
             path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
+            pageBuilder: (context, state) =>
+                glassPageBuilder(context, state, const ProfileScreen()),
           ),
         ],
       ),
+      // Dream routes
       GoRoute(
         path: '/dreams/create',
-        builder: (context, state) => const CreateDreamScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const CreateDreamScreen()),
       ),
       GoRoute(
         path: '/dreams/:id',
-        builder: (context, state) =>
-            DreamDetailScreen(dreamId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, DreamDetailScreen(dreamId: state.pathParameters['id']!)),
       ),
       GoRoute(
         path: '/dreams/:id/calibration',
-        builder: (context, state) =>
-            CalibrationScreen(dreamId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/chat/:id',
-        builder: (context, state) =>
-            ChatScreen(conversationId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/circles',
-        builder: (context, state) => const CirclesScreen(),
-      ),
-      GoRoute(
-        path: '/circles/:id',
-        builder: (context, state) =>
-            CircleDetailScreen(circleId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/buddy',
-        builder: (context, state) => const DreamBuddyScreen(),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: '/leaderboard',
-        builder: (context, state) => const LeaderboardScreen(),
-      ),
-      GoRoute(
-        path: '/notifications',
-        builder: (context, state) => const NotificationsScreen(),
-      ),
-      GoRoute(
-        path: '/store',
-        builder: (context, state) => const StoreScreen(),
-      ),
-      GoRoute(
-        path: '/subscription',
-        builder: (context, state) => const SubscriptionScreen(),
-      ),
-      GoRoute(
-        path: '/vision-board/:id',
-        builder: (context, state) =>
-            VisionBoardScreen(dreamId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/micro-start/:id',
-        builder: (context, state) =>
-            MicroStartScreen(taskId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/profile/edit',
-        builder: (context, state) => const EditProfileScreen(),
-      ),
-      GoRoute(
-        path: '/change-password',
-        builder: (context, state) => const ChangePasswordScreen(),
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, CalibrationScreen(dreamId: state.pathParameters['id']!)),
       ),
       GoRoute(
         path: '/dreams/:id/edit',
-        builder: (context, state) =>
-            EditDreamScreen(dreamId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/conversations',
-        builder: (context, state) => const ConversationListScreen(),
-      ),
-      GoRoute(
-        path: '/friends',
-        builder: (context, state) => const FriendsScreen(),
-      ),
-      GoRoute(
-        path: '/social/search',
-        builder: (context, state) => const UserSearchScreen(),
-      ),
-      GoRoute(
-        path: '/social/requests',
-        builder: (context, state) => const FriendRequestsScreen(),
-      ),
-      GoRoute(
-        path: '/buddy-chat/:id',
-        builder: (context, state) =>
-            BuddyChatScreen(conversationId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, EditDreamScreen(dreamId: state.pathParameters['id']!)),
       ),
       GoRoute(
         path: '/dream-templates',
-        builder: (context, state) => const DreamTemplatesScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const DreamTemplatesScreen()),
+      ),
+      // Chat routes
+      GoRoute(
+        path: '/chat/:id',
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, ChatScreen(conversationId: state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/conversations',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const ConversationListScreen()),
+      ),
+      GoRoute(
+        path: '/buddy-chat/:id',
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, BuddyChatScreen(conversationId: state.pathParameters['id']!)),
+      ),
+      // Social routes
+      GoRoute(
+        path: '/circles',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const CirclesScreen()),
+      ),
+      GoRoute(
+        path: '/circles/:id',
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, CircleDetailScreen(circleId: state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/buddy',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const DreamBuddyScreen()),
+      ),
+      GoRoute(
+        path: '/leaderboard',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const LeaderboardScreen()),
+      ),
+      GoRoute(
+        path: '/friends',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const FriendsScreen()),
+      ),
+      GoRoute(
+        path: '/social/search',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const UserSearchScreen()),
+      ),
+      GoRoute(
+        path: '/social/requests',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const FriendRequestsScreen()),
+      ),
+      // Profile routes
+      GoRoute(
+        path: '/settings',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const SettingsScreen()),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const EditProfileScreen()),
+      ),
+      GoRoute(
+        path: '/change-password',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const ChangePasswordScreen()),
       ),
       GoRoute(
         path: '/google-calendar',
-        builder: (context, state) => const GoogleCalendarScreen(),
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const GoogleCalendarScreen()),
+      ),
+      // Other routes
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const NotificationsScreen()),
+      ),
+      GoRoute(
+        path: '/store',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const StoreScreen()),
+      ),
+      GoRoute(
+        path: '/subscription',
+        pageBuilder: (context, state) =>
+            glassPageBuilder(context, state, const SubscriptionScreen()),
+      ),
+      GoRoute(
+        path: '/vision-board/:id',
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, VisionBoardScreen(dreamId: state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/micro-start/:id',
+        pageBuilder: (context, state) => glassPageBuilder(
+            context, state, MicroStartScreen(taskId: state.pathParameters['id']!)),
       ),
     ],
   );
@@ -197,33 +231,19 @@ class ScaffoldWithNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _calculateSelectedIndex(context),
-        onDestinationSelected: (index) => _onItemTapped(index, context),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Calendar',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Social',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gradients = isDark ? AppTheme.gradientHome : AppTheme.gradientHomeLight;
+
+    return GradientBackground(
+      colors: gradients,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        body: child,
+        bottomNavigationBar: GlassBottomNav(
+          selectedIndex: _calculateSelectedIndex(context),
+          onDestinationSelected: (index) => _onItemTapped(index, context),
+        ),
       ),
     );
   }

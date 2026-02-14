@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 
@@ -30,46 +31,86 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
-        ),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.send,
-                maxLines: 4,
-                minLines: 1,
-                onChanged: (v) => setState(() => _hasText = v.trim().isNotEmpty),
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.5),
+            border: Border(
+              top: BorderSide(
+                color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.3),
+              ),
+            ),
+          ),
+          child: SafeArea(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.3),
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      textInputAction: TextInputAction.send,
+                      maxLines: 4,
+                      minLines: 1,
+                      onChanged: (v) => setState(() => _hasText = v.trim().isNotEmpty),
+                      onSubmitted: (_) => _send(),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1E1B4B),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.grey[600],
+                        ),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                    ),
                   ),
-                  filled: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-              ),
+                const SizedBox(width: 8),
+                AnimatedScale(
+                  scale: _hasText ? 1.0 : 0.8,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: _hasText
+                          ? const LinearGradient(
+                              colors: [AppTheme.primaryPurple, AppTheme.primaryDark],
+                            )
+                          : null,
+                      color: _hasText
+                          ? null
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.grey[600]),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: _hasText ? _send : null,
+                      icon: const Icon(Icons.send, size: 20),
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: _hasText ? _send : null,
-              icon: const Icon(Icons.send),
-              style: IconButton.styleFrom(
-                backgroundColor: _hasText ? AppTheme.primaryPurple : Colors.grey[300],
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../widgets/gradient_background.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/glass_app_bar.dart';
+import '../../widgets/glass_text_field.dart';
+import '../../widgets/glass_button.dart';
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
   const ChangePasswordScreen({super.key});
 
   @override
-  ConsumerState<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
+  ConsumerState<ChangePasswordScreen> createState() =>
+      _ChangePasswordScreenState();
 }
 
 class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
@@ -57,74 +64,94 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Change Password')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _oldPasswordController,
-                obscureText: _obscureOld,
-                decoration: InputDecoration(
-                  labelText: 'Current Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureOld ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscureOld = !_obscureOld),
-                  ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GradientBackground(
+      colors: isDark ? AppTheme.gradientProfile : AppTheme.gradientProfileLight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: const GlassAppBar(title: 'Change Password'),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: GlassContainer(
+                padding: const EdgeInsets.all(24),
+                opacity: isDark ? 0.12 : 0.25,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    GlassTextField(
+                      controller: _oldPasswordController,
+                      label: 'Current Password',
+                      obscureText: _obscureOld,
+                      prefixIcon: Icon(Icons.lock_outline,
+                          color: isDark ? Colors.white54 : Colors.grey),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureOld
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: isDark ? Colors.white54 : Colors.grey,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureOld = !_obscureOld),
+                      ),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    GlassTextField(
+                      controller: _newPassword1Controller,
+                      label: 'New Password',
+                      obscureText: _obscureNew,
+                      prefixIcon: Icon(Icons.lock,
+                          color: isDark ? Colors.white54 : Colors.grey),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureNew
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: isDark ? Colors.white54 : Colors.grey,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureNew = !_obscureNew),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Required';
+                        if (v.length < 8) return 'At least 8 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    GlassTextField(
+                      controller: _newPassword2Controller,
+                      label: 'Confirm New Password',
+                      obscureText: _obscureNew,
+                      prefixIcon: Icon(Icons.lock,
+                          color: isDark ? Colors.white54 : Colors.grey),
+                      validator: (v) {
+                        if (v != _newPassword1Controller.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    GlassButton(
+                      label: 'Change Password',
+                      onPressed: _isLoading ? null : _changePassword,
+                      isLoading: _isLoading,
+                    ),
+                  ],
                 ),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _newPassword1Controller,
-                obscureText: _obscureNew,
-                decoration: InputDecoration(
-                  labelText: 'New Password',
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (v.length < 8) return 'At least 8 characters';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _newPassword2Controller,
-                obscureText: _obscureNew,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm New Password',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                validator: (v) {
-                  if (v != _newPassword1Controller.text) return 'Passwords do not match';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 32),
-              FilledButton(
-                onPressed: _isLoading ? null : _changePassword,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppTheme.primaryPurple,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Change Password', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
-            ],
+              )
+                  .animate()
+                  .fadeIn(duration: 500.ms)
+                  .slideY(begin: 0.1, end: 0),
+            ),
           ),
         ),
       ),

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
@@ -133,6 +134,26 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   String _extractError(dynamic e) {
+    if (e is DioException && e.response?.data != null) {
+      final data = e.response!.data;
+      if (data is Map) {
+        // Extract from our custom error format: {details: {field: [msgs]}} or {detail: "msg"}
+        if (data['detail'] is String) return data['detail'];
+        if (data['details'] is Map) {
+          final details = data['details'] as Map;
+          final messages = <String>[];
+          for (final value in details.values) {
+            if (value is List) {
+              messages.addAll(value.map((v) => v.toString()));
+            } else {
+              messages.add(value.toString());
+            }
+          }
+          if (messages.isNotEmpty) return messages.join('\n');
+        }
+        if (data['message'] is String) return data['message'];
+      }
+    }
     if (e is Exception) {
       return e.toString().replaceAll('Exception: ', '');
     }
