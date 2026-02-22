@@ -1,8 +1,8 @@
-# DreamPlanner - Application Mobile de Planification de Rêves
+# DreamPlanner - Application de Planification de Rêves
 
 ## Vision du Projet
 
-**DreamPlanner** est une application mobile cross-platform (Android & iOS) qui utilise l'intelligence artificielle de ChatGPT pour aider les utilisateurs à transformer leurs rêves en objectifs concrets et atteignables.
+**DreamPlanner** est une application web backend (API Django) qui utilise l'intelligence artificielle de ChatGPT pour aider les utilisateurs à transformer leurs rêves en objectifs concrets et atteignables.
 
 ## Problème Résolu
 
@@ -59,23 +59,24 @@ Un assistant IA personnel qui:
   - Premium (9.99€/mois): Objectifs illimités, notifications avancées, export calendrier
   - Pro (19.99€/mois): Coaching IA avancé, intégrations calendrier, analytics détaillés
 
-## Stack Technique Proposé
+## Stack Technique
 
-- **Framework**: React Native (pour iOS et Android)
-- **Backend**: Node.js avec Express
+- **Framework**: Django 5.0.1 + Django REST Framework
+- **Langage**: Python 3.11
 - **Base de données**: PostgreSQL + Redis
 - **IA**: OpenAI ChatGPT API (GPT-4)
-- **Notifications**: Firebase Cloud Messaging
-- **Auth**: Firebase Authentication
-- **Analytics**: Mixpanel/Amplitude
+- **WebSocket**: Django Channels (Daphne)
+- **Tâches asynchrones**: Celery
+- **Notifications**: Celery + WebSocket
+- **Auth**: dj-rest-auth + django-allauth
 
 ## Timeline Estimée
 
 | Phase | Durée | Livrables |
 |-------|-------|-----------|
-| Phase 1 - MVP | 8 semaines | App basique avec conversation et calendrier |
+| Phase 1 - MVP | 8 semaines | API basique avec conversation et calendrier |
 | Phase 2 - Notifications | 4 semaines | Système de notifications complet |
-| Phase 3 - Polish | 4 semaines | UI/UX finalisé, tests, optimisations |
-| Phase 4 - Launch | 2 semaines | Déploiement stores, marketing |
+| Phase 3 - Polish | 4 semaines | API finalisée, tests, optimisations |
+| Phase 4 - Launch | 2 semaines | Déploiement production, marketing |
 
 **Total: ~18 semaines pour la v1.0**

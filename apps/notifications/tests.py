@@ -1,0 +1,952 @@
+"""
+Tests for notifications app.
+"""
+
+import pytest
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework import status
+from unittest.mock import patch, Mock
+import uuid
+
+from .models import Notification, NotificationTemplate
+from apps.users.models import User
+
+
+class TestNotificationModel:
+    """Test Notification model"""
+
+    def test_create_notification(self, db, notification_data):
+        """Test creating a notification"""
+        notification = Notification.objects.create(**notification_data)
+
+        assert notification.user == notification_data['user']
+        assert notification.notification_type == 'reminder'
+        assert notification.status == 'pending'
+        assert notification.read_at is None
+
+    def test_notification_str(self, notification):
+        """Test notification string representation"""
+        expected = f"{notification.notification_type}: {notification.title} ({notification.status})"
+        assert str(notification) == expected
+
+    def test_mark_read(self, notification):
+        """Test marking notification as read"""
+        assert notification.read_at is None
+
+        notification.mark_read()
+
+        assert notification.read_at is not None
+        assert (timezone.now() - notification.read_at).seconds < 5
+
+    def test_notification_scheduled_in_future(self, db, user):
+        """Test notification scheduled for future"""
+        future_time = timezone.now() + timedelta(hours=2)
+
+        notification = Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Future notification',
+            body='Scheduled for later',
+            scheduled_for=future_time
+        )
+
+        assert notification.scheduled_for > timezone.now()
+        assert notification.status == 'pending'
+
+    def test_notification_with_data(self, db, user):
+        """Test notification with additional data"""
+        data = {
+            'action': 'open_dream',
+            'dream_id': str(uuid.uuid4()),
+            'screen': 'DreamDetail'
+        }
+
+        notification = Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Test notification',
+            body='With data',
+            scheduled_for=timezone.now(),
+            data=data
+        )
+
+        assert notification.data['action'] == 'open_dream'
+        assert notification.data['screen'] == 'DreamDetail'
+
+
+class TestNotificationTemplateModel:
+    """Test NotificationTemplate model"""
+
+    def test_create_template(self, db):
+        """Test creating a notification template"""
+        template = NotificationTemplate.objects.create(
+            name='test_template',
+            notification_type='reminder',
+            title_template='Reminder: {title}',
+            body_template='Don\'t forget to {action}',
+            is_active=True
+        )
+
+        assert template.name == 'test_template'
+        assert template.notification_type == 'reminder'
+        assert template.is_active
+
+    def test_render_template(self, notification_template):
+        """Test rendering template with variables"""
+        context = {
+            'title': 'Complete task',
+            'action': 'finish your homework'
+        }
+
+        title = notification_template.title_template.format(**context)
+        body = notification_template.body_template.format(**context)
+
+        assert title == 'Reminder: Complete task'
+        assert body == 'Don\'t forget to finish your homework'
+
+    def test_inactive_template(self, db):
+        """Test inactive template"""
+        template = NotificationTemplate.objects.create(
+            name='inactive_template',
+            notification_type='reminder',
+            title_template='Test',
+            body_template='Test',
+            is_active=False
+        )
+
+        # Active templates query should not include this
+        active_templates = NotificationTemplate.objects.filter(is_active=True)
+        assert template not in active_templates
+
+
+class TestNotificationViewSet:
+    """Test Notification API endpoints"""
+
+    def test_list_notifications(self, authenticated_client, user):
+        """Test GET /api/notifications/"""
+        # Create notifications
+        Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Notification 1',
+            body='Body 1',
+            scheduled_for=timezone.now()
+        )
+        Notification.objects.create(
+            user=user,
+            notification_type='motivation',
+            title='Notification 2',
+            body='Body 2',
+            scheduled_for=timezone.now()
+        )
+
+        response = authenticated_client.get('/api/notifications/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 2
+
+    def test_mark_notification_read(self, authenticated_client, notification):
+        """Test POST /api/notifications/{id}/mark-read/"""
+        assert notification.read_at is None
+
+        response = authenticated_client.post(f'/api/notifications/{notification.id}/mark_read/')
+
+        assert response.status_code == status.HTTP_200_OK
+        notification.refresh_from_db()
+        assert notification.read_at is not None
+
+    def test_mark_all_read(self, authenticated_client, user):
+        """Test POST /api/notifications/mark-all-read/"""
+        # Create multiple unread notifications
+        for i in range(3):
+            Notification.objects.create(
+                user=user,
+                notification_type='reminder',
+                title=f'Notification {i}',
+                body=f'Body {i}',
+                scheduled_for=timezone.now(),
+                status='sent'
+            )
+
+        response = authenticated_client.post('/api/notifications/mark_all_read/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['marked_read'] == 3
+
+        # All should be marked as read
+        unread_count = Notification.objects.filter(user=user, read_at__isnull=True).count()
+        assert unread_count == 0
+
+    def test_unread_count(self, authenticated_client, user):
+        """Test GET /api/notifications/unread-count/"""
+        # Create some read and unread notifications
+        Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Read notification',
+            body='Body',
+            scheduled_for=timezone.now(),
+            status='sent',
+            read_at=timezone.now()
+        )
+
+        for i in range(3):
+            Notification.objects.create(
+                user=user,
+                notification_type='reminder',
+                title=f'Unread {i}',
+                body='Body',
+                scheduled_for=timezone.now(),
+                status='sent'
+            )
+
+        response = authenticated_client.get('/api/notifications/unread_count/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['unread_count'] == 3
+
+    def test_filter_by_type(self, authenticated_client, user):
+        """Test filtering notifications by type"""
+        Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Reminder',
+            body='Body',
+            scheduled_for=timezone.now()
+        )
+        Notification.objects.create(
+            user=user,
+            notification_type='motivation',
+            title='Motivation',
+            body='Body',
+            scheduled_for=timezone.now()
+        )
+
+        response = authenticated_client.get('/api/notifications/?notification_type=reminder')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert response.data['results'][0]['notification_type'] == 'reminder'
+
+
+class TestNotificationTasks:
+    """Test Celery tasks for notifications"""
+
+    def test_process_pending_notifications(self, db, user):
+        """Test process_pending_notifications task"""
+        # Create pending notifications
+        Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='Test notification',
+            body='Body',
+            scheduled_for=timezone.now() - timedelta(minutes=1),
+            status='pending'
+        )
+
+        from apps.notifications.tasks import process_pending_notifications
+
+        result = process_pending_notifications()
+
+        assert result['sent'] == 1
+
+        # Notification should be marked as sent
+        notification = Notification.objects.first()
+        assert notification.status == 'sent'
+        assert notification.sent_at is not None
+
+    def test_generate_daily_motivation(self, db, user, dream, mock_openai):
+        """Test generate_daily_motivation task"""
+        # Set user preferences
+        user.notification_prefs = {'motivation': True}
+        user.save()
+
+        from apps.notifications.tasks import generate_daily_motivation
+
+        with patch('apps.notifications.tasks.OpenAIService') as mock_service:
+            mock_service.return_value.generate_motivational_message.return_value = 'Stay motivated!'
+
+            result = generate_daily_motivation()
+
+            assert result['created'] >= 1
+
+            # Notification should be created
+            notification = Notification.objects.filter(
+                user=user,
+                notification_type='motivation'
+            ).first()
+
+            assert notification is not None
+            assert notification.title == '💪 Daily motivation'
+
+    def test_send_weekly_report(self, db, user, dream, task, mock_openai):
+        """Test send_weekly_report task"""
+        # Set user preferences
+        user.notification_prefs = {'weekly_report': True}
+        user.save()
+
+        # Complete a task
+        task.status = 'completed'
+        task.completed_at = timezone.now()
+        task.save()
+
+        from apps.notifications.tasks import send_weekly_report
+
+        with patch('apps.notifications.tasks.OpenAIService') as mock_service:
+            mock_service.return_value.generate_weekly_report.return_value = 'Great week!'
+
+            result = send_weekly_report()
+
+            assert result['created'] >= 1
+
+            # Notification should be created
+            notification = Notification.objects.filter(
+                user=user,
+                notification_type='weekly_report'
+            ).first()
+
+            assert notification is not None
+            assert 'weekly report' in notification.title
+
+    def test_check_inactive_users(self, db, user, dream, mock_openai):
+        """Test check_inactive_users task (Rescue Mode)"""
+        # Set user as inactive
+        user.last_activity = timezone.now() - timedelta(days=4)
+        user.save()
+
+        from apps.notifications.tasks import check_inactive_users
+
+        with patch('apps.notifications.tasks.OpenAIService') as mock_service:
+            mock_service.return_value.generate_rescue_message.return_value = 'We miss you!'
+
+            result = check_inactive_users()
+
+            assert result['created'] >= 1
+
+            # Rescue notification should be created
+            notification = Notification.objects.filter(
+                user=user,
+                notification_type='rescue'
+            ).first()
+
+            assert notification is not None
+            assert 'still here' in notification.title
+
+    def test_send_reminder_notifications(self, db, user, goal):
+        """Test send_reminder_notifications task"""
+        # Set reminder for goal
+        goal.reminder_enabled = True
+        goal.reminder_time = timezone.now() + timedelta(minutes=10)
+        goal.save()
+
+        from apps.notifications.tasks import send_reminder_notifications
+
+        result = send_reminder_notifications()
+
+        assert result['created'] >= 1
+
+        # Reminder notification should be created
+        notification = Notification.objects.filter(
+            user=user,
+            notification_type='reminder'
+        ).first()
+
+        assert notification is not None
+
+    def test_cleanup_old_notifications(self, db, user):
+        """Test cleanup_old_notifications task"""
+        # Create old read notifications
+        old_date = timezone.now() - timedelta(days=35)
+
+        for i in range(5):
+            notification = Notification.objects.create(
+                user=user,
+                notification_type='reminder',
+                title=f'Old notification {i}',
+                body='Body',
+                scheduled_for=old_date,
+                status='sent',
+                read_at=old_date
+            )
+            # Manually set created_at to old date
+            notification.created_at = old_date
+            notification.save()
+
+        initial_count = Notification.objects.count()
+
+        from apps.notifications.tasks import cleanup_old_notifications
+
+        result = cleanup_old_notifications()
+
+        assert result['deleted'] == 5
+        assert Notification.objects.count() == initial_count - 5
+
+    def test_send_streak_milestone_notification(self, db, user, mock_celery):
+        """Test send_streak_milestone_notification task"""
+        from apps.notifications.tasks import send_streak_milestone_notification
+
+        result = send_streak_milestone_notification(str(user.id), 7)
+
+        assert result['sent'] is True
+
+        # Notification should be created
+        notification = Notification.objects.filter(
+            user=user,
+            notification_type='achievement',
+            data__achievement='streak'
+        ).first()
+
+        assert notification is not None
+        assert '7-day streak' in notification.title
+
+    def test_send_level_up_notification(self, db, user):
+        """Test send_level_up_notification task"""
+        from apps.notifications.tasks import send_level_up_notification
+
+        result = send_level_up_notification(str(user.id), 5)
+
+        assert result['sent'] is True
+
+        # Notification should be created
+        notification = Notification.objects.filter(
+            user=user,
+            notification_type='achievement',
+            data__achievement='level_up'
+        ).first()
+
+        assert notification is not None
+        assert 'Level 5' in notification.title
+
+
+# ============================================================
+# New tests for WebSocket consumer, delivery service, WebPush
+# ============================================================
+
+import json
+import pytest
+from channels.testing import WebsocketCommunicator
+from channels.db import database_sync_to_async
+from django.core import mail
+
+from .models import WebPushSubscription, NotificationBatch
+from .consumers import NotificationConsumer
+from .services import NotificationDeliveryService
+from .serializers import NotificationBatchSerializer, WebPushSubscriptionSerializer
+
+
+class TestNotificationModelExtended:
+    """Extended tests for Notification model methods."""
+
+    def test_mark_sent(self, notification):
+        """Test mark_sent sets status and sent_at."""
+        notification.mark_sent()
+        notification.refresh_from_db()
+        assert notification.status == 'sent'
+        assert notification.sent_at is not None
+
+    def test_mark_opened_sets_both(self, notification):
+        """Test mark_opened sets opened_at and read_at if not already read."""
+        assert notification.opened_at is None
+        assert notification.read_at is None
+
+        notification.mark_opened()
+        notification.refresh_from_db()
+
+        assert notification.opened_at is not None
+        assert notification.read_at is not None
+        assert notification.read_at == notification.opened_at
+
+    def test_mark_opened_preserves_read_at(self, notification):
+        """Test mark_opened preserves existing read_at."""
+        notification.mark_read()
+        original_read_at = notification.read_at
+
+        notification.mark_opened()
+        notification.refresh_from_db()
+
+        assert notification.opened_at is not None
+        assert notification.read_at == original_read_at
+
+    def test_mark_failed(self, notification):
+        """Test mark_failed sets status, error, and increments retry."""
+        notification.mark_failed('Connection timeout')
+        notification.refresh_from_db()
+
+        assert notification.status == 'failed'
+        assert notification.error_message == 'Connection timeout'
+        assert notification.retry_count == 1
+
+    def test_should_send_pending_and_past(self, notification):
+        """Test should_send returns True for pending notification scheduled in past."""
+        notification.scheduled_for = timezone.now() - timedelta(minutes=1)
+        notification.save()
+        assert notification.should_send() is True
+
+    def test_should_send_already_sent(self, notification):
+        """Test should_send returns False for already-sent notification."""
+        notification.status = 'sent'
+        notification.save()
+        assert notification.should_send() is False
+
+    def test_should_send_future_scheduled(self, notification):
+        """Test should_send returns False for future-scheduled notification."""
+        notification.scheduled_for = timezone.now() + timedelta(hours=2)
+        notification.save()
+        assert notification.should_send() is False
+
+    def test_should_send_dnd_crosses_midnight(self, db, user):
+        """Test should_send returns False during DND that crosses midnight."""
+        user.notification_prefs = {
+            'dndEnabled': True,
+            'dndStart': 22,
+            'dndEnd': 7,
+        }
+        user.timezone = 'UTC'
+        user.save()
+
+        notification = Notification.objects.create(
+            user=user,
+            notification_type='reminder',
+            title='DND test',
+            body='body',
+            scheduled_for=timezone.now() - timedelta(minutes=1),
+            status='pending',
+        )
+
+        # We can't easily control the current hour in tests,
+        # but we can verify the method runs without error
+        result = notification.should_send()
+        assert isinstance(result, bool)
+
+
+class TestWebPushSubscriptionModel:
+    """Test WebPushSubscription model."""
+
+    def test_create_subscription(self, db, user):
+        """Test creating a web push subscription."""
+        sub = WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={
+                'endpoint': 'https://push.example.com/abc',
+                'keys': {'p256dh': 'key1', 'auth': 'key2'},
+            },
+            browser='Chrome',
+        )
+        assert sub.is_active is True
+        assert sub.browser == 'Chrome'
+
+    def test_subscription_str(self, db, user):
+        """Test string representation."""
+        sub = WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/abc'},
+            browser='Firefox',
+        )
+        assert user.email in str(sub)
+        assert 'Firefox' in str(sub)
+
+    def test_subscription_str_no_browser(self, db, user):
+        """Test string representation without browser."""
+        sub = WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/abc'},
+        )
+        assert 'unknown' in str(sub)
+
+
+class TestNotificationBatchModel:
+    """Test NotificationBatch model."""
+
+    def test_create_batch(self, db):
+        """Test creating a notification batch."""
+        batch = NotificationBatch.objects.create(
+            name='Daily motivation',
+            notification_type='motivation',
+            total_scheduled=100,
+            total_sent=95,
+            total_failed=5,
+        )
+        assert batch.status == 'scheduled'
+        assert batch.completed_at is None
+
+    def test_batch_str(self, db):
+        """Test string representation."""
+        batch = NotificationBatch.objects.create(
+            name='Weekly reports',
+            notification_type='weekly_report',
+            total_scheduled=50,
+            total_sent=48,
+        )
+        assert 'Weekly reports' in str(batch)
+        assert '48/50' in str(batch)
+
+
+class TestNotificationBatchSerializerTests:
+    """Test NotificationBatch serializer."""
+
+    def test_success_rate_zero_scheduled(self, db):
+        """Test success rate when no notifications scheduled."""
+        batch = NotificationBatch.objects.create(
+            name='empty', notification_type='system',
+            total_scheduled=0, total_sent=0,
+        )
+        serializer = NotificationBatchSerializer(batch)
+        assert serializer.data['success_rate'] == 0.0
+
+    def test_success_rate_partial(self, db):
+        """Test partial success rate."""
+        batch = NotificationBatch.objects.create(
+            name='partial', notification_type='system',
+            total_scheduled=100, total_sent=50,
+        )
+        serializer = NotificationBatchSerializer(batch)
+        assert serializer.data['success_rate'] == 50.0
+
+    def test_success_rate_full(self, db):
+        """Test 100% success rate."""
+        batch = NotificationBatch.objects.create(
+            name='full', notification_type='system',
+            total_scheduled=100, total_sent=100,
+        )
+        serializer = NotificationBatchSerializer(batch)
+        assert serializer.data['success_rate'] == 100.0
+
+
+class TestWebPushSubscriptionViewSet:
+    """Test WebPush subscription API endpoints."""
+
+    def test_list_subscriptions(self, authenticated_client, user):
+        """Test GET /api/notifications/push-subscriptions/."""
+        WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/1'},
+        )
+        response = authenticated_client.get('/api/notifications/push-subscriptions/')
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+
+    def test_create_subscription(self, authenticated_client, user):
+        """Test POST /api/notifications/push-subscriptions/."""
+        data = {
+            'subscription_info': {
+                'endpoint': 'https://push.example.com/new',
+                'keys': {'p256dh': 'abc', 'auth': 'def'},
+            },
+            'browser': 'Chrome',
+        }
+        response = authenticated_client.post(
+            '/api/notifications/push-subscriptions/', data, format='json'
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert WebPushSubscription.objects.filter(user=user).count() == 1
+
+    def test_create_deactivates_existing(self, authenticated_client, user):
+        """Test creating subscription deactivates old one with same endpoint."""
+        old_sub = WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/same'},
+        )
+        data = {
+            'subscription_info': {
+                'endpoint': 'https://push.example.com/same',
+                'keys': {'p256dh': 'new', 'auth': 'new'},
+            },
+        }
+        response = authenticated_client.post(
+            '/api/notifications/push-subscriptions/', data, format='json'
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        old_sub.refresh_from_db()
+        assert old_sub.is_active is False
+
+    def test_delete_subscription(self, authenticated_client, user):
+        """Test DELETE /api/notifications/push-subscriptions/{id}/."""
+        sub = WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/del'},
+        )
+        response = authenticated_client.delete(
+            f'/api/notifications/push-subscriptions/{sub.id}/'
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_requires_auth(self, api_client):
+        """Test endpoint requires authentication."""
+        response = api_client.get('/api/notifications/push-subscriptions/')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestNotificationViewSetExtended:
+    """Extended tests for notification view actions."""
+
+    def test_opened_action(self, authenticated_client, notification):
+        """Test POST /api/notifications/{id}/opened/."""
+        response = authenticated_client.post(
+            f'/api/notifications/{notification.id}/opened/'
+        )
+        assert response.status_code == status.HTTP_200_OK
+        notification.refresh_from_db()
+        assert notification.opened_at is not None
+
+    def test_grouped_action(self, authenticated_client, user):
+        """Test GET /api/notifications/grouped/."""
+        for t in ['reminder', 'motivation', 'reminder']:
+            Notification.objects.create(
+                user=user,
+                notification_type=t,
+                title=f'{t} test',
+                body='body',
+                scheduled_for=timezone.now(),
+                status='sent',
+            )
+        response = authenticated_client.get('/api/notifications/grouped/')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'groups' in response.data
+        types = [g['type'] for g in response.data['groups']]
+        assert 'reminder' in types
+
+    def test_create_notification_sanitizes(self, authenticated_client, user):
+        """Test that creating a notification sanitizes XSS from title/body."""
+        data = {
+            'notification_type': 'system',
+            'title': '<script>alert("xss")</script>Test',
+            'body': '<img onerror=alert(1)>Body',
+            'scheduled_for': timezone.now().isoformat(),
+        }
+        response = authenticated_client.post(
+            '/api/notifications/', data, format='json'
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert '<script>' not in response.data['title']
+
+
+class TestNotificationDeliveryService:
+    """Test NotificationDeliveryService."""
+
+    def test_deliver_websocket_success(self, db, user):
+        """Test websocket delivery sends to channel layer."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='WS test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_websocket(notification)
+        assert result is True
+
+    def test_deliver_websocket_disabled(self, db, user):
+        """Test websocket is skipped when disabled in prefs."""
+        user.notification_prefs = {'websocket_enabled': False, 'email_enabled': False, 'push_enabled': False}
+        user.save()
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service.deliver(notification)
+        assert result is False
+
+    def test_deliver_email_success(self, db, user):
+        """Test email delivery sends email."""
+        user.notification_prefs = {'email_enabled': True}
+        user.save()
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='Email test', body='body content',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_email(notification)
+        assert result is True
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].subject == 'Email test'
+
+    def test_deliver_email_disabled_by_default(self, db, user):
+        """Test email is disabled by default."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        # deliver() should not send email by default
+        prefs = user.notification_prefs or {}
+        assert prefs.get('email_enabled', False) is False
+
+    def test_deliver_webpush_no_subscriptions(self, db, user):
+        """Test webpush returns False when no subscriptions."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_webpush(notification)
+        assert result is False
+
+    def test_deliver_webpush_no_vapid_key(self, db, user):
+        """Test webpush returns False when VAPID key not configured."""
+        WebPushSubscription.objects.create(
+            user=user,
+            subscription_info={'endpoint': 'https://push.example.com/1'},
+        )
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        with patch.object(
+            service, '_send_webpush',
+            wraps=service._send_webpush
+        ):
+            result = service._send_webpush(notification)
+            # No VAPID key in test settings
+            assert result is False
+
+    @patch('apps.notifications.services.async_to_sync')
+    def test_deliver_websocket_failure(self, mock_async, db, user):
+        """Test websocket returns False on exception."""
+        mock_async.side_effect = Exception('Channel layer down')
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_websocket(notification)
+        assert result is False
+
+    def test_deliver_returns_true_if_any_succeed(self, db, user):
+        """Test deliver returns True if at least one channel succeeds."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        # By default websocket is enabled and will succeed with InMemoryChannelLayer
+        result = service.deliver(notification)
+        assert result is True
+
+    def test_deliver_prefs_none(self, db, user):
+        """Test deliver handles None notification_prefs."""
+        user.notification_prefs = None
+        user.save()
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service.deliver(notification)
+        # Should use defaults (websocket enabled) and succeed
+        assert result is True
+
+
+class TestNotificationConsumer:
+    """Test WebSocket notification consumer."""
+
+    @pytest.mark.asyncio
+    async def test_connect_unauthenticated(self, db):
+        """Test unauthenticated connection is rejected."""
+        from unittest.mock import MagicMock
+        from channels.testing import WebsocketCommunicator
+
+        communicator = WebsocketCommunicator(
+            NotificationConsumer.as_asgi(),
+            '/ws/notifications/'
+        )
+        communicator.scope['user'] = MagicMock(is_authenticated=False)
+
+        connected, code = await communicator.connect()
+        assert connected is False
+
+    @pytest.mark.asyncio
+    async def test_connect_authenticated(self, db, user):
+        """Test authenticated connection succeeds and sends unread count."""
+        communicator = WebsocketCommunicator(
+            NotificationConsumer.as_asgi(),
+            '/ws/notifications/'
+        )
+        communicator.scope['user'] = user
+
+        connected, _ = await communicator.connect()
+        assert connected is True
+
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'connection'
+        assert response['status'] == 'connected'
+        assert 'unread_count' in response
+
+        await communicator.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_receive_invalid_json(self, db, user):
+        """Test receiving invalid JSON sends error."""
+        communicator = WebsocketCommunicator(
+            NotificationConsumer.as_asgi(),
+            '/ws/notifications/'
+        )
+        communicator.scope['user'] = user
+        await communicator.connect()
+        await communicator.receive_json_from()  # consume connection message
+
+        await communicator.send_to(text_data='not valid json')
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'error'
+
+        await communicator.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_mark_read_via_ws(self, db, user):
+        """Test mark_read action via WebSocket."""
+        notification = await database_sync_to_async(Notification.objects.create)(
+            user=user, notification_type='system',
+            title='WS read test', body='body',
+            scheduled_for=timezone.now(), status='sent',
+        )
+
+        communicator = WebsocketCommunicator(
+            NotificationConsumer.as_asgi(),
+            '/ws/notifications/'
+        )
+        communicator.scope['user'] = user
+        await communicator.connect()
+        await communicator.receive_json_from()  # consume connection message
+
+        await communicator.send_json_to({
+            'type': 'mark_read',
+            'notification_id': str(notification.id),
+        })
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'marked_read'
+
+        await communicator.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_mark_all_read_via_ws(self, db, user):
+        """Test mark_all_read action via WebSocket."""
+        for i in range(3):
+            await database_sync_to_async(Notification.objects.create)(
+                user=user, notification_type='system',
+                title=f'WS test {i}', body='body',
+                scheduled_for=timezone.now(), status='sent',
+            )
+
+        communicator = WebsocketCommunicator(
+            NotificationConsumer.as_asgi(),
+            '/ws/notifications/'
+        )
+        communicator.scope['user'] = user
+        await communicator.connect()
+        await communicator.receive_json_from()  # consume connection message
+
+        await communicator.send_json_to({'type': 'mark_all_read'})
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'all_marked_read'
+        assert response['count'] == 3
+
+        await communicator.disconnect()

@@ -32,25 +32,18 @@
 ### Semaine 1-2: Setup & Infrastructure
 
 **Backend**
-- [ ] Initialiser le projet Node.js/TypeScript
-- [ ] Configurer Prisma avec PostgreSQL
+- [ ] Initialiser le projet Django avec Python
+- [ ] Configurer Django ORM avec PostgreSQL
 - [ ] Setup Redis pour cache
 - [ ] Créer le schéma de base de données
-- [ ] Configurer Firebase Auth
+- [ ] Configurer l'authentification (dj-rest-auth)
 - [ ] Setup CI/CD (GitHub Actions)
 - [ ] Déployer environnement staging
-
-**Mobile**
-- [ ] Initialiser React Native avec TypeScript
-- [ ] Configurer la navigation (React Navigation)
-- [ ] Setup Zustand pour state management
-- [ ] Intégrer le design system de base
-- [ ] Configurer les builds iOS/Android
 
 **Livrables S2:**
 - Projet initialisé et déployable
 - Auth fonctionnel (login/register)
-- Navigation de base
+- API de base
 
 ### Semaine 3-4: Core Features - Backend
 
@@ -73,26 +66,7 @@
 - Tests unitaires > 80%
 - Intégration ChatGPT fonctionnelle
 
-### Semaine 5-6: Core Features - Mobile
-
-**Écrans Principaux**
-- [ ] Écran de chat avec IA
-- [ ] Interface de saisie de rêve
-- [ ] Affichage du plan généré
-- [ ] Liste des rêves (dashboard)
-- [ ] Détail d'un rêve
-
-**Composants**
-- [ ] Bulles de chat
-- [ ] Cartes de rêves
-- [ ] Progress bars
-- [ ] Boutons et inputs
-
-**Livrables S6:**
-- Flow complet: saisie rêve → chat → plan
-- UI responsive et fluide
-
-### Semaine 7-8: Calendrier & Intégration
+### Semaine 5-8: Calendrier & Intégration
 
 **Calendrier**
 - [ ] Vue mensuelle
@@ -119,17 +93,9 @@
 ### Semaine 9-10: Infrastructure Notifications
 
 **Backend**
-- [ ] Setup Firebase Cloud Messaging
 - [ ] Service de planification (Bull/Redis)
 - [ ] API gestion des notifications
 - [ ] Scheduler pour notifications récurrentes
-- [ ] Gestion des tokens FCM
-
-**Mobile**
-- [ ] Intégration Firebase Messaging
-- [ ] Gestion des permissions
-- [ ] Handlers de notifications (foreground/background)
-- [ ] Deep linking depuis notifications
 
 **Livrables S10:**
 - Notifications push fonctionnelles
@@ -144,10 +110,10 @@
 - [ ] Check-ins après inactivité
 
 **Paramètres**
-- [ ] Écran de configuration complet
+- [ ] API de configuration des notifications
 - [ ] Mode "Ne pas déranger"
 - [ ] Préférences par type
-- [ ] Tests de notifications
+- [ ] Tests des notifications
 
 **Livrables S12:**
 - Système de notifications complet
@@ -160,37 +126,30 @@
 
 ### Semaine 13-14: UX & Performance
 
-**UX Improvements**
-- [ ] Animations et transitions
-- [ ] Feedback haptique
-- [ ] États de chargement
-- [ ] Empty states
+**Améliorations API**
+- [ ] États de chargement et réponses cohérentes
 - [ ] Gestion des erreurs gracieuse
+- [ ] Documentation API (Swagger/OpenAPI)
 
 **Performance**
 - [ ] Optimisation des requêtes
 - [ ] Cache intelligent
-- [ ] Lazy loading images
-- [ ] Optimisation bundle size
-- [ ] Réduction temps de démarrage
+- [ ] Optimisation des réponses API
+- [ ] Réduction temps de réponse
 
 **Livrables S14:**
-- App fluide et réactive
+- API performante et stable
 - Feedback beta intégré
 
 ### Semaine 15-16: Features Complémentaires
 
 **Fonctionnalités**
-- [ ] Onboarding complet
 - [ ] Système de badges/gamification basique
 - [ ] Export calendrier (iCal)
-- [ ] Thème sombre
 - [ ] Multi-langue (FR/EN)
 
 **Qualité**
-- [ ] Tests E2E (Detox)
 - [ ] Tests de charge backend
-- [ ] Audit accessibilité
 - [ ] Audit sécurité
 - [ ] Fix bugs beta
 
@@ -203,37 +162,29 @@
 
 ## Phase 4: Launch (Semaines 17-18)
 
-### Semaine 17: Préparation Stores
+### Semaine 17: Préparation Déploiement
 
-**App Store (iOS)**
-- [ ] Screenshots pour tous les devices
-- [ ] App Preview video
-- [ ] Description et mots-clés
+**Infrastructure**
+- [ ] Configuration serveur production
+- [ ] Déploiement AWS (ECS/Fargate)
+- [ ] Configuration CDN et load balancer
 - [ ] Privacy policy
-- [ ] Soumission review
-
-**Google Play (Android)**
-- [ ] Listing graphiques
-- [ ] Feature graphic
-- [ ] Description localisée
-- [ ] Data safety form
-- [ ] Publication beta ouverte
+- [ ] Landing page live
 
 **Livrables S17:**
-- Apps soumises aux stores
+- Backend déployé en production
 - Landing page live
 
 ### Semaine 18: Launch
 
 **Launch Day**
-- [ ] Release simultanée iOS/Android
+- [ ] Mise en production
 - [ ] Monitoring actif
 - [ ] Support utilisateurs
 - [ ] Annonce réseaux sociaux
-- [ ] Outreach presse/influenceurs
 
 **Post-Launch**
-- [ ] Analyse métriques D1, D7
+- [ ] Analyse métriques
 - [ ] Hotfixes si nécessaire
 - [ ] Collecte feedback
 - [ ] Planification v1.1
@@ -244,7 +195,6 @@
 
 ### v1.1 (Mois 1-2 post-launch)
 - Intégration Google Calendar
-- Widgets iOS/Android
 - Amélioration suggestions IA
 - Corrections bugs remontés
 
@@ -255,10 +205,9 @@
 - Analytics utilisateur avancés
 
 ### v1.3 (Mois 5-6)
-- Apple Watch / Wear OS
-- Reconnaissance vocale
 - Coach IA proactif
-- Intégration santé (Apple Health, Google Fit)
+- API publique pour intégrations tierces
+- Webhooks pour événements
 
 ---
 
@@ -270,8 +219,7 @@
 |------|--------|-----------------|
 | Product Manager | 1 | Vision, priorités, roadmap |
 | Lead Developer | 1 | Architecture, code review |
-| Mobile Dev (RN) | 1-2 | App iOS/Android |
-| Backend Dev | 1 | API, infrastructure |
+| Backend Dev | 1-2 | API Django, infrastructure |
 | UI/UX Designer | 1 | Design, prototypes |
 | QA Engineer | 0.5 | Tests, qualité |
 
@@ -280,11 +228,9 @@
 | Poste | Coût estimé |
 |-------|-------------|
 | Développement | Variable selon équipe |
-| Infrastructure (AWS/Firebase) | ~500€/mois |
+| Infrastructure (AWS) | ~500€/mois |
 | OpenAI API | ~200-500€/mois (selon usage) |
 | Outils (Figma, GitHub, etc.) | ~200€/mois |
-| Apple Developer Account | 99€/an |
-| Google Play Account | 25€ (one-time) |
 
 ---
 
@@ -292,17 +238,16 @@
 
 ### Phase MVP
 - [ ] 100% features MVP implémentées
-- [ ] < 3s temps de chargement initial
-- [ ] 0 crash critique
+- [ ] < 500ms temps de réponse API (p95)
+- [ ] 0 erreur critique
 
 ### Phase Beta
 - [ ] 50+ beta testeurs actifs
 - [ ] NPS > 40
-- [ ] < 5% taux de désinstallation
+- [ ] Uptime > 99.5%
 
 ### Launch
-- [ ] 1000 téléchargements semaine 1
-- [ ] Note store > 4.0
+- [ ] 1000 utilisateurs inscrits semaine 1
 - [ ] DAU/MAU > 30%
 - [ ] Rétention D7 > 40%
 
@@ -313,7 +258,6 @@
 | Risque | Impact | Probabilité | Mitigation |
 |--------|--------|-------------|------------|
 | Coûts API OpenAI élevés | Haut | Moyen | Cache agressif, quotas free tier |
-| Rejet App Store | Moyen | Faible | Suivre guidelines, test review |
 | Performance insuffisante | Haut | Moyen | Profiling continu, optimisation |
-| Bugs critiques au launch | Haut | Moyen | Tests E2E, beta étendue |
-| Faible adoption | Haut | Moyen | Marketing pré-launch, ASO |
+| Bugs critiques au launch | Haut | Moyen | Tests d'intégration, beta étendue |
+| Faible adoption | Haut | Moyen | Marketing pré-launch, SEO |

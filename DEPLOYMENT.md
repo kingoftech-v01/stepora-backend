@@ -1,23 +1,22 @@
 # DreamPlanner Deployment Guide
 
-This guide covers deploying DreamPlanner to production environments with the Django backend and React Native mobile app.
+This guide covers deploying DreamPlanner to production environments.
 
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Prerequisites](#prerequisites)
 - [Backend Deployment (Django)](#backend-deployment-django)
-- [Mobile Deployment (EAS)](#mobile-deployment-eas)
 - [Post-Deployment](#post-deployment)
 - [Monitoring](#monitoring)
 - [Troubleshooting](#troubleshooting)
 
 ## Architecture Overview
 
-```
+```text
                     ┌─────────────────┐
-                    │   Mobile App    │
-                    │ (React Native)  │
+                    │   API Clients   │
+                    │ (Mobile / Web)  │
                     └────────┬────────┘
                              │
                     ┌────────▼────────┐
@@ -48,7 +47,6 @@ This guide covers deploying DreamPlanner to production environments with the Dja
 |---------|---------|---------------------|
 | PostgreSQL 15+ | Database | AWS RDS, Supabase, Railway |
 | Redis 7+ | Cache & Celery broker | AWS ElastiCache, Upstash, Railway |
-| Firebase | Authentication | Google Firebase |
 | OpenAI | AI features (GPT-4) | OpenAI |
 | Sentry | Error tracking | Sentry.io |
 
@@ -61,9 +59,6 @@ docker --version  # >= 24.0
 # Python
 python --version  # >= 3.11
 
-# Mobile
-npm install -g eas-cli
-eas --version
 ```
 
 ## Backend Deployment (Django)
@@ -73,7 +68,6 @@ eas --version
 #### 1. Build Production Image
 
 ```bash
-cd backend
 
 # Build the image
 docker build -t dreamplanner-backend:latest .
@@ -103,11 +97,6 @@ DB_PORT=5432
 # Redis
 REDIS_URL=redis://your-redis-host.com:6379/0
 
-# Firebase Admin SDK
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
-
 # OpenAI
 OPENAI_API_KEY=sk-...
 
@@ -117,6 +106,11 @@ CORS_ORIGIN=https://app.dreamplanner.app
 # Monitoring
 SENTRY_DSN=https://...@sentry.io/...
 SENTRY_ENVIRONMENT=production
+
+# Web Push (VAPID) - for browser push notifications
+VAPID_PUBLIC_KEY=<your-vapid-public-key>
+VAPID_PRIVATE_KEY=<your-vapid-private-key>
+VAPID_ADMIN_EMAIL=admin@dreamplanner.app
 ```
 
 #### 3. Run with Docker Compose
@@ -233,7 +227,6 @@ aws ecs update-service \
 ### Option C: Manual Deployment
 
 ```bash
-cd backend
 
 # Create virtual environment
 python -m venv venv
@@ -263,98 +256,6 @@ celery -A config worker -l info
 
 # In another terminal: Start Celery beat
 celery -A config beat -l info
-```
-
-## Mobile Deployment (EAS)
-
-### 1. Configure EAS
-
-```bash
-cd apps/mobile
-
-# Login to Expo
-eas login
-
-# Configure project
-eas build:configure
-```
-
-### 2. Update `eas.json`
-
-```json
-{
-  "cli": {
-    "version": ">= 5.0.0"
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal",
-      "env": {
-        "API_URL": "https://staging-api.dreamplanner.app",
-        "WS_URL": "wss://staging-api.dreamplanner.app/ws"
-      }
-    },
-    "production": {
-      "env": {
-        "API_URL": "https://api.dreamplanner.app",
-        "WS_URL": "wss://api.dreamplanner.app/ws"
-      },
-      "ios": {
-        "buildType": "release"
-      },
-      "android": {
-        "buildType": "app-bundle"
-      }
-    }
-  },
-  "submit": {
-    "production": {
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "1234567890",
-        "appleTeamId": "ABCD123456"
-      },
-      "android": {
-        "serviceAccountKeyPath": "./google-play-key.json",
-        "track": "production"
-      }
-    }
-  }
-}
-```
-
-### 3. Build for Production
-
-```bash
-# iOS
-eas build --platform ios --profile production
-
-# Android
-eas build --platform android --profile production
-
-# Both platforms
-eas build --platform all --profile production
-```
-
-### 4. Submit to App Stores
-
-```bash
-# iOS App Store
-eas submit --platform ios --profile production
-
-# Google Play Store
-eas submit --platform android --profile production
-```
-
-### 5. OTA Updates
-
-```bash
-# Publish update without new build
-eas update --branch production --message "Bug fixes"
 ```
 
 ## Post-Deployment
@@ -505,7 +406,6 @@ gunicorn --workers 2 --threads 4 --max-requests 1000
 - [ ] HTTPS enforced
 - [ ] CORS origins restricted
 - [ ] Database credentials secured
-- [ ] Firebase private key secured
 - [ ] Rate limiting enabled
 - [ ] Security headers configured
 - [ ] Admin URL changed from `/admin/`

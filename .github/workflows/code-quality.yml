@@ -5,43 +5,8 @@ on:
     branches: [main, develop]
 
 jobs:
-  mobile-quality:
-    name: Mobile Code Quality
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies (Mobile)
-        working-directory: apps/mobile
-        run: npm ci
-
-      - name: Run Prettier check
-        run: |
-          npx prettier --check "apps/mobile/**/*.{ts,tsx,js,jsx,json}"
-
-      - name: Run ESLint (Mobile)
-        working-directory: apps/mobile
-        run: npm run lint
-
-      - name: TypeScript check (Mobile)
-        working-directory: apps/mobile
-        run: npx tsc --noEmit
-
-      - name: Check for security vulnerabilities
-        run: |
-          cd apps/mobile && npm audit --audit-level=moderate || true
-
   backend-quality:
-    name: Django Backend Quality
+    name: Django Code Quality
     runs-on: ubuntu-latest
 
     steps:
@@ -53,31 +18,27 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: requirements/base.txt
 
       - name: Install dependencies
-        working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements/base.txt
           pip install flake8 black isort
 
       - name: Run Black (format check)
-        working-directory: backend
         run: black --check .
 
       - name: Run isort (import check)
-        working-directory: backend
         run: isort --check-only .
 
       - name: Run Flake8 (linting)
-        working-directory: backend
         run: flake8 .
 
   comment-results:
     name: Comment PR
     runs-on: ubuntu-latest
-    needs: [mobile-quality, backend-quality]
+    needs: [backend-quality]
     if: always()
 
     steps:
@@ -85,14 +46,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const mobileResult = '${{ needs.mobile-quality.result }}';
             const backendResult = '${{ needs.backend-quality.result }}';
-            const mobileEmoji = mobileResult === 'success' ? '✅' : '❌';
             const backendEmoji = backendResult === 'success' ? '✅' : '❌';
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Code Quality Results\n\n${mobileEmoji} Mobile: ${mobileResult}\n${backendEmoji} Backend: ${backendResult}`
+              body: `## Code Quality Results\n\n${backendEmoji} Django: ${backendResult}`
             })

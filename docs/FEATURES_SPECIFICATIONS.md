@@ -24,7 +24,7 @@
 **Options d'inscription:**
 - Email + Mot de passe
 - Google Sign-In
-- Apple Sign-In (iOS)
+- Apple Sign-In
 
 **Informations collectées:**
 1. Nom d'affichage
@@ -416,8 +416,8 @@ Après la conversation, l'IA génère un plan:
 │ Activer                     [====○]   │
 │ De [22:00] à [07:00]                  │
 │                                        │
-│ [ ] Respecter le mode silencieux      │
-│     du téléphone                       │
+│ [ ] Respecter les préférences          │
+│     utilisateur                        │
 │                                        │
 └────────────────────────────────────────┘
 ```

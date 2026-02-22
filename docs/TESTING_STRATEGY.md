@@ -9,15 +9,15 @@
 │                                                                  │
 │                         /\                                       │
 │                        /  \      E2E Tests                      │
-│                       /    \     (Detox/Maestro)                │
+│                       /    \     (API end-to-end)               │
 │                      /──────\    ~10% - Parcours critiques      │
 │                     /        \                                   │
 │                    /          \  Integration Tests              │
-│                   /            \ (API + Components)             │
+│                   /            \ (API + Database)               │
 │                  /──────────────\~30% - Services & API          │
 │                 /                \                               │
 │                /                  \ Unit Tests                  │
-│               /                    \(Jest/Vitest)               │
+│               /                    \(pytest)                    │
 │              /______________________\~60% - Logique métier      │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -27,328 +27,145 @@
 
 ## 1. Tests Unitaires (60%)
 
-### 1.1 Backend (Vitest)
+### 1.1 Backend (pytest + pytest-django)
 
 **Fichiers à tester:**
 ```
-apps/api/src/
-├── services/
-│   ├── ai.service.test.ts         ✅ Priorité haute
-│   ├── notification.service.test.ts
-│   ├── calendar.service.test.ts
-│   └── planning.service.test.ts   ✅ Priorité haute
-├── utils/
-│   ├── dateUtils.test.ts
-│   ├── validation.test.ts
-│   └── scheduling.test.ts
-└── controllers/
-    └── *.controller.test.ts
+apps/
+├── dreams/
+│   └── tests/
+│       ├── test_models.py          ✅ Priorité haute
+│       ├── test_views.py           ✅ Priorité haute
+│       └── test_tasks.py
+├── conversations/
+│   └── tests/
+│       ├── test_models.py
+│       ├── test_views.py
+│       └── test_consumers.py       ✅ Priorité haute
+├── notifications/
+│   └── tests/
+│       ├── test_models.py
+│       ├── test_views.py
+│       └── test_tasks.py
+├── users/
+│   └── tests/
+│       ├── test_models.py
+│       └── test_views.py
+└── calendar/
+    └── tests/
+        └── test_views.py
+integrations/
+├── test_openai_service.py          ✅ Priorité haute
 ```
 
 **Exemple de test - AI Service:**
 
-```typescript
-// apps/api/src/services/__tests__/ai.service.test.ts
+```python
+# integrations/tests/test_openai_service.py
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AIService } from '../ai.service';
+import pytest
+from unittest.mock import patch, MagicMock
+from integrations.openai_service import OpenAIService
 
-describe('AIService', () => {
-  let aiService: AIService;
+class TestOpenAIService:
+    def setup_method(self):
+        self.ai_service = OpenAIService()
 
-  beforeEach(() => {
-    aiService = new AIService();
-  });
+    @patch('integrations.openai_service.openai')
+    def test_generate_plan_returns_valid_structure(self, mock_openai):
+        mock_openai.ChatCompletion.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content='{"analysis": "...", "feasibility": "high", "goals": [{"title": "Les bases", "order": 0, "tasks": []}]}'))]
+        )
 
-  describe('generatePlan', () => {
-    it('should generate a valid plan structure', async () => {
-      const dream = {
-        title: 'Apprendre la guitare',
-        description: 'Je veux jouer mes chansons préférées',
-        targetDate: new Date('2026-06-01'),
-        category: 'creativity',
-      };
+        dream = MagicMock(
+            title='Apprendre la guitare',
+            description='Je veux jouer mes chansons préférées',
+            target_date='2026-06-01',
+            category='creativity',
+        )
+        user = MagicMock(
+            work_schedule={'workDays': [1, 2, 3, 4, 5], 'startTime': '09:00', 'endTime': '18:00'},
+            timezone='Europe/Paris',
+        )
 
-      const context = {
-        userName: 'Marie',
-        timezone: 'Europe/Paris',
-        workSchedule: {
-          workDays: [1, 2, 3, 4, 5],
-          startTime: '09:00',
-          endTime: '18:00',
-        },
-      };
+        plan = self.ai_service.generate_plan(dream, user)
 
-      const plan = await aiService.generatePlan(dream, context);
+        assert 'analysis' in plan
+        assert 'feasibility' in plan
+        assert 'goals' in plan
+        assert len(plan['goals']) > 0
+        assert plan['feasibility'] in ['high', 'medium', 'low']
 
-      expect(plan).toHaveProperty('analysis');
-      expect(plan).toHaveProperty('feasibility');
-      expect(plan).toHaveProperty('goals');
-      expect(plan.goals.length).toBeGreaterThan(0);
-      expect(['high', 'medium', 'low']).toContain(plan.feasibility);
-    });
+    @patch('integrations.openai_service.openai')
+    def test_generate_motivational_message_under_limit(self, mock_openai):
+        mock_openai.ChatCompletion.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content='Continue comme ça!'))]
+        )
 
-    it('should respect work schedule when generating tasks', async () => {
-      // Test que les tâches ne sont pas planifiées pendant les heures de travail
-    });
+        user = MagicMock(display_name='Marie', xp=100, level=2, streak_days=7)
+        message = self.ai_service.generate_motivational_message(user)
 
-    it('should handle missing target date gracefully', async () => {
-      // Test avec date non spécifiée
-    });
-  });
-
-  describe('generateMotivationalMessage', () => {
-    it('should generate message under 100 characters', async () => {
-      const message = await aiService.generateMotivationalMessage(
-        50, // progress
-        7,  // streak
-        'Apprendre la guitare',
-        'Marie'
-      );
-
-      expect(message.length).toBeLessThanOrEqual(100);
-    });
-
-    it('should adapt message to streak length', async () => {
-      const message1 = await aiService.generateMotivationalMessage(50, 1, 'Test', 'User');
-      const message7 = await aiService.generateMotivationalMessage(50, 7, 'Test', 'User');
-      const message30 = await aiService.generateMotivationalMessage(50, 30, 'Test', 'User');
-
-      // Les messages devraient être différents selon la série
-      expect(message1).not.toBe(message30);
-    });
-  });
-});
+        assert len(message) <= 150
 ```
 
-**Exemple de test - Scheduling Utils:**
+**Exemple de test - Dream Views:**
 
-```typescript
-// apps/api/src/utils/__tests__/scheduling.test.ts
+```python
+# apps/dreams/tests/test_views.py
 
-import { describe, it, expect } from 'vitest';
-import {
-  isWorkingHours,
-  findAvailableSlots,
-  calculateNextTaskDate,
-  isDoNotDisturbTime,
-} from '../scheduling';
+import pytest
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+from apps.users.models import User
+from apps.dreams.models import Dream
 
-describe('Scheduling Utils', () => {
-  describe('isWorkingHours', () => {
-    const workSchedule = {
-      workDays: [1, 2, 3, 4, 5], // Lun-Ven
-      startTime: '09:00',
-      endTime: '18:00',
-    };
+@pytest.mark.django_db
+class TestDreamViewSet:
+    def setup_method(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='test@example.com',
+            password='Test123!',
+            display_name='Test User',
+        )
+        self.client.force_authenticate(user=self.user)
 
-    it('should return true during work hours on workday', () => {
-      const monday10am = new Date('2026-02-02T10:00:00'); // Lundi
-      expect(isWorkingHours(monday10am, workSchedule)).toBe(true);
-    });
+    def test_create_dream(self):
+        url = reverse('dream-list')
+        data = {
+            'title': 'Apprendre la guitare',
+            'description': 'Je veux jouer mes chansons préférées',
+            'category': 'creativity',
+            'target_date': '2026-06-01',
+        }
 
-    it('should return false on weekend', () => {
-      const saturday10am = new Date('2026-02-07T10:00:00'); // Samedi
-      expect(isWorkingHours(saturday10am, workSchedule)).toBe(false);
-    });
+        response = self.client.post(url, data, format='json')
 
-    it('should return false before work starts', () => {
-      const monday7am = new Date('2026-02-02T07:00:00');
-      expect(isWorkingHours(monday7am, workSchedule)).toBe(false);
-    });
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['title'] == 'Apprendre la guitare'
+        assert response.data['status'] == 'active'
 
-    it('should return false after work ends', () => {
-      const monday7pm = new Date('2026-02-02T19:00:00');
-      expect(isWorkingHours(monday7pm, workSchedule)).toBe(false);
-    });
-  });
+    def test_create_dream_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        url = reverse('dream-list')
+        data = {'title': 'Test', 'description': 'Test'}
 
-  describe('findAvailableSlots', () => {
-    it('should find slots outside work hours', () => {
-      const slots = findAvailableSlots(
-        new Date('2026-02-02'), // Lundi
-        30, // durée en minutes
-        { workDays: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '18:00' }
-      );
+        response = self.client.post(url, data, format='json')
 
-      expect(slots.length).toBeGreaterThan(0);
-      slots.forEach(slot => {
-        const hour = slot.getHours();
-        expect(hour < 9 || hour >= 18).toBe(true);
-      });
-    });
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    it('should respect minimum gap between tasks', () => {
-      // Test que les créneaux ont au moins 15min d'écart
-    });
-  });
+    def test_list_dreams_returns_only_own_dreams(self):
+        Dream.objects.create(user=self.user, title='Mon rêve', description='Test')
+        other_user = User.objects.create_user(email='other@test.com', password='Test123!')
+        Dream.objects.create(user=other_user, title='Autre rêve', description='Test')
 
-  describe('isDoNotDisturbTime', () => {
-    it('should return true during DND hours', () => {
-      const prefs = { dndStart: 22, dndEnd: 7 };
+        url = reverse('dream-list')
+        response = self.client.get(url)
 
-      expect(isDoNotDisturbTime(new Date('2026-02-02T23:00:00'), prefs)).toBe(true);
-      expect(isDoNotDisturbTime(new Date('2026-02-02T06:00:00'), prefs)).toBe(true);
-    });
-
-    it('should return false outside DND hours', () => {
-      const prefs = { dndStart: 22, dndEnd: 7 };
-
-      expect(isDoNotDisturbTime(new Date('2026-02-02T10:00:00'), prefs)).toBe(false);
-      expect(isDoNotDisturbTime(new Date('2026-02-02T20:00:00'), prefs)).toBe(false);
-    });
-  });
-});
-```
-
-### 1.2 Mobile (Jest + React Native Testing Library)
-
-**Fichiers à tester:**
-```
-apps/mobile/src/
-├── stores/
-│   ├── authStore.test.ts
-│   ├── chatStore.test.ts
-│   └── dreamsStore.test.ts
-├── hooks/
-│   ├── useChat.test.ts
-│   └── useNotifications.test.ts
-├── utils/
-│   ├── formatters.test.ts
-│   └── validators.test.ts
-└── components/
-    └── *.test.tsx
-```
-
-**Exemple de test - Auth Store:**
-
-```typescript
-// apps/mobile/src/stores/__tests__/authStore.test.ts
-
-import { renderHook, act } from '@testing-library/react-hooks';
-import { useAuthStore } from '../authStore';
-
-describe('AuthStore', () => {
-  beforeEach(() => {
-    // Reset store between tests
-    useAuthStore.getState().logout();
-  });
-
-  describe('setUser', () => {
-    it('should set user and mark as authenticated', () => {
-      const { result } = renderHook(() => useAuthStore());
-
-      act(() => {
-        result.current.setUser({
-          id: '123',
-          email: 'test@example.com',
-          displayName: 'Test User',
-          avatarUrl: null,
-          timezone: 'Europe/Paris',
-          subscription: 'free',
-        });
-      });
-
-      expect(result.current.user?.email).toBe('test@example.com');
-      expect(result.current.isAuthenticated).toBe(true);
-    });
-  });
-
-  describe('logout', () => {
-    it('should clear all user data', () => {
-      const { result } = renderHook(() => useAuthStore());
-
-      // First set a user
-      act(() => {
-        result.current.setUser({
-          id: '123',
-          email: 'test@example.com',
-          displayName: 'Test',
-          avatarUrl: null,
-          timezone: 'Europe/Paris',
-          subscription: 'premium',
-        });
-      });
-
-      // Then logout
-      act(() => {
-        result.current.logout();
-      });
-
-      expect(result.current.user).toBeNull();
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.accessToken).toBeNull();
-    });
-  });
-
-  describe('setWorkSchedule', () => {
-    it('should update work schedule', () => {
-      const { result } = renderHook(() => useAuthStore());
-
-      act(() => {
-        result.current.setWorkSchedule({
-          workDays: [1, 2, 3, 4, 5],
-          startTime: '09:00',
-          endTime: '18:00',
-        });
-      });
-
-      expect(result.current.workSchedule?.workDays).toEqual([1, 2, 3, 4, 5]);
-    });
-  });
-});
-```
-
-**Exemple de test - Composant ChatBubble:**
-
-```tsx
-// apps/mobile/src/components/__tests__/ChatBubble.test.tsx
-
-import React from 'react';
-import { render, screen } from '@testing-library/react-native';
-import { ChatBubble } from '../ChatBubble';
-
-describe('ChatBubble', () => {
-  it('renders user message correctly', () => {
-    render(
-      <ChatBubble
-        message="Hello World"
-        isUser={true}
-        timestamp={new Date('2026-02-04T10:00:00')}
-      />
-    );
-
-    expect(screen.getByText('Hello World')).toBeTruthy();
-  });
-
-  it('renders AI message with different style', () => {
-    const { getByTestId } = render(
-      <ChatBubble
-        message="AI Response"
-        isUser={false}
-        timestamp={new Date('2026-02-04T10:00:00')}
-      />
-    );
-
-    const bubble = getByTestId('chat-bubble');
-    // Vérifier que le style est différent pour l'IA
-    expect(bubble.props.style).toMatchObject(
-      expect.objectContaining({ alignSelf: 'flex-start' })
-    );
-  });
-
-  it('formats timestamp correctly', () => {
-    render(
-      <ChatBubble
-        message="Test"
-        isUser={true}
-        timestamp={new Date('2026-02-04T10:30:00')}
-      />
-    );
-
-    expect(screen.getByText('10:30')).toBeTruthy();
-  });
-});
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert response.data['results'][0]['title'] == 'Mon rêve'
 ```
 
 ---
@@ -357,376 +174,210 @@ describe('ChatBubble', () => {
 
 ### 2.1 API Integration Tests
 
-```typescript
-// apps/api/src/__tests__/integration/dreams.integration.test.ts
+```python
+# apps/dreams/tests/test_integration.py
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import request from 'supertest';
-import { app } from '../../index';
-import { prisma } from '../../config/database';
+import pytest
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+from apps.users.models import User
+from apps.dreams.models import Dream
 
-describe('Dreams API Integration', () => {
-  let authToken: string;
-  let userId: string;
+@pytest.mark.django_db
+class TestDreamsAPIIntegration:
+    def setup_method(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='test@example.com',
+            password='Test123!',
+            display_name='Test User',
+        )
+        self.client.force_authenticate(user=self.user)
 
-  beforeAll(async () => {
-    // Setup: Create test user and get auth token
-    const res = await request(app)
-      .post('/api/auth/register')
-      .send({
-        email: 'test@example.com',
-        password: 'Test123!',
-        displayName: 'Test User',
-      });
+    def test_create_dream(self):
+        url = reverse('dream-list')
+        data = {
+            'title': 'Apprendre la guitare',
+            'description': 'Je veux jouer mes chansons préférées',
+            'category': 'creativity',
+            'target_date': '2026-06-01',
+        }
 
-    authToken = res.body.accessToken;
-    userId = res.body.user.id;
-  });
+        response = self.client.post(url, data, format='json')
 
-  afterAll(async () => {
-    // Cleanup
-    await prisma.user.delete({ where: { id: userId } });
-    await prisma.$disconnect();
-  });
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['title'] == 'Apprendre la guitare'
+        assert response.data['status'] == 'active'
 
-  describe('POST /api/dreams', () => {
-    it('should create a new dream', async () => {
-      const response = await request(app)
-        .post('/api/dreams')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'Apprendre la guitare',
-          description: 'Je veux jouer mes chansons préférées',
-          category: 'creativity',
-          targetDate: '2026-06-01',
-        });
+    def test_reject_invalid_dream_data(self):
+        url = reverse('dream-list')
+        data = {
+            'title': '',  # Invalid: empty title
+            'description': 'Test',
+        }
 
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty('id');
-      expect(response.body.title).toBe('Apprendre la guitare');
-      expect(response.body.status).toBe('active');
-    });
+        response = self.client.post(url, data, format='json')
 
-    it('should reject invalid dream data', async () => {
-      const response = await request(app)
-        .post('/api/dreams')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: '', // Invalid: empty title
-          description: 'Test',
-        });
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('errors');
-    });
+    def test_require_authentication(self):
+        self.client.force_authenticate(user=None)
+        url = reverse('dream-list')
+        data = {
+            'title': 'Test Dream',
+            'description': 'Test',
+        }
 
-    it('should require authentication', async () => {
-      const response = await request(app)
-        .post('/api/dreams')
-        .send({
-          title: 'Test Dream',
-          description: 'Test',
-        });
+        response = self.client.post(url, data, format='json')
 
-      expect(response.status).toBe(401);
-    });
-  });
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-  describe('POST /api/dreams/:id/generate-plan', () => {
-    it('should generate a plan for a dream', async () => {
-      // First create a dream
-      const createRes = await request(app)
-        .post('/api/dreams')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'Courir un marathon',
-          description: 'Mon premier marathon',
-          targetDate: '2026-10-01',
-        });
+    @pytest.mark.slow
+    def test_generate_plan_for_dream(self):
+        dream = Dream.objects.create(
+            user=self.user,
+            title='Courir un marathon',
+            description='Mon premier marathon',
+            target_date='2026-10-01',
+        )
 
-      const dreamId = createRes.body.id;
+        url = reverse('dream-generate-plan', kwargs={'pk': dream.pk})
+        response = self.client.post(url, {'available_hours_per_week': 5}, format='json')
 
-      // Then generate plan
-      const response = await request(app)
-        .post(`/api/dreams/${dreamId}/generate-plan`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          availableHoursPerWeek: 5,
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('goals');
-      expect(response.body.goals.length).toBeGreaterThan(0);
-    }, 30000); // Timeout plus long pour l'appel IA
-  });
-});
+        assert response.status_code == status.HTTP_200_OK
+        assert 'goals' in response.data
+        assert len(response.data['goals']) > 0
 ```
 
-### 2.2 Component Integration Tests
+### 2.2 WebSocket Integration Tests
 
-```tsx
-// apps/mobile/src/screens/__tests__/ChatScreen.integration.test.tsx
+```python
+# apps/conversations/tests/test_consumers.py
 
-import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ChatScreen } from '../ChatScreen';
-import { mockApiService } from '../../__mocks__/apiService';
+import pytest
+from channels.testing import WebsocketCommunicator
+from channels.db import database_sync_to_async
+from config.asgi import application
+from apps.users.models import User
+from apps.conversations.models import Conversation
 
-jest.mock('../../services/api', () => mockApiService);
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+class TestChatConsumer:
+    async def test_connect_with_valid_token(self):
+        user = await database_sync_to_async(User.objects.create_user)(
+            email='ws@test.com', password='Test123!'
+        )
+        conversation = await database_sync_to_async(Conversation.objects.create)(
+            user=user, conversation_type='general'
+        )
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
-});
+        communicator = WebsocketCommunicator(
+            application,
+            f'/ws/conversations/{conversation.id}/?token={user.auth_token.key}'
+        )
 
-const wrapper = ({ children }) => (
-  <QueryClientProvider client={queryClient}>
-    {children}
-  </QueryClientProvider>
-);
+        connected, _ = await communicator.connect()
+        assert connected
 
-describe('ChatScreen Integration', () => {
-  beforeEach(() => {
-    queryClient.clear();
-    jest.clearAllMocks();
-  });
+        response = await communicator.receive_json_from()
+        assert response['type'] == 'connection'
+        assert response['status'] == 'connected'
 
-  it('should send message and receive AI response', async () => {
-    mockApiService.sendMessage.mockResolvedValueOnce({
-      id: '1',
-      role: 'assistant',
-      content: 'Bonjour ! Comment puis-je t\'aider ?',
-    });
+        await communicator.disconnect()
 
-    const { getByPlaceholderText, getByTestId, findByText } = render(
-      <ChatScreen />,
-      { wrapper }
-    );
+    async def test_reject_without_authentication(self):
+        communicator = WebsocketCommunicator(
+            application,
+            '/ws/conversations/fake-id/'
+        )
 
-    // Type message
-    const input = getByPlaceholderText('Écris ton message...');
-    fireEvent.changeText(input, 'Bonjour');
-
-    // Send message
-    const sendButton = getByTestId('send-button');
-    fireEvent.press(sendButton);
-
-    // Wait for AI response
-    await waitFor(() => {
-      expect(findByText('Comment puis-je t\'aider ?')).toBeTruthy();
-    });
-  });
-
-  it('should display quick suggestions when conversation is empty', () => {
-    const { getByText } = render(<ChatScreen />, { wrapper });
-
-    expect(getByText('Je veux apprendre une nouvelle langue')).toBeTruthy();
-    expect(getByText('Je veux me mettre au sport')).toBeTruthy();
-  });
-
-  it('should handle suggestion tap', async () => {
-    const { getByText, getByPlaceholderText } = render(
-      <ChatScreen />,
-      { wrapper }
-    );
-
-    const suggestion = getByText('Je veux apprendre une nouvelle langue');
-    fireEvent.press(suggestion);
-
-    const input = getByPlaceholderText('Écris ton message...');
-    expect(input.props.value).toBe('Je veux apprendre une nouvelle langue');
-  });
-});
+        connected, code = await communicator.connect()
+        assert not connected or code == 4003
 ```
 
 ---
 
 ## 3. Tests E2E (10%)
 
-### 3.1 Configuration Detox (React Native)
+### 3.1 Tests E2E API (Parcours Critiques)
 
-```javascript
-// .detoxrc.js
+```python
+# tests/e2e/test_dream_flow.py
 
-module.exports = {
-  testRunner: {
-    args: {
-      $0: 'jest',
-      config: 'e2e/jest.config.js',
-    },
-    jest: {
-      setupTimeout: 120000,
-    },
-  },
-  apps: {
-    'ios.debug': {
-      type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/DreamPlanner.app',
-      build: 'xcodebuild -workspace ios/DreamPlanner.xcworkspace -scheme DreamPlanner -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
-    },
-    'android.debug': {
-      type: 'android.apk',
-      binaryPath: 'android/app/build/outputs/apk/debug/app-debug.apk',
-      build: 'cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug',
-    },
-  },
-  devices: {
-    simulator: {
-      type: 'ios.simulator',
-      device: { type: 'iPhone 15' },
-    },
-    emulator: {
-      type: 'android.emulator',
-      device: { avdName: 'Pixel_5_API_33' },
-    },
-  },
-  configurations: {
-    'ios.sim.debug': {
-      device: 'simulator',
-      app: 'ios.debug',
-    },
-    'android.emu.debug': {
-      device: 'emulator',
-      app: 'android.debug',
-    },
-  },
-};
-```
+import pytest
+from rest_framework.test import APIClient
+from apps.users.models import User
 
-### 3.2 Tests E2E Critiques
+@pytest.mark.django_db
+class TestCreateDreamFlow:
+    """Test du parcours complet: inscription -> création rêve -> génération plan"""
 
-```typescript
-// e2e/flows/onboarding.e2e.ts
+    def setup_method(self):
+        self.client = APIClient()
 
-import { device, element, by, expect } from 'detox';
+    def test_full_dream_creation_flow(self):
+        # 1. Inscription
+        response = self.client.post('/api/auth/registration/', {
+            'email': 'e2e@test.com',
+            'password1': 'TestPass123A',
+            'password2': 'TestPass123A',
+        })
+        assert response.status_code == 201
+        token = response.data['key']
 
-describe('Onboarding Flow', () => {
-  beforeAll(async () => {
-    await device.launchApp({ newInstance: true });
-  });
+        # 2. Authentification
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token}')
 
-  it('should complete full onboarding flow', async () => {
-    // Slide 1
-    await expect(element(by.text('Transformez vos rêves en réalité'))).toBeVisible();
-    await element(by.id('next-button')).tap();
+        # 3. Créer un rêve
+        response = self.client.post('/api/dreams/', {
+            'title': 'Apprendre la guitare',
+            'description': 'Je veux jouer mes chansons préférées',
+            'category': 'creativity',
+            'target_date': '2026-06-01',
+        }, format='json')
+        assert response.status_code == 201
+        dream_id = response.data['id']
 
-    // Slide 2
-    await expect(element(by.text('Parlez, nous planifions'))).toBeVisible();
-    await element(by.id('next-button')).tap();
+        # 4. Récupérer le rêve
+        response = self.client.get(f'/api/dreams/{dream_id}/')
+        assert response.status_code == 200
+        assert response.data['title'] == 'Apprendre la guitare'
 
-    // Slide 3
-    await expect(element(by.text('Ne perdez jamais le cap'))).toBeVisible();
-    await element(by.id('get-started-button')).tap();
+        # 5. Vérifier le rêve dans la liste
+        response = self.client.get('/api/dreams/')
+        assert response.status_code == 200
+        assert len(response.data['results']) == 1
 
-    // Login/Register screen
-    await expect(element(by.id('email-input'))).toBeVisible();
-  });
-});
-```
+    def test_task_completion_flow(self):
+        # Setup: créer utilisateur, rêve, goal, task
+        user = User.objects.create_user(email='task@test.com', password='TestPass123A')
+        self.client.force_authenticate(user=user)
 
-```typescript
-// e2e/flows/createDream.e2e.ts
+        # Créer rêve -> goal -> task
+        dream_res = self.client.post('/api/dreams/', {
+            'title': 'Test Dream', 'description': 'Test',
+        }, format='json')
+        dream_id = dream_res.data['id']
 
-import { device, element, by, expect, waitFor } from 'detox';
+        goal_res = self.client.post(f'/api/dreams/{dream_id}/goals/', {
+            'title': 'Goal 1', 'order': 0,
+        }, format='json')
+        goal_id = goal_res.data['id']
 
-describe('Create Dream Flow', () => {
-  beforeAll(async () => {
-    await device.launchApp({ newInstance: true });
-    // Login avec utilisateur de test
-    await loginTestUser();
-  });
+        task_res = self.client.post(f'/api/goals/{goal_id}/tasks/', {
+            'title': 'Task 1', 'order': 0,
+        }, format='json')
+        task_id = task_res.data['id']
 
-  it('should create a dream through chat', async () => {
-    // Naviguer vers Chat
-    await element(by.id('tab-chat')).tap();
+        # Compléter la tâche
+        response = self.client.post(f'/api/tasks/{task_id}/complete/')
+        assert response.status_code == 200
 
-    // Attendre le message de bienvenue
-    await waitFor(element(by.text(/Bonjour/)))
-      .toBeVisible()
-      .withTimeout(5000);
-
-    // Envoyer un message
-    await element(by.id('chat-input')).typeText('Je veux apprendre la guitare');
-    await element(by.id('send-button')).tap();
-
-    // Attendre la réponse de l'IA
-    await waitFor(element(by.text(/guitare/)))
-      .toBeVisible()
-      .withTimeout(10000);
-
-    // Répondre aux questions
-    await element(by.id('chat-input')).typeText('Oui j\'ai déjà une guitare');
-    await element(by.id('send-button')).tap();
-
-    // Continuer la conversation...
-    await element(by.id('chat-input')).typeText('30 minutes par jour');
-    await element(by.id('send-button')).tap();
-
-    await element(by.id('chat-input')).typeText('Dans 6 mois');
-    await element(by.id('send-button')).tap();
-
-    // Attendre la génération du plan
-    await waitFor(element(by.text('Ton Plan')))
-      .toBeVisible()
-      .withTimeout(30000);
-
-    // Accepter le plan
-    await element(by.text('Adopter ce plan')).tap();
-
-    // Vérifier que le rêve apparaît dans le dashboard
-    await element(by.id('tab-dreams')).tap();
-    await expect(element(by.text('Apprendre la guitare'))).toBeVisible();
-  });
-
-  it('should complete a task from calendar', async () => {
-    await element(by.id('tab-calendar')).tap();
-
-    // Trouver une tâche
-    await waitFor(element(by.id('task-card')))
-      .toBeVisible()
-      .withTimeout(5000);
-
-    // Compléter la tâche
-    await element(by.id('complete-task-button')).tap();
-
-    // Vérifier la célébration
-    await waitFor(element(by.text(/Bravo/)))
-      .toBeVisible()
-      .withTimeout(3000);
-  });
-});
-```
-
-```typescript
-// e2e/flows/notifications.e2e.ts
-
-import { device, element, by, expect } from 'detox';
-
-describe('Notifications Flow', () => {
-  beforeAll(async () => {
-    await device.launchApp({
-      newInstance: true,
-      permissions: { notifications: 'YES' },
-    });
-    await loginTestUser();
-  });
-
-  it('should receive and handle task reminder notification', async () => {
-    // Simuler une notification
-    await device.sendUserNotification({
-      trigger: { type: 'push' },
-      title: 'Rappel',
-      body: 'Pratique guitare dans 15 min',
-      payload: { taskId: 'test-task-id' },
-    });
-
-    // Tap sur la notification
-    await element(by.text('Pratique guitare dans 15 min')).tap();
-
-    // Devrait ouvrir le calendrier avec la tâche
-    await expect(element(by.id('task-detail-modal'))).toBeVisible();
-  });
-});
+        # Vérifier la progression
+        response = self.client.get(f'/api/dreams/{dream_id}/')
+        assert response.data['progress_percentage'] > 0
 ```
 
 ---
@@ -793,74 +444,46 @@ export default function () {
 }
 ```
 
-### 4.2 Mobile Performance Tests
-
-```typescript
-// apps/mobile/src/__tests__/performance/rendering.perf.test.tsx
-
-import { measureRenders } from 'reassure';
-import { ChatScreen } from '../../screens/ChatScreen';
-
-describe('Performance Tests', () => {
-  it('ChatScreen renders within threshold', async () => {
-    await measureRenders(<ChatScreen />, {
-      runs: 10,
-      scenario: async (screen) => {
-        // Simuler interaction
-        const input = screen.getByPlaceholderText('Écris ton message...');
-        fireEvent.changeText(input, 'Test message');
-      },
-    });
-  });
-
-  it('DreamsList renders 50 items efficiently', async () => {
-    const dreams = generateMockDreams(50);
-
-    await measureRenders(<DreamsList dreams={dreams} />, {
-      runs: 10,
-    });
-  });
-});
-```
-
 ---
 
 ## 5. Couverture de Code
 
 ### Objectifs de Couverture
 
-| Module | Minimum | Idéal |
-|--------|---------|-------|
-| Services (Backend) | 80% | 90% |
-| Controllers (Backend) | 70% | 85% |
-| Utils | 90% | 95% |
-| Stores (Mobile) | 85% | 95% |
-| Components (Mobile) | 60% | 75% |
-| Hooks (Mobile) | 80% | 90% |
+| Module | Minimum | Target |
+|--------|---------|--------|
+| Services / Integrations | 95% | 99% |
+| Views (DRF ViewSets) | 95% | 99% |
+| Models | 95% | 99% |
+| Utils / Validators | 95% | 99% |
+| Celery Tasks | 90% | 99% |
+| WebSocket Consumers | 90% | 99% |
 
-### Configuration Jest
+### Configuration pytest
 
-```javascript
-// apps/mobile/jest.config.js
+```ini
+# pytest.ini
 
-module.exports = {
-  preset: 'react-native',
-  setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    '!src/**/*.d.ts',
-    '!src/**/__tests__/**',
-    '!src/**/__mocks__/**',
-  ],
-  coverageThreshold: {
-    global: {
-      branches: 70,
-      functions: 75,
-      lines: 80,
-      statements: 80,
-    },
-  },
-};
+[pytest]
+DJANGO_SETTINGS_MODULE = config.settings.testing
+python_files = tests.py test_*.py *_tests.py
+python_classes = Test*
+python_functions = test_*
+addopts = --cov --cov-report=html --cov-report=term-missing
+markers =
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    integration: marks integration tests
+    e2e: marks end-to-end tests
+
+[coverage:run]
+source = apps/, integrations/, core/
+omit =
+    */migrations/*
+    */tests/*
+    */admin.py
+
+[coverage:report]
+fail_under = 80
 ```
 
 ---
@@ -883,20 +506,34 @@ on:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: dreamplanner
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: dreamplanner_test
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '20'
-          cache: 'yarn'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - run: yarn install --frozen-lockfile
+      - run: pip install -r requirements/testing.txt
 
-      - name: Run API tests
-        run: yarn api test --coverage
+      - name: Run migrations
+        run: python manage.py migrate --settings=config.settings.testing
 
-      - name: Run Mobile tests
-        run: yarn mobile test --coverage
+      - name: Run tests with coverage
+        run: pytest --cov --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -907,7 +544,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
+          POSTGRES_USER: dreamplanner
           POSTGRES_PASSWORD: test
+          POSTGRES_DB: dreamplanner_test
         ports:
           - 5432:5432
       redis:
@@ -917,26 +556,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '20'
-          cache: 'yarn'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - run: yarn install --frozen-lockfile
-      - run: yarn api db:push
-      - run: yarn api test:integration
-
-  e2e-ios:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - run: yarn install --frozen-lockfile
-      - run: yarn mobile ios:build
-      - run: yarn mobile e2e:ios
+      - run: pip install -r requirements/testing.txt
+      - run: python manage.py migrate --settings=config.settings.testing
+      - run: pytest -m integration --settings=config.settings.testing
 ```
 
 ---
@@ -947,11 +574,9 @@ jobs:
 
 - [ ] Tous les tests unitaires passent (>80% coverage)
 - [ ] Tous les tests d'intégration passent
-- [ ] Tests E2E sur iOS et Android passent
+- [ ] Tests E2E API passent
 - [ ] Tests de charge passent (p95 < 500ms)
 - [ ] Pas de régression de performance
-- [ ] Tests d'accessibilité passent
-- [ ] Tests sur différentes tailles d'écran
-- [ ] Tests offline fonctionnent
-- [ ] Tests de notifications fonctionnent
+- [ ] Tests WebSocket fonctionnent
 - [ ] Revue de sécurité effectuée
+- [ ] Migrations Django vérifiées

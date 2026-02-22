@@ -47,7 +47,6 @@ Les vulnérabilités suivantes sont dans notre portée :
 ## Mesures de Sécurité Implémentées
 
 ### Authentification
-- Firebase Authentication avec JWT
 - Tokens avec expiration courte
 - Refresh tokens sécurisés
 

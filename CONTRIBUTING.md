@@ -47,7 +47,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/dreamplanner.git
-cd dreamplanner/backend
+cd dreamplanner
 
 # Create virtual environment
 python -m venv venv
@@ -73,19 +73,10 @@ python manage.py runserver
 ### Using Docker (Recommended)
 
 ```bash
-cd backend
 make build
 make up
 make migrate
 make test
-```
-
-### Mobile (React Native)
-
-```bash
-cd apps/mobile
-npm install
-npm start
 ```
 
 ## Coding Standards
@@ -148,26 +139,6 @@ class DreamViewSet(viewsets.ModelViewSet):
         # ... rest of implementation
 ```
 
-### TypeScript/React Native Mobile
-
-#### Style Guide
-- Use TypeScript for all new code
-- Follow [Airbnb JavaScript Style Guide](https://github.com/airbnb/javascript)
-- Use functional components with hooks
-- Use meaningful component and variable names
-
-#### Code Quality
-```bash
-# Lint
-npm run lint
-
-# Format
-npm run format
-
-# Type check
-npm run type-check
-```
-
 ## Testing
 
 ### Backend Testing
@@ -207,16 +178,6 @@ pytest apps/users/tests.py
 
 # Specific test
 pytest apps/users/tests.py::TestUserModel::test_create_user -v
-```
-
-### Mobile Testing
-
-```bash
-# Run tests
-npm test
-
-# With coverage
-npm test -- --coverage
 ```
 
 ## Commit Messages
@@ -313,19 +274,16 @@ Use our [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md) which includes
 
 ```
 dreamplanner/
-├── backend/                 # Django backend
-│   ├── apps/               # Django applications
-│   │   ├── users/          # User management
-│   │   ├── dreams/         # Dreams, Goals, Tasks
-│   │   ├── conversations/  # AI chat
-│   │   ├── notifications/  # Push notifications
-│   │   └── calendar/       # Calendar views
-│   ├── core/               # Core utilities
-│   ├── integrations/       # External services
-│   └── config/             # Django settings
-├── apps/mobile/            # React Native app
-├── docs/                   # Documentation
-└── _archived/              # Archived Node.js backend
+├── apps/                   # Django applications
+│   ├── users/              # User management
+│   ├── dreams/             # Dreams, Goals, Tasks
+│   ├── conversations/      # AI chat
+│   ├── notifications/      # Push notifications
+│   └── calendar/           # Calendar views
+├── core/                   # Core utilities
+├── integrations/           # External services
+├── config/                 # Django settings
+└── docs/                   # Documentation
 ```
 
 ## Branching Strategy
@@ -360,7 +318,6 @@ git push origin feature/add-vision-boards
 ### Code Documentation
 - Add docstrings to all public classes and methods
 - Use Google-style docstrings for Python
-- Use JSDoc for TypeScript
 - Explain "why" not just "what"
 
 ### API Documentation

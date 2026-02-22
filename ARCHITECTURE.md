@@ -6,15 +6,15 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENTS                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
-│  │   iOS App   │    │ Android App │    │   Web App   │         │
-│  │   (React    │    │   (React    │    │  (Future)   │         │
-│  │   Native)   │    │   Native)   │    │             │         │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
-└─────────┼──────────────────┼──────────────────┼─────────────────┘
-          │                  │                  │
-          └──────────────────┼──────────────────┘
-                             │
+│  ┌─────────────┐    ┌─────────────┐                            │
+│  │   iOS App   │    │ Android App │                            │
+│  │  (Mobile    │    │  (Mobile    │                            │
+│  │   Client)   │    │   Client)   │                            │
+│  └──────┬──────┘    └──────┬──────┘                            │
+└─────────┼──────────────────┼───────────────────────────────────┘
+          │                  │
+          └────────┬─────────┘
+                   │
                     ┌────────▼────────┐
                     │  Load Balancer  │
                     │  (Nginx / ALB)  │
@@ -63,10 +63,10 @@
 ┌────────────────────────────┼───────────────────────────────────┐
 │              EXTERNAL SERVICES                                  │
 ├────────────────────────────┼───────────────────────────────────┤
-│   ┌─────────────┐  ┌───────▼───────┐  ┌─────────────┐         │
-│   │   OpenAI    │  │   Firebase    │  │   Sentry    │         │
-│   │  (GPT-4)    │  │ (Auth + FCM)  │  │  (Errors)   │         │
-│   └─────────────┘  └───────────────┘  └─────────────┘         │
+│   ┌─────────────┐                        ┌─────────────┐         │
+│   │   OpenAI    │                        │   Sentry    │         │
+│   │  (GPT-4)    │                        │  (Errors)   │         │
+│   └─────────────┘                        └─────────────┘         │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,23 +103,13 @@
 4. **Pub/Sub**: Real-time features
 5. **Data Structures**: Lists, sets, sorted sets for leaderboards
 
-### Mobile: React Native
-
-**Why React Native:**
-
-1. **Cross-Platform**: Single codebase for iOS and Android
-2. **Performance**: Near-native performance
-3. **Ecosystem**: Large library ecosystem
-4. **Hot Reload**: Fast development iteration
-5. **TypeScript**: Full type safety
-
 ## Django App Structure
 
 ```text
-backend/
+dreamplanner/
 ├── apps/
 │   ├── users/              # User management
-│   │   ├── models.py       # User, Profile, FCMDevice
+│   │   ├── models.py       # User, Profile
 │   │   ├── views.py        # ViewSets
 │   │   ├── serializers.py  # DRF serializers
 │   │   └── urls.py         # URL routing
@@ -139,21 +129,21 @@ backend/
 │   │   ├── views.py        # Date range views
 │   │   └── utils.py        # Date calculations
 │   │
-│   └── notifications/      # Push notifications
-│       ├── models.py       # Notification, Settings
-│       ├── tasks.py        # Celery tasks
-│       └── services.py     # FCM integration
+│   └── notifications/      # Multi-channel notifications
+│       ├── models.py       # Notification, WebPushSubscription, NotificationBatch
+│       ├── consumers.py    # WebSocket consumer (real-time delivery)
+│       ├── services.py     # NotificationDeliveryService (WebSocket + Email + Web Push)
+│       └── tasks.py        # Celery tasks (scheduling, cleanup)
 │
 ├── core/                   # Shared functionality
-│   ├── authentication.py   # Firebase auth
+│   ├── authentication.py   # Token auth
 │   ├── permissions.py      # DRF permissions
 │   ├── pagination.py       # Cursor pagination
 │   └── exceptions.py       # Custom exceptions
 │
 ├── integrations/           # External services
-│   ├── openai_client.py    # GPT-4 + DALL-E
-│   ├── firebase.py         # Firebase Admin
-│   └── fcm.py              # Push notifications
+│   ├── openai_service.py   # GPT-4 + DALL-E + Whisper
+│   └── google_calendar.py  # Google Calendar sync
 │
 └── config/                 # Configuration
     ├── settings/
@@ -189,7 +179,7 @@ Client Request
 │  SecurityMiddleware                 │
 │  SessionMiddleware                  │
 │  AuthenticationMiddleware           │
-│  FirebaseAuthMiddleware (custom)    │
+│  TokenAuthMiddleware (custom)       │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -282,8 +272,8 @@ Trigger Event (API call, schedule)
 
 ```text
 ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│   Mobile    │         │   Django    │         │  Firebase   │
-│    App      │         │   Backend   │         │    Auth     │
+│   Mobile    │         │   Django    │         │  dj-rest-   │
+│    App      │         │   Backend   │         │    auth     │
 └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
        │                       │                       │
        │  1. Sign in           │                       │
@@ -310,7 +300,7 @@ Trigger Event (API call, schedule)
 ### Security Layers
 
 1. **Transport**: HTTPS/TLS 1.3
-2. **Authentication**: Firebase ID tokens
+2. **Authentication**: Token auth (django-allauth + dj-rest-auth)
 3. **Authorization**: Django permissions
 4. **Input Validation**: DRF serializers
 5. **SQL Injection**: Django ORM (parameterized queries)
@@ -422,10 +412,38 @@ services:
 | `DJANGO_SECRET_KEY` | Session encryption |
 | `DATABASE_URL` | PostgreSQL connection |
 | `REDIS_URL` | Redis connection |
-| `FIREBASE_*` | Firebase Admin SDK |
 | `OPENAI_API_KEY` | GPT-4 access |
 | `SENTRY_DSN` | Error tracking |
+| `VAPID_PUBLIC_KEY` | Web Push public key |
+| `VAPID_PRIVATE_KEY` | Web Push private key |
+
+### Notification Delivery Flow
+
+```text
+Notification Created (API / Celery task)
+              │
+              ▼
+┌─────────────────────────────────────┐
+│   NotificationDeliveryService       │
+├─────────────────────────────────────┤
+│  1. Check user notification prefs   │
+│  2. Check DND hours                │
+│  3. Dispatch to enabled channels:  │
+│     ├── WebSocket (channel layer)  │
+│     ├── Email (django.core.mail)   │
+│     └── Web Push (VAPID/pywebpush) │
+│  4. Mark notification as sent      │
+└─────────────────────────────────────┘
+```
+
+### WebSocket Routes
+
+| Route | Consumer | Purpose |
+|-------|----------|---------|
+| `ws/conversations/{id}/` | ChatConsumer | AI chat streaming |
+| `ws/buddy-chat/{id}/` | BuddyChatConsumer | Peer-to-peer buddy chat |
+| `ws/notifications/` | NotificationConsumer | Real-time notification delivery |
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026

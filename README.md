@@ -2,8 +2,7 @@
 
 DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
-**Backend**: Django 5.0.1 with 12 apps, 150+ API endpoints, 50+ Celery tasks, 2 WebSocket consumers
-**Mobile**: Flutter 3.24 with 31 screens, 10 Riverpod providers, 32 GoRouter routes, 15 languages
+**Backend**: Django 5.0.1 with 12 apps, 150+ API endpoints, 50+ Celery tasks, 3 WebSocket consumers
 
 ---
 
@@ -117,14 +116,15 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Pairing History**: View past buddy pairings
 
 ### Smart Notifications
+- **3-Channel Delivery**: WebSocket (real-time), Email, and Web Push (VAPID) with per-user preference toggles
 - **12+ Notification Types**: Reminders, motivation, progress milestones, achievements, rescue, buddy check-in, overdue tasks, weekly report, dream completed, dream paused, dream archived, coaching suggestions
-- **DND Support**: Respects Do Not Disturb hours with automatic rescheduling
-- **Granular Preferences**: Per-type notification toggle (push/email) for each user
+- **DND Support**: Respects Do Not Disturb hours with automatic rescheduling (including midnight-crossing windows)
+- **Granular Preferences**: Per-type and per-channel notification toggle for each user
 - **Personalized Messages**: AI-generated notification content based on user context
 - **Notification Grouping**: Group similar notifications for cleaner inbox
-- **Notification Analytics**: Track delivery and engagement rates
+- **Notification Analytics**: Track delivery, open, and engagement rates
 - **Notification Templates**: Reusable templates for common notification patterns
-- **Multi-Device**: iOS and Android via Firebase Cloud Messaging
+- **Web Push Subscriptions**: Register/manage browser push subscriptions via VAPID
 
 ### Authentication and Security
 - **django-allauth + dj-rest-auth**: Token-based authentication (Token and Bearer variants)
@@ -138,62 +138,35 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Data Export**: Export all user data (profile, dreams, goals, tasks, notifications) as JSON
 - **Email Data Export**: Async data export via Celery with download link emailed to user
 
-### Internationalization (i18n)
-- **15 Languages**: English, French, Spanish, Portuguese, Arabic, Chinese, Hindi, Japanese, German, Russian, Korean, Italian, Turkish, Dutch, Polish
-- **Full Coverage**: All UI strings, error messages, and notifications translated
-- **RTL Support**: Arabic layout support
-- **Dynamic Switching**: Change language without app restart
-
-### Dark Mode
-- **Theme Persistence**: Dark mode preference saved locally
-- **System Theme**: Follows system-level dark/light mode setting
-- **Theme Provider**: Dedicated Riverpod provider for theme state management
-
 ---
 
 ## Architecture
 
 ```
 dreamplanner/
-+-- backend/                      # Django 5.0.1 API
-|   +-- apps/                     # 12 Django applications
-|   |   +-- users/                # User management, gamification, 2FA, GDPR
-|   |   +-- dreams/               # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
-|   |   +-- conversations/        # AI chat, buddy chat (WebSocket), templates, voice transcription
-|   |   +-- notifications/        # Push notifications, templates, preferences, Celery tasks
-|   |   +-- calendar/             # Events, recurring, Google Calendar sync, iCal feed
-|   |   +-- subscriptions/        # Stripe plans, checkout, webhooks, invoices
-|   |   +-- store/                # Items, categories, purchases, wishlists, gifting, refunds
-|   |   +-- leagues/              # Leagues, seasons, leaderboards, rank snapshots
-|   |   +-- circles/              # Circles, posts, reactions, challenges, invitations
-|   |   +-- social/               # Friends, follows, blocking, reporting, activity feed
-|   |   +-- buddies/              # Buddy pairing, encouragement, check-in reminders
-|   |   +-- core/                 # Auth, permissions, pagination, health checks
-|   +-- integrations/             # OpenAI (GPT-4, DALL-E, Whisper), FCM, Google Calendar
-|   +-- config/                   # Django settings, Celery, ASGI/WSGI
-|   +-- docker/                   # Docker + Nginx configs
-|   +-- tests/                    # Test suite
-|
-+-- apps/mobile/                  # Flutter 3.24 app
-|   +-- lib/
-|       +-- screens/              # 31 screens across 9 feature areas
-|       +-- widgets/              # Reusable shared widgets
-|       +-- services/             # 4 services (API, Auth, WebSocket, Notifications)
-|       +-- providers/            # 10 Riverpod providers
-|       +-- config/               # Routes (GoRouter, 32 routes), API constants
-|       +-- models/               # 9 data models
-|       +-- core/                 # Theme, validators
-|       +-- l10n/                 # 15 languages (.arb files)
-|
-+-- docs/                         # Documentation
-+-- .github/workflows/            # CI/CD Pipelines
++-- apps/                        # 12 Django applications
+|   +-- users/                   # User management, gamification, 2FA, GDPR
+|   +-- dreams/                  # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
+|   +-- conversations/           # AI chat, buddy chat (WebSocket), templates, voice transcription
+|   +-- notifications/           # Push notifications, templates, preferences, Celery tasks
+|   +-- calendar/                # Events, recurring, Google Calendar sync, iCal feed
+|   +-- subscriptions/           # Stripe plans, checkout, webhooks, invoices
+|   +-- store/                   # Items, categories, purchases, wishlists, gifting, refunds
+|   +-- leagues/                 # Leagues, seasons, leaderboards, rank snapshots
+|   +-- circles/                 # Circles, posts, reactions, challenges, invitations
+|   +-- social/                  # Friends, follows, blocking, reporting, activity feed
+|   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders
++-- core/                        # Auth, permissions, pagination, health checks
++-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
++-- config/                      # Django settings, Celery, ASGI/WSGI
++-- docker/                      # Docker + Nginx configs
++-- docs/                        # Documentation
++-- .github/workflows/           # CI/CD Pipelines
 ```
 
 ---
 
 ## Tech Stack
-
-### Backend (Django)
 
 | Component | Technology |
 |-----------|-----------|
@@ -207,7 +180,6 @@ dreamplanner/
 | **Authentication** | django-allauth + dj-rest-auth (Token auth) |
 | **Social Auth** | Google Sign-In, Apple Sign-In |
 | **AI** | OpenAI GPT-4, DALL-E 3, Whisper, GPT-4V |
-| **Push Notifications** | Firebase Cloud Messaging |
 | **Payments** | Stripe (subscriptions + one-time) |
 | **PDF Generation** | ReportLab |
 | **Server** | Gunicorn + Daphne |
@@ -216,36 +188,24 @@ dreamplanner/
 | **Testing** | pytest + pytest-django |
 | **Language** | Python 3.11 |
 
-### Mobile (Flutter)
-
-| Component | Technology |
-|-----------|-----------|
-| **Framework** | Flutter 3.24 |
-| **Language** | Dart |
-| **State Management** | Riverpod (10 providers) |
-| **Navigation** | GoRouter (32 routes, ShellRoute with 4 tabs) |
-| **API Client** | Dio with Token auth interceptor |
-| **Storage** | Flutter Secure Storage |
-| **Notifications** | Flutter Local Notifications + FCM |
-| **UI** | Material 3 + Google Fonts |
-| **i18n** | Flutter Localizations (15 languages) |
-| **Payments** | Stripe (via backend) |
-| **Theme** | Dark mode with persistence |
-
 ---
 
 ## Quick Start
 
-### Backend (Django)
+### With Docker (Recommended)
 
 ```bash
-cd backend
+# Build images
+make build
 
-# With Docker (Recommended for production)
-make build          # Build images
-make up             # Start all services
-make migrate        # Run migrations
-make createsuperuser  # Create admin user
+# Start all services
+make up
+
+# Run migrations
+make migrate
+
+# Create admin user
+make createsuperuser
 
 # Seed data
 python manage.py seed_leagues   # Create league tiers and initial season
@@ -260,8 +220,9 @@ python manage.py seed_store     # Create store categories and items
 # Flower:    http://localhost:5555
 ```
 
+### Without Docker (Local development - uses SQLite)
+
 ```bash
-# Without Docker (Local development - uses SQLite)
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
@@ -276,27 +237,9 @@ celery -A config beat -l info
 daphne -b 0.0.0.0 -p 9000 config.asgi:application
 ```
 
-### Mobile (Flutter)
-
-```bash
-cd apps/mobile
-
-# Install dependencies
-flutter pub get
-
-# Run on connected device/emulator
-flutter run
-
-# Build
-flutter build apk      # Android
-flutter build ios       # iOS
-flutter build appbundle # Android App Bundle (Play Store)
-flutter build ipa       # iOS (App Store)
-```
-
 ### Environment Variables
 
-Create `.env` in `backend/`:
+Create `.env` in the project root:
 
 ```env
 # Django
@@ -394,7 +337,6 @@ POST   /api/auth/apple/                        # Apple Sign-In
 ```
 GET    /api/users/me/                          # Current user profile
 PUT    /api/users/update_profile/              # Update profile
-POST   /api/users/register_fcm_token/          # Register FCM device token
 GET    /api/users/gamification/                # Gamification profile (XP, level, rank)
 POST   /api/users/upload_avatar/               # Upload avatar image
 GET    /api/users/stats/                       # User statistics
@@ -525,6 +467,13 @@ GET    /api/notifications/notifications/unread_count/  # Unread count
 
 GET    /api/notifications/templates/                   # List notification templates
 GET    /api/notifications/templates/{id}/              # Template details
+
+POST   /api/notifications/notifications/{id}/opened/   # Mark as opened (tracks engagement)
+GET    /api/notifications/notifications/grouped/       # Notifications grouped by type
+
+GET    /api/notifications/push-subscriptions/          # List push subscriptions
+POST   /api/notifications/push-subscriptions/          # Register push subscription
+DELETE /api/notifications/push-subscriptions/{id}/     # Remove push subscription
 ```
 
 ### Subscriptions
@@ -646,6 +595,7 @@ DELETE /api/buddies/{id}/                      # End pairing
 ```
 ws://localhost:9000/ws/conversations/{conversation_id}/    # AI chat (GPT-4 streaming)
 ws://localhost:9000/ws/buddy-chat/{conversation_id}/       # Buddy real-time chat
+ws://localhost:9000/ws/notifications/                       # Real-time notification delivery
 ```
 
 ### Health Checks
@@ -704,43 +654,9 @@ Influence = (Total XP * 0.6)
 
 ---
 
-## Flutter Mobile App
-
-### 31 Screens
-
-| Area | Screens |
-|------|---------|
-| **Auth** | Login, Register, Forgot Password, Change Password |
-| **Home** | Home (dashboard) |
-| **Dreams** | Dream Detail, Create Dream, Edit Dream, Calibration, Dream Templates |
-| **Chat** | Conversation List, AI Chat, Buddy Chat |
-| **Calendar** | Calendar |
-| **Social** | Social Hub, Friends, Friend Requests, User Search, Circles, Circle Detail, Leaderboard, Dream Buddy |
-| **Profile** | Profile, Edit Profile, Settings, Google Calendar |
-| **Notifications** | Notifications |
-| **Store** | Store |
-| **Subscription** | Subscription |
-| **Vision** | Vision Board |
-| **Micro Start** | Micro Start (2-minute action) |
-
-### 10 Riverpod Providers
-auth, dreams, tasks, chat, calendar, notifications, social, store, theme, locale
-
-### 9 Data Models
-User, Dream, Goal, Task, Conversation, Message, NotificationModel, CalendarEvent, StoreItem
-
-### 4 Services
-API Service (Dio), Auth Service, WebSocket Service, Notification Service
-
----
-
 ## Testing
 
-### Backend Tests
-
 ```bash
-cd backend
-
 # All tests
 make test
 
@@ -755,30 +671,19 @@ pytest -m asyncio       # Async tests (WebSocket)
 # Coverage report generated in htmlcov/index.html
 ```
 
-### Mobile Tests
-
-```bash
-cd apps/mobile
-
-flutter test
-flutter test --coverage
-```
-
 ---
 
 ## Deployment
 
-### Backend Deployment (AWS ECS)
+### Docker Deployment
 
 ```bash
-cd backend
-
 # Build production image
 make build-prod
 
 # Tag and push to ECR
-docker tag dreamplanner-api:latest ${ECR_REGISTRY}/dreamplanner-api:latest
-docker push ${ECR_REGISTRY}/dreamplanner-api:latest
+docker tag dreamplanner:latest ${ECR_REGISTRY}/dreamplanner:latest
+docker push ${ECR_REGISTRY}/dreamplanner:latest
 
 # Deploy to ECS
 aws ecs update-service \
@@ -797,37 +702,18 @@ aws ecs update-service \
 - **CloudWatch**: Logging and monitoring
 - **Secrets Manager**: Environment secrets
 
-### Mobile Deployment
-
-```bash
-cd apps/mobile
-
-flutter build appbundle    # Android (AAB for Play Store)
-flutter build ipa          # iOS (for App Store)
-```
-
 ---
 
 ## Project Stats
 
-### Backend
 - **Django Apps**: 12 (users, dreams, conversations, notifications, calendar, subscriptions, store, leagues, circles, social, buddies, core)
 - **API Endpoints**: 150+
-- **WebSocket Consumers**: 2 (AI Chat, Buddy Chat)
+- **WebSocket Consumers**: 3 (AI Chat, Buddy Chat, Notifications)
 - **Celery Beat Tasks**: 15 periodic tasks
 - **On-Demand Celery Tasks**: 35+ async tasks
 - **Management Commands**: seed_leagues, seed_store
 - **Models**: 40+
-- **Test Coverage**: 80%+ target
-
-### Mobile
-- **Screens**: 31
-- **GoRouter Routes**: 32 (including ShellRoute with 4 bottom tabs)
-- **Riverpod Providers**: 10
-- **Services**: 4
-- **Data Models**: 9
-- **Languages**: 15
-- **Dart Files**: 60+
+- **Test Coverage**: 99%+ target
 
 ---
 
@@ -851,8 +737,6 @@ flutter build ipa          # iOS (for App Store)
 
 ## Documentation
 
-- **[backend/README.md](backend/README.md)**: Complete backend documentation with all endpoints, Celery tasks, and environment variables
-- **[apps/mobile/README.md](apps/mobile/README.md)**: Mobile app documentation
 - **[docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md)**: Technical architecture
 - **[docs/FEATURES_SPECIFICATIONS.md](docs/FEATURES_SPECIFICATIONS.md)**: Feature specifications
 - **[docs/IMPROVEMENTS_STRATEGY.md](docs/IMPROVEMENTS_STRATEGY.md)**: Improvement roadmap
@@ -877,4 +761,4 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
-**Built with Django, Flutter, GPT-4, DALL-E, Whisper, Stripe, and Firebase**
+**Built with Django, GPT-4, DALL-E, Whisper, and Stripe**

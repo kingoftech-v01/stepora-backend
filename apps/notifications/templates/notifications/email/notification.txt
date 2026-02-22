@@ -1,0 +1,11 @@
+{{ title }}
+
+Hi {{ user_name }},
+
+{{ body }}
+
+Open DreamPlanner: {{ action_url }}
+
+---
+DreamPlanner - Turn your dreams into reality
+Manage notification preferences in your profile settings.
