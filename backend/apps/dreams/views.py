@@ -23,6 +23,14 @@ from .serializers import (
 from core.permissions import IsOwner, CanCreateDream
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
+from core.ai_validators import (
+    validate_plan_response,
+    validate_analysis_response,
+    validate_calibration_questions,
+    validate_calibration_summary,
+    check_plan_calibration_coherence,
+    AIValidationError,
+)
 
 
 @extend_schema_view(
@@ -81,17 +89,26 @@ class DreamViewSet(viewsets.ModelViewSet):
         ai_service = OpenAIService()
 
         try:
-            analysis = ai_service.analyze_dream(
+            raw_analysis = ai_service.analyze_dream(
                 dream.title,
                 dream.description
             )
 
-            # Save analysis
-            dream.ai_analysis = analysis
+            # Validate AI output before saving
+            analysis = validate_analysis_response(raw_analysis)
+            analysis_dict = analysis.model_dump()
+
+            # Save validated analysis
+            dream.ai_analysis = analysis_dict
             dream.save(update_fields=['ai_analysis'])
 
-            return Response(analysis)
+            return Response(analysis_dict)
 
+        except AIValidationError as e:
+            return Response(
+                {'error': f'AI produced an invalid analysis: {e.message}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},
@@ -114,20 +131,23 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         try:
             # Generate initial batch of 7 questions
-            result = ai_service.generate_calibration_questions(
+            raw_result = ai_service.generate_calibration_questions(
                 dream.title,
                 dream.description,
                 batch_size=7
             )
 
-            # Save questions to database
+            # Validate AI output
+            result = validate_calibration_questions(raw_result)
+
+            # Save validated questions to database
             questions_created = []
-            for i, q_data in enumerate(result.get('questions', []), start=1):
+            for i, q in enumerate(result.questions, start=1):
                 cr = CalibrationResponse.objects.create(
                     dream=dream,
-                    question=q_data['question'],
+                    question=q.question,
                     question_number=i,
-                    category=q_data.get('category', '')
+                    category=q.category,
                 )
                 questions_created.append(cr)
 
@@ -142,6 +162,11 @@ class DreamViewSet(viewsets.ModelViewSet):
                 'answered': 0,
             })
 
+        except AIValidationError as e:
+            return Response(
+                {'error': f'AI produced invalid calibration questions: {e.message}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},
@@ -167,16 +192,20 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Save answers
+        # Save answers with error handling for missing keys
         for ans in answers_data:
             try:
+                question_id = ans.get('question_id')
+                answer_text = ans.get('answer', '')
+                if not question_id or not answer_text:
+                    continue
                 cr = CalibrationResponse.objects.get(
-                    id=ans['question_id'],
+                    id=question_id,
                     dream=dream
                 )
-                cr.answer = ans['answer']
+                cr.answer = answer_text
                 cr.save(update_fields=['answer'])
-            except CalibrationResponse.DoesNotExist:
+            except (CalibrationResponse.DoesNotExist, KeyError, ValueError):
                 continue
 
         # Get all Q&A pairs so far
@@ -209,14 +238,17 @@ class DreamViewSet(viewsets.ModelViewSet):
             remaining_capacity = 15 - total_questions
             batch_size = min(remaining_capacity, 4)  # Follow-up batches of up to 4
 
-            result = ai_service.generate_calibration_questions(
+            raw_result = ai_service.generate_calibration_questions(
                 dream.title,
                 dream.description,
                 existing_qa=all_qa,
                 batch_size=batch_size
             )
 
-            if result.get('sufficient', False) or not result.get('questions'):
+            # Validate AI output
+            result = validate_calibration_questions(raw_result)
+
+            if result.sufficient or not result.questions:
                 # AI says we have enough info
                 dream.calibration_status = 'completed'
                 dream.save(update_fields=['calibration_status'])
@@ -225,19 +257,19 @@ class DreamViewSet(viewsets.ModelViewSet):
                     'status': 'completed',
                     'total_questions': total_questions,
                     'answered': answered_count,
-                    'confidence_score': result.get('confidence_score', 1.0),
+                    'confidence_score': result.confidence_score,
                     'message': 'Calibration complete. Ready to generate your personalized plan.',
                 })
             else:
-                # Save new follow-up questions
+                # Save validated follow-up questions
                 new_questions = []
                 start_number = total_questions + 1
-                for i, q_data in enumerate(result.get('questions', [])):
+                for i, q in enumerate(result.questions):
                     cr = CalibrationResponse.objects.create(
                         dream=dream,
-                        question=q_data['question'],
+                        question=q.question,
                         question_number=start_number + i,
-                        category=q_data.get('category', '')
+                        category=q.category,
                     )
                     new_questions.append(cr)
 
@@ -248,10 +280,15 @@ class DreamViewSet(viewsets.ModelViewSet):
                     'questions': CalibrationResponseSerializer(new_questions, many=True).data,
                     'total_questions': new_total,
                     'answered': answered_count,
-                    'confidence_score': result.get('confidence_score', 0.5),
-                    'missing_areas': result.get('missing_areas', []),
+                    'confidence_score': result.confidence_score,
+                    'missing_areas': result.missing_areas,
                 })
 
+        except AIValidationError as e:
+            return Response(
+                {'error': f'AI produced invalid follow-up questions: {e.message}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},
@@ -284,7 +321,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         }
 
         # If calibration was completed, build rich context from Q&A
-        calibration_context = None
+        calibration_profile_dict = None
+        calibration_context_dict = None
         if dream.calibration_status == 'completed':
             qa_pairs = list(
                 CalibrationResponse.objects.filter(
@@ -295,68 +333,91 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             if qa_pairs:
                 try:
-                    calibration_context = ai_service.generate_calibration_summary(
+                    raw_summary = ai_service.generate_calibration_summary(
                         dream.title,
                         dream.description,
                         qa_pairs
                     )
-                    # Store the calibration summary in ai_analysis
-                    user_context['calibration_profile'] = calibration_context.get('user_profile', {})
-                    user_context['plan_recommendations'] = calibration_context.get('plan_recommendations', {})
-                    # Use enriched description if available
-                    enriched = calibration_context.get('enriched_description', '')
-                    if enriched:
-                        user_context['enriched_description'] = enriched
-                except OpenAIError:
+                    # Validate calibration summary
+                    summary = validate_calibration_summary(raw_summary)
+                    calibration_profile_dict = summary.user_profile.model_dump()
+                    calibration_context_dict = summary.model_dump()
+
+                    user_context['calibration_profile'] = calibration_profile_dict
+                    user_context['plan_recommendations'] = summary.plan_recommendations.model_dump()
+                    if summary.enriched_description:
+                        user_context['enriched_description'] = summary.enriched_description
+                except (OpenAIError, AIValidationError):
                     pass  # Fall back to basic plan generation
 
         try:
             # Generate plan with AI (now with calibration context)
-            plan = ai_service.generate_plan(
+            raw_plan = ai_service.generate_plan(
                 dream.title,
                 dream.description,
                 user_context
             )
 
-            # Save AI analysis (include calibration summary)
-            analysis_data = plan
-            if calibration_context:
-                analysis_data['calibration_summary'] = calibration_context
+            # Validate the entire plan structure
+            plan = validate_plan_response(raw_plan)
+
+            # Check coherence between plan and calibration data
+            coherence_warnings = check_plan_calibration_coherence(
+                plan, calibration_profile_dict
+            )
+
+            # Save validated AI analysis (include calibration summary)
+            analysis_data = plan.model_dump()
+            if calibration_context_dict:
+                analysis_data['calibration_summary'] = calibration_context_dict
+            if coherence_warnings:
+                analysis_data['coherence_warnings'] = coherence_warnings
             dream.ai_analysis = analysis_data
             dream.save(update_fields=['ai_analysis'])
 
-            # Create Goals and Tasks from plan
-            for goal_data in plan.get('goals', []):
-                goal = Goal.objects.create(
+            # Create Goals and Tasks from validated plan
+            for goal in plan.goals:
+                db_goal = Goal.objects.create(
                     dream=dream,
-                    title=goal_data['title'],
-                    description=goal_data.get('description', ''),
-                    order=goal_data['order'],
-                    estimated_minutes=goal_data.get('estimated_minutes')
+                    title=goal.title,
+                    description=goal.description,
+                    order=goal.order,
+                    estimated_minutes=goal.estimated_minutes,
                 )
 
-                # Create tasks for this goal
-                for task_data in goal_data.get('tasks', []):
+                for task in goal.tasks:
                     Task.objects.create(
-                        goal=goal,
-                        title=task_data['title'],
-                        description=task_data.get('description', ''),
-                        order=task_data['order'],
-                        duration_mins=task_data.get('duration_mins', 30)
+                        goal=db_goal,
+                        title=task.title,
+                        description=task.description,
+                        order=task.order,
+                        duration_mins=task.duration_mins,
                     )
 
-            # Create obstacles
-            for obstacle_data in plan.get('potential_obstacles', []):
+            # Create obstacles (fixed: uses .description not .title for description)
+            for obstacle in plan.potential_obstacles:
                 Obstacle.objects.create(
                     dream=dream,
-                    title=obstacle_data['title'],
-                    description=obstacle_data.get('title', ''),
-                    solution=obstacle_data.get('solution', ''),
-                    obstacle_type='predicted'
+                    title=obstacle.title,
+                    description=obstacle.description,
+                    solution=obstacle.solution,
+                    obstacle_type='predicted',
                 )
 
-            return Response(DreamDetailSerializer(dream).data)
+            response_data = DreamDetailSerializer(dream).data
+            # Include evidence so frontend can show the user WHY each step exists
+            response_data['plan_evidence'] = {
+                'calibration_references': plan.calibration_references,
+                'coherence_warnings': coherence_warnings,
+            }
 
+            return Response(response_data)
+
+        except AIValidationError as e:
+            return Response(
+                {'error': f'AI produced an invalid plan: {e.message}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},

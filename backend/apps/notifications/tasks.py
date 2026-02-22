@@ -14,6 +14,7 @@ from apps.dreams.models import Dream, Task
 from integrations.fcm_service import FCMService
 from integrations.openai_service import OpenAIService
 from core.exceptions import FCMError, OpenAIError
+from core.sanitizers import sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +105,9 @@ def generate_daily_motivation(self):
 
         for user in users:
             try:
-                # Generate personalized motivation message
-                message = ai_service.generate_motivational_message(user)
+                # Generate personalized motivation message and sanitize
+                raw_message = ai_service.generate_motivational_message(user)
+                message = sanitize_text(raw_message)[:500]
 
                 # Create notification
                 Notification.objects.create(
@@ -178,13 +180,14 @@ def send_weekly_report(self):
                 # Calculate XP gained this week
                 xp_gained = user.xp  # In production, you'd track weekly XP
 
-                # Generate personalized report with AI
-                report = ai_service.generate_weekly_report(
+                # Generate personalized report with AI and sanitize
+                raw_report = ai_service.generate_weekly_report(
                     user=user,
                     completed_tasks=completed_tasks,
                     total_tasks=total_tasks,
                     xp_gained=xp_gained
                 )
+                report = sanitize_text(raw_report)[:2000]
 
                 # Create notification
                 Notification.objects.create(
@@ -251,8 +254,9 @@ def check_inactive_users(self):
 
         for user in inactive_users:
             try:
-                # Generate personalized rescue message with AI
-                rescue_message = ai_service.generate_rescue_message(user)
+                # Generate personalized rescue message with AI and sanitize
+                raw_rescue = ai_service.generate_rescue_message(user)
+                rescue_message = sanitize_text(raw_rescue)[:500]
 
                 # Get user's most recent dream for context
                 recent_dream = user.dreams.filter(status='active').order_by('-updated_at').first()

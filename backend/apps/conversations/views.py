@@ -21,6 +21,7 @@ from .serializers import (
 from .tasks import transcribe_voice_message, summarize_conversation
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
+from core.ai_validators import validate_chat_response, validate_function_call, AIValidationError
 
 
 @extend_schema_view(
@@ -82,23 +83,29 @@ class ConversationViewSet(viewsets.ModelViewSet):
             messages = conversation.get_messages_for_api(limit=20)
 
             # Get AI response
-            response = ai_service.chat(
+            raw_response = ai_service.chat(
                 messages=messages,
                 conversation_type=conversation.conversation_type
             )
 
-            # Save assistant message
+            # Validate chat response
+            validated = validate_chat_response(raw_response)
+
+            # Save validated assistant message
             assistant_message = conversation.add_message(
                 'assistant',
-                response['content'],
-                metadata={'tokens_used': response['tokens_used']}
+                validated.content,
+                metadata={'tokens_used': validated.tokens_used}
             )
 
-            # Handle function calls from AI
-            if response.get('function_call'):
-                fc = response['function_call']
-                assistant_message.metadata['function_call'] = fc
-                assistant_message.save(update_fields=['metadata'])
+            # Handle function calls from AI (validate before executing)
+            if raw_response.get('function_call'):
+                try:
+                    fc = validate_function_call(raw_response['function_call'])
+                    assistant_message.metadata['function_call'] = fc.model_dump()
+                    assistant_message.save(update_fields=['metadata'])
+                except AIValidationError:
+                    pass  # Ignore invalid function calls silently
 
             # Trigger summarization if threshold reached
             if conversation.total_messages % 20 == 0 and conversation.total_messages > 0:
@@ -113,6 +120,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 'conversation': ConversationSerializer(conversation).data
             })
 
+        except AIValidationError as e:
+            return Response(
+                {'error': f'AI produced an invalid response: {e.message}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},

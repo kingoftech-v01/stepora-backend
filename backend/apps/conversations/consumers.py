@@ -11,6 +11,7 @@ from asgiref.sync import sync_to_async
 from .models import Conversation, Message
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
+from core.sanitizers import sanitize_text
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -125,7 +126,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'type': 'stream_start'
             }))
 
-            # Stream AI response
+            # Stream AI response with length limit
+            MAX_STREAM_LEN = 10000
             full_response = ""
             async for chunk in ai_service.chat_stream_async(
                 messages=messages,
@@ -133,11 +135,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
             ):
                 full_response += chunk
 
+                # Safety: stop accumulating if response is excessively long
+                if len(full_response) > MAX_STREAM_LEN:
+                    full_response = full_response[:MAX_STREAM_LEN]
+                    break
+
                 # Send chunk to client
                 await self.send(text_data=json.dumps({
                     'type': 'stream_chunk',
                     'chunk': chunk
                 }))
+
+            # Sanitize full response before saving
+            full_response = sanitize_text(full_response)
 
             # Send streaming end indicator
             await self.send(text_data=json.dumps({

@@ -68,12 +68,13 @@ Your role:
 2. Break it down into concrete, achievable steps
 3. Account for time constraints and schedule
 4. Propose a progressive and motivating plan
+5. ALWAYS provide reasoning/evidence so the user can verify your suggestions
 
 IMPORTANT: You must respond ONLY with a valid JSON object, NO text before or after.
 
 Required JSON format:
 {
-  "analysis": "Brief analysis of the goal and its feasibility",
+  "analysis": "Brief analysis of the goal and its feasibility, referencing the user's specific situation",
   "estimated_duration_weeks": 12,
   "weekly_time_hours": 5,
   "goals": [
@@ -82,12 +83,14 @@ Required JSON format:
       "description": "Detailed description",
       "order": 1,
       "estimated_minutes": 300,
+      "reasoning": "WHY this goal is important for THIS specific user based on their profile/answers",
       "tasks": [
         {
           "title": "Specific task",
           "order": 1,
           "duration_mins": 30,
-          "description": "Task description"
+          "description": "Task description",
+          "reasoning": "Why this task and why this duration, based on user's context"
         }
       ]
     }
@@ -96,10 +99,24 @@ Required JSON format:
   "potential_obstacles": [
     {
       "title": "Possible obstacle",
-      "solution": "How to overcome it"
+      "description": "What this obstacle looks like in practice",
+      "solution": "How to overcome it",
+      "evidence": "Why this obstacle is likely for THIS user specifically"
     }
+  ],
+  "calibration_references": [
+    "User said they have 5 hours/week -> plan uses 5h/week max",
+    "User is a beginner -> starting with fundamentals first",
+    "User mentioned budget constraint -> only free resources suggested"
   ]
-}""",
+}
+
+CRITICAL RULES:
+- Every goal MUST have a "reasoning" field explaining WHY it's recommended for this specific user
+- Every task MUST have a "reasoning" field linking it to the user's situation
+- "calibration_references" MUST list the specific user answers/context you used to shape the plan
+- Task durations MUST respect the user's stated available hours per week
+- Do NOT generate generic plans — every element must be personalized""",
 
         'motivation': """You generate short, personalized motivational messages (1-2 sentences max).
 
@@ -340,7 +357,10 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
 - Respect their constraints and budget
 - Align with their preferred learning style
 - Set pace according to their timeline and risk tolerance
-- Address their specific potential pitfalls proactively"""
+- Address their specific potential pitfalls proactively
+- For EVERY goal and task, include a "reasoning" field that references specific calibration data
+- Fill "calibration_references" with every calibration answer you used (e.g. "User said X -> plan does Y")
+- Do NOT produce a generic plan. Every element must trace back to something the user told you"""
 
         prompt = f"""Generate a detailed plan to achieve this goal:
 
