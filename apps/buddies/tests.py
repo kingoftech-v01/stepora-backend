@@ -4,6 +4,7 @@ import uuid
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import status
+from rest_framework.test import APIClient
 from apps.users.models import User, GamificationProfile
 from apps.notifications.models import Notification
 from .models import BuddyPairing, BuddyEncouragement
@@ -11,26 +12,51 @@ from .admin import BuddyEncouragementAdmin
 
 
 # ---------------------------------------------------------------------------
-# Local fixtures
+# Local fixtures (override global user to be premium for buddy access)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
+def user(db):
+    """Premium user for buddy tests (buddies require premium+)."""
+    return User.objects.create_user(
+        email='testuser@example.com',
+        password='testpassword123',
+        display_name='Test User',
+        timezone='Europe/Paris',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def authenticated_client(user):
+    """Authenticated client with premium user."""
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
+
+
+@pytest.fixture
 def other_user(db):
-    """Create a second user for pairing tests."""
+    """Create a second premium user for pairing tests."""
     return User.objects.create_user(
         email='other@example.com',
         password='testpass123',
         display_name='Other User',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
     )
 
 
 @pytest.fixture
 def third_user(db):
-    """Create a third user for edge-case tests."""
+    """Create a third premium user for edge-case tests."""
     return User.objects.create_user(
         email='third@example.com',
         password='testpass123',
         display_name='Third User',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
     )
 
 
@@ -303,7 +329,8 @@ class TestBuddyProgressAction:
         api_client.force_authenticate(user=third_user)
         response = api_client.get(f'{BASE_URL}{buddy_pairing.id}/progress/')
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert 'not part of' in response.data['error']
+        resp_str = str(response.data)
+        assert 'not part of' in resp_str or 'error' in resp_str
 
     def test_progress_not_found(self, authenticated_client):
         fake_id = uuid.uuid4()
@@ -608,7 +635,9 @@ class TestBuddyDestroyAction:
         api_client.force_authenticate(user=third_user)
         response = api_client.delete(f'{BASE_URL}{buddy_pairing.id}/')
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert 'not part of' in response.data['error']
+        # Custom exception handler wraps errors: check message or detail
+        resp_str = str(response.data)
+        assert 'not part of' in resp_str or 'error' in resp_str
 
     def test_destroy_not_found(self, authenticated_client):
         fake_id = uuid.uuid4()

@@ -27,6 +27,7 @@ from .serializers import (
     LeaderboardEntrySerializer,
 )
 from .services import LeagueService
+from core.permissions import CanUseLeague
 
 
 @extend_schema_view(
@@ -47,11 +48,12 @@ class LeagueViewSet(viewsets.ReadOnlyModelViewSet):
 
     Leagues are read-only resources that define the competitive tiers
     (Bronze through Legend) with their XP ranges and rewards.
+    Requires premium+ subscription.
     """
 
     queryset = League.objects.all().order_by('min_xp')
     serializer_class = LeagueSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseLeague]
     pagination_class = None  # Leagues are a small, fixed set
 
 
@@ -69,7 +71,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
     All leaderboard data exposes scores and badges but NEVER dreams.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseLeague]
     serializer_class = LeaderboardEntrySerializer
 
     @extend_schema(
@@ -193,13 +195,14 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['get'], url_path='friends')
     def friends_leaderboard(self, request):
         """
-        Return the leaderboard filtered to the user's friends (buddies).
+        Return the leaderboard filtered to the user's friends.
 
-        Uses the DreamBuddy model to find connected users and returns
-        their standings ranked by XP.
+        Uses the Friendship model (accepted) and BuddyPairing to find
+        connected users and returns their standings ranked by XP.
         """
         from django.db.models import Q
         from apps.buddies.models import BuddyPairing
+        from apps.social.models import Friendship
 
         limit = min(int(request.query_params.get('limit', 50)), 100)
         season = Season.get_active_season()
@@ -210,19 +213,22 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Get friend IDs from active buddy pairings
+        # Get friend IDs from accepted friendships
+        friend_ids = set()
+        friendships = Friendship.objects.filter(
+            Q(user1=request.user) | Q(user2=request.user),
+            status='accepted'
+        )
+        for f in friendships:
+            friend_ids.add(f.user2_id if f.user1_id == request.user.id else f.user1_id)
+
+        # Also include active buddy pairings
         buddy_relations = BuddyPairing.objects.filter(
             Q(user1=request.user) | Q(user2=request.user),
             status='active'
         )
-
-        # Collect friend user IDs
-        friend_ids = set()
         for buddy in buddy_relations:
-            if buddy.user1_id == request.user.id:
-                friend_ids.add(buddy.user2_id)
-            else:
-                friend_ids.add(buddy.user1_id)
+            friend_ids.add(buddy.user2_id if buddy.user1_id == request.user.id else buddy.user1_id)
 
         # Include the current user
         friend_ids.add(request.user.id)
@@ -363,7 +369,7 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = Season.objects.all()
     serializer_class = SeasonSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseLeague]
 
     @extend_schema(
         summary="Current season",

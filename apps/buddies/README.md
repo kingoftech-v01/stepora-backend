@@ -19,6 +19,9 @@ Represents an accountability pairing between two users.
 | user2 | FK(User) | Matched partner (related_name: `buddy_pairings_as_user2`) |
 | status | CharField(20) | `pending`, `active`, `completed`, `cancelled` (default: `pending`) |
 | compatibility_score | Float | Score between 0.0 and 1.0, calculated at match time |
+| encouragement_streak | IntegerField | Current consecutive-day encouragement streak (default: 0) |
+| best_encouragement_streak | IntegerField | Best-ever consecutive-day encouragement streak (default: 0) |
+| last_encouragement_at | DateTimeField | Timestamp of the last encouragement sent (nullable) |
 | created_at | DateTimeField | Auto-set on creation |
 | updated_at | DateTimeField | Auto-set on update |
 | ended_at | DateTimeField | When pairing ended (nullable) |
@@ -47,7 +50,7 @@ An encouragement message sent between buddies.
 | GET | `/{id}/progress` | Get progress comparison between user and buddy |
 | GET | `/history` | Get pairing history (all past and current pairings) |
 | POST | `/find-match` | Find a compatible buddy match |
-| POST | `/pair` | Create a pairing with a specific user (body: `{"partnerId": "UUID"}`, status: `pending`) |
+| POST | `/pair` | Create a pairing with a specific user (body: `{"partnerId": "UUID"}`, status: `active`) |
 | POST | `/{id}/accept` | Accept a pending buddy request |
 | POST | `/{id}/reject` | Reject a pending buddy request |
 | POST | `/{id}/encourage` | Send encouragement to buddy (body: `{"message": "text"}`) |
@@ -88,7 +91,7 @@ Searches for available users (no active pairing, active account) and scores them
 
 #### POST /pair
 
-Creates a buddy pairing request (status set to `pending`). Both users must not have an existing active pairing. The target user must accept the request before the pairing becomes active.
+Creates a buddy pairing (status set to `active` immediately). Both users must not have an existing active pairing. A conversation is also created for the buddy pair.
 
 #### POST /{id}/accept
 
@@ -104,7 +107,7 @@ Returns all past and current pairings for the authenticated user, ordered by cre
 
 #### POST /{id}/encourage
 
-Creates a BuddyEncouragement record. Also attempts to create a notification for the partner (best-effort, fails silently if the notifications app is unavailable).
+Creates a BuddyEncouragement record. Also tracks encouragement streaks (consecutive days of encouragement exchange, awards bonus XP) and attempts to create a notification for the partner (best-effort, fails silently if the notifications app is unavailable).
 
 #### DELETE /{id}/
 
@@ -150,7 +153,8 @@ Both users in an active pairing can exchange real-time messages, with typing ind
 | Task | Description |
 |------|-------------|
 | `send_checkin_reminders` | Periodic task (Celery beat) that sends check-in reminder notifications to active buddy pairs who haven't interacted recently |
-| `track_encouragement_streaks` | Tracks consecutive days where buddies have exchanged encouragements, awarding bonus XP for sustained engagement |
+
+**Note:** Encouragement streak tracking (consecutive days of exchange, bonus XP) is handled inline in the `encourage` endpoint, not as a separate Celery task.
 
 ## Admin
 

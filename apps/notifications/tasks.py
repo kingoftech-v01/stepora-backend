@@ -14,6 +14,7 @@ from apps.dreams.models import Dream, Task
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
+from core.ai_usage import AIUsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +92,22 @@ def generate_daily_motivation(self):
 
         created_count = 0
 
+        tracker = AIUsageTracker()
+
         for user in users:
             try:
+                # Check AI background quota
+                allowed, _ = tracker.check_quota(user, 'ai_background')
+                if not allowed:
+                    logger.info(f"Skipping motivation for user {user.id}: background quota reached")
+                    continue
+
                 # Generate personalized motivation message and sanitize
                 raw_message = ai_service.generate_motivational_message(user)
                 message = sanitize_text(raw_message)[:500]
+
+                # Increment usage counter
+                tracker.increment(user, 'ai_background')
 
                 # Create notification
                 Notification.objects.create(
@@ -151,8 +163,16 @@ def send_weekly_report(self):
 
         created_count = 0
 
+        tracker = AIUsageTracker()
+
         for user in users:
             try:
+                # Check AI background quota
+                allowed, _ = tracker.check_quota(user, 'ai_background')
+                if not allowed:
+                    logger.info(f"Skipping weekly report for user {user.id}: background quota reached")
+                    continue
+
                 # Calculate weekly stats
                 completed_tasks = Task.objects.filter(
                     goal__dream__user=user,
@@ -176,6 +196,9 @@ def send_weekly_report(self):
                     xp_gained=xp_gained
                 )
                 report = sanitize_text(raw_report)[:2000]
+
+                # Increment usage counter
+                tracker.increment(user, 'ai_background')
 
                 # Create notification
                 Notification.objects.create(
@@ -240,11 +263,22 @@ def check_inactive_users(self):
 
         created_count = 0
 
+        tracker = AIUsageTracker()
+
         for user in inactive_users:
             try:
+                # Check AI background quota
+                allowed, _ = tracker.check_quota(user, 'ai_background')
+                if not allowed:
+                    logger.info(f"Skipping rescue for user {user.id}: background quota reached")
+                    continue
+
                 # Generate personalized rescue message with AI and sanitize
                 raw_rescue = ai_service.generate_rescue_message(user)
                 rescue_message = sanitize_text(raw_rescue)[:500]
+
+                # Increment usage counter
+                tracker.increment(user, 'ai_background')
 
                 # Get user's most recent dream for context
                 recent_dream = user.dreams.filter(status='active').order_by('-updated_at').first()

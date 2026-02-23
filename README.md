@@ -2,7 +2,7 @@
 
 DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
-**Backend**: Django 5.0.1 with 12 apps, 150+ API endpoints, 50+ Celery tasks, 3 WebSocket consumers
+**Backend**: Django 5.0.1 with 12 apps, 150+ API endpoints, 28 Celery tasks, 3 WebSocket consumers
 
 ---
 
@@ -57,7 +57,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Influence Score**: Weighted composite of XP, completed dreams, active buddies, circle memberships, and streaks
 
 ### Subscriptions and Monetization
-- **3 Tiers**: Free (3 dreams, no AI), Premium ($9.99/mo or $99.99/yr), Pro ($19.99/mo or $199.99/yr)
+- **3 Tiers**: Free (3 dreams, no AI), Premium ($14.99/mo), Pro ($29.99/mo)
 - **Stripe Integration**: Checkout sessions, webhooks, customer portal, invoices
 - **Trial Periods**: Configurable free trial for premium tiers
 - **Coupons**: Stripe coupon and promotion code support
@@ -156,7 +156,7 @@ dreamplanner/
 |   +-- circles/                 # Circles, posts, reactions, challenges, invitations
 |   +-- social/                  # Friends, follows, blocking, reporting, activity feed
 |   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders
-+-- core/                        # Auth, permissions, pagination, health checks
++-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware
 +-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
 +-- config/                      # Django settings, Celery, ASGI/WSGI
 +-- docker/                      # Docker + Nginx configs
@@ -208,8 +208,13 @@ make migrate
 make createsuperuser
 
 # Seed data
-python manage.py seed_leagues   # Create league tiers and initial season
-python manage.py seed_store     # Create store categories and items
+python manage.py seed_subscription_plans    # Create Free, Premium, Pro plans
+python manage.py seed_achievements          # Create 17 achievement definitions
+python manage.py seed_dream_templates       # Create 8 dream templates
+python manage.py seed_conversation_templates # Create 6 AI conversation types
+python manage.py seed_notification_templates # Create 6 notification templates
+python manage.py seed_leagues               # Create league tiers and initial season
+python manage.py seed_store                 # Create store categories and items
 
 # Services available:
 # API:       http://localhost:8000
@@ -444,12 +449,14 @@ GET    /api/calendar/timeblocks/{id}/          # Time block details
 PUT    /api/calendar/timeblocks/{id}/          # Update time block
 DELETE /api/calendar/timeblocks/{id}/          # Delete time block
 
-GET    /api/calendar/{view}/                   # Calendar views (today, week, month, overdue)
-POST   /api/calendar/reschedule/               # Reschedule tasks
-POST   /api/calendar/auto-schedule/            # AI auto-scheduling
+GET    /api/calendar/view/                     # Calendar view for date range (?start=&end=)
+GET    /api/calendar/today/                    # Today's scheduled tasks
+POST   /api/calendar/reschedule/               # Reschedule a task
+GET    /api/calendar/suggest-time-slots/       # Find available time slots (?date=&duration_mins=)
+PATCH  /api/calendar/events/{id}/reschedule/   # Reschedule event to new times
 
-POST   /api/calendar/google/auth/              # Start Google Calendar OAuth
-GET    /api/calendar/google/callback/          # Google Calendar OAuth callback
+GET    /api/calendar/google/auth/              # Start Google Calendar OAuth
+POST   /api/calendar/google/callback/          # Google Calendar OAuth callback
 POST   /api/calendar/google/sync/              # Trigger bidirectional sync
 POST   /api/calendar/google/disconnect/        # Disconnect Google Calendar
 GET    /api/calendar/ical-feed/<token>/        # Public iCal feed
@@ -710,8 +717,8 @@ aws ecs update-service \
 - **API Endpoints**: 150+
 - **WebSocket Consumers**: 3 (AI Chat, Buddy Chat, Notifications)
 - **Celery Beat Tasks**: 15 periodic tasks
-- **On-Demand Celery Tasks**: 35+ async tasks
-- **Management Commands**: seed_leagues, seed_store
+- **On-Demand Celery Tasks**: 13 async tasks
+- **Management Commands**: 7 (seed_subscription_plans, seed_achievements, seed_dream_templates, seed_conversation_templates, seed_notification_templates, seed_leagues, seed_store)
 - **Models**: 40+
 - **Test Coverage**: 99%+ target
 
@@ -736,6 +743,18 @@ aws ecs update-service \
 ---
 
 ## Documentation
+
+### Architecture & Navigation
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: System architecture, feature location guide, subscription tiers, infrastructure catalog — **start here to find anything**
+- **[docs/CROSS_APP_FLOWS.md](docs/CROSS_APP_FLOWS.md)**: Step-by-step traces of cross-app flows (task completion, dream creation, registration, notifications, subscriptions)
+- **[core/README.md](core/README.md)**: Core module docs (auth, permissions, AI validators, moderation, throttling, middleware, audit)
+
+### Per-App Documentation
+
+Each app has a detailed README: [users](apps/users/README.md) | [dreams](apps/dreams/README.md) | [conversations](apps/conversations/README.md) | [notifications](apps/notifications/README.md) | [calendar](apps/calendar/README.md) | [subscriptions](apps/subscriptions/README.md) | [store](apps/store/README.md) | [leagues](apps/leagues/README.md) | [circles](apps/circles/README.md) | [social](apps/social/README.md) | [buddies](apps/buddies/README.md)
+
+### Other Docs
 
 - **[docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md)**: Technical architecture
 - **[docs/FEATURES_SPECIFICATIONS.md](docs/FEATURES_SPECIFICATIONS.md)**: Feature specifications

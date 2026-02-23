@@ -13,12 +13,16 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResp
 import secrets
 from datetime import timedelta
 from django.utils import timezone
+from django.db.models import Q, Count
 
-from .models import User, GamificationProfile, EmailChangeRequest
+from .models import User, GamificationProfile, EmailChangeRequest, DailyActivity, Achievement, UserAchievement
 from .serializers import (
     UserSerializer, UserProfileSerializer, UserUpdateSerializer,
     GamificationProfileSerializer,
 )
+from core.audit import log_data_export, log_account_change
+from core.throttles import ExportRateThrottle
+from core.ai_usage import AIUsageTracker
 
 
 @extend_schema_view(
@@ -68,6 +72,21 @@ class UserViewSet(viewsets.ModelViewSet):
         profile, created = GamificationProfile.objects.get_or_create(user=request.user)
         serializer = GamificationProfileSerializer(profile)
         return Response(serializer.data)
+
+    @extend_schema(summary="Get AI usage", description="Get the current user's AI usage quotas for today", tags=["Users"], responses={200: dict})
+    @action(detail=False, methods=['get'], url_path='ai-usage')
+    def ai_usage(self, request):
+        """Get current user's AI usage and remaining quotas for today."""
+        tracker = AIUsageTracker()
+        usage = tracker.get_usage(request.user)
+        reset_time = tracker.get_reset_time()
+
+        return Response({
+            'date': timezone.now().date().isoformat(),
+            'usage': usage,
+            'plan': getattr(request.user, 'subscription', 'free'),
+            'resets_at': reset_time.isoformat(),
+        })
 
     @extend_schema(
         summary="Upload avatar",
@@ -156,6 +175,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        log_account_change(user, 'account_deletion')
+
         # Anonymize personal data
         user.display_name = 'Deleted User'
         user.email = f'deleted_{user.id}@deleted.dreamplanner.app'
@@ -186,10 +207,11 @@ class UserViewSet(viewsets.ModelViewSet):
         responses={200: dict},
         tags=["Users"],
     )
-    @action(detail=False, methods=['get'], url_path='export-data')
+    @action(detail=False, methods=['get'], url_path='export-data', throttle_classes=[ExportRateThrottle])
     def export_data(self, request):
         """Export all user data as JSON for GDPR compliance."""
         user = request.user
+        log_data_export(user)
 
         data = {
             'profile': {
@@ -292,6 +314,131 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response({
             'message': 'Verification email sent to the new address. Please check your inbox.',
+        })
+
+    @extend_schema(summary="Get dashboard", description="Aggregated dashboard data: heatmap, stats, upcoming tasks, top dreams", tags=["Users"], responses={200: dict})
+    @action(detail=False, methods=['get'])
+    def dashboard(self, request):
+        """Get aggregated dashboard data for the home screen."""
+        user = request.user
+
+        # Heatmap: last 28 days of DailyActivity
+        from datetime import date, timedelta as td
+        today = date.today()
+        start_date = today - td(days=27)
+        activities = DailyActivity.objects.filter(
+            user=user, date__gte=start_date
+        ).order_by('date')
+        activity_map = {a.date: a for a in activities}
+        heatmap = []
+        for i in range(28):
+            d = start_date + td(days=i)
+            a = activity_map.get(d)
+            heatmap.append({
+                'date': str(d),
+                'tasks_completed': a.tasks_completed if a else 0,
+                'xp_earned': a.xp_earned if a else 0,
+                'minutes_active': a.minutes_active if a else 0,
+            })
+
+        # Stats
+        from apps.dreams.models import Dream, Task
+        week_start = today - td(days=6)
+        completed_tasks_week = Task.objects.filter(
+            goal__dream__user=user,
+            status='completed',
+            completed_at__date__gte=week_start,
+        ).count()
+
+        stats = {
+            'active_dreams': Dream.objects.filter(user=user, status='active').count(),
+            'completed_tasks_week': completed_tasks_week,
+            'streak_days': user.streak_days,
+            'xp': user.xp,
+            'level': user.level,
+        }
+
+        # Upcoming tasks: next 5 scheduled tasks
+        upcoming_tasks = Task.objects.filter(
+            goal__dream__user=user,
+            status='pending',
+            scheduled_date__gte=timezone.now(),
+        ).select_related('goal__dream').order_by('scheduled_date')[:5]
+        upcoming_list = [
+            {
+                'id': str(t.id),
+                'title': t.title,
+                'scheduled_date': t.scheduled_date,
+                'duration_mins': t.duration_mins,
+                'dream_title': t.goal.dream.title,
+                'dream_id': str(t.goal.dream.id),
+            }
+            for t in upcoming_tasks
+        ]
+
+        # Top 3 active dreams with sparkline
+        from apps.dreams.models import DreamProgressSnapshot
+        top_dreams = Dream.objects.filter(
+            user=user, status='active'
+        ).order_by('-updated_at')[:3]
+        dreams_data = []
+        for dream in top_dreams:
+            snapshots = DreamProgressSnapshot.objects.filter(
+                dream=dream
+            ).order_by('-date')[:7]
+            sparkline = list(reversed([
+                {'date': str(s.date), 'progress': s.progress_percentage}
+                for s in snapshots
+            ]))
+            dreams_data.append({
+                'id': str(dream.id),
+                'title': dream.title,
+                'category': dream.category,
+                'progress_percentage': dream.progress_percentage,
+                'sparkline_data': sparkline,
+            })
+
+        return Response({
+            'heatmap': heatmap,
+            'stats': stats,
+            'upcoming_tasks': upcoming_list,
+            'top_dreams': dreams_data,
+        })
+
+    @extend_schema(summary="Get achievements", description="List all achievements with unlock status", tags=["Users"], responses={200: dict})
+    @action(detail=False, methods=['get'])
+    def achievements(self, request):
+        """Get all achievements with user unlock status."""
+        user = request.user
+        all_achievements = Achievement.objects.filter(is_active=True)
+        unlocked_ids = set(
+            UserAchievement.objects.filter(user=user).values_list('achievement_id', flat=True)
+        )
+        unlocked_map = {
+            ua.achievement_id: ua.unlocked_at
+            for ua in UserAchievement.objects.filter(user=user)
+        }
+
+        results = []
+        for ach in all_achievements:
+            is_unlocked = ach.id in unlocked_ids
+            results.append({
+                'id': str(ach.id),
+                'name': ach.name,
+                'description': ach.description,
+                'icon': ach.icon,
+                'category': ach.category,
+                'xp_reward': ach.xp_reward,
+                'condition_type': ach.condition_type,
+                'condition_value': ach.condition_value,
+                'unlocked': is_unlocked,
+                'unlocked_at': unlocked_map.get(ach.id),
+            })
+
+        return Response({
+            'achievements': results,
+            'unlocked_count': len(unlocked_ids),
+            'total_count': all_achievements.count(),
         })
 
     @extend_schema(

@@ -21,9 +21,14 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
+# Strict cookie security in production
+SESSION_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_SAMESITE = 'Strict'
+
 # CORS - Strict in production
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ORIGIN', '').split(',')
+_cors_raw = os.getenv('CORS_ORIGIN', '')
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
 
 # Static files (served via S3/CloudFront in production)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')

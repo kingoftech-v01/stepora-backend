@@ -152,3 +152,38 @@ class CanUseLeague(permissions.BasePermission):
             and request.user.is_authenticated
             and request.user.subscription in ('premium', 'pro')
         )
+
+
+class CanUseStore(permissions.BasePermission):
+    """Permission to restrict store purchases to premium and pro users.
+
+    Browsing the store catalog is allowed for everyone (AllowAny on those views).
+    Purchasing items (via Stripe, XP, or gifting) requires a paid subscription.
+    """
+
+    message = 'Store purchases require a Premium or Pro subscription.'
+
+    def has_permission(self, request, view):
+        """Check if user can make store purchases."""
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.subscription in ('premium', 'pro')
+        )
+
+
+class CanUseSocialFeed(permissions.BasePermission):
+    """Permission to restrict the social activity feed to premium and pro users.
+
+    Free users can only see encouragements received. Full feed requires premium+.
+    """
+
+    message = 'The full activity feed requires a Premium or Pro subscription.'
+
+    def has_permission(self, request, view):
+        """Check if user can access the full social feed."""
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.subscription in ('premium', 'pro')
+        )

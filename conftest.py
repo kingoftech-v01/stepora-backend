@@ -75,9 +75,25 @@ def pro_user(db):
 
 @pytest.fixture
 def authenticated_client(api_client, user):
-    """Return authenticated API client"""
+    """Return authenticated API client (free user)"""
     api_client.force_authenticate(user=user)
     return api_client
+
+
+@pytest.fixture
+def premium_client(premium_user):
+    """Return authenticated API client for premium user"""
+    client = APIClient()
+    client.force_authenticate(user=premium_user)
+    return client
+
+
+@pytest.fixture
+def pro_client(pro_user):
+    """Return authenticated API client for pro user"""
+    client = APIClient()
+    client.force_authenticate(user=pro_user)
+    return client
 
 
 @pytest.fixture
@@ -341,6 +357,66 @@ def complete_dream_structure(db, user):
         'goals': goals,
         'tasks': Task.objects.filter(goal__dream=dream)
     }
+
+
+@pytest.fixture
+def second_user(db):
+    """Create a second free user for cross-user/IDOR tests"""
+    return User.objects.create_user(
+        email='second@example.com',
+        password='testpassword123',
+        display_name='Second User',
+        timezone='Europe/Paris',
+    )
+
+
+@pytest.fixture
+def second_client(second_user):
+    """Authenticated client for second free user"""
+    client = APIClient()
+    client.force_authenticate(user=second_user)
+    return client
+
+
+@pytest.fixture
+def second_premium_user(db):
+    """Create a second premium user for buddy/social tests"""
+    return User.objects.create_user(
+        email='premium2@example.com',
+        password='testpassword123',
+        display_name='Premium User 2',
+        timezone='Europe/Paris',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def second_premium_client(second_premium_user):
+    """Authenticated client for second premium user"""
+    client = APIClient()
+    client.force_authenticate(user=second_premium_user)
+    return client
+
+
+@pytest.fixture
+def second_pro_user(db):
+    """Create a second pro user for circles tests"""
+    return User.objects.create_user(
+        email='pro2@example.com',
+        password='testpassword123',
+        display_name='Pro User 2',
+        subscription='pro',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def second_pro_client(second_pro_user):
+    """Authenticated client for second pro user"""
+    client = APIClient()
+    client.force_authenticate(user=second_pro_user)
+    return client
 
 
 @pytest.fixture(autouse=True)

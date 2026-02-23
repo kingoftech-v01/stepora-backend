@@ -7,6 +7,7 @@ and match results for the DreamBuddyScreen in the mobile app.
 
 from rest_framework import serializers
 
+from core.sanitizers import sanitize_text
 from .models import BuddyPairing, BuddyEncouragement
 
 
@@ -72,6 +73,9 @@ class BuddyEncourageSerializer(serializers.Serializer):
         max_length=1000,
         help_text='Optional motivational message.'
     )
+
+    def validate_message(self, value):
+        return sanitize_text(value)
 
 
 class BuddyHistorySerializer(serializers.Serializer):

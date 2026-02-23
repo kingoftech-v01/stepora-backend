@@ -89,6 +89,9 @@ class Dream(models.Model):
 
         self.save(update_fields=['progress_percentage'])
 
+        # Record progress snapshot for sparkline display
+        DreamProgressSnapshot.record_snapshot(self)
+
     def complete(self):
         """Mark dream as completed."""
         self.status = 'completed'
@@ -98,6 +101,10 @@ class Dream(models.Model):
 
         # Award XP to user
         self.user.add_xp(500)  # Completing a dream gives 500 XP
+
+        # Check achievements
+        from apps.users.services import AchievementService
+        AchievementService.check_achievements(self.user)
 
 
 class Goal(models.Model):
@@ -248,6 +255,18 @@ class Task(models.Model):
 
         # Update streak
         self._update_streak()
+
+        # Record daily activity for heatmap
+        from apps.users.models import DailyActivity
+        DailyActivity.record_task_completion(
+            user=self.goal.dream.user,
+            xp_earned=xp_amount,
+            duration_mins=self.duration_mins or 0,
+        )
+
+        # Check achievements
+        from apps.users.services import AchievementService
+        AchievementService.check_achievements(self.goal.dream.user)
 
     def _update_streak(self):
         """Update user's streak based on consecutive day completions."""
@@ -504,3 +523,60 @@ class SharedDream(models.Model):
 
     def __str__(self):
         return f"{self.dream.title} shared with {self.shared_with.display_name or self.shared_with.email}"
+
+
+class DreamProgressSnapshot(models.Model):
+    """Daily snapshot of dream progress for sparkline charts."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='progress_snapshots')
+    date = models.DateField()
+    progress_percentage = models.FloatField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'dream_progress_snapshots'
+        unique_together = ('dream', 'date')
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['dream', '-date']),
+        ]
+
+    def __str__(self):
+        return f"{self.dream.title} - {self.date}: {self.progress_percentage}%"
+
+    @classmethod
+    def record_snapshot(cls, dream):
+        """Record or update today's progress snapshot for a dream."""
+        today = timezone.now().date()
+        cls.objects.update_or_create(
+            dream=dream,
+            date=today,
+            defaults={'progress_percentage': dream.progress_percentage},
+        )
+
+
+class VisionBoardImage(models.Model):
+    """Image in a dream's vision board gallery."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='vision_images')
+
+    image_url = models.URLField(max_length=500, blank=True)
+    image_file = models.ImageField(upload_to='vision_boards/', blank=True)
+    caption = models.CharField(max_length=500, blank=True)
+    is_ai_generated = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'vision_board_images'
+        ordering = ['order', '-created_at']
+        indexes = [
+            models.Index(fields=['dream', 'order']),
+        ]
+
+    def __str__(self):
+        return f"Vision: {self.dream.title} #{self.order}"

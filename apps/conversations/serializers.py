@@ -15,6 +15,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'conversation', 'role', 'content',
             'audio_url', 'transcription', 'image_url',
+            'is_pinned', 'is_liked', 'reactions',
             'metadata', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
@@ -42,6 +43,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'id', 'user', 'dream', 'dream_title',
+            'title', 'is_pinned',
             'conversation_type', 'total_messages', 'total_tokens_used',
             'is_active', 'last_message',
             'created_at', 'updated_at'
@@ -70,11 +72,19 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'id', 'user', 'dream', 'dream_title',
+            'title', 'is_pinned',
             'conversation_type', 'total_messages', 'total_tokens_used',
             'is_active', 'messages',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'total_messages', 'total_tokens_used', 'created_at', 'updated_at']
+
+
+    def validate_title(self, value):
+        """Sanitize conversation title."""
+        if value:
+            return sanitize_text(value)
+        return value
 
 
 class ConversationCreateSerializer(serializers.ModelSerializer):
@@ -90,6 +100,19 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         if value not in valid_types:
             raise serializers.ValidationError(f"Invalid conversation type. Must be one of: {', '.join(valid_types)}")
         return value
+
+    def validate(self, attrs):
+        """Ensure dream-related conversations have a dream linked."""
+        dream_required_types = {'dream_creation', 'planning', 'check_in', 'adjustment'}
+        conv_type = attrs.get('conversation_type', 'general')
+        dream = attrs.get('dream')
+
+        if conv_type in dream_required_types and not dream:
+            raise serializers.ValidationError(
+                f"Conversations of type '{conv_type}' must be linked to a dream. "
+                f"Please provide a dream ID."
+            )
+        return attrs
 
 
 class ConversationSummarySerializer(serializers.ModelSerializer):

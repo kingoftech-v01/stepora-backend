@@ -1,313 +1,314 @@
-# Users App - DreamPlanner Backend
+# Users App
+
+Django application for user management, authentication, gamification, achievements, and account operations.
 
 ## Overview
 
-The **users** app manages user authentication, profiles, gamification, and social features including the Dream Buddy system.
+The Users app manages:
 
-## Features
-
-### Core Features
-- User management with django-allauth + Token authentication
-- Profile management (display name, avatar, timezone, preferences)
-- Enhanced profile fields (bio, location, social_links, avatar_image, profile_visibility)
-- Avatar upload endpoint (POST /upload-avatar/ with file type/size validation)
-- Subscription management (free, premium, pro)
-- Work schedule and notification preferences
-
-### Account Management
-- Account deletion (soft-delete, GDPR compliant)
-- Email change with verification (Celery task)
-- Data export endpoint (GDPR compliant downloadable archive)
-- Notification preferences endpoint (per-type push/email toggles)
-
-### Two-Factor Authentication (2FA)
-- 2FA setup (TOTP-based)
-- 2FA verify
-- 2FA disable
-- 2FA status check
-- Backup codes generation and management
-
-### Gamification Features
-- XP and leveling system
-- Streak tracking (daily activity)
-- RPG-style attributes (health, career, education, etc.)
-- Badge/achievement system
-- Rank tiers (Dreamer -> Legend)
-
-### Social Features
-- Dream Buddy matching system
-- Accountability partnerships
-- User statistics and progress tracking
+- **User** - Custom user model with email auth, gamification, subscriptions, encrypted PII
+- **GamificationProfile** - RPG-style attribute XP system (6 life categories)
+- **EmailChangeRequest** - Verified email change flow
+- **DailyActivity** - Daily activity tracking for heatmap display
+- **Achievement** - Achievement definitions with condition-based unlocking
+- **UserAchievement** - Tracks which achievements a user has unlocked
 
 ## Models
 
 ### User
-Main user model with django-allauth integration and gamification.
 
-**Fields**:
-- `id` (UUID) - Primary key
-- `email` (Email, unique) - User email
-- `display_name` (String) - Display name
-- `avatar_url` (URL) - Profile picture
-- `avatar_image` (ImageField) - Uploaded avatar image file
-- `bio` (TextField) - User biography
-- `location` (String) - User location
-- `social_links` (JSONField) - Social media profile links
-- `profile_visibility` (Choice) - Profile visibility setting (public/friends/private)
-- `timezone` (String) - User timezone (default: Europe/Paris)
-- `subscription` (Choice) - Subscription tier (free/premium/pro)
-- `subscription_ends` (DateTime) - Subscription expiration
-- `xp` (Integer) - Experience points
-- `level` (Integer) - User level
-- `streak_days` (Integer) - Consecutive active days
-- `last_activity` (DateTime) - Last activity timestamp
-- `work_schedule` (JSON) - Work hours configuration
-- `notification_prefs` (JSON) - Notification preferences
-- `app_prefs` (JSON) - App preferences
+Custom user model using email for authentication (extends `AbstractBaseUser`, `PermissionsMixin`).
 
-**Methods**:
-- `is_premium` (property) - Check if user has active premium
-- `update_streak()` - Update daily streak
-- `award_xp(amount)` - Award XP and check for level up
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| email | EmailField | Unique email (login identifier) |
+| display_name | CharField(255) | Display name |
+| avatar_url | URLField(500) | Profile picture URL |
+| avatar_image | ImageField | Uploaded avatar file (upload_to: `avatars/`) |
+| bio | EncryptedTextField | User biography (encrypted at rest) |
+| location | EncryptedCharField(200) | User location (encrypted at rest) |
+| social_links | JSONField | Social media links: `{twitter, instagram, ...}` (nullable) |
+| profile_visibility | CharField(20) | `public`, `friends`, `private` (default: `public`) |
+| timezone | CharField(50) | User timezone (default: `Europe/Paris`) |
+| subscription | CharField(20) | `free`, `premium`, `pro` (default: `free`) |
+| subscription_ends | DateTimeField | Subscription expiration (nullable) |
+| work_schedule | JSONField | Work schedule: `{workDays, startTime, endTime}` (nullable) |
+| notification_prefs | JSONField | Notification preferences (nullable) |
+| app_prefs | JSONField | App preferences: `{theme, language}` (nullable) |
+| xp | IntegerField | Experience points (default: 0) |
+| level | IntegerField | User level (default: 1) |
+| streak_days | IntegerField | Consecutive active days (default: 0) |
+| last_activity | DateTimeField | Last activity timestamp |
+| is_online | BooleanField | Online status (default: False) |
+| last_seen | DateTimeField | Last seen timestamp (nullable) |
+| is_staff | BooleanField | Django admin access (default: False) |
+| is_active | BooleanField | Account active status (default: True) |
+| created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
+
+**DB table:** `users`
+
+**Methods:**
+
+- `is_premium()` - Returns True if subscription is `premium` or `pro`
+- `can_create_dream()` - Check dream creation limit (free: 3, premium: 10, pro: unlimited)
+- `update_activity()` - Update `last_activity` to now
+- `add_xp(amount)` - Add XP and auto-level (100 XP per level)
 
 ### GamificationProfile
-Extended gamification data for RPG-style attributes.
 
-**Fields**:
-- `user` (OneToOne) - Related user
-- `xp` (Integer) - Experience points
-- `level` (Integer) - Current level
-- `attributes` (JSON) - RPG attributes (health, career, etc.)
+RPG-style attribute XP system with 6 life categories.
 
-### DreamBuddy
-Accountability partner matching system.
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | OneToOneField(User) | Related user (related_name: `gamification`) |
+| health_xp | IntegerField | Health & Fitness XP (default: 0) |
+| career_xp | IntegerField | Career & Business XP (default: 0) |
+| relationships_xp | IntegerField | Relationships XP (default: 0) |
+| personal_growth_xp | IntegerField | Personal Growth XP (default: 0) |
+| finance_xp | IntegerField | Finance XP (default: 0) |
+| hobbies_xp | IntegerField | Hobbies XP (default: 0) |
+| badges | JSONField | Earned badges (default: []) |
+| achievements | JSONField | Earned achievements (default: []) |
+| streak_jokers | IntegerField | Streak insurance tokens (default: 3) |
+| created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
 
-**Fields**:
-- `user` (ForeignKey) - User requesting buddy
-- `buddy` (ForeignKey) - Matched buddy user
-- `status` (String) - pending/active/ended
-- `matched_at` (DateTime) - Matching date
+**DB table:** `gamification_profiles`
 
-### Badge
-Achievement badges system.
+**Methods:**
 
-**Fields**:
-- `user` (ForeignKey) - Badge owner
-- `badge_type` (String) - Type identifier
-- `name` (String) - Badge name
-- `description` (Text) - Badge description
-- `icon_url` (URL) - Badge icon
-- `is_claimed` (Boolean) - Whether badge is claimed
-- `earned_at` (DateTime) - Earned date
-- `claimed_at` (DateTime) - Claimed date
+- `get_attribute_level(attribute)` - Get level for a specific attribute (100 XP per level)
+- `add_attribute_xp(attribute, amount)` - Add XP to a specific attribute
+
+### EmailChangeRequest
+
+Stores pending email change requests with token verification.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | User requesting change (related_name: `email_change_requests`) |
+| new_email | EmailField | New email address |
+| token | CharField(128) | Unique verification token |
+| is_verified | BooleanField | Whether verified (default: False) |
+| expires_at | DateTimeField | Token expiration (24 hours) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `email_change_requests`
+
+**Properties:**
+
+- `is_expired` - Check if token has expired
+
+### DailyActivity
+
+Daily activity tracking for heatmap display.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | User (related_name: `daily_activities`) |
+| date | DateField | Activity date |
+| tasks_completed | IntegerField | Tasks completed that day (default: 0) |
+| xp_earned | IntegerField | XP earned that day (default: 0) |
+| minutes_active | IntegerField | Active minutes (default: 0) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `daily_activities`
+**Constraint:** `unique_together = ('user', 'date')`
+
+**Methods:**
+
+- `record_task_completion(user, xp_earned, duration_mins)` (classmethod) - Record or update today's activity
+
+### Achievement
+
+Achievement definition for the gamification system.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| name | CharField(200) | Achievement name (unique) |
+| description | TextField | Achievement description |
+| icon | CharField(50) | Emoji or icon identifier |
+| category | CharField(20) | `streaks`, `dreams`, `social`, `tasks`, `special` |
+| xp_reward | IntegerField | XP awarded on unlock (default: 0) |
+| condition_type | CharField(30) | Unlock condition (see choices below) |
+| condition_value | IntegerField | Threshold value to unlock (default: 1) |
+| is_active | BooleanField | Whether achievement is available (default: True) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `achievements`
+
+**Condition types:** `streak_days`, `dreams_created`, `dreams_completed`, `tasks_completed`, `friends_count`, `circles_joined`, `level_reached`, `xp_earned`, `early_task`, `late_task`, `first_dream`, `first_buddy`, `vision_created`
+
+### UserAchievement
+
+Tracks which achievements a user has unlocked.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | User (related_name: `user_achievements`) |
+| achievement | FK(Achievement) | Achievement (related_name: `user_achievements`) |
+| unlocked_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `user_achievements`
+**Constraint:** `unique_together = ('user', 'achievement')`
 
 ## API Endpoints
 
-### Profile Management
-```
-GET    /api/users/me/                      # Get current user profile
-PUT    /api/users/me/                      # Update full profile
-PATCH  /api/users/me/                      # Partial update
-POST   /api/users/me/upload-avatar/        # Upload avatar image (file type/size validation)
-```
+### User Profile
 
-**Response Example**:
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "display_name": "John Doe",
-  "xp": 1250,
-  "level": 5,
-  "streak_days": 7,
-  "subscription": "premium",
-  "is_premium": true
-}
-```
-
-### Preferences
-```
-POST   /api/users/me/update-preferences/  # Update user preferences
-```
-
-**Request Body**:
-```json
-{
-  "notification_prefs": {
-    "motivation": true,
-    "weekly_report": true,
-    "reminders": true,
-    "dnd_start": "22:00",
-    "dnd_end": "08:00"
-  },
-  "work_schedule": {
-    "start_hour": 9,
-    "end_hour": 17,
-    "working_days": [1, 2, 3, 4, 5]
-  },
-  "app_prefs": {
-    "theme": "dark",
-    "language": "fr"
-  }
-}
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/me/` | Get current user profile (with achievements summary, equipped items, season rank) |
+| PUT/PATCH | `/update-profile/` | Update profile fields |
+| POST | `/upload-avatar/` | Upload avatar image (JPEG/PNG/GIF/WebP, max 5MB) |
+| GET | `/stats/` | Get user statistics (dreams, tasks, streaks, XP) |
+| GET | `/dashboard/` | Aggregated dashboard: heatmap (28 days), stats, upcoming tasks, top dreams with sparklines |
+| GET | `/gamification/` | Get RPG-style gamification profile with skill radar data |
+| GET | `/ai-usage/` | Get current AI usage quotas and remaining for today |
+| GET | `/achievements/` | List all achievements with unlock status |
+| PUT | `/notification-preferences/` | Update per-type notification preferences |
 
 ### Account Management
-```
-POST   /api/users/me/delete-account/       # Soft-delete account (GDPR compliant)
-POST   /api/users/me/change-email/         # Request email change (sends verification via Celery)
-GET    /api/users/me/export-data/          # Export all user data (GDPR compliant)
-POST   /api/users/me/notification-prefs/   # Update notification preferences
-```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| DELETE | `/delete-account/` | Soft-delete account (GDPR), anonymize data, requires password confirmation |
+| POST | `/change-email/` | Request email change (sends verification via Celery), requires password |
+| GET | `/export-data/` | Export all user data as JSON (GDPR data portability), rate-limited |
+| GET | `/verify-email/{token}/` | Verify email change via token link |
 
 ### Two-Factor Authentication (2FA)
-```
-POST   /api/users/me/2fa/setup/            # Initialize 2FA setup (returns TOTP secret + QR code)
-POST   /api/users/me/2fa/verify/           # Verify 2FA with TOTP code
-POST   /api/users/me/2fa/disable/          # Disable 2FA
-GET    /api/users/me/2fa/status/           # Check 2FA status
-POST   /api/users/me/2fa/backup-codes/     # Generate backup codes
-```
 
-### Statistics
-```
-GET    /api/users/me/stats/                # Get user statistics
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/2fa/setup/` | Initialize 2FA setup (returns TOTP secret + QR code) |
+| POST | `/2fa/verify/` | Verify 2FA with TOTP code |
+| POST | `/2fa/disable/` | Disable 2FA |
+| GET | `/2fa/status/` | Check 2FA status |
+| POST | `/2fa/backup-codes/` | Regenerate backup codes |
 
-**Response Example**:
-```json
-{
-  "total_dreams": 5,
-  "completed_dreams": 2,
-  "active_dreams": 3,
-  "total_tasks": 45,
-  "completed_tasks": 32,
-  "completion_rate": 71.1,
-  "current_streak": 7,
-  "longest_streak": 14,
-  "total_xp": 1250,
-  "level": 5
-}
-```
+**ViewSet:** `UserViewSet` (ModelViewSet)
 
-## Serializers
-
-### UserSerializer
-Complete user serialization with all fields.
-
-**Fields**: All User model fields + `is_premium` property
-
-### UserUpdateSerializer
-For profile updates (excludes sensitive fields).
-
-**Fields**: `display_name`, `avatar_url`, `timezone`
-
-### UserStatsSerializer
-User statistics aggregation.
-
-**Fields**: Computed statistics fields
-
-## Permissions
-
-### IsOwner
-Ensures user can only access/modify their own data.
-
-**Usage**: Applied to all user endpoints
-
-### IsPremiumUser
-Checks if user has active premium subscription.
-
-**Usage**: Applied to premium-only features
+- Permission: `IsAuthenticated`
+- Users can only see/modify their own data
 
 ## Authentication
 
 Uses django-allauth + Token authentication via dj-rest-auth.
 
-**Authentication Flow**:
-1. Client registers or logs in via dj-rest-auth endpoints (email/password)
-2. Server returns a DRF Token on successful authentication
-3. Client sends Token in header: `Authorization: Token <key>` or `Authorization: Bearer <key>`
-4. Backend validates the Token and retrieves the associated Django User
-5. Request proceeds with authenticated user
+**Flow:**
 
-**Registration/Login Endpoints** (provided by dj-rest-auth):
-```
-POST /api/auth/registration/    # Register new user (email + password)
-POST /api/auth/login/           # Login (returns Token)
-POST /api/auth/logout/          # Logout (invalidates Token)
-POST /api/auth/password/reset/  # Password reset via email
-```
+1. Register or login via dj-rest-auth endpoints (email/password)
+2. Server returns a DRF Token
+3. Client sends Token in header: `Authorization: Token <key>` or `Authorization: Bearer <key>`
+
+**Auth endpoints** (provided by dj-rest-auth):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/auth/registration/` | Register (email + password) |
+| POST | `/api/auth/login/` | Login (returns Token) |
+| POST | `/api/auth/logout/` | Logout (invalidates Token) |
+| POST | `/api/auth/password/reset/` | Password reset via email |
+
+## Serializers
+
+| Serializer | Purpose |
+|------------|---------|
+| `UserSerializer` | Full user with computed `can_create_dream`, `is_premium` |
+| `UserProfileSerializer` | Detailed profile with `active_dreams_count`, `completed_dreams_count`, `achievements_summary` (recent 5), `equipped_items` (from store), `rank` (current season league standing) |
+| `UserUpdateSerializer` | Input: `display_name` (validated), `avatar_url` (sanitized), `bio` (sanitized), `location` (validated), `social_links` (sanitized), `profile_visibility`, `timezone`, `work_schedule`, `notification_prefs`, `app_prefs` (all JSON values sanitized) |
+| `GamificationProfileSerializer` | RPG profile with per-attribute `{category}_level` computed fields and `skill_radar` data for radar chart |
+
+## Services
+
+### BuddyMatchingService
+
+Finds compatible dream buddies using a weighted scoring algorithm.
+
+**Scoring weights:**
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| Shared dream categories | 40% | Jaccard similarity of active dream categories |
+| Activity level | 25% | Streak days similarity |
+| Timezone proximity | 20% | Same timezone > same region > different regions |
+| Level similarity | 15% | Level difference scoring |
+
+**Minimum compatibility score:** 0.3
+
+**Exclusions:** Self, existing active/pending pairings, inactive users (30+ days)
+
+### UserStatsService
+
+Calculates comprehensive user statistics including `xp_to_next_level`, weekly task completions, and subscription info.
+
+### AchievementService
+
+Checks all achievement conditions against user stats and unlocks any newly met ones. Pre-computes stats for `streak_days`, `dreams_created/completed`, `tasks_completed`, `friends_count`, `circles_joined`, `first_dream`, `first_buddy`, `vision_created`, `level_reached`, `xp_earned`.
+
+## Management Commands
+
+| Command | Description |
+|---------|-------------|
+| `seed_achievements` | Seeds 17 achievements across 5 categories (streaks: 4, dreams: 4, tasks: 4, social: 3, special: 2). Idempotent (update_or_create by name) |
+
+## Admin
+
+3 models registered with Django admin:
+
+- **UserAdmin** (extends BaseUserAdmin) - Shows email, display_name, subscription, level, xp, streak_days, is_staff. Fieldsets: Basic Info, Subscription, Preferences, Gamification, Permissions, Important dates. Filter by subscription, is_staff, is_active, date. Search by email, display_name
+- **GamificationProfileAdmin** - Shows user, health/career/relationships levels, streak_jokers. Filter by date. Search by user email
+- **EmailChangeRequestAdmin** - Shows user, new_email, is_verified, expires_at. Filter by is_verified, date. Search by user email, new_email
+
+## Subscription Tiers
+
+| Feature | Free | Premium | Pro |
+|---------|------|---------|-----|
+| Active dreams | 3 | 10 | Unlimited |
+| AI features | Limited | Full | Full |
+| Vision board | No | Yes | Yes |
+| Notification types | Basic (4) | All | All |
+
+## Gamification
+
+**XP System:** 100 XP per level, auto-levels on `add_xp()`
+
+**RPG Attributes (6 categories):**
+
+- Health & Fitness
+- Career & Business
+- Relationships
+- Personal Growth
+- Finance
+- Hobbies
+
+Each attribute has independent XP and level tracking. Skill radar data is computed for chart display.
+
+## Celery Tasks
+
+| Task | Description |
+|------|-------------|
+| `send_email_change_verification` | Sends verification email with token link for email change |
 
 ## Testing
 
-### Test Files
-- `tests.py` - Complete test suite (300+ lines)
-
-### Test Coverage
-- Model tests (User, GamificationProfile, Badge)
-- Authentication tests (django-allauth backend, DRF Token auth)
-- ViewSet tests (all CRUD operations)
-- Permission tests (IsOwner, IsPremiumUser)
-- Gamification tests (XP, levels, streaks)
-
-### Run Tests
 ```bash
-# All users app tests
 pytest apps/users/tests.py -v
-
-# With coverage
-pytest apps/users/tests.py --cov=apps/users --cov-report=html
-
-# Specific test class
-pytest apps/users/tests.py::TestUserModel -v
 ```
-
-## Security
-
-### Implemented Security
-- Token verification on every request via DRF TokenAuthentication
-- IsOwner permission on all user endpoints
-- Sensitive fields excluded from serializers (password)
-- Rate limiting via Nginx (10 req/s)
-- CORS whitelist configured
-- Input validation via DRF serializers
-
-### Security Best Practices
-- Always use IsOwner permission for user-specific endpoints
-- Sanitize user-generated content (display_name, avatar_url)
-- Rate limit authentication attempts
-
-## Admin Interface
-
-### Registered Models
-- User (with search, filters, actions)
-- GamificationProfile (inline with User)
-- DreamBuddy (with filters by status)
-- Badge (with filters by type, claimed status)
-
-### Admin URL
-`http://localhost:8000/admin/users/`
-
-## Dependencies
-
-### Internal
-- `core.authentication` - Token authentication backend
-- `core.permissions` - Custom permissions
-- `core.pagination` - Pagination classes
-
-### External
-- `django-allauth==65.3.0` - Authentication and account management
-- `dj-rest-auth[with-social]==7.0.2` - REST API auth endpoints
-- `djangorestframework` - REST API
-- `django-filter` - API filtering
 
 ## Configuration
 
-### Settings
 ```python
 # django-allauth settings
 ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
 # DRF Token Authentication
@@ -317,106 +318,13 @@ REST_FRAMEWORK = {
     ],
 }
 
-# Subscription tiers
-SUBSCRIPTION_CHOICES = [
-    ('free', 'Free'),
-    ('premium', 'Premium'),
-    ('pro', 'Pro'),
-]
-
-# XP Configuration
-XP_PER_LEVEL = 100  # XP required per level
+# XP per level
+XP_PER_LEVEL = 100
 ```
 
-## Database Indexes
+## Dependencies
 
-Optimized indexes for performance:
-- `email` - Unique index
-- `last_activity` - Index for streak calculations
-- `subscription` + `subscription_ends` - Compound index for premium checks
-
-## Related Apps
-
-- **dreams** - User's dreams, goals, tasks
-- **conversations** - User's AI conversations
-- **notifications** - User notifications
-- **calendar** - User's calendar events
-
-## Maintenance
-
-### Common Tasks
-
-**Update user subscription**:
-```python
-from apps.users.models import User
-from django.utils import timezone
-from datetime import timedelta
-
-user = User.objects.get(email='user@example.com')
-user.subscription = 'premium'
-user.subscription_ends = timezone.now() + timedelta(days=30)
-user.save()
-```
-
-**Award XP and check level up**:
-```python
-user.award_xp(100)
-```
-
-**Update streak**:
-```python
-user.update_streak()
-```
-
-### Database Migrations
-```bash
-# Create migrations
-python manage.py makemigrations users
-
-# Apply migrations
-python manage.py migrate users
-
-# Show migrations
-python manage.py showmigrations users
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Token authentication fails**:
-- Verify the Token exists in the database (`authtoken_token` table)
-- Ensure the header format is correct: `Authorization: Token <key>`
-- Check that `rest_framework.authentication.TokenAuthentication` is in `DEFAULT_AUTHENTICATION_CLASSES`
-- Confirm dj-rest-auth endpoints are included in URL config
-
-**Streak not updating**:
-- Check `last_activity` field
-- Verify timezone configuration
-- Run `user.update_streak()` manually
-
-**Premium check fails**:
-- Verify `subscription_ends` is in future
-- Check subscription value is 'premium' or 'pro'
-
-## Celery Tasks
-
-| Task | Description |
-|------|-------------|
-| `send_email_change_verification` | Sends a verification email when a user requests an email change. Generates a signed token and sends a confirmation link |
-| `export_user_data` | Collects all user data (profile, dreams, conversations, calendar events, notifications) and packages it as a downloadable archive for GDPR compliance |
-
-## Future Enhancements
-
-- [ ] Social graph (friends, followers)
-- [ ] Activity feed
-
-## License
-
-Proprietary - DreamPlanner
-
----
-
-**Last Updated**: 2026-02-08
-**Maintained By**: Backend Team
-**Status**: Production Ready
+- `django-allauth` - Authentication and account management
+- `dj-rest-auth` - REST API auth endpoints
+- `django-encrypted-model-fields` - PII encryption at rest (bio, location)
+- `pyotp` - TOTP-based 2FA

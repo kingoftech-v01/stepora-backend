@@ -48,6 +48,9 @@ INSTALLED_APPS = [
     'dj_rest_auth',
     'dj_rest_auth.registration',
 
+    # Encryption
+    'encrypted_model_fields',
+
     # Local apps
     'apps.users',
     'apps.dreams',
@@ -65,6 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -75,6 +79,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'core.middleware.LastActivityMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -192,7 +197,7 @@ WEBPUSH_SETTINGS = {
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'core.authentication.ExpiringTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -214,12 +219,15 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '30/minute',
-        'user': '120/minute',
-        'ai_chat': '20/minute',
-        'ai_plan': '10/minute',
-        'subscription': '10/minute',
-        'store_purchase': '10/minute',
+        'anon': '20/minute',
+        'user': '100/minute',
+        'ai_chat': '10/minute',
+        'ai_plan': '5/minute',
+        'subscription': '5/minute',
+        'store_purchase': '5/minute',
+        'auth': '5/minute',
+        'search': '15/minute',
+        'export': '1/day',
     },
 }
 
@@ -290,8 +298,28 @@ CACHES = {
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_ORGANIZATION_ID = os.getenv('OPENAI_ORGANIZATION_ID')
-OPENAI_MODEL = 'gpt-4-turbo-preview'
+OPENAI_MODEL = 'gpt-4o-mini'
 OPENAI_TIMEOUT = 30
+
+# Content Moderation Configuration
+CONTENT_MODERATION = {
+    'ENABLED': True,
+    'OPENAI_MODERATION_ENABLED': True,
+    'CUSTOM_PATTERNS_ENABLED': True,
+    'MODERATION_CACHE_TTL': 300,  # Cache moderation results for 5 minutes
+}
+
+# AI Usage Quotas (daily limits per subscription tier)
+AI_QUOTAS = {
+    'ENABLED': True,
+    'REDIS_KEY_PREFIX': 'ai_usage',
+    'KEY_TTL_HOURS': 25,
+    'DEFAULT_LIMITS': {
+        'free': {'ai_chat': 0, 'ai_plan': 0, 'ai_image': 0, 'ai_voice': 0, 'ai_background': 0},
+        'premium': {'ai_chat': 50, 'ai_plan': 10, 'ai_image': 0, 'ai_voice': 10, 'ai_background': 3},
+        'pro': {'ai_chat': 150, 'ai_plan': 25, 'ai_image': 3, 'ai_voice': 20, 'ai_background': 3},
+    },
+}
 
 # django-allauth Configuration
 ACCOUNT_LOGIN_METHODS = {'email'}
@@ -331,8 +359,10 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ORIGIN', 'http://localhost:3000').split(',')
-CORS_ALLOW_CREDENTIALS = True
+_cors_raw = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
+CORS_ALLOW_CREDENTIALS = False  # Token auth via header, no cross-origin cookies needed
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-Request-Id']
 CORS_ALLOWED_METHODS = [
     'DELETE',
     'GET',
@@ -372,7 +402,7 @@ SUBSCRIPTION_PRICES = {
     'pro': {'monthly': 19.99, 'yearly': 199.99},
 }
 
-# Free tier limits
+# Free tier limits — free users only get basic todo list (dreams/goals/tasks)
 FREE_TIER_LIMITS = {
     'max_dreams': 3,
     'ai_access': False,
@@ -380,13 +410,34 @@ FREE_TIER_LIMITS = {
     'circle_access': False,
     'vision_board_access': False,
     'league_access': False,
+    'store_purchase': False,
+    'social_feed': False,
+    'advanced_notifications': False,
     'has_ads': True,
 }
+
+# Token expiration
+TOKEN_EXPIRY_HOURS = int(os.getenv('TOKEN_EXPIRY_HOURS', 24))
 
 # Security settings (will be overridden in production)
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Session & Cookie security
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Field-level encryption key for PII (required for encrypted model fields)
+# In production, set FIELD_ENCRYPTION_KEY env var. For dev, a default is used.
+FIELD_ENCRYPTION_KEY = os.getenv(
+    'FIELD_ENCRYPTION_KEY',
+    'XT94MCe7dwrIRNEwVri4TzphlFiVnkj6xF3y3gpT2mg='
+)
 
 # Logging
 LOGGING = {
@@ -414,6 +465,13 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'verbose',
         },
+        'security_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
     },
     'root': {
         'handlers': ['console', 'file'],
@@ -428,6 +486,11 @@ LOGGING = {
         'apps': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
+            'propagate': False,
+        },
+        'security': {
+            'handlers': ['console', 'security_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

@@ -8,6 +8,7 @@ representations optimized for the mobile app's needs.
 
 from rest_framework import serializers
 
+from core.sanitizers import sanitize_text
 from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
@@ -190,6 +191,12 @@ class CircleCreateSerializer(serializers.ModelSerializer):
             'isPublic',
         ]
 
+    def validate_name(self, value):
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        return sanitize_text(value)
+
     def create(self, validated_data):
         """Create the circle and add the creator as an admin member."""
         user = self.context['request'].user
@@ -252,6 +259,9 @@ class CirclePostCreateSerializer(serializers.Serializer):
         help_text='The text content of the post.'
     )
 
+    def validate_content(self, value):
+        return sanitize_text(value)
+
 
 class CircleUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating a circle (admin only)."""
@@ -276,6 +286,12 @@ class CircleUpdateSerializer(serializers.ModelSerializer):
             'category': {'required': False},
             'max_members': {'required': False},
         }
+
+    def validate_name(self, value):
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        return sanitize_text(value)
 
 
 class PostReactionSerializer(serializers.Serializer):
@@ -305,6 +321,9 @@ class CirclePostUpdateSerializer(serializers.Serializer):
         max_length=5000,
         help_text='The updated text content of the post.'
     )
+
+    def validate_content(self, value):
+        return sanitize_text(value)
 
 
 class MemberRoleSerializer(serializers.Serializer):
@@ -383,3 +402,6 @@ class ChallengeProgressCreateSerializer(serializers.Serializer):
         default='',
         help_text='Optional notes about this progress update.',
     )
+
+    def validate_notes(self, value):
+        return sanitize_text(value)

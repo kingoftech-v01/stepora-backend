@@ -7,6 +7,7 @@ Stripe customer records, and checkout initiation payloads.
 
 from rest_framework import serializers
 
+from core.validators import validate_coupon_code
 from .models import StripeCustomer, Subscription, SubscriptionPlan
 
 
@@ -102,6 +103,12 @@ class SubscriptionCreateSerializer(serializers.Serializer):
         default='',
         help_text='Optional Stripe coupon/promo code',
     )
+
+    def validate_coupon_code(self, value):
+        """Validate coupon code format."""
+        if value:
+            return validate_coupon_code(value)
+        return value
 
     def validate_plan_slug(self, value):
         """Ensure the plan exists, is active, and is not the free tier."""

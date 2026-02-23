@@ -8,6 +8,7 @@ social features.
 
 from rest_framework import serializers
 
+from core.sanitizers import sanitize_text
 from apps.users.models import User
 from .models import Friendship, UserFollow, ActivityFeedItem
 
@@ -184,6 +185,9 @@ class BlockUserSerializer(serializers.Serializer):
         help_text='Optional reason for blocking.'
     )
 
+    def validate_reason(self, value):
+        return sanitize_text(value)
+
 
 class ReportUserSerializer(serializers.Serializer):
     """Serializer for reporting a user."""
@@ -199,6 +203,9 @@ class ReportUserSerializer(serializers.Serializer):
         default='other',
         help_text='Category of the report.'
     )
+
+    def validate_reason(self, value):
+        return sanitize_text(value)
 
 
 class BlockedUserSerializer(serializers.Serializer):

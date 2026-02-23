@@ -108,11 +108,11 @@ Invitation system for private circles, supporting both direct and link-based inv
 |-------|------|-------------|
 | id | UUID | Primary key |
 | circle | FK(Circle) | Target circle (related_name: `invitations`) |
-| invited_by | FK(User) | Inviting user (related_name: `sent_circle_invitations`) |
-| invited_user | FK(User) | Invited user (nullable, for direct invites) |
-| invite_code | CharField(50) | Unique invite code (for link-based invites) |
+| inviter | FK(User) | Inviting user (related_name: `circle_invites_sent`) |
+| invitee | FK(User) | Invited user (nullable, for direct invites) |
+| invite_code | CharField(20) | Unique invite code (for link-based invites) |
 | status | CharField(20) | `pending`, `accepted`, `declined`, `expired` (default: `pending`) |
-| expires_at | DateTimeField | Invitation expiry (nullable) |
+| expires_at | DateTimeField | Invitation expiry |
 | created_at | DateTimeField | Auto-set on creation |
 
 **DB table:** `circle_invitations`
@@ -126,11 +126,11 @@ Tracks individual user progress within a challenge.
 | id | UUID | Primary key |
 | challenge | FK(CircleChallenge) | Parent challenge (related_name: `progress_entries`) |
 | user | FK(User) | Participant (related_name: `challenge_progress`) |
-| progress_data | JSONField | Structured progress data |
-| updated_at | DateTimeField | Auto-set on update |
+| progress_value | FloatField | Numeric progress value (default: 0) |
+| notes | TextField | Optional notes (blank) |
+| created_at | DateTimeField | Auto-set on creation |
 
 **DB table:** `challenge_progress`
-**Constraint:** `unique_together = [['challenge', 'user']]`
 
 ## API Endpoints
 

@@ -223,15 +223,14 @@ class TestWebSocketAuth:
     async def test_get_user_success(self, db):
         """Test successful user retrieval with a valid DRF token."""
         from apps.users.models import User
+        from asgiref.sync import sync_to_async
 
-        # Create test user
-        test_user = User.objects.create_user(
+        # Create test user and token in sync context
+        test_user = await sync_to_async(User.objects.create_user)(
             email='test@test.com',
             password='testpass123'
         )
-
-        # Create a DRF token for the user
-        token = Token.objects.create(user=test_user)
+        token = await sync_to_async(Token.objects.create)(user=test_user)
 
         user = await get_user_from_token(token.key)
 
@@ -252,13 +251,14 @@ class TestTokenWebSocketMiddleware:
     async def test_extracts_token_from_query_string(self, db):
         """Test middleware extracts token from query string and authenticates user."""
         from apps.users.models import User
+        from asgiref.sync import sync_to_async
 
-        # Create user and token
-        test_user = User.objects.create_user(
+        # Create user and token in sync context
+        test_user = await sync_to_async(User.objects.create_user)(
             email='ws@test.com',
             password='testpass123'
         )
-        token = Token.objects.create(user=test_user)
+        token = await sync_to_async(Token.objects.create)(user=test_user)
 
         inner = AsyncMock()
         middleware = TokenWebSocketMiddleware(inner)

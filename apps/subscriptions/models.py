@@ -122,6 +122,28 @@ class SubscriptionPlan(models.Model):
         help_text='Whether ads are shown to users on this plan',
     )
 
+    # AI Usage Quotas (daily limits, 0 = no access)
+    ai_chat_daily_limit = models.IntegerField(
+        default=0,
+        help_text='Daily AI chat messages limit. 0=no access.',
+    )
+    ai_plan_daily_limit = models.IntegerField(
+        default=0,
+        help_text='Daily AI plan/analysis operations limit.',
+    )
+    ai_image_daily_limit = models.IntegerField(
+        default=0,
+        help_text='Daily AI image generation limit (DALL-E).',
+    )
+    ai_voice_daily_limit = models.IntegerField(
+        default=0,
+        help_text='Daily voice transcription limit.',
+    )
+    ai_background_daily_limit = models.IntegerField(
+        default=3,
+        help_text='Daily background AI tasks limit (motivation, reports).',
+    )
+
     trial_period_days = models.IntegerField(
         default=0,
         help_text='Number of free trial days for new subscribers (0 = no trial)',
@@ -174,6 +196,11 @@ class SubscriptionPlan(models.Model):
                     'has_vision_board': False,
                     'has_league': False,
                     'has_ads': True,
+                    'ai_chat_daily_limit': 0,
+                    'ai_plan_daily_limit': 0,
+                    'ai_image_daily_limit': 0,
+                    'ai_voice_daily_limit': 0,
+                    'ai_background_daily_limit': 0,
                     'features': {
                         'dreams': '3 active dreams',
                         'ai_coaching': False,
@@ -190,7 +217,7 @@ class SubscriptionPlan(models.Model):
                 'defaults': {
                     'name': 'Premium',
                     'stripe_price_id': '',
-                    'price_monthly': 9.99,
+                    'price_monthly': 14.99,
                     'dream_limit': 10,
                     'has_ai': True,
                     'has_buddy': True,
@@ -198,6 +225,11 @@ class SubscriptionPlan(models.Model):
                     'has_vision_board': False,
                     'has_league': True,
                     'has_ads': False,
+                    'ai_chat_daily_limit': 50,
+                    'ai_plan_daily_limit': 10,
+                    'ai_image_daily_limit': 0,
+                    'ai_voice_daily_limit': 10,
+                    'ai_background_daily_limit': 3,
                     'features': {
                         'dreams': '10 active dreams',
                         'ai_coaching': True,
@@ -214,7 +246,7 @@ class SubscriptionPlan(models.Model):
                 'defaults': {
                     'name': 'Pro',
                     'stripe_price_id': '',
-                    'price_monthly': 19.99,
+                    'price_monthly': 29.99,
                     'dream_limit': -1,
                     'has_ai': True,
                     'has_buddy': True,
@@ -222,6 +254,11 @@ class SubscriptionPlan(models.Model):
                     'has_vision_board': True,
                     'has_league': True,
                     'has_ads': False,
+                    'ai_chat_daily_limit': 150,
+                    'ai_plan_daily_limit': 25,
+                    'ai_image_daily_limit': 3,
+                    'ai_voice_daily_limit': 20,
+                    'ai_background_daily_limit': 3,
                     'features': {
                         'dreams': 'Unlimited active dreams',
                         'ai_coaching': True,

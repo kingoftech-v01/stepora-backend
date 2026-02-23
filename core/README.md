@@ -10,15 +10,21 @@ The `core` module provides cross-cutting infrastructure including authentication
 
 | File | Description |
 |------|-------------|
-| `authentication.py` | Token authentication backend and CSRF exemption middleware |
-| `permissions.py` | Subscription-based permission classes for feature gating |
+| `authentication.py` | Token authentication backend (24h expiry) and CSRF exemption middleware |
+| `permissions.py` | 11 subscription-based permission classes for feature gating |
 | `pagination.py` | Custom DRF pagination classes |
 | `sanitizers.py` | XSS sanitization utilities for user-generated content |
-| `throttling.py` | Per-feature rate limiting throttle classes |
+| `throttles.py` | Per-feature rate limiting throttle classes |
 | `websocket_auth.py` | Token-based WebSocket authentication for Django Channels |
 | `exceptions.py` | Custom DRF exception handler and domain exception classes |
+| `ai_validators.py` | Pydantic schemas for validating AI-generated output |
+| `ai_usage.py` | Redis-backed daily AI usage quota tracking per user |
+| `moderation.py` | 3-tier content moderation (patterns + OpenAI API) |
+| `validators.py` | Input validators (display names, UUIDs, pagination, search queries) |
+| `middleware.py` | Security headers and last-activity tracking middleware |
+| `audit.py` | Structured security audit logging |
 | `urls.py` | Health check endpoint routing |
-| `views.py` | Health check view functions |
+| `views.py` | Health check view functions and social auth views |
 
 ## Authentication
 
@@ -76,6 +82,8 @@ Subscription-based access control. Each permission class checks the user's `subs
 | `CanUseCircles` | Pro (create), Premium+ (join/read) | Circle creation requires Pro; joining/reading requires Premium+ |
 | `CanUseVisionBoard` | Pro only | Gates AI Vision Board generation |
 | `CanUseLeague` | Premium or Pro | Gates league features |
+| `CanUseStore` | Premium or Pro | Gates store purchasing |
+| `CanUseSocialFeed` | Premium or Pro | Gates full social feed access |
 
 ### Feature Access Matrix
 
@@ -243,3 +251,210 @@ If the original response contains a `detail` key, it is preserved. Otherwise, al
   }
 }
 ```
+
+## AI Output Validators
+
+`ai_validators.py`
+
+Pydantic-based validation schemas for all AI-generated responses. Every AI output is validated before being saved or returned to the user.
+
+### Pydantic Schemas
+
+| Schema | Purpose |
+|--------|---------|
+| `PlanTaskSchema` | Single task: title, description, order, duration_mins, reasoning |
+| `PlanGoalSchema` | Goal with nested tasks list, estimated_minutes, reasoning |
+| `PlanObstacleSchema` | Obstacle: title, description, solution, evidence |
+| `PlanResponseSchema` | Complete plan: goals, tips, obstacles, calibration_references |
+| `AnalysisResponseSchema` | Dream analysis: category, difficulty, key_challenges, approach |
+| `CalibrationQuestionSchema` | Single calibration question with category |
+| `CalibrationQuestionsResponseSchema` | Question batch with sufficient flag, confidence_score |
+| `UserProfileSchema` | Structured user profile: experience_level, budget, tools, motivations, constraints |
+| `PlanRecommendationsSchema` | AI recommendations: pace, focus areas, pitfalls |
+| `CalibrationSummaryResponseSchema` | Full calibration summary with user profile and recommendations |
+| `ChatResponseSchema` | Chat response: content, tokens_used, model |
+| `FunctionCallSchema` | Function calls (create_task, complete_task, create_goal) |
+
+### Validation Functions
+
+| Function | Purpose |
+|----------|---------|
+| `validate_plan_response(data)` | Validates plan against `PlanResponseSchema` |
+| `validate_analysis_response(data)` | Validates analysis against `AnalysisResponseSchema` |
+| `validate_calibration_questions(data)` | Validates questions against `CalibrationQuestionsResponseSchema` |
+| `validate_calibration_summary(data)` | Validates summary against `CalibrationSummaryResponseSchema` |
+| `validate_chat_response(data)` | Validates chat response against `ChatResponseSchema` |
+| `validate_function_call(data)` | Validates function call against `FunctionCallSchema` |
+
+### Safety Checks
+
+| Function | Purpose |
+|----------|---------|
+| `validate_ai_output_safety(text)` | Scans AI output for harmful content (violence, sexual, illegal, self-harm) |
+| `check_ai_character_integrity(text)` | Detects jailbreak or role-play patterns in AI responses |
+| `check_plan_calibration_coherence(plan, calibration)` | Validates that the generated plan matches the user's calibration data |
+
+### Constants
+
+- Max lengths: `MAX_TITLE_LEN=255`, `MAX_DESCRIPTION_LEN=5000`, `MAX_TEXT_LEN=10000`
+- Valid enums: categories, difficulties, experience_levels, paces, risk_levels, calibration_categories
+
+## AI Usage Tracking
+
+`ai_usage.py`
+
+Redis-backed daily AI usage quota tracking per user per feature. Prevents users from exceeding their subscription plan's daily limits.
+
+### Quota Categories
+
+| Category | Actions Included |
+|----------|-----------------|
+| `ai_chat` | send_message, websocket_chat, send_image |
+| `ai_plan` | analyze_dream, calibration, generate_plan, two_minute_start |
+| `ai_image` | generate_vision (DALL-E) |
+| `ai_voice` | send_voice, transcribe (Whisper) |
+| `ai_background` | daily_motivation, weekly_report, rescue_message, conversation_summary |
+
+### AIUsageTracker Class
+
+| Method | Description |
+|--------|-------------|
+| `get_limits(user)` | Returns daily limits from user's subscription plan (or defaults) |
+| `check_quota(user, category)` | Returns `(allowed: bool, info: dict)` — whether user has remaining quota |
+| `increment(user, category)` | Atomically increments usage counter. Sets 24h TTL on first use |
+| `get_usage(user)` | Returns all category usage counts for today |
+| `get_reset_time()` | Returns next midnight UTC when quotas reset |
+
+### Redis Key Format
+
+```
+ai_usage:{user_id}:{category}:{YYYY-MM-DD}
+```
+
+Keys auto-expire at end of day via Redis TTL.
+
+## Content Moderation
+
+`moderation.py`
+
+Three-tier content moderation system for all user-generated text and AI inputs/outputs.
+
+### Moderation Pipeline
+
+```
+Input text
+  │
+  ├─ Tier 1: Jailbreak detection (regex)
+  │    Instruction overrides, DAN/persona injection, system prompt extraction,
+  │    encoding bypass, hypothetical framing
+  │
+  ├─ Tier 2: Roleplay detection (regex)
+  │    Pretend/imagine attempts, character adoption
+  │
+  ├─ Tier 3: Harmful content patterns (regex)
+  │    Four categories:
+  │    - Violence (kill, harm, revenge)
+  │    - Sexual content (explicit language)
+  │    - Coercion (force love, stalking, manipulation)
+  │    - Illegal activity (steal, hack, fraud, drugs)
+  │
+  └─ Tier 4: OpenAI Moderation API
+       Model: omni-moderation-latest
+       Catches anything patterns missed
+```
+
+### ModerationResult
+
+Dataclass returned from all moderation checks:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `is_flagged` | bool | Whether content was flagged |
+| `categories` | list[str] | Flagged categories (e.g., `['jailbreak_attempt']`) |
+| `severity` | str | `none`, `low`, `medium`, `high` |
+| `user_message` | str | User-facing rejection message |
+| `raw_scores` | dict | Raw scores from OpenAI API |
+| `detection_source` | str | Which tier caught it |
+
+### ContentModerationService
+
+| Method | Description |
+|--------|-------------|
+| `moderate_text(text)` | Full moderation pipeline with caching |
+| `moderate_dream(title, description)` | Specialized for dream content |
+
+### Rejection Messages
+
+Pre-written friendly rejection messages for: `harmful_content`, `sexual_content`, `relationship_coercion`, `self_harm`, `jailbreak_attempt`, `roleplay_attempt`, `illegal_content`, `generic_violation`.
+
+## Input Validators
+
+`validators.py`
+
+Field-specific input validators with regex patterns.
+
+### Regex Patterns
+
+| Pattern | Rules | Max Length |
+|---------|-------|-----------|
+| `DISPLAY_NAME_PATTERN` | Alphanumeric + accents, spaces, hyphens, apostrophes, periods | 100 chars |
+| `LOCATION_PATTERN` | Alphanumeric + accents, commas, hyphens, apostrophes, parentheses | 200 chars |
+| `COUPON_CODE_PATTERN` | Letters, numbers, hyphens, underscores | 50 chars |
+| `TAG_NAME_PATTERN` | Letters, numbers, spaces, hyphens | 50 chars |
+| `UUID_PATTERN` | Standard UUID format | 36 chars |
+
+### Validation Functions
+
+| Function | Purpose |
+|----------|---------|
+| `validate_uuid(value)` | Validates UUID strings or UUID objects |
+| `validate_pagination_params(page, page_size)` | Ensures page >= 1, page_size 1-100 |
+| `validate_search_query(query)` | Sanitizes and limits search input to 200 chars |
+| `validate_display_name(name)` | Validates against DISPLAY_NAME_PATTERN |
+| `validate_location(location)` | Validates against LOCATION_PATTERN |
+| `validate_coupon_code(code)` | Validates against COUPON_CODE_PATTERN |
+| `validate_tag_name(name)` | Validates against TAG_NAME_PATTERN |
+| `validate_text_length(text, max_length)` | Ensures text doesn't exceed max_length |
+
+## Middleware
+
+`middleware.py`
+
+### SecurityHeadersMiddleware
+
+Adds security headers to every HTTP response:
+
+| Header | Value |
+|--------|-------|
+| `Content-Security-Policy` | Configurable via `settings.CSP_POLICY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | Disables geolocation, microphone, camera, payment |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Cross-Origin-Opener-Policy` | Set |
+| `Cross-Origin-Resource-Policy` | Set |
+
+### LastActivityMiddleware
+
+Tracks `user.last_seen` and `user.is_online` on every authenticated request. Throttled to max once per 60 seconds per user to minimize database writes. Uses in-memory cache for throttle tracking.
+
+## Audit Logging
+
+`audit.py`
+
+Structured security event logging via Python's `logging` module (logger name: `security`). All functions accept the Django `request` object and extract client IP from `X-Forwarded-For` header.
+
+### Logging Functions
+
+| Function | Severity | Triggered By |
+|----------|----------|--------------|
+| `log_auth_failure(request, email)` | WARNING | Failed login attempt |
+| `log_auth_success(request, user)` | INFO | Successful login |
+| `log_permission_denied(request, permission)` | WARNING | Permission check failure |
+| `log_data_export(request, user)` | INFO | GDPR data export request |
+| `log_account_change(request, change_type)` | INFO | Password/email change, account deletion |
+| `log_webhook_event(request, event_type)` | INFO | Incoming Stripe/external webhook |
+| `log_suspicious_input(request, field, original)` | WARNING | Input sanitization stripped content |
+| `log_content_moderation(request, text, result)` | WARNING | Content moderation flagged input |
+| `log_ai_output_flagged(request, output, reason)` | WARNING | AI output failed safety check |
+| `log_jailbreak_attempt(request, text)` | CRITICAL | Jailbreak attempt detected |

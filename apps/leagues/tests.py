@@ -25,6 +25,32 @@ from apps.leagues.services import LeagueService
 
 
 # ---------------------------------------------------------------------------
+# Local fixture overrides – make all users premium so CanUseLeague passes
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def user(db):
+    """Override global ``user`` fixture: create a **premium** user so that
+    CanUseLeague (premium+ required) does not block API requests."""
+    return User.objects.create_user(
+        email=f'league_premium_{uuid.uuid4().hex[:8]}@example.com',
+        password='testpassword123',
+        display_name='Premium League User',
+        subscription='premium',
+        subscription_ends=django_timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def authenticated_client(user):
+    """Override global ``authenticated_client`` fixture: authenticate with the
+    premium *user* defined above."""
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -81,13 +107,16 @@ def ended_season(db):
 
 @pytest.fixture
 def league_user(db):
-    """Create a test user for league tests."""
+    """Create a premium test user for league tests (premium subscription
+    required for CanUseLeague permission)."""
     return User.objects.create(
         email=f'league_{uuid.uuid4().hex[:8]}@example.com',
         display_name='League Tester',
         xp=0,
         level=1,
         streak_days=0,
+        subscription='premium',
+        subscription_ends=django_timezone.now() + timedelta(days=30),
     )
 
 

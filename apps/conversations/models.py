@@ -46,6 +46,9 @@ class Conversation(models.Model):
         db_index=True
     )
 
+    title = models.CharField(max_length=255, blank=True, help_text='Optional conversation title')
+    is_pinned = models.BooleanField(default=False, help_text='Whether this conversation is pinned')
+
     # Metadata
     total_messages = models.IntegerField(default=0)
     total_tokens_used = models.IntegerField(default=0)
@@ -84,8 +87,60 @@ class Conversation(models.Model):
         return message
 
     def get_messages_for_api(self, limit=20, max_tokens=None):
-        """Get recent messages formatted for OpenAI API, with summary context."""
+        """Get recent messages formatted for OpenAI API, with dream context and summary."""
         api_messages = []
+
+        # Always inject dream context if conversation is linked to a dream
+        if self.dream:
+            dream = self.dream
+            dream_context = (
+                f"DREAM CONTEXT (always active — base all responses on this dream):\n"
+                f"- Dream Title: {dream.title}\n"
+                f"- Dream Description: {dream.description}\n"
+                f"- Category: {dream.category}\n"
+                f"- Status: {dream.status}\n"
+                f"- Progress: {dream.progress_percentage:.0f}%\n"
+            )
+
+            # Add calibration profile if available
+            if dream.calibration_status == 'completed' and dream.ai_analysis:
+                cal_summary = dream.ai_analysis.get('calibration_summary', {})
+                if cal_summary:
+                    profile = cal_summary.get('user_profile', {})
+                    if profile:
+                        dream_context += (
+                            f"- Experience Level: {profile.get('experience_level', 'unknown')}\n"
+                            f"- Available Hours/Week: {profile.get('available_hours_per_week', 'unknown')}\n"
+                            f"- Primary Motivation: {profile.get('primary_motivation', 'unknown')}\n"
+                        )
+
+            # Add current goals with status (top 5)
+            goals = list(dream.goals.order_by('order')[:5])
+            if goals:
+                dream_context += "\nCurrent Goals:\n"
+                for g in goals:
+                    dream_context += f"  - {g.title} ({g.status}, {g.progress_percentage:.0f}%)\n"
+
+            api_messages.append({
+                'role': 'system',
+                'content': dream_context,
+            })
+
+        elif self.conversation_type != 'buddy_chat':
+            # Fallback: look up user's most recent active dream for context
+            recent_dream = Dream.objects.filter(
+                user=self.user, status='active'
+            ).order_by('-updated_at').first()
+            if recent_dream:
+                api_messages.append({
+                    'role': 'system',
+                    'content': (
+                        f"Note: This conversation is not linked to a specific dream, "
+                        f"but the user's most recent active dream is: "
+                        f'"{recent_dream.title}" ({recent_dream.progress_percentage:.0f}% complete). '
+                        f"You may reference it if relevant to the conversation."
+                    ),
+                })
 
         # Prepend latest summary as system context if available
         latest_summary = self.summaries.order_by('-created_at').first()
@@ -161,6 +216,11 @@ class Message(models.Model):
         blank=True,
         help_text='URL to an uploaded image for GPT-4 Vision analysis.'
     )
+
+    # Interaction fields
+    is_pinned = models.BooleanField(default=False)
+    is_liked = models.BooleanField(default=False)
+    reactions = models.JSONField(default=list, blank=True, help_text='List of reaction emojis')
 
     # Metadata (tokens used, model version, etc.)
     metadata = models.JSONField(default=dict, blank=True)

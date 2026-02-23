@@ -7,6 +7,7 @@ enforces field constraints, and guarantees the AI provides evidence/reasoning
 so users can verify the plan makes sense for their situation.
 """
 
+import re
 import logging
 from typing import ClassVar, Optional, Set
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -480,6 +481,66 @@ def validate_function_call(raw: dict) -> FunctionCallSchema:
     except Exception as e:
         logger.error("Function call validation failed: %s", e)
         raise AIValidationError(f"AI generated an invalid function call: {e}") from e
+
+
+def validate_ai_output_safety(content: str) -> tuple[bool, str]:
+    """
+    Check if AI-generated output contains harmful content or character breach.
+
+    This is a SECONDARY safety layer — the system prompt should prevent this,
+    but this validates the AI didn't break character or produce harmful output.
+
+    Returns:
+        (is_safe, reason) - True if content is safe, else (False, reason string)
+    """
+    if not content:
+        return True, ""
+
+    # Check character integrity first (fast, no API)
+    if not check_ai_character_integrity(content):
+        logger.warning("AI output failed character integrity check")
+        return False, "AI broke character"
+
+    # Run content moderation on the output
+    try:
+        from core.moderation import ContentModerationService
+        moderation = ContentModerationService()
+        result = moderation.moderate_text(content, context='ai_output')
+        if result.is_flagged:
+            logger.warning(
+                "AI OUTPUT FLAGGED: categories=%s, severity=%s",
+                result.categories, result.severity
+            )
+            return False, f"AI output flagged: {','.join(result.categories)}"
+    except Exception as e:
+        # Don't block on moderation errors for output checks
+        logger.error("AI output moderation error: %s", e)
+
+    return True, ""
+
+
+# Patterns that indicate the AI broke character or complied with a jailbreak
+BROKEN_CHARACTER_PATTERNS = [
+    re.compile(r'as\s+an?\s+AI\s+(language\s+)?model', re.IGNORECASE),
+    re.compile(r'I\s+am\s+(just|only)\s+an?\s+(AI|language\s+model|chatbot)', re.IGNORECASE),
+    re.compile(r'I\s+don\'?t\s+have\s+(personal\s+)?(feelings|emotions|opinions)', re.IGNORECASE),
+    re.compile(r'(sure|okay|alright),?\s+I\'?ll\s+(pretend|act|role.?play|be)\s+', re.IGNORECASE),
+    re.compile(r'\[DAN\]|\[JAILBREAK\]|\[NO\s+FILTER\]', re.IGNORECASE),
+    re.compile(r'\*enters?\s+.*mode\*', re.IGNORECASE),
+]
+
+
+def check_ai_character_integrity(content: str) -> bool:
+    """
+    Check if the AI broke character or complied with a jailbreak.
+
+    Returns True if integrity is maintained, False if broken.
+    """
+    for pattern in BROKEN_CHARACTER_PATTERNS:
+        if pattern.search(content):
+            logger.warning("AI character integrity breach detected: %s", pattern.pattern)
+            return False
+    return True
 
 
 def check_plan_calibration_coherence(

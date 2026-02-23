@@ -52,3 +52,16 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
+
+# Set very high throttle rates in tests to prevent rate limit interference
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
+    'anon': '10000/minute',
+    'user': '10000/minute',
+    'ai_chat': '10000/minute',
+    'ai_plan': '10000/minute',
+    'subscription': '10000/minute',
+    'store_purchase': '10000/minute',
+    'auth': '10000/minute',
+    'search': '10000/minute',
+    'export': '10000/minute',
+}

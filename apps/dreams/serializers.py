@@ -4,7 +4,7 @@ Serializers for Dreams app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -67,6 +67,7 @@ class DreamSerializer(serializers.ModelSerializer):
     goals_count = serializers.SerializerMethodField()
     tasks_count = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    sparkline_data = serializers.SerializerMethodField()
 
     class Meta:
         model = Dream
@@ -77,6 +78,7 @@ class DreamSerializer(serializers.ModelSerializer):
             'has_two_minute_start', 'vision_image_url',
             'calibration_status',
             'goals_count', 'tasks_count', 'tags',
+            'sparkline_data',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'progress_percentage', 'created_at', 'updated_at', 'completed_at']
@@ -92,6 +94,17 @@ class DreamSerializer(serializers.ModelSerializer):
 
     def get_tags(self, obj):
         return list(obj.taggings.values_list('tag__name', flat=True))
+
+    def get_sparkline_data(self, obj):
+        """Return last 7 progress snapshots for sparkline chart."""
+        from .models import DreamProgressSnapshot
+        snapshots = DreamProgressSnapshot.objects.filter(
+            dream=obj
+        ).order_by('-date')[:7]
+        return list(reversed([
+            {'date': str(s.date), 'progress': s.progress_percentage}
+            for s in snapshots
+        ]))
 
 
 class CalibrationResponseSerializer(serializers.ModelSerializer):
@@ -139,15 +152,29 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_title(self, value):
-        """Validate and sanitize dream title."""
+        """Validate, sanitize, and moderate dream title."""
         value = sanitize_text(value)
         if len(value) < 3:
             raise serializers.ValidationError("Title must be at least 3 characters long")
+
+        from core.moderation import ContentModerationService
+        result = ContentModerationService().moderate_text(value, context='dream_title')
+        if result.is_flagged:
+            raise serializers.ValidationError(result.user_message)
+
         return value
 
     def validate_description(self, value):
-        """Sanitize dream description."""
-        return sanitize_text(value)
+        """Sanitize and moderate dream description."""
+        value = sanitize_text(value)
+
+        if value:
+            from core.moderation import ContentModerationService
+            result = ContentModerationService().moderate_text(value, context='dream_description')
+            if result.is_flagged:
+                raise serializers.ValidationError(result.user_message)
+
+        return value
 
     def validate_category(self, value):
         """Sanitize category."""
@@ -165,12 +192,28 @@ class DreamUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_title(self, value):
-        """Sanitize title."""
-        return sanitize_text(value)
+        """Sanitize and moderate title."""
+        value = sanitize_text(value)
+
+        if value:
+            from core.moderation import ContentModerationService
+            result = ContentModerationService().moderate_text(value, context='dream_title')
+            if result.is_flagged:
+                raise serializers.ValidationError(result.user_message)
+
+        return value
 
     def validate_description(self, value):
-        """Sanitize description."""
-        return sanitize_text(value)
+        """Sanitize and moderate description."""
+        value = sanitize_text(value)
+
+        if value:
+            from core.moderation import ContentModerationService
+            result = ContentModerationService().moderate_text(value, context='dream_description')
+            if result.is_flagged:
+                raise serializers.ValidationError(result.user_message)
+
+        return value
 
     def validate_category(self, value):
         """Sanitize category."""
@@ -183,7 +226,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'title', 'description', 'order',
+            'goal', 'title', 'description', 'order',
             'scheduled_date', 'scheduled_time', 'duration_mins',
             'recurrence', 'is_two_minute_start'
         ]
@@ -244,6 +287,11 @@ class AddTagSerializer(serializers.Serializer):
         help_text='Name of the tag to add.'
     )
 
+    def validate_tag_name(self, value):
+        """Sanitize and validate tag name."""
+        from core.validators import validate_tag_name
+        return validate_tag_name(value)
+
 
 class DreamTemplateSerializer(serializers.ModelSerializer):
     """Serializer for DreamTemplate model."""
@@ -291,13 +339,26 @@ class AddCollaboratorSerializer(serializers.Serializer):
     )
 
 
+class VisionBoardImageSerializer(serializers.ModelSerializer):
+    """Serializer for VisionBoardImage model."""
+
+    class Meta:
+        model = VisionBoardImage
+        fields = [
+            'id', 'dream', 'image_url', 'image_file',
+            'caption', 'is_ai_generated', 'order',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
 class GoalCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating goals with sanitization."""
 
     class Meta:
         model = Goal
         fields = [
-            'title', 'description', 'order',
+            'dream', 'title', 'description', 'order',
             'estimated_minutes', 'scheduled_start', 'scheduled_end',
             'reminder_enabled', 'reminder_time'
         ]

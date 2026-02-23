@@ -3,12 +3,36 @@ Tests for conversations app.
 """
 
 import pytest
+from datetime import timedelta
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.test import APIClient
 from unittest.mock import patch, Mock, AsyncMock
 import json
 
+from apps.users.models import User
 from .models import Conversation, Message
+
+
+@pytest.fixture
+def user(db):
+    """Override global user fixture to create a premium user for conversation tests."""
+    return User.objects.create_user(
+        email='testuser@example.com',
+        password='testpassword123',
+        display_name='Test User',
+        timezone='Europe/Paris',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def authenticated_client(user):
+    """Override global authenticated_client to use the premium user."""
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
 
 
 class TestConversationModel:
@@ -156,16 +180,25 @@ class TestConversationViewSet:
         assert len(response.data['results']) == 2
 
     def test_create_conversation(self, authenticated_client, user):
-        """Test POST /api/conversations/"""
+        """Test POST /api/conversations/ with general type (no dream required)."""
         data = {
-            'conversation_type': 'planning',
+            'conversation_type': 'general',
         }
 
         response = authenticated_client.post('/api/conversations/', data, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['conversation_type'] == 'planning'
-        assert Conversation.objects.filter(user=user, conversation_type='planning').exists()
+        assert response.data['conversation_type'] == 'general'
+        assert Conversation.objects.filter(user=user, conversation_type='general').exists()
+
+    def test_create_planning_conversation_requires_dream(self, authenticated_client, user):
+        """Test POST /api/conversations/ with planning type requires dream."""
+        data = {
+            'conversation_type': 'planning',
+        }
+
+        response = authenticated_client.post('/api/conversations/', data, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_get_conversation_detail(self, authenticated_client, conversation):
         """Test GET /api/conversations/{id}/"""

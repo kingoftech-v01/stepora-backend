@@ -40,6 +40,12 @@ Defines available subscription plans with feature flags and resource limits.
 | has_circles | Boolean | Access to Dream Circles (default: False) |
 | has_vision_board | Boolean | Access to AI Vision Board generation (default: False) |
 | has_league | Boolean | Access to competitive leagues (default: False) |
+| ai_chat_daily_limit | Integer | Daily AI chat limit (default: 0) |
+| ai_plan_daily_limit | Integer | Daily AI plan generation limit (default: 0) |
+| ai_image_daily_limit | Integer | Daily AI image generation limit (default: 0) |
+| ai_voice_daily_limit | Integer | Daily AI voice limit (default: 0) |
+| ai_background_daily_limit | Integer | Daily AI background limit (default: 3) |
+| trial_period_days | Integer | Trial period duration in days (default: 0) |
 | has_ads | Boolean | Whether ads are shown (default: True) |
 | is_active | Boolean | Whether plan is available for purchase (default: True) |
 | created_at | DateTimeField | Auto-set on creation |
@@ -59,8 +65,8 @@ Defines available subscription plans with feature flags and resource limits.
 | Plan | Price | Dreams | AI | Buddy | Circles | Vision | League | Ads |
 |------|-------|--------|-----|-------|---------|--------|--------|-----|
 | Free | $0/mo | 3 | No | No | No | No | No | Yes |
-| Premium | $9.99/mo | 10 | Yes | Yes | No | No | Yes | No |
-| Pro | $19.99/mo | Unlimited | Yes | Yes | Yes | Yes | Yes | No |
+| Premium | $14.99/mo | 10 | Yes | Yes | No | No | Yes | No |
+| Pro | $29.99/mo | Unlimited | Yes | Yes | Yes | Yes | Yes | No |
 
 ### Subscription
 
@@ -75,8 +81,6 @@ Tracks an active subscription linking a user to a plan via Stripe.
 | status | CharField(30) | Status: `active`, `past_due`, `canceled`, `incomplete`, `incomplete_expired`, `trialing`, `unpaid`, `paused` |
 | current_period_start | DateTimeField | Start of current billing period (nullable) |
 | current_period_end | DateTimeField | End of current billing period (nullable) |
-| trial_start | DateTimeField | Trial period start (nullable) |
-| trial_end | DateTimeField | Trial period end (nullable) |
 | cancel_at_period_end | Boolean | If True, cancels at end of period (default: False) |
 | canceled_at | DateTimeField | When cancellation was requested (nullable) |
 | created_at | DateTimeField | Auto-set on creation |
@@ -132,7 +136,8 @@ Tracks an active subscription linking a user to a plan via Stripe.
 | `SubscriptionPlanSerializer` | Full plan details with computed `is_free` and `has_unlimited_dreams` fields |
 | `StripeCustomerSerializer` | Stripe customer mapping with `user_email` (admin/debug use) |
 | `SubscriptionSerializer` | Subscription details with nested `SubscriptionPlanSerializer` and computed `is_active` |
-| `SubscriptionCreateSerializer` | Input for checkout: `plan_slug`, optional `success_url`, `cancel_url`. Validates plan exists, is active, and is not the free tier |
+| `SubscriptionCreateSerializer` | Input for checkout: `plan_slug`, optional `success_url`, `cancel_url`, `coupon_code`. Validates plan exists, is active, and is not the free tier |
+| `InvoiceSerializer` | Invoice history entries for the `/invoices/` endpoint |
 
 ## Services (StripeService)
 
@@ -147,6 +152,8 @@ All Stripe API interactions are encapsulated in `StripeService`:
 | `reactivate_subscription(user)` | Reverse pending cancellation via Stripe API |
 | `sync_subscription_status(user)` | Force-sync local subscription from Stripe |
 | `handle_webhook_event(payload, sig_header)` | Verify signature and dispatch webhook events |
+| `list_invoices(user, limit)` | List invoice history for a user (default limit: 10) |
+| `get_analytics()` | Get subscription analytics (MRR, counts, churn) |
 
 ### Webhook Event Handlers
 
@@ -179,12 +186,15 @@ All Stripe API interactions are encapsulated in `StripeService`:
 
 | Task | Description |
 |------|-------------|
-| `send_subscription_receipt` | Sends an email receipt after each successful payment/invoice |
-| `check_trial_expiry` | Checks for trials about to expire and sends reminder notifications |
+| `send_payment_receipt_email` | Sends an email receipt after each successful payment/invoice |
+
+## Signals
+
+- **User post_save** - Automatically creates a `StripeCustomer` record when a new User is created (via `signals.py`)
 
 ## Subscription Analytics
 
-The app tracks key subscription metrics accessible via admin or internal APIs:
+Analytics accessible via `GET /subscription/analytics/` (admin only) and internal APIs:
 
 - **MRR (Monthly Recurring Revenue)** - Sum of active subscription plan prices
 - **Churn rate** - Percentage of subscriptions canceled over a time period

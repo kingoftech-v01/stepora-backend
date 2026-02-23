@@ -46,6 +46,8 @@ from .services import (
     InsufficientXPError,
 )
 
+from core.permissions import CanUseStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -301,9 +303,9 @@ class WishlistViewSet(viewsets.ModelViewSet):
 
 
 class PurchaseView(views.APIView):
-    """API view for initiating store purchases via Stripe."""
+    """API view for initiating store purchases via Stripe. Requires premium+."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseStore]
 
     @extend_schema(
         summary='Initiate purchase',
@@ -357,9 +359,9 @@ class PurchaseView(views.APIView):
 
 
 class PurchaseConfirmView(views.APIView):
-    """API view for confirming a purchase after Stripe payment completion."""
+    """API view for confirming a purchase after Stripe payment completion. Requires premium+."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseStore]
 
     @extend_schema(
         summary='Confirm purchase',
@@ -416,9 +418,9 @@ class PurchaseConfirmView(views.APIView):
 
 
 class XPPurchaseView(views.APIView):
-    """API view for purchasing store items with XP."""
+    """API view for purchasing store items with XP. Requires premium+."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseStore]
 
     @extend_schema(
         summary='Purchase with XP',
@@ -474,9 +476,9 @@ class XPPurchaseView(views.APIView):
 
 
 class GiftSendView(views.APIView):
-    """Send a store item as a gift to another user."""
+    """Send a store item as a gift to another user. Requires premium+."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseStore]
 
     @extend_schema(
         summary='Send gift',

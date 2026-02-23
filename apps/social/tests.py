@@ -105,6 +105,36 @@ def activity_item(user):
     )
 
 
+@pytest.fixture
+def premium_social_user(db):
+    """A premium user used as the main actor in follow-suggestion tests."""
+    return User.objects.create_user(
+        email='premium_social@example.com',
+        password='testpass123',
+        display_name='Premium Social User',
+        subscription='premium',
+    )
+
+
+@pytest.fixture
+def premium_social_client(premium_social_user):
+    """Authenticated API client backed by a premium user."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    client.force_authenticate(user=premium_social_user)
+    return client
+
+
+@pytest.fixture
+def premium_activity_item(premium_social_user):
+    """Activity item owned by the premium social user."""
+    return ActivityFeedItem.objects.create(
+        user=premium_social_user,
+        activity_type='task_completed',
+        content={'title': 'Completed a task'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # URL helpers
 # ---------------------------------------------------------------------------
@@ -1069,99 +1099,100 @@ class TestSocialCounts:
 
 
 class TestActivityFeedView:
-    def test_own_activity_visible(self, authenticated_client, activity_item):
-        resp = authenticated_client.get(f'{BASE}feed/friends')
+    """Activity feed tests use premium users (full feed requires premium+)."""
+
+    def test_own_activity_visible(self, premium_social_client, premium_activity_item):
+        resp = premium_social_client.get(f'{BASE}feed/friends')
         assert resp.status_code == status.HTTP_200_OK
         assert 'activities' in resp.data
         ids = [a['id'] for a in resp.data['activities']]
-        assert str(activity_item.id) in ids
+        assert str(premium_activity_item.id) in ids
 
     def test_friend_activity_visible(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
-        Friendship.objects.create(user1=user, user2=other_user, status='accepted')
+        Friendship.objects.create(user1=premium_social_user, user2=other_user, status='accepted')
         item = ActivityFeedItem.objects.create(
             user=other_user,
             activity_type='dream_completed',
             content={'title': 'Dream done'},
         )
-        resp = authenticated_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) in ids
 
     def test_followed_user_activity_visible(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
-        UserFollow.objects.create(follower=user, following=other_user)
+        UserFollow.objects.create(follower=premium_social_user, following=other_user)
         item = ActivityFeedItem.objects.create(
             user=other_user,
             activity_type='level_up',
         )
-        resp = authenticated_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) in ids
 
     def test_stranger_activity_not_visible(
-        self, authenticated_client, other_user
+        self, premium_social_client, other_user
     ):
         item = ActivityFeedItem.objects.create(
             user=other_user,
             activity_type='badge_earned',
         )
-        resp = authenticated_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) not in ids
 
     def test_blocked_user_activity_excluded(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
-        Friendship.objects.create(user1=user, user2=other_user, status='accepted')
-        BlockedUser.objects.create(blocker=user, blocked=other_user)
+        Friendship.objects.create(user1=premium_social_user, user2=other_user, status='accepted')
+        BlockedUser.objects.create(blocker=premium_social_user, blocked=other_user)
         ActivityFeedItem.objects.create(
             user=other_user,
             activity_type='task_completed',
         )
-        resp = authenticated_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends')
         assert resp.status_code == status.HTTP_200_OK
-        # other_user is blocked, so their activity should be excluded
         for a in resp.data['activities']:
             assert a['user']['id'] != str(other_user.id)
 
-    def test_filter_by_activity_type(self, authenticated_client, user):
-        ActivityFeedItem.objects.create(user=user, activity_type='task_completed')
-        ActivityFeedItem.objects.create(user=user, activity_type='dream_completed')
-        resp = authenticated_client.get(
+    def test_filter_by_activity_type(self, premium_social_client, premium_social_user):
+        ActivityFeedItem.objects.create(user=premium_social_user, activity_type='task_completed')
+        ActivityFeedItem.objects.create(user=premium_social_user, activity_type='dream_completed')
+        resp = premium_social_client.get(
             f'{BASE}feed/friends?activity_type=task_completed'
         )
         assert resp.status_code == status.HTTP_200_OK
         for a in resp.data['activities']:
             assert a['type'] == 'task_completed'
 
-    def test_filter_by_created_after(self, authenticated_client, user):
+    def test_filter_by_created_after(self, premium_social_client, premium_social_user):
         ActivityFeedItem.objects.create(
-            user=user,
+            user=premium_social_user,
             activity_type='task_completed',
         )
         future = timezone.now() + timedelta(hours=1)
         future_str = future.isoformat()
-        resp = authenticated_client.get(
+        resp = premium_social_client.get(
             f'{BASE}feed/friends',
             {'created_after': future_str},
         )
         assert resp.status_code == status.HTTP_200_OK
         assert len(resp.data['activities']) == 0
 
-    def test_filter_by_created_before(self, authenticated_client, user):
+    def test_filter_by_created_before(self, premium_social_client, premium_social_user):
         ActivityFeedItem.objects.create(
-            user=user,
+            user=premium_social_user,
             activity_type='task_completed',
         )
         past = timezone.now() - timedelta(hours=1)
         past_str = past.isoformat()
-        resp = authenticated_client.get(
+        resp = premium_social_client.get(
             f'{BASE}feed/friends',
             {'created_before': past_str},
         )
@@ -1185,10 +1216,12 @@ class TestUserSearchView:
         assert len(resp.data['users']) == 1
         assert resp.data['users'][0]['username'] == 'Other User'
 
-    def test_search_by_email(self, authenticated_client, other_user):
+    def test_search_by_email_no_longer_supported(self, authenticated_client, other_user):
+        """Email search was removed from UserSearchView for security."""
         resp = authenticated_client.get(f'{BASE}users/search?q=other@')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['users']) >= 1
+        # Email-based search should return no results since only display_name is searched
+        assert len(resp.data['users']) == 0
 
     def test_search_short_query_returns_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}users/search?q=a')
@@ -1263,104 +1296,104 @@ class TestUserSearchView:
 
 
 class TestFollowSuggestionsView:
-    def test_suggestions_empty_when_no_connections(self, authenticated_client):
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+    def test_suggestions_empty_when_no_connections(self, premium_social_client):
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         assert 'suggestions' in resp.data
 
-    def test_suggestions_via_shared_circle(self, authenticated_client, user, other_user):
+    def test_suggestions_via_shared_circle(self, premium_social_client, premium_social_user, other_user):
         from apps.circles.models import Circle, CircleMembership
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(other_user.id) in ids
 
     def test_suggestions_via_friends_of_friends(
-        self, authenticated_client, user, other_user, third_user
+        self, premium_social_client, premium_social_user, other_user, third_user
     ):
-        Friendship.objects.create(user1=user, user2=other_user, status='accepted')
+        Friendship.objects.create(user1=premium_social_user, user2=other_user, status='accepted')
         Friendship.objects.create(user1=other_user, user2=third_user, status='accepted')
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(third_user.id) in ids
 
     def test_suggestions_exclude_already_following(
-        self, authenticated_client, user, other_user, third_user
+        self, premium_social_client, premium_social_user, other_user, third_user
     ):
         from apps.circles.models import Circle, CircleMembership
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
-        UserFollow.objects.create(follower=user, following=other_user)
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        UserFollow.objects.create(follower=premium_social_user, following=other_user)
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(other_user.id) not in ids
 
     def test_suggestions_exclude_friends(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
         from apps.circles.models import Circle, CircleMembership
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
-        Friendship.objects.create(user1=user, user2=other_user, status='accepted')
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        Friendship.objects.create(user1=premium_social_user, user2=other_user, status='accepted')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(other_user.id) not in ids
 
     def test_suggestions_exclude_blocked(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
         from apps.circles.models import Circle, CircleMembership
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
-        BlockedUser.objects.create(blocker=user, blocked=other_user)
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        BlockedUser.objects.create(blocker=premium_social_user, blocked=other_user)
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(other_user.id) not in ids
 
     def test_suggestions_via_similar_dreams(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
         from apps.dreams.models import Dream
         Dream.objects.create(
-            user=user, title='Learn Python', description='desc',
+            user=premium_social_user, title='Learn Python', description='desc',
             category='education', status='active',
         )
         Dream.objects.create(
             user=other_user, title='Learn Django', description='desc',
             category='education', status='active',
         )
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [str(s['id']) for s in resp.data['suggestions']]
         assert str(other_user.id) in ids
 
     def test_suggestions_scoring_circle_ranked_higher(
-        self, authenticated_client, user, other_user, third_user
+        self, premium_social_client, premium_social_user, other_user, third_user
     ):
         from apps.circles.models import Circle, CircleMembership
         from apps.dreams.models import Dream
         # other_user in shared circle (score 3)
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
         # third_user only via similar dreams (score 1)
         Dream.objects.create(
-            user=user, title='D1', description='d', category='health', status='active',
+            user=premium_social_user, title='D1', description='d', category='health', status='active',
         )
         Dream.objects.create(
             user=third_user, title='D2', description='d', category='health', status='active',
         )
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         suggestions = resp.data['suggestions']
         if len(suggestions) >= 2:
@@ -1369,17 +1402,21 @@ class TestFollowSuggestionsView:
             assert ids.index(str(other_user.id)) < ids.index(str(third_user.id))
 
     def test_suggestions_is_friend_and_is_following_are_false(
-        self, authenticated_client, user, other_user
+        self, premium_social_client, premium_social_user, other_user
     ):
         from apps.circles.models import Circle, CircleMembership
-        circle = Circle.objects.create(name='Test Circle', category='career', creator=user)
-        CircleMembership.objects.create(circle=circle, user=user)
+        circle = Circle.objects.create(name='Test Circle', category='career', creator=premium_social_user)
+        CircleMembership.objects.create(circle=circle, user=premium_social_user)
         CircleMembership.objects.create(circle=circle, user=other_user)
-        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
         for suggestion in resp.data['suggestions']:
             assert suggestion['isFriend'] is False
             assert suggestion['isFollowing'] is False
+
+    def test_free_user_is_forbidden(self, authenticated_client):
+        resp = authenticated_client.get(f'{BASE}follow-suggestions/')
+        assert resp.status_code == status.HTTP_403_FORBIDDEN
 
     def test_unauthenticated_is_rejected(self, api_client):
         resp = api_client.get(f'{BASE}follow-suggestions/')

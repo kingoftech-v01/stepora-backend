@@ -9,6 +9,7 @@ acceptance), while follows are unidirectional.
 import uuid
 
 from django.db import models
+from encrypted_model_fields.fields import EncryptedTextField
 
 from apps.users.models import User
 
@@ -38,10 +39,10 @@ class BlockedUser(models.Model):
         related_name='blocked_by',
         help_text='The user who was blocked.'
     )
-    reason = models.TextField(
+    reason = EncryptedTextField(
         blank=True,
         default='',
-        help_text='Optional reason for blocking.'
+        help_text='Optional reason for blocking (encrypted at rest).'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -99,8 +100,8 @@ class ReportedUser(models.Model):
         related_name='reports_received',
         help_text='The user being reported.'
     )
-    reason = models.TextField(
-        help_text='Description of why the user is being reported.'
+    reason = EncryptedTextField(
+        help_text='Description of why the user is being reported (encrypted at rest).'
     )
     category = models.CharField(
         max_length=20,
@@ -323,3 +324,34 @@ class ActivityFeedItem(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email}: {self.activity_type}"
+
+
+class RecentSearch(models.Model):
+    """Stores recent search queries for a user."""
+
+    SEARCH_TYPE_CHOICES = [
+        ('users', 'Users'),
+        ('dreams', 'Dreams'),
+        ('all', 'All'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='recent_searches',
+    )
+    query = models.CharField(max_length=200)
+    search_type = models.CharField(
+        max_length=10, choices=SEARCH_TYPE_CHOICES, default='all',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'recent_searches'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email}: {self.query}"

@@ -207,7 +207,7 @@ All four models are registered with Django admin:
 - **SeasonAdmin** - Shows `days_remaining` in list. Includes `LeagueStandingInline` for viewing standings within a season
 - **LeagueStandingAdmin** - Filter by league and season. Search by user email/display name
 - **SeasonRewardAdmin** - Filter by claimed status, league achieved, season
-- **RankSnapshotAdmin** - Filter by season, league, date. Search by user email/display name
+**Note:** RankSnapshot is not registered in the admin interface.
 
 ## Management Commands
 
@@ -220,5 +220,5 @@ All four models are registered with Django admin:
 | Task | Description |
 |------|-------------|
 | `check_season_end` | Runs on a schedule to detect when the active season has ended. Automatically triggers reward calculation and season deactivation |
-| `take_daily_rank_snapshots` | Creates daily RankSnapshot records for all active standings. Runs once per day |
+| `create_daily_rank_snapshots` | Creates daily RankSnapshot records for all active standings. Runs once per day |
 | `send_promotion_demotion_notifications` | Sends push notifications to users who have been promoted or demoted after weekly league tier changes |

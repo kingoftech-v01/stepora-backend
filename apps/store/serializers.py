@@ -8,6 +8,7 @@ and nested serialization for category browsing with embedded items.
 
 from rest_framework import serializers
 
+from core.sanitizers import sanitize_text
 from .models import StoreCategory, StoreItem, UserInventory, Wishlist, Gift, RefundRequest
 
 
@@ -333,6 +334,9 @@ class GiftSendSerializer(serializers.Serializer):
         help_text='Optional personal message.',
     )
 
+    def validate_message(self, value):
+        return sanitize_text(value)
+
 
 class GiftSerializer(serializers.ModelSerializer):
     """Serializer for displaying gift details."""
@@ -358,6 +362,9 @@ class RefundRequestSerializer(serializers.Serializer):
         max_length=2000,
         help_text='Reason for the refund request.',
     )
+
+    def validate_reason(self, value):
+        return sanitize_text(value)
 
 
 class RefundRequestDisplaySerializer(serializers.ModelSerializer):

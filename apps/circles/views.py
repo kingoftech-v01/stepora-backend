@@ -25,6 +25,7 @@ from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
 )
+from core.permissions import CanUseCircles
 from .serializers import (
     CircleListSerializer,
     CircleDetailSerializer,
@@ -79,9 +80,10 @@ class CircleViewSet(viewsets.ModelViewSet):
 
     Supports listing (with filters), creating, retrieving details,
     joining, leaving, posting to feed, and viewing challenges.
+    Requires premium+ for all access; creating circles requires pro.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseCircles]
 
     def _get_membership(self, circle, user):
         """Get the membership for a user in a circle, or None."""
@@ -848,10 +850,10 @@ class ChallengeViewSet(viewsets.GenericViewSet):
     """
     ViewSet for challenge actions that operate outside a specific circle context.
 
-    Supports joining challenges by ID.
+    Supports joining challenges by ID. Requires premium+ subscription.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseCircles]
     serializer_class = CircleChallengeSerializer
     queryset = CircleChallenge.objects.all()
 
@@ -900,9 +902,9 @@ class ChallengeViewSet(viewsets.GenericViewSet):
 
 
 class JoinByInviteCodeView(generics.GenericAPIView):
-    """Join a circle using an invite code."""
+    """Join a circle using an invite code. Requires premium+ subscription."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseCircles]
 
     @extend_schema(
         summary="Join circle via invite code",
@@ -974,9 +976,9 @@ class JoinByInviteCodeView(generics.GenericAPIView):
 
 
 class MyInvitationsView(generics.ListAPIView):
-    """List pending invitations received by the current user."""
+    """List pending invitations received by the current user. Requires premium+."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseCircles]
     serializer_class = CircleInvitationSerializer
 
     def get_queryset(self):

@@ -6,6 +6,7 @@ import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone as django_timezone
+from encrypted_model_fields.fields import EncryptedTextField, EncryptedCharField
 
 
 class UserManager(BaseUserManager):
@@ -48,16 +49,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         help_text='Uploaded avatar image file.'
     )
-    bio = models.TextField(
+    bio = EncryptedTextField(
         blank=True,
         default='',
-        help_text='Short user biography.'
+        help_text='Short user biography (encrypted at rest).'
     )
-    location = models.CharField(
+    location = EncryptedCharField(
         max_length=200,
         blank=True,
         default='',
-        help_text='User location (city, country).'
+        help_text='User location (encrypted at rest).'
     )
     social_links = models.JSONField(
         null=True,
@@ -113,6 +114,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     level = models.IntegerField(default=1)
     streak_days = models.IntegerField(default=0)
     last_activity = models.DateTimeField(default=django_timezone.now)
+
+    # Online status
+    is_online = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(null=True, blank=True)
 
     # Django admin
     is_staff = models.BooleanField(default=False)
@@ -236,5 +241,104 @@ class GamificationProfile(models.Model):
         current_xp = getattr(self, f'{attribute}_xp', 0)
         setattr(self, f'{attribute}_xp', current_xp + amount)
         self.save()
+
+
+class DailyActivity(models.Model):
+    """Tracks daily user activity for heatmap display."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_activities')
+    date = models.DateField()
+    tasks_completed = models.IntegerField(default=0)
+    xp_earned = models.IntegerField(default=0)
+    minutes_active = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'daily_activities'
+        unique_together = ('user', 'date')
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['user', '-date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.date} ({self.tasks_completed} tasks)"
+
+    @classmethod
+    def record_task_completion(cls, user, xp_earned=0, duration_mins=0):
+        """Record a task completion for today."""
+        today = django_timezone.now().date()
+        activity, _ = cls.objects.get_or_create(
+            user=user, date=today
+        )
+        activity.tasks_completed += 1
+        activity.xp_earned += xp_earned
+        activity.minutes_active += duration_mins
+        activity.save(update_fields=['tasks_completed', 'xp_earned', 'minutes_active'])
+        return activity
+
+
+class Achievement(models.Model):
+    """Achievement definition for the gamification system."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField()
+    icon = models.CharField(max_length=50, help_text='Emoji or icon identifier')
+    CATEGORY_CHOICES = [
+        ('streaks', 'Streaks'),
+        ('dreams', 'Dreams'),
+        ('social', 'Social'),
+        ('tasks', 'Tasks'),
+        ('special', 'Special'),
+    ]
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_index=True)
+    xp_reward = models.IntegerField(default=0)
+    CONDITION_CHOICES = [
+        ('streak_days', 'Streak Days'),
+        ('dreams_created', 'Dreams Created'),
+        ('dreams_completed', 'Dreams Completed'),
+        ('tasks_completed', 'Tasks Completed'),
+        ('friends_count', 'Friends Count'),
+        ('circles_joined', 'Circles Joined'),
+        ('level_reached', 'Level Reached'),
+        ('xp_earned', 'XP Earned'),
+        ('early_task', 'Early Task (before 8am)'),
+        ('late_task', 'Late Task (after 10pm)'),
+        ('first_dream', 'First Dream Created'),
+        ('first_buddy', 'First Buddy Matched'),
+        ('vision_created', 'Vision Board Created'),
+    ]
+    condition_type = models.CharField(max_length=30, choices=CONDITION_CHOICES)
+    condition_value = models.IntegerField(default=1, help_text='Threshold value to unlock')
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'achievements'
+        ordering = ['category', 'condition_value']
+
+    def __str__(self):
+        return f"{self.icon} {self.name}"
+
+
+class UserAchievement(models.Model):
+    """Tracks which achievements a user has unlocked."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_achievements')
+    achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE, related_name='user_achievements')
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_achievements'
+        unique_together = ('user', 'achievement')
+        ordering = ['-unlocked_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.achievement.name}"
 
 

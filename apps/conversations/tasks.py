@@ -100,6 +100,15 @@ def summarize_conversation(self, conversation_id):
 
     try:
         conversation = Conversation.objects.get(id=conversation_id)
+
+        # Check AI background quota for the conversation owner
+        from core.ai_usage import AIUsageTracker
+        tracker = AIUsageTracker()
+        allowed, _ = tracker.check_quota(conversation.user, 'ai_background')
+        if not allowed:
+            logger.info(f"Skipping summarization for conversation {conversation_id}: background quota reached")
+            return
+
         messages = conversation.messages.order_by('created_at')
 
         # Find last summary end point
@@ -134,6 +143,9 @@ def summarize_conversation(self, conversation_id):
             start_message=message_list[0],
             end_message=message_list[-1],
         )
+
+        # Increment usage counter
+        tracker.increment(conversation.user, 'ai_background')
 
         logger.info(f"Summarized conversation {conversation_id}")
 

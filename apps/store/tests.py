@@ -7,12 +7,14 @@ into test classes by component for clarity.
 """
 
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 import pytest
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -42,10 +44,16 @@ from apps.store.serializers import (
 
 @pytest.fixture
 def store_user(db):
-    """Create and return a test user for store tests."""
+    """Create and return a premium test user for store tests.
+
+    Uses a premium subscription so that purchase-related views gated by
+    the ``CanUseStore`` permission (premium+ required) are accessible.
+    """
     return User.objects.create(
         email=f'store_{uuid.uuid4().hex[:8]}@example.com',
         display_name='Store Test User',
+        subscription='premium',
+        subscription_ends=timezone.now() + timedelta(days=30),
     )
 
 

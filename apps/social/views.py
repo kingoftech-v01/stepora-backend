@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from core.permissions import CanUseSocialFeed
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -18,7 +19,7 @@ from drf_spectacular.utils import (
 )
 
 from apps.users.models import User
-from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser
+from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser, RecentSearch
 from .serializers import (
     FriendSerializer,
     FriendRequestSerializer,
@@ -616,6 +617,62 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         return Response({'friends': serializer.data, 'count': len(friends)})
 
     @extend_schema(
+        summary="Cancel friend request",
+        description="Cancel a pending friend request sent by the current user.",
+        responses={
+            200: OpenApiResponse(description="Friend request cancelled."),
+            404: OpenApiResponse(description="Request not found."),
+        },
+        tags=["Social"],
+    )
+    @action(detail=False, methods=['delete'], url_path=r'friends/cancel/(?P<request_id>[0-9a-f-]+)')
+    def cancel_request(self, request, request_id=None):
+        """Cancel a pending friend request sent by the current user."""
+        try:
+            friendship = Friendship.objects.get(
+                id=request_id,
+                user1=request.user,
+                status='pending'
+            )
+        except Friendship.DoesNotExist:
+            return Response(
+                {'error': 'Friend request not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        friendship.delete()
+        return Response({'message': 'Friend request cancelled.'})
+
+    @extend_schema(
+        summary="Online friends",
+        description="Get friends who are currently online or recently active.",
+        responses={200: FriendSerializer(many=True)},
+        tags=["Social"],
+    )
+    @action(detail=False, methods=['get'], url_path='friends/online')
+    def online_friends(self, request):
+        """Get friends who are online or were active in the last 5 minutes."""
+        from datetime import timedelta
+        from django.utils import timezone as tz
+
+        friendships = Friendship.objects.filter(
+            Q(user1=request.user) | Q(user2=request.user),
+            status='accepted'
+        ).select_related('user1', 'user2')
+
+        threshold = tz.now() - timedelta(minutes=5)
+        online = []
+        for friendship in friendships:
+            friend_user = friendship.user2 if friendship.user1_id == request.user.id else friendship.user1
+            if friend_user.is_online or (friend_user.last_seen and friend_user.last_seen >= threshold):
+                data = self._get_friend_data(friend_user)
+                data['is_online'] = friend_user.is_online
+                data['last_seen'] = friend_user.last_seen
+                online.append(data)
+
+        return Response({'friends': online, 'count': len(online)})
+
+    @extend_schema(
         summary="Follower and following counts",
         description="Get follower and following counts for a user.",
         tags=["Social"],
@@ -651,6 +708,7 @@ class ActivityFeedView(generics.ListAPIView):
 
     Shows activity items from the user's friends and followed users,
     ordered by most recent first.
+    Free users only see encouragement-type activities.
     """
 
     permission_classes = [IsAuthenticated]
@@ -658,6 +716,13 @@ class ActivityFeedView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+
+        # Free users only see encouragements received
+        if user.subscription == 'free':
+            return ActivityFeedItem.objects.filter(
+                Q(user=user),
+                activity_type='encouragement',
+            ).select_related('user').order_by('-created_at')
 
         # Get friend IDs (accepted friendships)
         friend_ids = set()
@@ -792,8 +857,9 @@ class UserSearchView(generics.ListAPIView):
             blocked_ids.add(blocked_id)
         blocked_ids.discard(request.user.id)
 
+        # Security: search by display_name only — never expose email in search
         users = User.objects.filter(
-            Q(display_name__icontains=query) | Q(email__icontains=query),
+            display_name__icontains=query,
             is_active=True
         ).exclude(
             id=request.user.id
@@ -852,7 +918,7 @@ class UserSearchView(generics.ListAPIView):
 
 class FollowSuggestionsView(generics.ListAPIView):
     """
-    View for suggesting users to follow.
+    View for suggesting users to follow. Requires premium+ subscription.
 
     Suggestions are based on:
     - Users in shared circles
@@ -860,7 +926,7 @@ class FollowSuggestionsView(generics.ListAPIView):
     - Users with similar dream categories
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseSocialFeed]
     serializer_class = UserSearchResultSerializer
 
     @extend_schema(
@@ -987,3 +1053,65 @@ class FollowSuggestionsView(generics.ListAPIView):
 
         serializer = UserSearchResultSerializer(results, many=True)
         return Response({'suggestions': serializer.data})
+
+
+class RecentSearchViewSet(viewsets.GenericViewSet):
+    """CRUD for recent search queries."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List recent searches",
+        description="Get the user's recent search queries.",
+        tags=["Social"],
+    )
+    @action(detail=False, methods=['get'], url_path='list')
+    def list_searches(self, request):
+        """Return up to 20 recent searches."""
+        searches = RecentSearch.objects.filter(user=request.user)[:20]
+        data = [
+            {
+                'id': str(s.id),
+                'query': s.query,
+                'search_type': s.search_type,
+                'created_at': s.created_at,
+            }
+            for s in searches
+        ]
+        return Response({'recent_searches': data})
+
+    @extend_schema(
+        summary="Record a search",
+        description="Record a recent search query.",
+        tags=["Social"],
+    )
+    @action(detail=False, methods=['post'], url_path='add')
+    def add_search(self, request):
+        """Record a search query."""
+        query = request.data.get('query', '').strip()
+        search_type = request.data.get('search_type', 'all')
+        if not query:
+            return Response({'error': 'query is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Avoid duplicates — delete older same query
+        RecentSearch.objects.filter(user=request.user, query=query).delete()
+        RecentSearch.objects.create(user=request.user, query=query, search_type=search_type)
+
+        # Keep only 20 most recent
+        old_ids = RecentSearch.objects.filter(
+            user=request.user
+        ).order_by('-created_at').values_list('id', flat=True)[20:]
+        RecentSearch.objects.filter(id__in=list(old_ids)).delete()
+
+        return Response({'message': 'Search recorded.'}, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Clear recent searches",
+        description="Delete all recent searches for the current user.",
+        tags=["Social"],
+    )
+    @action(detail=False, methods=['delete'], url_path='clear')
+    def clear_searches(self, request):
+        """Clear all recent searches."""
+        RecentSearch.objects.filter(user=request.user).delete()
+        return Response({'message': 'Recent searches cleared.'})

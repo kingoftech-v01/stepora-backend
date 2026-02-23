@@ -12,6 +12,7 @@ from .models import Conversation, Message
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
+from core.ai_usage import AIUsageTracker
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -75,6 +76,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         if not message_content:
             await self.send_error('Message cannot be empty')
+            return
+
+        # Content moderation check BEFORE saving or calling AI
+        mod_result = await self._moderate_message(message_content)
+        if mod_result.is_flagged:
+            await self.send(text_data=json.dumps({
+                'type': 'moderation',
+                'message': mod_result.user_message,
+            }))
+            return
+
+        # Check AI daily quota BEFORE saving or calling AI
+        allowed, info = await self._check_ai_quota()
+        if not allowed:
+            await self.send(text_data=json.dumps({
+                'type': 'quota_exceeded',
+                'message': f"Daily AI chat limit reached ({info['used']}/{info['limit']}). Resets at midnight.",
+                'usage': info,
+            }))
             return
 
         # Save user message
@@ -149,10 +169,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
             # Sanitize full response before saving
             full_response = sanitize_text(full_response)
 
+            # Validate AI output safety
+            output_safe = await self._check_ai_output_safety(full_response)
+            if not output_safe:
+                full_response = (
+                    "I apologize, but I need to rephrase my response. "
+                    "Could you tell me more about what specific aspect of your dream you'd like help with?"
+                )
+
             # Send streaming end indicator
             await self.send(text_data=json.dumps({
                 'type': 'stream_end'
             }))
+
+            # Increment AI usage counter after successful response
+            await self._increment_ai_quota()
 
             # Save complete AI response
             assistant_message = await self.save_message('assistant', full_response)
@@ -220,10 +251,35 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return conversation.get_messages_for_api(limit=20)
 
     @database_sync_to_async
+    def _moderate_message(self, content):
+        """Run content moderation on a message."""
+        from core.moderation import ContentModerationService
+        return ContentModerationService().moderate_text(content, context='chat')
+
+    @database_sync_to_async
+    def _check_ai_output_safety(self, content):
+        """Check if AI output is safe."""
+        from core.ai_validators import validate_ai_output_safety
+        is_safe, _ = validate_ai_output_safety(content)
+        return is_safe
+
+    @database_sync_to_async
     def save_message(self, role, content):
         """Save message to database."""
         conversation = Conversation.objects.get(id=self.conversation_id)
         return conversation.add_message(role, content)
+
+    @database_sync_to_async
+    def _check_ai_quota(self):
+        """Check if user has remaining AI chat quota."""
+        tracker = AIUsageTracker()
+        return tracker.check_quota(self.user, 'ai_chat')
+
+    @database_sync_to_async
+    def _increment_ai_quota(self):
+        """Increment AI chat usage counter."""
+        tracker = AIUsageTracker()
+        return tracker.increment(self.user, 'ai_chat')
 
 
 class BuddyChatConsumer(AsyncWebsocketConsumer):
@@ -284,6 +340,15 @@ class BuddyChatConsumer(AsyncWebsocketConsumer):
         content = data.get('message', '').strip()
         if not content:
             await self.send_error('Message cannot be empty')
+            return
+
+        # Content moderation for buddy messages
+        mod_result = await self._moderate_buddy_message(content)
+        if mod_result.is_flagged:
+            await self.send(text_data=json.dumps({
+                'type': 'moderation',
+                'message': mod_result.user_message,
+            }))
             return
 
         message = await self.save_buddy_message(content)
@@ -351,6 +416,12 @@ class BuddyChatConsumer(AsyncWebsocketConsumer):
             return self.user in (pairing.user1, pairing.user2)
         except Conversation.DoesNotExist:
             return False
+
+    @database_sync_to_async
+    def _moderate_buddy_message(self, content):
+        """Run content moderation on a buddy message."""
+        from core.moderation import ContentModerationService
+        return ContentModerationService().moderate_text(content, context='chat')
 
     @database_sync_to_async
     def save_buddy_message(self, content):

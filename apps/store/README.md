@@ -94,9 +94,9 @@ Tracks items a user has saved for later.
 | id | UUID | Primary key |
 | user | FK(User) | User (related_name: `wishlist`) |
 | item | FK(StoreItem) | Wishlisted item (related_name: `wishlisted_by`) |
-| added_at | DateTimeField | Auto-set on creation |
+| created_at | DateTimeField | Auto-set on creation |
 
-**DB table:** `store_wishlists`
+**DB table:** `store_wishlist`
 **Constraint:** `unique_together = [['user', 'item']]`
 
 ### Gift
@@ -110,7 +110,7 @@ Allows users to purchase and send items to other users.
 | recipient | FK(User) | Gift recipient (related_name: `gifts_received`) |
 | item | FK(StoreItem) | Gifted item |
 | message | TextField | Optional gift message |
-| claimed | Boolean | Whether recipient has claimed the gift (default: False) |
+| is_claimed | Boolean | Whether recipient has claimed the gift (default: False) |
 | claimed_at | DateTimeField | Claim timestamp (nullable) |
 | stripe_payment_intent_id | CharField(255) | Stripe PaymentIntent ID |
 | created_at | DateTimeField | Auto-set on creation |
@@ -125,11 +125,13 @@ Tracks refund requests for purchased items.
 |-------|------|-------------|
 | id | UUID | Primary key |
 | user | FK(User) | Requesting user (related_name: `refund_requests`) |
-| inventory_item | FK(UserInventory) | Item to refund |
+| inventory_entry | FK(UserInventory) | Item to refund |
 | reason | TextField | Refund reason |
-| status | CharField(20) | `pending`, `approved`, `rejected` (default: `pending`) |
-| reviewed_at | DateTimeField | Review timestamp (nullable) |
+| status | CharField(20) | `pending`, `approved`, `rejected`, `refunded` (default: `pending`) |
+| stripe_refund_id | CharField(255) | Stripe refund ID (blank) |
+| admin_notes | TextField | Internal admin notes (blank) |
 | created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
 
 **DB table:** `store_refund_requests`
 

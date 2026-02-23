@@ -23,6 +23,7 @@ from .serializers import (
     InvoiceSerializer,
 )
 from .services import StripeService
+from core.audit import log_webhook_event
 
 logger = logging.getLogger(__name__)
 
@@ -315,11 +316,18 @@ class StripeWebhookView(views.APIView):
 
         try:
             result = StripeService.handle_webhook_event(payload, sig_header)
+            log_webhook_event(
+                result.get('event_type', 'unknown'),
+                result.get('event_id', 'unknown'),
+                'processed',
+            )
         except ValueError as e:
             logger.warning("Webhook signature verification failed: %s", e)
+            log_webhook_event('unknown', 'unknown', 'signature_failed')
             return HttpResponse(str(e), status=400)
         except Exception:
             logger.exception("Unexpected error processing webhook")
+            log_webhook_event('unknown', 'unknown', 'error')
             return HttpResponse('Webhook processing error', status=500)
 
         return Response(result, status=status.HTTP_200_OK)

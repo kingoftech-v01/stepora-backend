@@ -6,12 +6,13 @@ from rest_framework import viewsets, status, generics, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator
+from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
@@ -19,8 +20,9 @@ from .serializers import (
     ObstacleSerializer, CalibrationResponseSerializer,
     DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
+    VisionBoardImageSerializer,
 )
-from core.permissions import IsOwner, CanCreateDream
+from core.permissions import IsOwner, CanCreateDream, CanUseAI, CanUseVisionBoard
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.ai_validators import (
@@ -31,6 +33,8 @@ from core.ai_validators import (
     check_plan_calibration_coherence,
     AIValidationError,
 )
+from core.throttles import AIPlanRateThrottle, AIPlanDailyThrottle, AIImageDailyThrottle
+from core.ai_usage import AIUsageTracker
 
 
 @extend_schema_view(
@@ -72,7 +76,19 @@ class DreamViewSet(viewsets.ModelViewSet):
         return DreamSerializer
 
     def get_permissions(self):
-        """Get permissions based on action."""
+        """Get permissions based on action — AI and vision features require paid subscriptions."""
+        ai_actions = [
+            'analyze', 'start_calibration', 'answer_calibration',
+            'generate_plan', 'generate_two_minute_start',
+        ]
+        vision_actions = [
+            'generate_vision', 'vision_board_list',
+            'vision_board_add', 'vision_board_remove',
+        ]
+        if self.action in ai_actions:
+            return [IsAuthenticated(), CanUseAI()]
+        if self.action in vision_actions:
+            return [IsAuthenticated(), CanUseVisionBoard()]
         if self.action == 'create':
             return [IsAuthenticated(), CanCreateDream()]
         return super().get_permissions()
@@ -82,7 +98,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     @extend_schema(summary="Analyze dream", description="Analyze a dream using AI to get insights", tags=["Dreams"], responses={200: dict})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def analyze(self, request, pk=None):
         """Analyze dream with AI."""
         dream = self.get_object()
@@ -93,6 +109,9 @@ class DreamViewSet(viewsets.ModelViewSet):
                 dream.title,
                 dream.description
             )
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
 
             # Validate AI output before saving
             analysis = validate_analysis_response(raw_analysis)
@@ -116,7 +135,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
     @extend_schema(summary="Start calibration", description="Generate initial calibration questions for a dream", tags=["Dreams"], responses={200: dict})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def start_calibration(self, request, pk=None):
         """Generate initial calibration questions (7 questions) for the dream."""
         dream = self.get_object()
@@ -139,6 +158,9 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Validate AI output
             result = validate_calibration_questions(raw_result)
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
 
             # Save validated questions to database
             questions_created = []
@@ -174,7 +196,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
     @extend_schema(summary="Answer calibration", description="Submit answers to calibration questions and get follow-ups if needed", tags=["Dreams"], responses={200: dict})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def answer_calibration(self, request, pk=None):
         """
         Submit answers to calibration questions.
@@ -192,13 +214,25 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Save answers with error handling for missing keys
+        # Moderate and save answers
+        from core.moderation import ContentModerationService
+        moderation = ContentModerationService()
+
         for ans in answers_data:
             try:
                 question_id = ans.get('question_id')
                 answer_text = ans.get('answer', '')
                 if not question_id or not answer_text:
                     continue
+
+                # Moderate each answer
+                mod_result = moderation.moderate_text(answer_text, context='calibration_answer')
+                if mod_result.is_flagged:
+                    return Response(
+                        {'error': mod_result.user_message, 'moderation': True},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
                 cr = CalibrationResponse.objects.get(
                     id=question_id,
                     dream=dream
@@ -247,6 +281,9 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Validate AI output
             result = validate_calibration_questions(raw_result)
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
 
             if result.sufficient or not result.questions:
                 # AI says we have enough info
@@ -309,7 +346,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         })
 
     @extend_schema(summary="Generate plan", description="Generate a complete AI-powered plan with goals and tasks, using calibration data if available", tags=["Dreams"], responses={200: DreamDetailSerializer})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def generate_plan(self, request, pk=None):
         """Generate complete plan for dream with AI, enriched by calibration data."""
         dream = self.get_object()
@@ -360,6 +397,9 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Validate the entire plan structure
             plan = validate_plan_response(raw_plan)
+
+            # Increment AI usage counter (counts as 1 even if calibration summary was also generated)
+            AIUsageTracker().increment(request.user, 'ai_plan')
 
             # Check coherence between plan and calibration data
             coherence_warnings = check_plan_calibration_coherence(
@@ -425,7 +465,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
     @extend_schema(summary="Generate 2-minute start", description="Generate a micro-action to start working on the dream in 2 minutes", tags=["Dreams"], responses={200: DreamDetailSerializer})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIPlanDailyThrottle])
     def generate_two_minute_start(self, request, pk=None):
         """Generate 2-minute start task for dream."""
         dream = self.get_object()
@@ -443,6 +483,9 @@ class DreamViewSet(viewsets.ModelViewSet):
                 dream.title,
                 dream.description
             )
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
 
             # Get first goal or create one
             first_goal = dream.goals.order_by('order').first()
@@ -475,7 +518,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
     @extend_schema(summary="Generate vision board", description="Generate a vision board image using DALL-E", tags=["Dreams"], responses={200: dict})
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[AIImageDailyThrottle])
     def generate_vision(self, request, pk=None):
         """Generate vision board image for dream."""
         dream = self.get_object()
@@ -487,8 +530,20 @@ class DreamViewSet(viewsets.ModelViewSet):
                 dream.description
             )
 
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_image')
+
             dream.vision_image_url = image_url
             dream.save(update_fields=['vision_image_url'])
+
+            # Also add to vision board gallery
+            VisionBoardImage.objects.create(
+                dream=dream,
+                image_url=image_url,
+                caption=f'AI-generated vision for "{dream.title}"',
+                is_ai_generated=True,
+                order=dream.vision_images.count(),
+            )
 
             return Response({'image_url': image_url})
 
@@ -497,6 +552,65 @@ class DreamViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @extend_schema(summary="Vision board list", description="List vision board images for a dream", tags=["Dreams"], responses={200: VisionBoardImageSerializer(many=True)})
+    @action(detail=True, methods=['get'], url_path='vision-board')
+    def vision_board_list(self, request, pk=None):
+        """List all vision board images for a dream."""
+        dream = self.get_object()
+        images = dream.vision_images.all()
+        return Response({'images': VisionBoardImageSerializer(images, many=True).data})
+
+    @extend_schema(summary="Add vision board image", description="Add an image to the vision board", tags=["Dreams"], responses={201: VisionBoardImageSerializer})
+    @action(detail=True, methods=['post'], url_path='vision-board/add', parser_classes=[MultiPartParser, FormParser])
+    def vision_board_add(self, request, pk=None):
+        """Add an image to the dream's vision board."""
+        dream = self.get_object()
+
+        image_file = request.FILES.get('image')
+        image_url = request.data.get('image_url', '')
+        caption = request.data.get('caption', '')
+
+        if not image_file and not image_url:
+            return Response({'error': 'Provide image file or image_url.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        vbi = VisionBoardImage(
+            dream=dream,
+            caption=caption,
+            order=dream.vision_images.count(),
+        )
+        if image_file:
+            vbi.image_file = image_file
+        if image_url:
+            vbi.image_url = image_url
+        vbi.save()
+
+        return Response(VisionBoardImageSerializer(vbi).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(summary="Remove vision board image", description="Remove an image from the vision board", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['delete'], url_path=r'vision-board/(?P<image_id>[0-9a-f-]+)')
+    def vision_board_remove(self, request, pk=None, image_id=None):
+        """Remove an image from the dream's vision board."""
+        dream = self.get_object()
+        deleted, _ = VisionBoardImage.objects.filter(dream=dream, id=image_id).delete()
+        if deleted == 0:
+            return Response({'error': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'message': 'Image removed.'})
+
+    @extend_schema(summary="Progress history", description="Get progress snapshot history for sparkline charts", tags=["Dreams"], responses={200: dict})
+    @action(detail=True, methods=['get'], url_path='progress-history')
+    def progress_history(self, request, pk=None):
+        """Get progress snapshots for a dream."""
+        dream = self.get_object()
+        days = int(request.query_params.get('days', 30))
+        snapshots = DreamProgressSnapshot.objects.filter(
+            dream=dream
+        ).order_by('-date')[:days]
+        data = list(reversed([
+            {'date': str(s.date), 'progress': s.progress_percentage}
+            for s in snapshots
+        ]))
+        return Response({'snapshots': data, 'current_progress': dream.progress_percentage})
 
     @extend_schema(summary="Complete dream", description="Mark a dream as completed", tags=["Dreams"], responses={200: DreamSerializer})
     @action(detail=True, methods=['post'])

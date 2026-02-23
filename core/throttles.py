@@ -1,0 +1,100 @@
+"""
+Custom throttle classes for DreamPlanner.
+
+Provides rate limiting for sensitive operations:
+- Auth endpoints (login, register)
+- AI features (chat, plan generation) - per-minute burst + daily quota
+- Search queries
+- Data export
+"""
+
+from datetime import datetime, timezone
+
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle, BaseThrottle
+
+from core.ai_usage import AIUsageTracker
+
+
+# --- Per-minute burst rate throttles (DRF built-in) ---
+
+class AuthRateThrottle(AnonRateThrottle):
+    """Rate limiting for authentication endpoints (login, register, password reset)."""
+    scope = 'auth'
+
+
+class AIRateThrottle(UserRateThrottle):
+    """Per-minute burst rate limiting for AI chat (10/min)."""
+    scope = 'ai_chat'
+
+
+class AIPlanRateThrottle(UserRateThrottle):
+    """Per-minute burst rate limiting for AI plan generation (3/min)."""
+    scope = 'ai_plan'
+
+
+class SearchRateThrottle(UserRateThrottle):
+    """Rate limiting for search endpoints."""
+    scope = 'search'
+
+
+class ExportRateThrottle(UserRateThrottle):
+    """Rate limiting for data export (1/day)."""
+    scope = 'export'
+
+
+class StorePurchaseRateThrottle(UserRateThrottle):
+    """Rate limiting for store purchases."""
+    scope = 'store_purchase'
+
+
+class SubscriptionRateThrottle(UserRateThrottle):
+    """Rate limiting for subscription operations."""
+    scope = 'subscription'
+
+
+# --- Daily AI Quota throttles (Redis counters) ---
+
+class DailyAIQuotaThrottle(BaseThrottle):
+    """
+    Base throttle that checks daily AI quota from Redis.
+
+    Subclasses set `category` to one of: ai_chat, ai_plan, ai_image, ai_voice.
+    The daily limit is determined by the user's subscription plan.
+    """
+    category = None
+
+    def allow_request(self, request, view):
+        if not hasattr(request, 'user') or not request.user.is_authenticated:
+            return False
+
+        tracker = AIUsageTracker()
+        allowed, info = tracker.check_quota(request.user, self.category)
+        self.usage_info = info
+        return allowed
+
+    def wait(self):
+        """Return seconds until midnight (quota reset)."""
+        now = datetime.now(timezone.utc)
+        reset = AIUsageTracker.get_reset_time()
+        delta = (reset - now).total_seconds()
+        return max(1, int(delta))
+
+
+class AIChatDailyThrottle(DailyAIQuotaThrottle):
+    """Daily quota for AI chat messages."""
+    category = 'ai_chat'
+
+
+class AIPlanDailyThrottle(DailyAIQuotaThrottle):
+    """Daily quota for AI plan/analysis operations."""
+    category = 'ai_plan'
+
+
+class AIImageDailyThrottle(DailyAIQuotaThrottle):
+    """Daily quota for AI image generation (DALL-E)."""
+    category = 'ai_image'
+
+
+class AIVoiceDailyThrottle(DailyAIQuotaThrottle):
+    """Daily quota for voice transcription."""
+    category = 'ai_voice'

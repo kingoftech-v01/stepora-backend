@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import uuid
 
 from .models import User, GamificationProfile
-from core.authentication import BearerTokenAuthentication
+from core.authentication import ExpiringTokenAuthentication
 
 
 class TestUserModel:
@@ -127,7 +127,7 @@ class TestTokenAuthentication:
     def test_token_auth_success(self, db, user):
         """Test successful Token authentication with 'Token' keyword"""
         token = Token.objects.create(user=user)
-        authenticator = BearerTokenAuthentication()
+        authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
         request = factory.get('/', HTTP_AUTHORIZATION=f'Token {token.key}')
@@ -138,9 +138,9 @@ class TestTokenAuthentication:
         assert auth_token == token
 
     def test_bearer_keyword_auth(self, db, user):
-        """Test BearerTokenAuthentication converts 'Bearer' to 'Token' and authenticates"""
+        """Test ExpiringTokenAuthentication converts 'Bearer' to 'Token' and authenticates"""
         token = Token.objects.create(user=user)
-        authenticator = BearerTokenAuthentication()
+        authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
         request = factory.get('/', HTTP_AUTHORIZATION=f'Bearer {token.key}')
@@ -152,7 +152,7 @@ class TestTokenAuthentication:
 
     def test_missing_token_returns_none(self, db):
         """Test missing auth header returns None"""
-        authenticator = BearerTokenAuthentication()
+        authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
         request = factory.get('/')
@@ -164,7 +164,7 @@ class TestTokenAuthentication:
         """Test invalid token raises AuthenticationFailed"""
         from rest_framework.exceptions import AuthenticationFailed
 
-        authenticator = BearerTokenAuthentication()
+        authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
         request = factory.get('/', HTTP_AUTHORIZATION='Token invalidtokenkey123')

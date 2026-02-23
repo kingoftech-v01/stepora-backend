@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from django.utils import timezone as django_timezone
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.users.models import User
 from apps.circles.models import (
@@ -25,27 +26,61 @@ from apps.circles.admin import (
 
 
 # ---------------------------------------------------------------------------
-# Local fixtures
+# Local fixtures – override the global ``user`` / ``authenticated_client``
+# so that the default test user has a *pro* subscription (circle creation
+# requires pro; joining/reading requires premium+).
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
+def user(db):
+    """Create a pro user (overrides global free-tier ``user`` fixture).
+
+    Uses the same email as the global fixture to avoid conflicts with tests
+    that reference 'testuser@example.com'.
+    """
+    return User.objects.create_user(
+        email="testuser@example.com",
+        password="testpassword123",
+        display_name="Test User",
+        subscription="pro",
+        subscription_ends=django_timezone.now() + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def authenticated_client(api_client, user):
+    """Return an API client authenticated as the local pro ``user``."""
+    api_client.force_authenticate(user=user)
+    return api_client
+
+
+@pytest.fixture
 def other_user(db):
-    """Create a second user for multi-user tests."""
+    """Create a second pro user for multi-user tests.
+
+    Pro subscription is needed because many tests force-authenticate as
+    ``other_user`` and hit CanUseCircles-gated endpoints (including POST
+    actions like join, invite-accept, etc.).
+    """
     return User.objects.create_user(
         email="otheruser@example.com",
         password="testpassword123",
         display_name="Other User",
+        subscription="pro",
+        subscription_ends=django_timezone.now() + timedelta(days=30),
     )
 
 
 @pytest.fixture
 def third_user(db):
-    """Create a third user."""
+    """Create a third pro user."""
     return User.objects.create_user(
         email="thirduser@example.com",
         password="testpassword123",
         display_name="Third User",
+        subscription="pro",
+        subscription_ends=django_timezone.now() + timedelta(days=30),
     )
 
 

@@ -35,9 +35,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
     ordering = ['-scheduled_for']
     lookup_value_regex = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
+    # Notification types accessible to free users
+    FREE_TIER_TYPES = {'reminder', 'progress', 'dream_completed', 'system'}
+
     def get_queryset(self):
-        """Get notifications for current user."""
-        return Notification.objects.filter(user=self.request.user)
+        """Get notifications for current user, filtered by subscription tier."""
+        qs = Notification.objects.filter(user=self.request.user)
+        # Free users only see basic notification types
+        if self.request.user.subscription == 'free':
+            qs = qs.filter(notification_type__in=self.FREE_TIER_TYPES)
+        return qs
 
     def get_serializer_class(self):
         """Return appropriate serializer."""

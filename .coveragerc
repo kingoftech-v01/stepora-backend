@@ -1,0 +1,37 @@
+[run]
+source = apps,core,integrations
+omit =
+    */migrations/*
+    */tests.py
+    */test_*.py
+    */tests_*.py
+    */__pycache__/*
+    */venv/*
+    */env/*
+    manage.py
+    config/wsgi.py
+    config/asgi.py
+    */management/commands/*
+    */consumers.py
+    */routing.py
+    */tasks.py
+    */admin.py
+    integrations/google_calendar.py
+    apps/notifications/services.py
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstract
+    except ImportError
+    pass$

@@ -22,6 +22,7 @@ from drf_spectacular.utils import (
 
 from apps.users.models import User
 from .models import BuddyPairing, BuddyEncouragement
+from core.permissions import CanUseBuddy
 from .serializers import (
     BuddyPairingSerializer,
     BuddyProgressSerializer,
@@ -38,9 +39,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
     Supports finding matches, creating pairings, viewing progress,
     sending encouragement, and ending pairings.
+    All buddy features require a premium+ subscription.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanUseBuddy]
     queryset = BuddyPairing.objects.all()
 
     def _get_partner_data(self, user):
