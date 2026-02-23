@@ -11,8 +11,6 @@ services:
       POSTGRES_PASSWORD: dreamplanner_dev_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dreamplanner"]
       interval: 10s
@@ -23,8 +21,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: dreamplanner_redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -44,16 +40,15 @@ services:
     container_name: dreamplanner_web
     command: >
       sh -c "python manage.py migrate --noinput &&
-             python manage.py runserver 0.0.0.0:8000"
+             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --access-logfile - config.wsgi:application"
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/mediafiles
     ports:
-      - "8000:8000"
+      - "8085:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
       - DB_HOST=db
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
@@ -62,11 +57,14 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,localhost,127.0.0.1
+      - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 30s
@@ -83,12 +81,11 @@ services:
         REQUIREMENTS_FILE: requirements/development.txt
         DJANGO_SETTINGS: config.settings.development
     container_name: dreamplanner_celery
-    command: celery -A config worker --loglevel=info --concurrency=4
+    command: celery -A config worker --loglevel=info --concurrency=2
     volumes:
       - .:/app
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
       - DB_HOST=db
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
@@ -101,6 +98,7 @@ services:
       - db
       - redis
       - web
+    restart: unless-stopped
 
   # Celery beat for scheduled tasks
   celery-beat:
@@ -116,7 +114,6 @@ services:
       - .:/app
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
       - DB_HOST=db
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
@@ -129,27 +126,7 @@ services:
       - db
       - redis
       - celery
-
-  # Flower for Celery monitoring (optional)
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        REQUIREMENTS_FILE: requirements/development.txt
-        DJANGO_SETTINGS: config.settings.development
-    container_name: dreamplanner_flower
-    command: celery -A config flower --port=5555
-    ports:
-      - "5555:5555"
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.development
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - REDIS_HOST=redis
-    depends_on:
-      - redis
-      - celery
+    restart: unless-stopped
 
   # Daphne for WebSocket support (Channels)
   daphne:
@@ -164,34 +141,20 @@ services:
     volumes:
       - .:/app
     ports:
-      - "9000:9000"
+      - "9085:9000"
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.development
-      - DATABASE_URL=postgresql://dreamplanner:dreamplanner_dev_password@db:5432/dreamplanner
       - DB_HOST=db
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
       - DB_PASSWORD=dreamplanner_dev_password
       - REDIS_URL=redis://redis:6379/0
       - REDIS_HOST=redis
+      - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,localhost,127.0.0.1
     depends_on:
       - db
       - redis
-
-  # Nginx reverse proxy (optional for local dev)
-  nginx:
-    image: nginx:alpine
-    container_name: dreamplanner_nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      - static_volume:/app/staticfiles:ro
-      - media_volume:/app/mediafiles:ro
-    depends_on:
-      - web
-      - daphne
+    restart: unless-stopped
 
 volumes:
   postgres_data:

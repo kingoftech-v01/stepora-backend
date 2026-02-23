@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create app user for security
 RUN useradd -m -u 1000 appuser && \
-    mkdir -p /app /app/staticfiles /app/mediafiles && \
+    mkdir -p /app /app/staticfiles /app/mediafiles /app/logs && \
     chown -R appuser:appuser /app
 
 # Set working directory
