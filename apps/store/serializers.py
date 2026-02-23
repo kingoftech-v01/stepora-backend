@@ -22,15 +22,18 @@ class StoreItemSerializer(serializers.ModelSerializer):
 
     rarity_display = serializers.CharField(
         source='get_rarity_display',
-        read_only=True
+        read_only=True,
+        help_text='Human-readable rarity label.',
     )
     item_type_display = serializers.CharField(
         source='get_item_type_display',
-        read_only=True
+        read_only=True,
+        help_text='Human-readable item type label.',
     )
     category_name = serializers.CharField(
         source='category.name',
-        read_only=True
+        read_only=True,
+        help_text='Name of the parent category.',
     )
 
     class Meta:
@@ -56,6 +59,23 @@ class StoreItemSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the store item.'},
+            'category': {'help_text': 'Category this item belongs to.'},
+            'name': {'help_text': 'Display name of the item.'},
+            'slug': {'help_text': 'URL-friendly slug for the item.'},
+            'description': {'help_text': 'Full description of the item.'},
+            'image_url': {'help_text': 'URL of the item image.'},
+            'price': {'help_text': 'Price in cents for Stripe payment.'},
+            'item_type': {'help_text': 'Type classification of the item.'},
+            'rarity': {'help_text': 'Rarity tier of the item.'},
+            'metadata': {'help_text': 'Additional JSON metadata for the item.'},
+            'xp_price': {'help_text': 'XP cost to purchase this item.'},
+            'available_from': {'help_text': 'Start date when item becomes available.'},
+            'available_until': {'help_text': 'End date when item is no longer available.'},
+            'is_active': {'help_text': 'Whether the item is currently listed.'},
+            'created_at': {'help_text': 'Timestamp when the item was created.'},
+        }
 
 
 class StoreItemDetailSerializer(StoreItemSerializer):
@@ -67,8 +87,12 @@ class StoreItemDetailSerializer(StoreItemSerializer):
     already owns the item.
     """
 
-    owners_count = serializers.SerializerMethodField()
-    is_owned = serializers.SerializerMethodField()
+    owners_count = serializers.SerializerMethodField(
+        help_text='Total number of users who own this item.',
+    )
+    is_owned = serializers.SerializerMethodField(
+        help_text='Whether the current user owns this item.',
+    )
 
     class Meta(StoreItemSerializer.Meta):
         fields = StoreItemSerializer.Meta.fields + [
@@ -76,11 +100,11 @@ class StoreItemDetailSerializer(StoreItemSerializer):
             'is_owned',
         ]
 
-    def get_owners_count(self, obj):
+    def get_owners_count(self, obj) -> int:
         """Return the total number of users who own this item."""
         return obj.owners.count()
 
-    def get_is_owned(self, obj):
+    def get_is_owned(self, obj) -> bool:
         """Check whether the requesting user already owns this item."""
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
@@ -98,7 +122,9 @@ class StoreCategorySerializer(serializers.ModelSerializer):
     Provides basic category information for listing views.
     """
 
-    items_count = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField(
+        help_text='Number of active items in this category.',
+    )
 
     class Meta:
         model = StoreCategory
@@ -113,8 +139,17 @@ class StoreCategorySerializer(serializers.ModelSerializer):
             'items_count',
         ]
         read_only_fields = ['id']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the category.'},
+            'name': {'help_text': 'Display name of the category.'},
+            'slug': {'help_text': 'URL-friendly slug for the category.'},
+            'description': {'help_text': 'Brief description of the category.'},
+            'icon': {'help_text': 'Icon identifier for the category.'},
+            'display_order': {'help_text': 'Sort order for category listing.'},
+            'is_active': {'help_text': 'Whether the category is visible in the store.'},
+        }
 
-    def get_items_count(self, obj):
+    def get_items_count(self, obj) -> int:
         """Return the number of active items in this category."""
         return obj.items.filter(is_active=True).count()
 
@@ -127,7 +162,10 @@ class StoreCategoryDetailSerializer(StoreCategorySerializer):
     for the category detail/browse view.
     """
 
-    items = StoreItemSerializer(many=True, read_only=True, source='active_items')
+    items = StoreItemSerializer(
+        many=True, read_only=True, source='active_items',
+        help_text='Active items belonging to this category.',
+    )
 
     class Meta(StoreCategorySerializer.Meta):
         fields = StoreCategorySerializer.Meta.fields + ['items']
@@ -153,8 +191,11 @@ class UserInventorySerializer(serializers.ModelSerializer):
     item details for display in the user's inventory screen.
     """
 
-    item = StoreItemSerializer(read_only=True)
-    item_id = serializers.UUIDField(source='item.id', read_only=True)
+    item = StoreItemSerializer(read_only=True, help_text='Nested store item details.')
+    item_id = serializers.UUIDField(
+        source='item.id', read_only=True,
+        help_text='UUID of the owned store item.',
+    )
 
     class Meta:
         model = UserInventory
@@ -174,6 +215,13 @@ class UserInventorySerializer(serializers.ModelSerializer):
             'purchased_at',
             'stripe_payment_intent_id',
         ]
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the inventory entry.'},
+            'user': {'help_text': 'Owner of this inventory entry.'},
+            'purchased_at': {'help_text': 'Timestamp when the item was purchased.'},
+            'stripe_payment_intent_id': {'help_text': 'Stripe PaymentIntent ID for the purchase.'},
+            'is_equipped': {'help_text': 'Whether the item is currently equipped.'},
+        }
 
 
 class PurchaseSerializer(serializers.Serializer):
@@ -277,13 +325,21 @@ class EquipSerializer(serializers.Serializer):
 class WishlistSerializer(serializers.ModelSerializer):
     """Serializer for wishlist entries."""
 
-    item = StoreItemSerializer(read_only=True)
-    item_id = serializers.UUIDField(write_only=True)
+    item = StoreItemSerializer(read_only=True, help_text='Nested store item details.')
+    item_id = serializers.UUIDField(
+        write_only=True,
+        help_text='UUID of the store item to add to the wishlist.',
+    )
 
     class Meta:
         model = Wishlist
         fields = ['id', 'user', 'item', 'item_id', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the wishlist entry.'},
+            'user': {'help_text': 'User who owns this wishlist entry.'},
+            'created_at': {'help_text': 'Timestamp when the item was wishlisted.'},
+        }
 
     def validate_item_id(self, value):
         """Validate that the item exists and is active."""
@@ -341,9 +397,15 @@ class GiftSendSerializer(serializers.Serializer):
 class GiftSerializer(serializers.ModelSerializer):
     """Serializer for displaying gift details."""
 
-    item = StoreItemSerializer(read_only=True)
-    sender_name = serializers.CharField(source='sender.display_name', read_only=True)
-    recipient_name = serializers.CharField(source='recipient.display_name', read_only=True)
+    item = StoreItemSerializer(read_only=True, help_text='Nested store item details.')
+    sender_name = serializers.CharField(
+        source='sender.display_name', read_only=True,
+        help_text='Display name of the gift sender.',
+    )
+    recipient_name = serializers.CharField(
+        source='recipient.display_name', read_only=True,
+        help_text='Display name of the gift recipient.',
+    )
 
     class Meta:
         model = Gift
@@ -352,6 +414,15 @@ class GiftSerializer(serializers.ModelSerializer):
             'item', 'message', 'is_claimed', 'claimed_at', 'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the gift.'},
+            'sender': {'help_text': 'User who sent the gift.'},
+            'recipient': {'help_text': 'User who received the gift.'},
+            'message': {'help_text': 'Personal message attached to the gift.'},
+            'is_claimed': {'help_text': 'Whether the recipient has claimed the gift.'},
+            'claimed_at': {'help_text': 'Timestamp when the gift was claimed.'},
+            'created_at': {'help_text': 'Timestamp when the gift was sent.'},
+        }
 
 
 class RefundRequestSerializer(serializers.Serializer):
@@ -370,7 +441,10 @@ class RefundRequestSerializer(serializers.Serializer):
 class RefundRequestDisplaySerializer(serializers.ModelSerializer):
     """Serializer for displaying refund request details."""
 
-    item_name = serializers.CharField(source='inventory_entry.item.name', read_only=True)
+    item_name = serializers.CharField(
+        source='inventory_entry.item.name', read_only=True,
+        help_text='Name of the item being refunded.',
+    )
 
     class Meta:
         model = RefundRequest
@@ -380,3 +454,13 @@ class RefundRequestDisplaySerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the refund request.'},
+            'user': {'help_text': 'User who submitted the refund request.'},
+            'inventory_entry': {'help_text': 'Inventory entry being refunded.'},
+            'reason': {'help_text': 'Reason provided for the refund.'},
+            'status': {'help_text': 'Current status of the refund request.'},
+            'admin_notes': {'help_text': 'Notes from admin reviewing the request.'},
+            'created_at': {'help_text': 'Timestamp when the request was submitted.'},
+            'updated_at': {'help_text': 'Timestamp when the request was last updated.'},
+        }

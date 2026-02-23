@@ -42,7 +42,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     and following users.
     """
 
+    queryset = Friendship.objects.none()
     permission_classes = [IsAuthenticated]
+    serializer_class = FriendSerializer
 
     def _get_friend_data(self, user):
         """Build friend data dict from a User object."""
@@ -125,6 +127,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         responses={
             201: OpenApiResponse(description="Friend request sent."),
             400: OpenApiResponse(description="Cannot send request (already friends, self-request, etc.)."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Social"],
     )
@@ -282,6 +285,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         responses={
             201: OpenApiResponse(description="Successfully followed the user."),
             400: OpenApiResponse(description="Already following or invalid target."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Social"],
     )
@@ -430,6 +434,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         responses={
             201: OpenApiResponse(description="User blocked."),
             400: OpenApiResponse(description="Cannot block yourself or already blocked."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Social"],
     )
@@ -536,6 +541,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         responses={
             201: OpenApiResponse(description="Report submitted."),
             400: OpenApiResponse(description="Cannot report yourself."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Social"],
     )
@@ -576,7 +582,10 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @extend_schema(
         summary="Mutual friends",
         description="Get mutual friends between the current user and another user.",
-        responses={200: FriendSerializer(many=True)},
+        responses={
+            200: FriendSerializer(many=True),
+            404: OpenApiResponse(description="Resource not found."),
+        },
         tags=["Social"],
     )
     @action(detail=False, methods=['get'], url_path=r'friends/mutual/(?P<user_id>[0-9a-f-]+)')
@@ -676,6 +685,10 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         summary="Follower and following counts",
         description="Get follower and following counts for a user.",
         tags=["Social"],
+        responses={
+            200: OpenApiResponse(description="Counts returned."),
+            404: OpenApiResponse(description="Resource not found."),
+        },
     )
     @action(detail=False, methods=['get'], url_path=r'counts/(?P<user_id>[0-9a-f-]+)')
     def social_counts(self, request, user_id=None):
@@ -715,6 +728,9 @@ class ActivityFeedView(generics.ListAPIView):
     serializer_class = ActivityFeedItemSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ActivityFeedItem.objects.none()
+
         user = self.request.user
 
         # Free users only see encouragements received
@@ -819,6 +835,7 @@ class UserSearchView(generics.ListAPIView):
     relative to the requesting user.
     """
 
+    queryset = User.objects.none()
     permission_classes = [IsAuthenticated]
     serializer_class = UserSearchResultSerializer
 
@@ -926,6 +943,7 @@ class FollowSuggestionsView(generics.ListAPIView):
     - Users with similar dream categories
     """
 
+    queryset = User.objects.none()
     permission_classes = [IsAuthenticated, CanUseSocialFeed]
     serializer_class = UserSearchResultSerializer
 
@@ -936,6 +954,10 @@ class FollowSuggestionsView(generics.ListAPIView):
             "mutual friends, and similar dream categories."
         ),
         tags=["Social"],
+        responses={
+            200: UserSearchResultSerializer(many=True),
+            403: OpenApiResponse(description="Subscription required."),
+        },
     )
     def list(self, request, *args, **kwargs):
         user = request.user
@@ -1058,7 +1080,9 @@ class FollowSuggestionsView(generics.ListAPIView):
 class RecentSearchViewSet(viewsets.GenericViewSet):
     """CRUD for recent search queries."""
 
+    queryset = RecentSearch.objects.none()
     permission_classes = [IsAuthenticated]
+    serializer_class = UserSearchResultSerializer
 
     @extend_schema(
         summary="List recent searches",

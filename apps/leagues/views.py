@@ -34,11 +34,18 @@ from core.permissions import CanUseLeague
     list=extend_schema(
         summary="List all leagues",
         description="Retrieve all league tiers with their XP ranges, icons, and rewards.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     ),
     retrieve=extend_schema(
         summary="Get league details",
         description="Retrieve detailed information about a specific league.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Leagues"],
     ),
 )
@@ -71,6 +78,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
     All leaderboard data exposes scores and badges but NEVER dreams.
     """
 
+    queryset = LeagueStanding.objects.none()
     permission_classes = [IsAuthenticated, CanUseLeague]
     serializer_class = LeaderboardEntrySerializer
 
@@ -89,7 +97,10 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 required=False,
             ),
         ],
-        responses={200: LeaderboardEntrySerializer(many=True)},
+        responses={
+            200: LeaderboardEntrySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='global')
@@ -134,7 +145,11 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 required=False,
             ),
         ],
-        responses={200: LeaderboardEntrySerializer(many=True)},
+        responses={
+            200: LeaderboardEntrySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='league')
@@ -189,7 +204,10 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 required=False,
             ),
         ],
-        responses={200: LeaderboardEntrySerializer(many=True)},
+        responses={
+            200: LeaderboardEntrySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='friends')
@@ -271,7 +289,11 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         description=(
             "Retrieve the current user's rank, league, and stats for the active season."
         ),
-        responses={200: LeagueStandingSerializer},
+        responses={
+            200: LeagueStandingSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='me')
@@ -327,7 +349,10 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 required=False,
             ),
         ],
-        responses={200: dict},
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='nearby')
@@ -347,11 +372,18 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
     list=extend_schema(
         summary="List seasons",
         description="Retrieve all seasons (current and past).",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     ),
     retrieve=extend_schema(
         summary="Get season details",
         description="Retrieve detailed information about a specific season.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Leagues"],
     ),
 )
@@ -374,7 +406,11 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Current season",
         description="Retrieve the currently active season.",
-        responses={200: SeasonSerializer},
+        responses={
+            200: SeasonSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='current')
@@ -393,7 +429,10 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Past seasons",
         description="Retrieve all past (inactive) seasons.",
-        responses={200: SeasonSerializer(many=True)},
+        responses={
+            200: SeasonSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='past')
@@ -406,7 +445,10 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="My season rewards",
         description="List all season rewards for the current user.",
-        responses={200: SeasonRewardSerializer(many=True)},
+        responses={
+            200: SeasonRewardSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Leagues"],
     )
     @action(detail=False, methods=['get'], url_path='my-rewards')
@@ -427,6 +469,7 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
         responses={
             200: SeasonRewardSerializer,
             400: OpenApiResponse(description="Rewards already claimed or season not ended."),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="No reward found for this season."),
         },
         tags=["Leagues"],

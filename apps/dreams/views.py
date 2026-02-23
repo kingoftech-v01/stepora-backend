@@ -12,6 +12,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 
+from core.openapi_examples import (
+    DREAM_CREATE_REQUEST, DREAM_LIST_RESPONSE, DREAM_ANALYZE_RESPONSE,
+    GOAL_CREATE_REQUEST,
+)
 from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
@@ -38,12 +42,61 @@ from core.ai_usage import AIUsageTracker
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List dreams", description="Get all dreams for the current user", tags=["Dreams"]),
-    create=extend_schema(summary="Create dream", description="Create a new dream", tags=["Dreams"]),
-    retrieve=extend_schema(summary="Get dream", description="Get a specific dream with details", tags=["Dreams"]),
-    update=extend_schema(summary="Update dream", description="Update a dream", tags=["Dreams"]),
-    partial_update=extend_schema(summary="Partial update dream", description="Partially update a dream", tags=["Dreams"]),
-    destroy=extend_schema(summary="Delete dream", description="Delete a dream", tags=["Dreams"]),
+    list=extend_schema(
+        summary="List dreams",
+        description="Get all dreams for the current user",
+        tags=["Dreams"],
+        responses={200: DreamSerializer(many=True)},
+        examples=[DREAM_LIST_RESPONSE],
+    ),
+    create=extend_schema(
+        summary="Create dream",
+        description="Create a new dream",
+        tags=["Dreams"],
+        responses={
+            201: DreamSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+        examples=[DREAM_CREATE_REQUEST],
+    ),
+    retrieve=extend_schema(
+        summary="Get dream",
+        description="Get a specific dream with details",
+        tags=["Dreams"],
+        responses={
+            200: DreamDetailSerializer,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    ),
+    update=extend_schema(
+        summary="Update dream",
+        description="Update a dream",
+        tags=["Dreams"],
+        responses={
+            200: DreamUpdateSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    ),
+    partial_update=extend_schema(
+        summary="Partial update dream",
+        description="Partially update a dream",
+        tags=["Dreams"],
+        responses={
+            200: DreamUpdateSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete dream",
+        description="Delete a dream",
+        tags=["Dreams"],
+        responses={
+            204: OpenApiResponse(description='Dream deleted.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    ),
 )
 class DreamViewSet(viewsets.ModelViewSet):
     """CRUD operations for dreams."""
@@ -57,6 +110,8 @@ class DreamViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get dreams for current user, including those they collaborate on."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Dream.objects.none()
         from django.db.models import Q
         collab_dream_ids = DreamCollaborator.objects.filter(
             user=self.request.user
@@ -97,7 +152,20 @@ class DreamViewSet(viewsets.ModelViewSet):
         """Create dream with current user."""
         serializer.save(user=self.request.user)
 
-    @extend_schema(summary="Analyze dream", description="Analyze a dream using AI to get insights", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Analyze dream",
+        description="Analyze a dream using AI to get insights",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+        examples=[DREAM_ANALYZE_RESPONSE],
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def analyze(self, request, pk=None):
         """Analyze dream with AI."""
@@ -134,7 +202,20 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Start calibration", description="Generate initial calibration questions for a dream", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Start calibration",
+        description="Generate initial calibration questions for a dream",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Calibration already completed.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def start_calibration(self, request, pk=None):
         """Generate initial calibration questions (7 questions) for the dream."""
@@ -195,7 +276,20 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Answer calibration", description="Submit answers to calibration questions and get follow-ups if needed", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Answer calibration",
+        description="Submit answers to calibration questions and get follow-ups if needed",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Validation error or content moderation flag.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def answer_calibration(self, request, pk=None):
         """
@@ -332,7 +426,15 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Skip calibration", description="Skip the calibration step and use basic info for plan generation", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Skip calibration",
+        description="Skip the calibration step and use basic info for plan generation",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def skip_calibration(self, request, pk=None):
         """Allow user to skip calibration and proceed with basic info."""
@@ -345,7 +447,19 @@ class DreamViewSet(viewsets.ModelViewSet):
             'message': 'Calibration skipped. You can generate a plan with basic info.',
         })
 
-    @extend_schema(summary="Generate plan", description="Generate a complete AI-powered plan with goals and tasks, using calibration data if available", tags=["Dreams"], responses={200: DreamDetailSerializer})
+    @extend_schema(
+        summary="Generate plan",
+        description="Generate a complete AI-powered plan with goals and tasks, using calibration data if available",
+        tags=["Dreams"],
+        responses={
+            200: DreamDetailSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def generate_plan(self, request, pk=None):
         """Generate complete plan for dream with AI, enriched by calibration data."""
@@ -464,7 +578,19 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Generate 2-minute start", description="Generate a micro-action to start working on the dream in 2 minutes", tags=["Dreams"], responses={200: DreamDetailSerializer})
+    @extend_schema(
+        summary="Generate 2-minute start",
+        description="Generate a micro-action to start working on the dream in 2 minutes",
+        tags=["Dreams"],
+        responses={
+            200: DreamDetailSerializer,
+            400: OpenApiResponse(description='2-minute start already generated.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+        },
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanDailyThrottle])
     def generate_two_minute_start(self, request, pk=None):
         """Generate 2-minute start task for dream."""
@@ -517,7 +643,18 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Generate vision board", description="Generate a vision board image using DALL-E", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Generate vision board",
+        description="Generate a vision board image using DALL-E",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+        },
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIImageDailyThrottle])
     def generate_vision(self, request, pk=None):
         """Generate vision board image for dream."""
@@ -553,7 +690,16 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Vision board list", description="List vision board images for a dream", tags=["Dreams"], responses={200: VisionBoardImageSerializer(many=True)})
+    @extend_schema(
+        summary="Vision board list",
+        description="List vision board images for a dream",
+        tags=["Dreams"],
+        responses={
+            200: VisionBoardImageSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['get'], url_path='vision-board')
     def vision_board_list(self, request, pk=None):
         """List all vision board images for a dream."""
@@ -561,7 +707,17 @@ class DreamViewSet(viewsets.ModelViewSet):
         images = dream.vision_images.all()
         return Response({'images': VisionBoardImageSerializer(images, many=True).data})
 
-    @extend_schema(summary="Add vision board image", description="Add an image to the vision board", tags=["Dreams"], responses={201: VisionBoardImageSerializer})
+    @extend_schema(
+        summary="Add vision board image",
+        description="Add an image to the vision board",
+        tags=["Dreams"],
+        responses={
+            201: VisionBoardImageSerializer,
+            400: OpenApiResponse(description='Validation error — image file or URL required.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['post'], url_path='vision-board/add', parser_classes=[MultiPartParser, FormParser])
     def vision_board_add(self, request, pk=None):
         """Add an image to the dream's vision board."""
@@ -587,7 +743,16 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         return Response(VisionBoardImageSerializer(vbi).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Remove vision board image", description="Remove an image from the vision board", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Remove vision board image",
+        description="Remove an image from the vision board",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Image not found.'),
+        },
+    )
     @action(detail=True, methods=['delete'], url_path=r'vision-board/(?P<image_id>[0-9a-f-]+)')
     def vision_board_remove(self, request, pk=None, image_id=None):
         """Remove an image from the dream's vision board."""
@@ -597,7 +762,15 @@ class DreamViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'message': 'Image removed.'})
 
-    @extend_schema(summary="Progress history", description="Get progress snapshot history for sparkline charts", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Progress history",
+        description="Get progress snapshot history for sparkline charts",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['get'], url_path='progress-history')
     def progress_history(self, request, pk=None):
         """Get progress snapshots for a dream."""
@@ -612,7 +785,15 @@ class DreamViewSet(viewsets.ModelViewSet):
         ]))
         return Response({'snapshots': data, 'current_progress': dream.progress_percentage})
 
-    @extend_schema(summary="Complete dream", description="Mark a dream as completed", tags=["Dreams"], responses={200: DreamSerializer})
+    @extend_schema(
+        summary="Complete dream",
+        description="Mark a dream as completed",
+        tags=["Dreams"],
+        responses={
+            200: DreamSerializer,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark dream as completed."""
@@ -621,7 +802,15 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         return Response(DreamSerializer(dream).data)
 
-    @extend_schema(summary="Duplicate dream", description="Create a deep copy of a dream with all goals and tasks", tags=["Dreams"], responses={201: DreamDetailSerializer})
+    @extend_schema(
+        summary="Duplicate dream",
+        description="Create a deep copy of a dream with all goals and tasks",
+        tags=["Dreams"],
+        responses={
+            201: DreamDetailSerializer,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):
         """Deep-copy a dream including goals and tasks."""
@@ -667,7 +856,17 @@ class DreamViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
 
-    @extend_schema(summary="Share dream", description="Share a dream with another user", tags=["Dreams"], request=ShareDreamRequestSerializer, responses={201: SharedDreamSerializer})
+    @extend_schema(
+        summary="Share dream",
+        description="Share a dream with another user",
+        tags=["Dreams"],
+        request=ShareDreamRequestSerializer,
+        responses={
+            201: SharedDreamSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Dream or target user not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def share(self, request, pk=None):
         """Share a dream with another user."""
@@ -711,7 +910,15 @@ class DreamViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
 
-    @extend_schema(summary="Unshare dream", description="Remove sharing of a dream with a user", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Unshare dream",
+        description="Remove sharing of a dream with a user",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            404: OpenApiResponse(description='Share not found.'),
+        },
+    )
     @action(detail=True, methods=['delete'], url_path=r'unshare/(?P<user_id>[0-9a-f-]+)')
     def unshare(self, request, pk=None, user_id=None):
         """Remove a dream share."""
@@ -730,7 +937,17 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         return Response({'message': 'Dream unshared.'})
 
-    @extend_schema(summary="Add tag to dream", description="Add a tag to a dream", tags=["Dreams"], request=AddTagSerializer, responses={200: DreamSerializer})
+    @extend_schema(
+        summary="Add tag to dream",
+        description="Add a tag to a dream",
+        tags=["Dreams"],
+        request=AddTagSerializer,
+        responses={
+            200: DreamSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
     @action(detail=True, methods=['post'], url_path='tags')
     def add_tag(self, request, pk=None):
         """Add a tag to a dream. Creates the tag if it doesn't exist."""
@@ -745,7 +962,15 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         return Response(DreamSerializer(dream).data)
 
-    @extend_schema(summary="Remove tag from dream", description="Remove a tag from a dream", tags=["Dreams"], responses={200: dict})
+    @extend_schema(
+        summary="Remove tag from dream",
+        description="Remove a tag from a dream",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            404: OpenApiResponse(description='Tag not found on this dream.'),
+        },
+    )
     @action(detail=True, methods=['delete'], url_path=r'tags/(?P<tag_name>[^/]+)')
     def remove_tag(self, request, pk=None, tag_name=None):
         """Remove a tag from a dream."""
@@ -767,7 +992,12 @@ class DreamViewSet(viewsets.ModelViewSet):
         summary="Add collaborator",
         description="Add a collaborator to a dream. Only the dream owner can add collaborators.",
         request=AddCollaboratorSerializer,
-        responses={201: DreamCollaboratorSerializer},
+        responses={
+            201: DreamCollaboratorSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Only the dream owner can add collaborators.'),
+            404: OpenApiResponse(description='Dream or target user not found.'),
+        },
         tags=["Dreams"],
     )
     @action(detail=True, methods=['post'], url_path='collaborators')
@@ -819,7 +1049,10 @@ class DreamViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="List collaborators",
         description="List all collaborators on a dream.",
-        responses={200: DreamCollaboratorSerializer(many=True)},
+        responses={
+            200: DreamCollaboratorSerializer(many=True),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
         tags=["Dreams"],
     )
     @action(detail=True, methods=['get'], url_path='collaborators/list')
@@ -835,7 +1068,11 @@ class DreamViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Remove collaborator",
         description="Remove a collaborator from a dream. Only the owner can remove.",
-        responses={200: dict},
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Only the dream owner can remove collaborators.'),
+            404: OpenApiResponse(description='Collaborator not found.'),
+        },
         tags=["Dreams"],
     )
     @action(detail=True, methods=['delete'], url_path=r'collaborators/(?P<user_id>[0-9a-f-]+)')
@@ -870,6 +1107,8 @@ class SharedWithMeView(generics.ListAPIView):
     serializer_class = SharedDreamSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return SharedDream.objects.none()
         return SharedDream.objects.filter(
             shared_with=self.request.user
         ).select_related('dream', 'shared_by', 'shared_with')
@@ -878,6 +1117,7 @@ class SharedWithMeView(generics.ListAPIView):
         summary="Dreams shared with me",
         description="Get all dreams that other users have shared with the current user.",
         tags=["Dreams"],
+        responses={200: SharedDreamSerializer(many=True)},
     )
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -896,6 +1136,7 @@ class DreamTagListView(generics.ListAPIView):
         summary="List dream tags",
         description="Get all available dream tags.",
         tags=["Dreams"],
+        responses={200: DreamTagSerializer(many=True)},
     )
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -904,8 +1145,21 @@ class DreamTagListView(generics.ListAPIView):
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List dream templates", description="Get all active dream templates", tags=["Dream Templates"]),
-    retrieve=extend_schema(summary="Get dream template", description="Get a specific dream template", tags=["Dream Templates"]),
+    list=extend_schema(
+        summary="List dream templates",
+        description="Get all active dream templates",
+        tags=["Dream Templates"],
+        responses={200: DreamTemplateSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Get dream template",
+        description="Get a specific dream template",
+        tags=["Dream Templates"],
+        responses={
+            200: DreamTemplateSerializer,
+            404: OpenApiResponse(description='Template not found.'),
+        },
+    ),
 )
 class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for browsing and using dream templates."""
@@ -915,6 +1169,8 @@ class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return active templates, optionally filtered by category."""
+        if getattr(self, 'swagger_fake_view', False):
+            return DreamTemplate.objects.none()
         qs = DreamTemplate.objects.filter(is_active=True)
         category = self.request.query_params.get('category')
         if category:
@@ -925,7 +1181,10 @@ class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Use dream template",
         description="Create a new dream from a template with pre-built goals and tasks.",
         tags=["Dream Templates"],
-        responses={201: DreamDetailSerializer},
+        responses={
+            201: DreamDetailSerializer,
+            404: OpenApiResponse(description='Template not found.'),
+        },
     )
     @action(detail=True, methods=['post'])
     def use(self, request, pk=None):
@@ -974,7 +1233,9 @@ class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Featured templates",
         description="Get featured dream templates.",
         tags=["Dream Templates"],
-        responses={200: DreamTemplateSerializer(many=True)},
+        responses={
+            200: DreamTemplateSerializer(many=True),
+        },
     )
     @action(detail=False, methods=['get'])
     def featured(self, request):
@@ -996,6 +1257,11 @@ class DreamPDFExportView(views.APIView):
         summary="Export dream as PDF",
         description="Generate and download a PDF of the dream with goals and tasks.",
         tags=["Dreams"],
+        responses={
+            200: OpenApiResponse(description='PDF file download.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            501: OpenApiResponse(description='PDF generation not available (reportlab not installed).'),
+        },
     )
     def get(self, request, dream_id):
         """Generate PDF for a dream."""
@@ -1105,12 +1371,60 @@ class DreamPDFExportView(views.APIView):
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List goals", description="Get all goals for the current user", tags=["Goals"]),
-    create=extend_schema(summary="Create goal", description="Create a new goal", tags=["Goals"]),
-    retrieve=extend_schema(summary="Get goal", description="Get a specific goal", tags=["Goals"]),
-    update=extend_schema(summary="Update goal", description="Update a goal", tags=["Goals"]),
-    partial_update=extend_schema(summary="Partial update goal", description="Partially update a goal", tags=["Goals"]),
-    destroy=extend_schema(summary="Delete goal", description="Delete a goal", tags=["Goals"]),
+    list=extend_schema(
+        summary="List goals",
+        description="Get all goals for the current user",
+        tags=["Goals"],
+        responses={200: GoalSerializer(many=True)},
+    ),
+    create=extend_schema(
+        summary="Create goal",
+        description="Create a new goal",
+        tags=["Goals"],
+        responses={
+            201: GoalSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+        examples=[GOAL_CREATE_REQUEST],
+    ),
+    retrieve=extend_schema(
+        summary="Get goal",
+        description="Get a specific goal",
+        tags=["Goals"],
+        responses={
+            200: GoalSerializer,
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    ),
+    update=extend_schema(
+        summary="Update goal",
+        description="Update a goal",
+        tags=["Goals"],
+        responses={
+            200: GoalSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    ),
+    partial_update=extend_schema(
+        summary="Partial update goal",
+        description="Partially update a goal",
+        tags=["Goals"],
+        responses={
+            200: GoalSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete goal",
+        description="Delete a goal",
+        tags=["Goals"],
+        responses={
+            204: OpenApiResponse(description='Goal deleted.'),
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    ),
 )
 class GoalViewSet(viewsets.ModelViewSet):
     """CRUD operations for goals."""
@@ -1123,6 +1437,8 @@ class GoalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get goals for current user's dreams."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Goal.objects.none()
         dream_id = self.request.query_params.get('dream')
         queryset = Goal.objects.filter(dream__user=self.request.user).prefetch_related('tasks')
 
@@ -1137,7 +1453,15 @@ class GoalViewSet(viewsets.ModelViewSet):
             return GoalCreateSerializer
         return GoalSerializer
 
-    @extend_schema(summary="Complete goal", description="Mark a goal as completed", tags=["Goals"], responses={200: GoalSerializer})
+    @extend_schema(
+        summary="Complete goal",
+        description="Mark a goal as completed",
+        tags=["Goals"],
+        responses={
+            200: GoalSerializer,
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark goal as completed."""
@@ -1148,12 +1472,59 @@ class GoalViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List tasks", description="Get all tasks for the current user", tags=["Tasks"]),
-    create=extend_schema(summary="Create task", description="Create a new task", tags=["Tasks"]),
-    retrieve=extend_schema(summary="Get task", description="Get a specific task", tags=["Tasks"]),
-    update=extend_schema(summary="Update task", description="Update a task", tags=["Tasks"]),
-    partial_update=extend_schema(summary="Partial update task", description="Partially update a task", tags=["Tasks"]),
-    destroy=extend_schema(summary="Delete task", description="Delete a task", tags=["Tasks"]),
+    list=extend_schema(
+        summary="List tasks",
+        description="Get all tasks for the current user",
+        tags=["Tasks"],
+        responses={200: TaskSerializer(many=True)},
+    ),
+    create=extend_schema(
+        summary="Create task",
+        description="Create a new task",
+        tags=["Tasks"],
+        responses={
+            201: TaskSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+    ),
+    retrieve=extend_schema(
+        summary="Get task",
+        description="Get a specific task",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer,
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    ),
+    update=extend_schema(
+        summary="Update task",
+        description="Update a task",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    ),
+    partial_update=extend_schema(
+        summary="Partial update task",
+        description="Partially update a task",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete task",
+        description="Delete a task",
+        tags=["Tasks"],
+        responses={
+            204: OpenApiResponse(description='Task deleted.'),
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    ),
 )
 class TaskViewSet(viewsets.ModelViewSet):
     """CRUD operations for tasks."""
@@ -1166,6 +1537,8 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get tasks for current user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Task.objects.none()
         goal_id = self.request.query_params.get('goal')
         queryset = Task.objects.filter(goal__dream__user=self.request.user)
 
@@ -1180,7 +1553,15 @@ class TaskViewSet(viewsets.ModelViewSet):
             return TaskCreateSerializer
         return TaskSerializer
 
-    @extend_schema(summary="Complete task", description="Mark a task as completed and earn XP", tags=["Tasks"], responses={200: TaskSerializer})
+    @extend_schema(
+        summary="Complete task",
+        description="Mark a task as completed and earn XP",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer,
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Mark task as completed."""
@@ -1189,7 +1570,15 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         return Response(TaskSerializer(task).data)
 
-    @extend_schema(summary="Skip task", description="Skip a task without completing it", tags=["Tasks"], responses={200: TaskSerializer})
+    @extend_schema(
+        summary="Skip task",
+        description="Skip a task without completing it",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer,
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def skip(self, request, pk=None):
         """Skip a task."""
@@ -1201,12 +1590,59 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List obstacles", description="Get all obstacles for the current user", tags=["Obstacles"]),
-    create=extend_schema(summary="Create obstacle", description="Create a new obstacle", tags=["Obstacles"]),
-    retrieve=extend_schema(summary="Get obstacle", description="Get a specific obstacle", tags=["Obstacles"]),
-    update=extend_schema(summary="Update obstacle", description="Update an obstacle", tags=["Obstacles"]),
-    partial_update=extend_schema(summary="Partial update obstacle", description="Partially update an obstacle", tags=["Obstacles"]),
-    destroy=extend_schema(summary="Delete obstacle", description="Delete an obstacle", tags=["Obstacles"]),
+    list=extend_schema(
+        summary="List obstacles",
+        description="Get all obstacles for the current user",
+        tags=["Obstacles"],
+        responses={200: ObstacleSerializer(many=True)},
+    ),
+    create=extend_schema(
+        summary="Create obstacle",
+        description="Create a new obstacle",
+        tags=["Obstacles"],
+        responses={
+            201: ObstacleSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+    ),
+    retrieve=extend_schema(
+        summary="Get obstacle",
+        description="Get a specific obstacle",
+        tags=["Obstacles"],
+        responses={
+            200: ObstacleSerializer,
+            404: OpenApiResponse(description='Obstacle not found.'),
+        },
+    ),
+    update=extend_schema(
+        summary="Update obstacle",
+        description="Update an obstacle",
+        tags=["Obstacles"],
+        responses={
+            200: ObstacleSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Obstacle not found.'),
+        },
+    ),
+    partial_update=extend_schema(
+        summary="Partial update obstacle",
+        description="Partially update an obstacle",
+        tags=["Obstacles"],
+        responses={
+            200: ObstacleSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Obstacle not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete obstacle",
+        description="Delete an obstacle",
+        tags=["Obstacles"],
+        responses={
+            204: OpenApiResponse(description='Obstacle deleted.'),
+            404: OpenApiResponse(description='Obstacle not found.'),
+        },
+    ),
 )
 class ObstacleViewSet(viewsets.ModelViewSet):
     """CRUD operations for obstacles."""
@@ -1216,6 +1652,8 @@ class ObstacleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get obstacles for current user's dreams."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Obstacle.objects.none()
         dream_id = self.request.query_params.get('dream')
         queryset = Obstacle.objects.filter(dream__user=self.request.user)
 
@@ -1224,7 +1662,15 @@ class ObstacleViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    @extend_schema(summary="Resolve obstacle", description="Mark an obstacle as resolved", tags=["Obstacles"], responses={200: ObstacleSerializer})
+    @extend_schema(
+        summary="Resolve obstacle",
+        description="Mark an obstacle as resolved",
+        tags=["Obstacles"],
+        responses={
+            200: ObstacleSerializer,
+            404: OpenApiResponse(description='Obstacle not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         """Mark obstacle as resolved."""

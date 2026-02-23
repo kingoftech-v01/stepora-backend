@@ -41,16 +41,18 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter to only allow users to see their own data."""
+        if getattr(self, 'swagger_fake_view', False):
+            return User.objects.none()
         return User.objects.filter(id=self.request.user.id)
 
-    @extend_schema(summary="Get current user", description="Get the current authenticated user's profile", tags=["Users"], responses={200: UserProfileSerializer})
+    @extend_schema(summary="Get current user", description="Get the current authenticated user's profile", tags=["Users"], responses={200: UserProfileSerializer, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Get current user profile."""
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
-    @extend_schema(summary="Update profile", description="Update the current user's profile", tags=["Users"], request=UserUpdateSerializer, responses={200: UserSerializer})
+    @extend_schema(summary="Update profile", description="Update the current user's profile", tags=["Users"], request=UserUpdateSerializer, responses={200: UserSerializer, 400: OpenApiResponse(description='Validation error.')})
     @action(detail=False, methods=['put', 'patch'])
     def update_profile(self, request):
         """Update current user profile."""
@@ -65,7 +67,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(UserSerializer(request.user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(summary="Get gamification profile", description="Get the current user's gamification profile with XP and levels", tags=["Users"], responses={200: GamificationProfileSerializer})
+    @extend_schema(summary="Get gamification profile", description="Get the current user's gamification profile with XP and levels", tags=["Users"], responses={200: GamificationProfileSerializer, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'])
     def gamification(self, request):
         """Get gamification profile."""
@@ -73,7 +75,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = GamificationProfileSerializer(profile)
         return Response(serializer.data)
 
-    @extend_schema(summary="Get AI usage", description="Get the current user's AI usage quotas for today", tags=["Users"], responses={200: dict})
+    @extend_schema(summary="Get AI usage", description="Get the current user's AI usage quotas for today", tags=["Users"], responses={200: dict, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'], url_path='ai-usage')
     def ai_usage(self, request):
         """Get current user's AI usage and remaining quotas for today."""
@@ -92,7 +94,10 @@ class UserViewSet(viewsets.ModelViewSet):
         summary="Upload avatar",
         description="Upload an avatar image for the current user.",
         request={'multipart/form-data': {'type': 'object', 'properties': {'avatar': {'type': 'string', 'format': 'binary'}}}},
-        responses={200: UserSerializer},
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
         tags=["Users"],
     )
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
@@ -155,7 +160,10 @@ class UserViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Delete account",
         description="Soft-delete the current user's account. Anonymizes personal data and deactivates the account.",
-        responses={200: OpenApiResponse(description="Account scheduled for deletion.")},
+        responses={
+            200: OpenApiResponse(description="Account scheduled for deletion."),
+            400: OpenApiResponse(description='Validation error.'),
+        },
         tags=["Users"],
     )
     @action(detail=False, methods=['delete'], url_path='delete-account')
@@ -204,7 +212,10 @@ class UserViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Export user data",
         description="Export all user data as JSON (GDPR data portability).",
-        responses={200: dict},
+        responses={
+            200: dict,
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+        },
         tags=["Users"],
     )
     @action(detail=False, methods=['get'], url_path='export-data', throttle_classes=[ExportRateThrottle])
@@ -266,7 +277,10 @@ class UserViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Change email",
         description="Request to change the user's email address. Sends a verification email to the new address.",
-        responses={200: OpenApiResponse(description="Verification email sent.")},
+        responses={
+            200: OpenApiResponse(description="Verification email sent."),
+            400: OpenApiResponse(description='Validation error.'),
+        },
         tags=["Users"],
     )
     @action(detail=False, methods=['post'], url_path='change-email')
@@ -316,7 +330,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'message': 'Verification email sent to the new address. Please check your inbox.',
         })
 
-    @extend_schema(summary="Get dashboard", description="Aggregated dashboard data: heatmap, stats, upcoming tasks, top dreams", tags=["Users"], responses={200: dict})
+    @extend_schema(summary="Get dashboard", description="Aggregated dashboard data: heatmap, stats, upcoming tasks, top dreams", tags=["Users"], responses={200: dict, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
         """Get aggregated dashboard data for the home screen."""
@@ -405,7 +419,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'top_dreams': dreams_data,
         })
 
-    @extend_schema(summary="Get achievements", description="List all achievements with unlock status", tags=["Users"], responses={200: dict})
+    @extend_schema(summary="Get achievements", description="List all achievements with unlock status", tags=["Users"], responses={200: dict, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'])
     def achievements(self, request):
         """Get all achievements with user unlock status."""
@@ -444,7 +458,10 @@ class UserViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Update notification preferences",
         description="Update per-type notification preferences (push/email toggles).",
-        responses={200: UserSerializer},
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
         tags=["Users"],
     )
     @action(detail=False, methods=['put'], url_path='notification-preferences')

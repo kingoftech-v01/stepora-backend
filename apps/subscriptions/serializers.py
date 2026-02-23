@@ -14,8 +14,8 @@ from .models import StripeCustomer, Subscription, SubscriptionPlan
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     """Serializer for SubscriptionPlan."""
 
-    is_free = serializers.BooleanField(read_only=True)
-    has_unlimited_dreams = serializers.BooleanField(read_only=True)
+    is_free = serializers.BooleanField(read_only=True, help_text='Whether this is the free tier plan.')
+    has_unlimited_dreams = serializers.BooleanField(read_only=True, help_text='Whether the plan allows unlimited dreams.')
 
     class Meta:
         model = SubscriptionPlan
@@ -38,12 +38,28 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             'is_active',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the plan.'},
+            'name': {'help_text': 'Display name of the subscription plan.'},
+            'slug': {'help_text': 'URL-friendly identifier for the plan.'},
+            'price_monthly': {'help_text': 'Monthly price of the plan.'},
+            'features': {'help_text': 'List of features included in the plan.'},
+            'dream_limit': {'help_text': 'Maximum number of dreams allowed.'},
+            'has_ai': {'help_text': 'Whether AI features are included.'},
+            'has_buddy': {'help_text': 'Whether buddy features are included.'},
+            'has_circles': {'help_text': 'Whether circle features are included.'},
+            'has_vision_board': {'help_text': 'Whether vision board is included.'},
+            'has_league': {'help_text': 'Whether league access is included.'},
+            'has_ads': {'help_text': 'Whether the plan shows ads.'},
+            'trial_period_days': {'help_text': 'Number of free trial days offered.'},
+            'is_active': {'help_text': 'Whether this plan is currently available.'},
+        }
 
 
 class StripeCustomerSerializer(serializers.ModelSerializer):
     """Serializer for the StripeCustomer mapping."""
 
-    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True, help_text='Email address of the customer.')
 
     class Meta:
         model = StripeCustomer
@@ -55,13 +71,19 @@ class StripeCustomerSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the customer record.'},
+            'user': {'help_text': 'User linked to this Stripe customer.'},
+            'stripe_customer_id': {'help_text': 'Stripe customer ID for payment processing.'},
+            'created_at': {'help_text': 'Timestamp when the customer record was created.'},
+        }
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     """Serializer for the active Subscription record."""
 
-    plan = SubscriptionPlanSerializer(read_only=True)
-    is_active = serializers.BooleanField(read_only=True)
+    plan = SubscriptionPlanSerializer(read_only=True, help_text='Details of the subscription plan.')
+    is_active = serializers.BooleanField(read_only=True, help_text='Whether the subscription is currently active.')
 
     class Meta:
         model = Subscription
@@ -79,6 +101,17 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the subscription.'},
+            'stripe_subscription_id': {'help_text': 'Stripe subscription ID for billing.'},
+            'status': {'help_text': 'Current status of the subscription.'},
+            'current_period_start': {'help_text': 'Start of the current billing period.'},
+            'current_period_end': {'help_text': 'End of the current billing period.'},
+            'cancel_at_period_end': {'help_text': 'Whether the subscription cancels at period end.'},
+            'canceled_at': {'help_text': 'Timestamp when the subscription was canceled.'},
+            'created_at': {'help_text': 'Timestamp when the subscription was created.'},
+            'updated_at': {'help_text': 'Timestamp when the subscription was last updated.'},
+        }
 
 
 class SubscriptionCreateSerializer(serializers.Serializer):
@@ -143,8 +176,8 @@ class InvoiceSerializer(serializers.Serializer):
     amount_paid = serializers.IntegerField(help_text='Amount paid in cents')
     currency = serializers.CharField(help_text='Currency code')
     status = serializers.CharField(help_text='Invoice status')
-    period_start = serializers.DateTimeField(allow_null=True)
-    period_end = serializers.DateTimeField(allow_null=True)
-    hosted_invoice_url = serializers.URLField(allow_null=True, allow_blank=True)
-    invoice_pdf = serializers.URLField(allow_null=True, allow_blank=True)
-    created = serializers.DateTimeField()
+    period_start = serializers.DateTimeField(allow_null=True, help_text='Start of the billing period for this invoice.')
+    period_end = serializers.DateTimeField(allow_null=True, help_text='End of the billing period for this invoice.')
+    hosted_invoice_url = serializers.URLField(allow_null=True, allow_blank=True, help_text='URL to view the hosted invoice on Stripe.')
+    invoice_pdf = serializers.URLField(allow_null=True, allow_blank=True, help_text='URL to download the invoice as PDF.')
+    created = serializers.DateTimeField(help_text='Timestamp when the invoice was created.')

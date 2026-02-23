@@ -13,7 +13,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as drf_serializers
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,16 @@ class TwoFactorSetupView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Setup 2FA", tags=["Two-Factor Auth"])
+    @extend_schema(
+        summary="Setup 2FA",
+        tags=["Auth"],
+        request=None,
+        responses={200: inline_serializer('TwoFactorSetupResponse', fields={
+            'secret': drf_serializers.CharField(),
+            'provisioning_uri': drf_serializers.CharField(),
+            'message': drf_serializers.CharField(),
+        })},
+    )
     def post(self, request):
         user = request.user
 
@@ -64,7 +74,19 @@ class TwoFactorVerifyView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Verify 2FA code", tags=["Two-Factor Auth"])
+    @extend_schema(
+        summary="Verify 2FA code",
+        tags=["Auth"],
+        request=inline_serializer('TwoFactorVerifyRequest', fields={
+            'code': drf_serializers.CharField(),
+        }),
+        responses={
+            200: inline_serializer('TwoFactorVerifyResponse', fields={
+                'verified': drf_serializers.BooleanField(),
+            }),
+            400: OpenApiResponse(description='Invalid code or 2FA not set up.'),
+        },
+    )
     def post(self, request):
         user = request.user
         code = request.data.get('code', '').strip()
@@ -134,7 +156,20 @@ class TwoFactorDisableView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Disable 2FA", tags=["Two-Factor Auth"])
+    @extend_schema(
+        summary="Disable 2FA",
+        tags=["Auth"],
+        request=inline_serializer('TwoFactorDisableRequest', fields={
+            'password': drf_serializers.CharField(),
+        }),
+        responses={
+            200: inline_serializer('TwoFactorDisableResponse', fields={
+                'two_factor_enabled': drf_serializers.BooleanField(),
+                'message': drf_serializers.CharField(),
+            }),
+            400: OpenApiResponse(description='Invalid password.'),
+        },
+    )
     def post(self, request):
         user = request.user
         password = request.data.get('password', '')
@@ -164,7 +199,15 @@ class TwoFactorStatusView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="2FA status", tags=["Two-Factor Auth"])
+    @extend_schema(
+        summary="2FA status",
+        tags=["Auth"],
+        request=None,
+        responses={200: inline_serializer('TwoFactorStatusResponse', fields={
+            'two_factor_enabled': drf_serializers.BooleanField(),
+            'backup_codes_remaining': drf_serializers.IntegerField(),
+        })},
+    )
     def get(self, request):
         prefs = request.user.app_prefs or {}
         return Response({
@@ -178,7 +221,20 @@ class TwoFactorRegenerateBackupCodesView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Regenerate backup codes", tags=["Two-Factor Auth"])
+    @extend_schema(
+        summary="Regenerate backup codes",
+        tags=["Auth"],
+        request=inline_serializer('TwoFactorRegenerateBackupCodesRequest', fields={
+            'password': drf_serializers.CharField(),
+        }),
+        responses={
+            200: inline_serializer('TwoFactorRegenerateBackupCodesResponse', fields={
+                'backup_codes': drf_serializers.ListField(child=drf_serializers.CharField()),
+                'message': drf_serializers.CharField(),
+            }),
+            400: OpenApiResponse(description='Invalid password or 2FA not enabled.'),
+        },
+    )
     def post(self, request):
         user = request.user
         password = request.data.get('password', '')

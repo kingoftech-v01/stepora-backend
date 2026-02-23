@@ -3,8 +3,11 @@ URLs for Users app.
 """
 
 from django.urls import path, include
-from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .views import UserViewSet
 from .models import EmailChangeRequest
 from .two_factor import (
@@ -13,16 +16,27 @@ from .two_factor import (
 )
 
 
+@extend_schema(
+    summary='Verify email change',
+    description='Verify an email change request using the token sent to the new email address.',
+    tags=['Users'],
+    responses={
+        200: OpenApiResponse(description='Email successfully changed.'),
+        400: OpenApiResponse(description='Invalid or expired token.'),
+    },
+)
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def verify_email_change(request, token):
     """Verify email change via token link."""
     try:
         ecr = EmailChangeRequest.objects.get(token=token, is_verified=False)
     except EmailChangeRequest.DoesNotExist:
-        return JsonResponse({'error': 'Invalid or expired token.'}, status=400)
+        return Response({'error': 'Invalid or expired token.'}, status=400)
 
     if ecr.is_expired:
         ecr.delete()
-        return JsonResponse({'error': 'Token has expired.'}, status=400)
+        return Response({'error': 'Token has expired.'}, status=400)
 
     # Apply email change
     user = ecr.user
@@ -32,7 +46,7 @@ def verify_email_change(request, token):
     ecr.is_verified = True
     ecr.save(update_fields=['is_verified'])
 
-    return JsonResponse({'message': 'Email successfully changed.'})
+    return Response({'message': 'Email successfully changed.'})
 
 
 router = SimpleRouter()

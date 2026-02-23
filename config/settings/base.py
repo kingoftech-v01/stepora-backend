@@ -240,19 +240,83 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/api/',
     'TAGS': [
-        {'name': 'auth', 'description': 'Authentication and registration'},
-        {'name': 'users', 'description': 'User profile management'},
-        {'name': 'dreams', 'description': 'Dream and goal management'},
-        {'name': 'conversations', 'description': 'AI chat in real-time'},
-        {'name': 'notifications', 'description': 'Push notifications'},
-        {'name': 'calendar', 'description': 'Calendar and planning'},
-        {'name': 'subscriptions', 'description': 'Stripe subscription management'},
-        {'name': 'store', 'description': 'In-app store for cosmetic items'},
-        {'name': 'leagues', 'description': 'League and ranking system'},
+        {'name': 'Auth', 'description': 'Authentication and registration'},
+        {'name': 'Users', 'description': 'User profile management'},
+        {'name': 'Dreams', 'description': 'Dream and goal management'},
+        {'name': 'Goals', 'description': 'Goal management within dreams'},
+        {'name': 'Tasks', 'description': 'Task management within goals'},
+        {'name': 'Obstacles', 'description': 'Obstacle tracking for dreams'},
+        {'name': 'Dream Templates', 'description': 'Pre-built dream templates'},
+        {'name': 'Conversations', 'description': 'AI chat conversations'},
+        {'name': 'Messages', 'description': 'Messages within AI conversations'},
+        {'name': 'Notifications', 'description': 'Push notifications and alerts'},
+        {'name': 'Notification Templates', 'description': 'Notification template management'},
+        {'name': 'Calendar', 'description': 'Calendar events and scheduling'},
+        {'name': 'Subscriptions', 'description': 'Stripe subscription management'},
+        {'name': 'Store', 'description': 'In-app store for cosmetic items'},
+        {'name': 'Leagues', 'description': 'League and ranking system'},
         {'name': 'Circles', 'description': 'Dream Circles for group goals and challenges'},
         {'name': 'Social', 'description': 'Friends, follows, and activity feed'},
         {'name': 'Buddies', 'description': 'Dream Buddy accountability pairing'},
     ],
+    'APPEND_COMPONENTS': {
+        'schemas': {
+            'ErrorResponse': {
+                'type': 'object',
+                'properties': {
+                    'detail': {'type': 'string', 'description': 'Human-readable error message.'},
+                },
+                'example': {'detail': 'A descriptive error message.'},
+            },
+            'ValidationErrorResponse': {
+                'type': 'object',
+                'additionalProperties': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
+                'example': {
+                    'title': ['This field is required.'],
+                    'non_field_errors': ['Invalid data.'],
+                },
+            },
+            'SubscriptionRequiredResponse': {
+                'type': 'object',
+                'properties': {
+                    'detail': {'type': 'string'},
+                },
+                'example': {
+                    'detail': 'This feature requires a Premium or Pro subscription.',
+                },
+            },
+            'RateLimitResponse': {
+                'type': 'object',
+                'properties': {
+                    'detail': {'type': 'string'},
+                },
+                'example': {
+                    'detail': 'Request was throttled. Expected available in 42 seconds.',
+                },
+            },
+            'AIServiceErrorResponse': {
+                'type': 'object',
+                'properties': {
+                    'error': {'type': 'string'},
+                },
+                'example': {
+                    'error': 'AI service returned an invalid response.',
+                },
+            },
+            'PaymentServiceErrorResponse': {
+                'type': 'object',
+                'properties': {
+                    'detail': {'type': 'string'},
+                },
+                'example': {
+                    'detail': 'Payment service error. Please try again later.',
+                },
+            },
+        },
+    },
 }
 
 # Channels (WebSocket)

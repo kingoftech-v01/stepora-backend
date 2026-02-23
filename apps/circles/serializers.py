@@ -22,8 +22,8 @@ class CircleMemberSerializer(serializers.ModelSerializer):
     Provides public user info: username, avatar, and role within the circle.
     """
 
-    username = serializers.CharField(source='user.display_name', read_only=True)
-    avatar = serializers.URLField(source='user.avatar_url', read_only=True)
+    username = serializers.CharField(source='user.display_name', read_only=True, help_text='Member display name.')
+    avatar = serializers.URLField(source='user.avatar_url', read_only=True, help_text='Member avatar URL.')
 
     class Meta:
         model = CircleMembership
@@ -36,6 +36,11 @@ class CircleMemberSerializer(serializers.ModelSerializer):
             'joined_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'user': {'help_text': 'ID of the member user.'},
+            'joined_at': {'help_text': 'Date and time the user joined the circle.'},
+        }
 
 
 class CircleChallengeSerializer(serializers.ModelSerializer):
@@ -48,10 +53,11 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
 
     participantCount = serializers.IntegerField(
         source='participant_count',
-        read_only=True
+        read_only=True,
+        help_text='Number of participants in the challenge.'
     )
-    startDate = serializers.DateTimeField(source='start_date', read_only=True)
-    endDate = serializers.DateTimeField(source='end_date', read_only=True)
+    startDate = serializers.DateTimeField(source='start_date', read_only=True, help_text='Challenge start date and time.')
+    endDate = serializers.DateTimeField(source='end_date', read_only=True, help_text='Challenge end date and time.')
 
     class Meta:
         model = CircleChallenge
@@ -66,6 +72,13 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'title': {'help_text': 'Title of the challenge.'},
+            'description': {'help_text': 'Description of the challenge.'},
+            'status': {'help_text': 'Current status of the challenge.'},
+            'created_at': {'help_text': 'Date and time the challenge was created.'},
+        }
 
 
 class CircleListSerializer(serializers.ModelSerializer):
@@ -76,11 +89,11 @@ class CircleListSerializer(serializers.ModelSerializer):
     including member count, member avatars, and basic info.
     """
 
-    memberCount = serializers.IntegerField(source='member_count', read_only=True)
-    maxMembers = serializers.IntegerField(source='max_members', read_only=True)
-    memberAvatars = serializers.SerializerMethodField()
-    creatorName = serializers.CharField(source='creator.display_name', read_only=True)
-    isMember = serializers.SerializerMethodField()
+    memberCount = serializers.IntegerField(source='member_count', read_only=True, help_text='Total number of circle members.')
+    maxMembers = serializers.IntegerField(source='max_members', read_only=True, help_text='Maximum allowed members in the circle.')
+    memberAvatars = serializers.SerializerMethodField(help_text='Avatar URLs of first 5 members.')
+    creatorName = serializers.CharField(source='creator.display_name', read_only=True, help_text='Display name of the circle creator.')
+    isMember = serializers.SerializerMethodField(help_text='Whether the requesting user is a member.')
 
     class Meta:
         model = Circle
@@ -98,13 +111,21 @@ class CircleListSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'name': {'help_text': 'Name of the circle.'},
+            'description': {'help_text': 'Description of the circle.'},
+            'category': {'help_text': 'Category of the circle.'},
+            'is_public': {'help_text': 'Whether the circle is publicly visible.'},
+            'created_at': {'help_text': 'Date and time the circle was created.'},
+        }
 
-    def get_memberAvatars(self, obj):
+    def get_memberAvatars(self, obj) -> list:
         """Return avatar URLs of the first 5 members for preview display."""
         memberships = obj.memberships.select_related('user').order_by('joined_at')[:5]
         return [m.user.avatar_url for m in memberships if m.user.avatar_url]
 
-    def get_isMember(self, obj):
+    def get_isMember(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -120,12 +141,12 @@ class CircleDetailSerializer(serializers.ModelSerializer):
     and whether the current user is a member.
     """
 
-    memberCount = serializers.IntegerField(source='member_count', read_only=True)
-    maxMembers = serializers.IntegerField(source='max_members', read_only=True)
-    members = serializers.SerializerMethodField()
-    challenges = serializers.SerializerMethodField()
-    creatorName = serializers.CharField(source='creator.display_name', read_only=True)
-    isMember = serializers.SerializerMethodField()
+    memberCount = serializers.IntegerField(source='member_count', read_only=True, help_text='Total number of circle members.')
+    maxMembers = serializers.IntegerField(source='max_members', read_only=True, help_text='Maximum allowed members in the circle.')
+    members = serializers.SerializerMethodField(help_text='List of all circle members.')
+    challenges = serializers.SerializerMethodField(help_text='Active and upcoming circle challenges.')
+    creatorName = serializers.CharField(source='creator.display_name', read_only=True, help_text='Display name of the circle creator.')
+    isMember = serializers.SerializerMethodField(help_text='Whether the requesting user is a member.')
 
     class Meta:
         model = Circle
@@ -146,20 +167,30 @@ class CircleDetailSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'name': {'help_text': 'Name of the circle.'},
+            'description': {'help_text': 'Description of the circle.'},
+            'category': {'help_text': 'Category of the circle.'},
+            'is_public': {'help_text': 'Whether the circle is publicly visible.'},
+            'creator': {'help_text': 'ID of the circle creator.'},
+            'created_at': {'help_text': 'Date and time the circle was created.'},
+            'updated_at': {'help_text': 'Date and time the circle was last updated.'},
+        }
 
-    def get_members(self, obj):
+    def get_members(self, obj) -> list:
         """Return all circle members with their roles."""
         memberships = obj.memberships.select_related('user').order_by('joined_at')
         return CircleMemberSerializer(memberships, many=True).data
 
-    def get_challenges(self, obj):
+    def get_challenges(self, obj) -> list:
         """Return active and upcoming challenges for this circle."""
         challenges = obj.challenges.filter(
             status__in=['upcoming', 'active']
         ).order_by('-start_date')
         return CircleChallengeSerializer(challenges, many=True).data
 
-    def get_isMember(self, obj):
+    def get_isMember(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -179,7 +210,8 @@ class CircleCreateSerializer(serializers.ModelSerializer):
     isPublic = serializers.BooleanField(
         source='is_public',
         required=False,
-        default=True
+        default=True,
+        help_text='Whether the circle is publicly visible.'
     )
 
     class Meta:
@@ -190,6 +222,11 @@ class CircleCreateSerializer(serializers.ModelSerializer):
             'category',
             'isPublic',
         ]
+        extra_kwargs = {
+            'name': {'help_text': 'Name of the circle.'},
+            'description': {'help_text': 'Description of the circle.'},
+            'category': {'help_text': 'Category of the circle.'},
+        }
 
     def validate_name(self, value):
         return sanitize_text(value)
@@ -219,9 +256,9 @@ class CirclePostSerializer(serializers.ModelSerializer):
     Provides post content along with author display info for the feed view.
     """
 
-    user = serializers.SerializerMethodField()
-    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
-    reactions = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField(help_text='Author display info including id, username, and avatar.')
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True, help_text='Date and time the post was created.')
+    reactions = serializers.SerializerMethodField(help_text='Reaction counts grouped by type.')
 
     class Meta:
         model = CirclePost
@@ -233,8 +270,11 @@ class CirclePostSerializer(serializers.ModelSerializer):
             'createdAt',
         ]
         read_only_fields = ['id', 'user', 'reactions', 'createdAt']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+        }
 
-    def get_user(self, obj):
+    def get_user(self, obj) -> dict:
         """Return author display info."""
         return {
             'id': str(obj.author.id),
@@ -242,7 +282,7 @@ class CirclePostSerializer(serializers.ModelSerializer):
             'avatar': obj.author.avatar_url or '',
         }
 
-    def get_reactions(self, obj):
+    def get_reactions(self, obj) -> dict:
         """Return reaction counts grouped by type."""
         from django.db.models import Count
         counts = obj.reactions.values('reaction_type').annotate(
@@ -269,6 +309,7 @@ class CircleUpdateSerializer(serializers.ModelSerializer):
     isPublic = serializers.BooleanField(
         source='is_public',
         required=False,
+        help_text='Whether the circle is publicly visible.'
     )
 
     class Meta:
@@ -281,10 +322,10 @@ class CircleUpdateSerializer(serializers.ModelSerializer):
             'max_members',
         ]
         extra_kwargs = {
-            'name': {'required': False},
-            'description': {'required': False},
-            'category': {'required': False},
-            'max_members': {'required': False},
+            'name': {'required': False, 'help_text': 'Name of the circle.'},
+            'description': {'required': False, 'help_text': 'Description of the circle.'},
+            'category': {'required': False, 'help_text': 'Category of the circle.'},
+            'max_members': {'required': False, 'help_text': 'Maximum allowed members in the circle.'},
         }
 
     def validate_name(self, value):
@@ -306,12 +347,17 @@ class PostReactionSerializer(serializers.Serializer):
 class PostReactionDisplaySerializer(serializers.ModelSerializer):
     """Serializer for displaying reactions on a post."""
 
-    username = serializers.CharField(source='user.display_name', read_only=True)
+    username = serializers.CharField(source='user.display_name', read_only=True, help_text='Display name of the reacting user.')
 
     class Meta:
         model = PostReaction
         fields = ['id', 'user', 'username', 'reaction_type', 'created_at']
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'user': {'help_text': 'ID of the reacting user.'},
+            'created_at': {'help_text': 'Date and time the reaction was created.'},
+        }
 
 
 class CirclePostUpdateSerializer(serializers.Serializer):
@@ -338,10 +384,10 @@ class MemberRoleSerializer(serializers.Serializer):
 class CircleInvitationSerializer(serializers.ModelSerializer):
     """Serializer for circle invitations."""
 
-    inviterName = serializers.CharField(source='inviter.display_name', read_only=True)
-    inviteeName = serializers.SerializerMethodField()
-    circleName = serializers.CharField(source='circle.name', read_only=True)
-    isExpired = serializers.BooleanField(source='is_expired', read_only=True)
+    inviterName = serializers.CharField(source='inviter.display_name', read_only=True, help_text='Display name of the inviter.')
+    inviteeName = serializers.SerializerMethodField(help_text='Display name of the invitee.')
+    circleName = serializers.CharField(source='circle.name', read_only=True, help_text='Name of the circle being invited to.')
+    isExpired = serializers.BooleanField(source='is_expired', read_only=True, help_text='Whether the invitation has expired.')
 
     class Meta:
         model = CircleInvitation
@@ -353,8 +399,18 @@ class CircleInvitationSerializer(serializers.ModelSerializer):
             'isExpired', 'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'circle': {'help_text': 'ID of the circle.'},
+            'inviter': {'help_text': 'ID of the user who sent the invitation.'},
+            'invitee': {'help_text': 'ID of the invited user.'},
+            'invite_code': {'help_text': 'Unique invitation code.'},
+            'status': {'help_text': 'Current status of the invitation.'},
+            'expires_at': {'help_text': 'Expiration date and time of the invitation.'},
+            'created_at': {'help_text': 'Date and time the invitation was created.'},
+        }
 
-    def get_inviteeName(self, obj):
+    def get_inviteeName(self, obj) -> str:
         if obj.invitee:
             return obj.invitee.display_name or 'Anonymous'
         return None
@@ -369,8 +425,8 @@ class DirectInviteSerializer(serializers.Serializer):
 class ChallengeProgressSerializer(serializers.ModelSerializer):
     """Serializer for challenge progress entries."""
 
-    userName = serializers.SerializerMethodField()
-    userAvatar = serializers.SerializerMethodField()
+    userName = serializers.SerializerMethodField(help_text='Display name of the user.')
+    userAvatar = serializers.SerializerMethodField(help_text='Avatar URL of the user.')
 
     class Meta:
         model = ChallengeProgress
@@ -381,11 +437,17 @@ class ChallengeProgressSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'challenge', 'user', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'challenge': {'help_text': 'ID of the associated challenge.'},
+            'user': {'help_text': 'ID of the user tracking progress.'},
+            'created_at': {'help_text': 'Date and time the progress was recorded.'},
+        }
 
-    def get_userName(self, obj):
+    def get_userName(self, obj) -> str:
         return obj.user.display_name or 'Anonymous'
 
-    def get_userAvatar(self, obj):
+    def get_userAvatar(self, obj) -> str:
         return obj.user.avatar_url or ''
 
 

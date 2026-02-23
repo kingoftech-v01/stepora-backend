@@ -8,7 +8,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
+
+from core.openapi_examples import AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPONSE
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -29,12 +31,65 @@ from core.ai_usage import AIUsageTracker
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List conversations", description="Get all conversations for the current user", tags=["Conversations"]),
-    create=extend_schema(summary="Create conversation", description="Create a new AI conversation", tags=["Conversations"]),
-    retrieve=extend_schema(summary="Get conversation", description="Get a specific conversation with messages", tags=["Conversations"]),
-    update=extend_schema(summary="Update conversation", description="Update a conversation", tags=["Conversations"]),
-    partial_update=extend_schema(summary="Partial update conversation", description="Partially update a conversation", tags=["Conversations"]),
-    destroy=extend_schema(summary="Delete conversation", description="Delete a conversation", tags=["Conversations"]),
+    list=extend_schema(
+        summary="List conversations",
+        description="Get all conversations for the current user",
+        tags=["Conversations"],
+        responses={
+            200: ConversationSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
+    ),
+    create=extend_schema(
+        summary="Create conversation",
+        description="Create a new AI conversation",
+        tags=["Conversations"],
+        responses={
+            201: ConversationSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
+    ),
+    retrieve=extend_schema(
+        summary="Get conversation",
+        description="Get a specific conversation with messages",
+        tags=["Conversations"],
+        responses={
+            200: ConversationDetailSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    ),
+    update=extend_schema(
+        summary="Update conversation",
+        description="Update a conversation",
+        tags=["Conversations"],
+        responses={
+            200: ConversationSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    ),
+    partial_update=extend_schema(
+        summary="Partial update conversation",
+        description="Partially update a conversation",
+        tags=["Conversations"],
+        responses={
+            200: ConversationSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete conversation",
+        description="Delete a conversation",
+        tags=["Conversations"],
+        responses={
+            204: OpenApiResponse(description='Conversation deleted.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    ),
 )
 class ConversationViewSet(viewsets.ModelViewSet):
     """CRUD operations for conversations. All AI conversation features require premium+."""
@@ -46,6 +101,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get conversations for current user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Conversation.objects.none()
         return Conversation.objects.filter(user=self.request.user).prefetch_related('messages')
 
     def get_serializer_class(self):
@@ -60,7 +117,20 @@ class ConversationViewSet(viewsets.ModelViewSet):
         """Create conversation with current user."""
         serializer.save(user=self.request.user)
 
-    @extend_schema(summary="Send message", description="Send a message and get AI response", tags=["Conversations"], request=MessageCreateSerializer, responses={200: dict})
+    @extend_schema(
+        summary="Send message",
+        description="Send a message and get AI response",
+        tags=["Conversations"],
+        request=MessageCreateSerializer,
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+        examples=[AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPONSE],
+    )
     @action(detail=True, methods=['post'], throttle_classes=[AIRateThrottle, AIChatDailyThrottle])
     def send_message(self, request, pk=None):
         """Send a message in the conversation."""
@@ -154,7 +224,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(summary="Send voice message", description="Upload audio for transcription and AI response", tags=["Conversations"])
+    @extend_schema(
+        summary="Send voice message",
+        description="Upload audio for transcription and AI response",
+        tags=["Conversations"],
+        responses={
+            201: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='send-voice', throttle_classes=[AIVoiceDailyThrottle])
     def send_voice(self, request, pk=None):
         """Send a voice message. Audio is transcribed via Whisper and AI responds."""
@@ -198,7 +279,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
             'status': 'transcription_queued',
         }, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Send image message", description="Upload image for GPT-4 Vision analysis", tags=["Conversations"])
+    @extend_schema(
+        summary="Send image message",
+        description="Upload image for GPT-4 Vision analysis",
+        tags=["Conversations"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='send-image', throttle_classes=[AIRateThrottle, AIChatDailyThrottle])
     def send_image(self, request, pk=None):
         """Send an image for GPT-4 Vision analysis in the conversation context."""
@@ -259,7 +351,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         except OpenAIError as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @extend_schema(summary="Get messages", description="Get all messages for a conversation", tags=["Conversations"], responses={200: MessageSerializer(many=True)})
+    @extend_schema(
+        summary="Get messages",
+        description="Get all messages for a conversation",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
         """Get messages for a conversation."""
@@ -274,7 +375,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data)
 
-    @extend_schema(summary="Pin conversation", description="Pin/unpin a conversation", tags=["Conversations"], responses={200: ConversationSerializer})
+    @extend_schema(
+        summary="Pin conversation",
+        description="Pin/unpin a conversation",
+        tags=["Conversations"],
+        responses={
+            200: ConversationSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def pin(self, request, pk=None):
         """Toggle pin status on a conversation."""
@@ -283,7 +393,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation.save(update_fields=['is_pinned'])
         return Response(ConversationSerializer(conversation).data)
 
-    @extend_schema(summary="Pin message", description="Pin/unpin a message in a conversation", tags=["Conversations"], responses={200: MessageSerializer})
+    @extend_schema(
+        summary="Pin message",
+        description="Pin/unpin a message in a conversation",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['post'], url_path=r'pin-message/(?P<message_id>[0-9a-f-]+)')
     def pin_message(self, request, pk=None, message_id=None):
         """Toggle pin on a message."""
@@ -296,7 +415,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         message.save(update_fields=['is_pinned'])
         return Response(MessageSerializer(message).data)
 
-    @extend_schema(summary="Like message", description="Toggle like on a message", tags=["Conversations"], responses={200: MessageSerializer})
+    @extend_schema(
+        summary="Like message",
+        description="Toggle like on a message",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['post'], url_path=r'like-message/(?P<message_id>[0-9a-f-]+)')
     def like_message(self, request, pk=None, message_id=None):
         """Toggle like on a message."""
@@ -309,7 +437,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
         message.save(update_fields=['is_liked'])
         return Response(MessageSerializer(message).data)
 
-    @extend_schema(summary="React to message", description="Add a reaction emoji to a message", tags=["Conversations"], responses={200: MessageSerializer})
+    @extend_schema(
+        summary="React to message",
+        description="Add a reaction emoji to a message",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['post'], url_path=r'react-message/(?P<message_id>[0-9a-f-]+)')
     def react_message(self, request, pk=None, message_id=None):
         """Add or remove a reaction on a message."""
@@ -332,7 +470,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         message.save(update_fields=['reactions'])
         return Response(MessageSerializer(message).data)
 
-    @extend_schema(summary="Search messages", description="Search messages within a conversation", tags=["Conversations"], responses={200: MessageSerializer(many=True)})
+    @extend_schema(
+        summary="Search messages",
+        description="Search messages within a conversation",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['get'])
     def search(self, request, pk=None):
         """Search messages within a conversation."""
@@ -346,7 +493,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')[:50]
         return Response({'messages': MessageSerializer(messages, many=True).data})
 
-    @extend_schema(summary="Export conversation", description="Export a conversation as JSON or PDF", tags=["Conversations"], responses={200: dict})
+    @extend_schema(
+        summary="Export conversation",
+        description="Export a conversation as JSON or PDF",
+        tags=["Conversations"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not found.'),
+        },
+    )
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
         """Export conversation in JSON or PDF format."""
@@ -433,6 +589,8 @@ class MessageViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Get messages for current user's conversations."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Message.objects.none()
         return Message.objects.filter(conversation__user=self.request.user)
 
 

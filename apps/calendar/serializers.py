@@ -10,9 +10,9 @@ from .models import CalendarEvent, TimeBlock
 class CalendarEventSerializer(serializers.ModelSerializer):
     """Serializer for Calendar events."""
 
-    task_title = serializers.CharField(source='task.title', read_only=True, allow_null=True)
-    goal_title = serializers.CharField(source='task.goal.title', read_only=True, allow_null=True)
-    dream_title = serializers.CharField(source='task.goal.dream.title', read_only=True, allow_null=True)
+    task_title = serializers.CharField(source='task.title', read_only=True, allow_null=True, help_text='Title of the linked task.')
+    goal_title = serializers.CharField(source='task.goal.title', read_only=True, allow_null=True, help_text='Title of the goal the task belongs to.')
+    dream_title = serializers.CharField(source='task.goal.dream.title', read_only=True, allow_null=True, help_text='Title of the dream the task belongs to.')
 
     class Meta:
         model = CalendarEvent
@@ -25,12 +25,29 @@ class CalendarEventSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the calendar event.'},
+            'user': {'help_text': 'Owner of the calendar event.'},
+            'task': {'help_text': 'Task linked to this calendar event.'},
+            'title': {'help_text': 'Title of the calendar event.'},
+            'description': {'help_text': 'Detailed description of the event.'},
+            'start_time': {'help_text': 'Start date and time of the event.'},
+            'end_time': {'help_text': 'End date and time of the event.'},
+            'location': {'help_text': 'Location where the event takes place.'},
+            'reminder_minutes_before': {'help_text': 'Minutes before the event to send a reminder.'},
+            'status': {'help_text': 'Current status of the event.'},
+            'is_recurring': {'help_text': 'Whether this event repeats on a schedule.'},
+            'recurrence_rule': {'help_text': 'Recurrence rule defining the repeat pattern.'},
+            'parent_event': {'help_text': 'Parent event if this is a recurring instance.'},
+            'created_at': {'help_text': 'Timestamp when the event was created.'},
+            'updated_at': {'help_text': 'Timestamp when the event was last updated.'},
+        }
 
 
 class CalendarEventCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating calendar events."""
 
-    force = serializers.BooleanField(required=False, default=False, write_only=True)
+    force = serializers.BooleanField(required=False, default=False, write_only=True, help_text='Force creation even if there is a scheduling conflict.')
 
     class Meta:
         model = CalendarEvent
@@ -41,6 +58,17 @@ class CalendarEventCreateSerializer(serializers.ModelSerializer):
             'is_recurring', 'recurrence_rule',
             'force',
         ]
+        extra_kwargs = {
+            'task': {'help_text': 'Task to link to this event.'},
+            'title': {'help_text': 'Title of the calendar event.'},
+            'description': {'help_text': 'Detailed description of the event.'},
+            'start_time': {'help_text': 'Start date and time of the event.'},
+            'end_time': {'help_text': 'End date and time of the event.'},
+            'location': {'help_text': 'Location where the event takes place.'},
+            'reminder_minutes_before': {'help_text': 'Minutes before the event to send a reminder.'},
+            'is_recurring': {'help_text': 'Whether this event repeats on a schedule.'},
+            'recurrence_rule': {'help_text': 'Recurrence rule defining the repeat pattern.'},
+        }
 
     def validate_title(self, value):
         """Sanitize title to prevent XSS."""
@@ -68,9 +96,9 @@ class CalendarEventCreateSerializer(serializers.ModelSerializer):
 class CalendarEventRescheduleSerializer(serializers.Serializer):
     """Serializer for rescheduling a calendar event."""
 
-    start_time = serializers.DateTimeField()
-    end_time = serializers.DateTimeField()
-    force = serializers.BooleanField(required=False, default=False)
+    start_time = serializers.DateTimeField(help_text='New start date and time for the event.')
+    end_time = serializers.DateTimeField(help_text='New end date and time for the event.')
+    force = serializers.BooleanField(required=False, default=False, help_text='Force reschedule even if there is a conflict.')
 
     def validate(self, data):
         if data['start_time'] >= data['end_time']:
@@ -81,14 +109,14 @@ class CalendarEventRescheduleSerializer(serializers.Serializer):
 class SuggestTimeSlotsSerializer(serializers.Serializer):
     """Serializer for time slot suggestion request."""
 
-    date = serializers.DateField()
-    duration_mins = serializers.IntegerField(min_value=5, max_value=480)
+    date = serializers.DateField(help_text='Date to find available time slots for.')
+    duration_mins = serializers.IntegerField(min_value=5, max_value=480, help_text='Desired duration in minutes (5-480).')
 
 
 class TimeBlockSerializer(serializers.ModelSerializer):
     """Serializer for Time blocks."""
 
-    day_name = serializers.SerializerMethodField()
+    day_name = serializers.SerializerMethodField(help_text='Human-readable name of the day of week.')
 
     class Meta:
         model = TimeBlock
@@ -98,8 +126,19 @@ class TimeBlockSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the time block.'},
+            'user': {'help_text': 'Owner of the time block.'},
+            'block_type': {'help_text': 'Category of the time block (e.g., work, rest).'},
+            'day_of_week': {'help_text': 'Day of week as integer (0=Monday, 6=Sunday).'},
+            'start_time': {'help_text': 'Start time of the block.'},
+            'end_time': {'help_text': 'End time of the block.'},
+            'is_active': {'help_text': 'Whether this time block is currently active.'},
+            'created_at': {'help_text': 'Timestamp when the time block was created.'},
+            'updated_at': {'help_text': 'Timestamp when the time block was last updated.'},
+        }
 
-    def get_day_name(self, obj):
+    def get_day_name(self, obj) -> str:
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         return days[obj.day_of_week]
 
@@ -119,14 +158,14 @@ class TimeBlockSerializer(serializers.ModelSerializer):
 class CalendarTaskSerializer(serializers.Serializer):
     """Serializer for tasks in calendar view."""
 
-    task_id = serializers.UUIDField()
-    task_title = serializers.CharField()
-    goal_id = serializers.UUIDField()
-    goal_title = serializers.CharField()
-    dream_id = serializers.UUIDField()
-    dream_title = serializers.CharField()
-    scheduled_date = serializers.DateTimeField()
-    scheduled_time = serializers.CharField(allow_blank=True)
-    duration_mins = serializers.IntegerField()
-    status = serializers.CharField()
-    is_two_minute_start = serializers.BooleanField()
+    task_id = serializers.UUIDField(help_text='Unique identifier of the task.')
+    task_title = serializers.CharField(help_text='Title of the task.')
+    goal_id = serializers.UUIDField(help_text='Unique identifier of the parent goal.')
+    goal_title = serializers.CharField(help_text='Title of the parent goal.')
+    dream_id = serializers.UUIDField(help_text='Unique identifier of the parent dream.')
+    dream_title = serializers.CharField(help_text='Title of the parent dream.')
+    scheduled_date = serializers.DateTimeField(help_text='Date the task is scheduled for.')
+    scheduled_time = serializers.CharField(allow_blank=True, help_text='Time of day the task is scheduled.')
+    duration_mins = serializers.IntegerField(help_text='Estimated duration of the task in minutes.')
+    status = serializers.CharField(help_text='Current completion status of the task.')
+    is_two_minute_start = serializers.BooleanField(help_text='Whether this task can be started in two minutes.')

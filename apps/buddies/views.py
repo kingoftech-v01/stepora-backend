@@ -44,6 +44,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
     permission_classes = [IsAuthenticated, CanUseBuddy]
     queryset = BuddyPairing.objects.all()
+    serializer_class = BuddyPairingSerializer
 
     def _get_partner_data(self, user):
         """Build partner data dict from a User object."""
@@ -88,7 +89,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
             "Retrieve the current user's active buddy pairing. "
             "Returns null buddy if no active pairing exists."
         ),
-        responses={200: BuddyPairingSerializer},
+        responses={
+            200: BuddyPairingSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Buddies"],
     )
     @action(detail=False, methods=['get'], url_path='current')
@@ -131,7 +135,12 @@ class BuddyViewSet(viewsets.GenericViewSet):
     @extend_schema(
         summary="Get buddy progress",
         description="Retrieve progress comparison between the current user and their buddy.",
-        responses={200: BuddyProgressSerializer},
+        responses={
+            200: BuddyProgressSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Buddies"],
     )
     @action(detail=True, methods=['get'], url_path='progress')
@@ -201,6 +210,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         responses={
             200: BuddyMatchSerializer,
             400: OpenApiResponse(description="Already have an active buddy."),
+            403: OpenApiResponse(description='Subscription required.'),
         },
         tags=["Buddies"],
     )
@@ -284,6 +294,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
         responses={
             201: OpenApiResponse(description="Buddy pairing created."),
             400: OpenApiResponse(description="Already have a buddy or invalid partner."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Buddies"],
     )
@@ -353,6 +365,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         description="Accept a pending buddy pairing request.",
         responses={
             200: OpenApiResponse(description="Pairing accepted."),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
@@ -380,6 +393,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         description="Reject a pending buddy pairing request.",
         responses={
             200: OpenApiResponse(description="Pairing rejected."),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
@@ -409,6 +423,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
         request=BuddyEncourageSerializer,
         responses={
             200: OpenApiResponse(description="Encouragement sent."),
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
@@ -493,6 +509,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         description="End an active buddy pairing. Sets status to cancelled.",
         responses={
             200: OpenApiResponse(description="Pairing ended."),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
@@ -525,7 +542,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
     @extend_schema(
         summary="Buddy pairing history",
         description="Get the user's past buddy pairings with stats.",
-        responses={200: BuddyHistorySerializer(many=True)},
+        responses={
+            200: BuddyHistorySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Buddies"],
     )
     @action(detail=False, methods=['get'], url_path='history')

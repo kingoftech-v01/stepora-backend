@@ -49,7 +49,6 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'slug'
 
 
-@extend_schema_view()
 class SubscriptionViewSet(viewsets.GenericViewSet):
     """Viewset for managing the authenticated user's subscription."""
 
@@ -58,6 +57,8 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     def get_queryset(self):
         """Scope to the current user's subscription only."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Subscription.objects.none()
         return Subscription.objects.filter(user=self.request.user)
 
     @extend_schema(
@@ -92,6 +93,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         responses={
             200: OpenApiResponse(description="Checkout session URL returned"),
             400: OpenApiResponse(description="Invalid plan or validation error"),
+            502: OpenApiResponse(description="Payment service error."),
         },
     )
     @action(detail=False, methods=['post'])
@@ -135,6 +137,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         responses={
             200: OpenApiResponse(description="Portal URL returned"),
             400: OpenApiResponse(description="No Stripe customer record"),
+            502: OpenApiResponse(description="Payment service error."),
         },
     )
     @action(detail=False, methods=['post'])
@@ -169,7 +172,9 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
+            400: OpenApiResponse(description="Validation error."),
             404: OpenApiResponse(description="No active subscription to cancel"),
+            502: OpenApiResponse(description="Payment service error."),
         },
     )
     @action(detail=False, methods=['post'])
@@ -199,7 +204,9 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         tags=["Subscriptions"],
         responses={
             200: SubscriptionSerializer,
+            400: OpenApiResponse(description="Validation error."),
             404: OpenApiResponse(description="No subscription pending cancellation"),
+            502: OpenApiResponse(description="Payment service error."),
         },
     )
     @action(detail=False, methods=['post'])
@@ -230,6 +237,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         responses={
             200: SubscriptionSerializer,
             404: OpenApiResponse(description="No subscription to sync"),
+            502: OpenApiResponse(description="Payment service error."),
         },
     )
     @action(detail=False, methods=['post'])
@@ -257,7 +265,10 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         summary="List invoices",
         description="Fetch recent invoices from Stripe for the current user.",
         tags=["Subscriptions"],
-        responses={200: InvoiceSerializer(many=True)},
+        responses={
+            200: InvoiceSerializer(many=True),
+            502: OpenApiResponse(description="Payment service error."),
+        },
     )
     @action(detail=False, methods=['get'])
     def invoices(self, request):

@@ -20,11 +20,11 @@ from .serializers import (
 
 @extend_schema_view(
     list=extend_schema(summary="List notifications", description="Get all notifications for the current user", tags=["Notifications"]),
-    create=extend_schema(summary="Create notification", description="Create a new notification", tags=["Notifications"]),
-    retrieve=extend_schema(summary="Get notification", description="Get a specific notification", tags=["Notifications"]),
-    update=extend_schema(summary="Update notification", description="Update a notification", tags=["Notifications"]),
-    partial_update=extend_schema(summary="Partial update notification", description="Partially update a notification", tags=["Notifications"]),
-    destroy=extend_schema(summary="Delete notification", description="Delete a notification", tags=["Notifications"]),
+    create=extend_schema(summary="Create notification", description="Create a new notification", responses={400: OpenApiResponse(description='Validation error.')}, tags=["Notifications"]),
+    retrieve=extend_schema(summary="Get notification", description="Get a specific notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
+    update=extend_schema(summary="Update notification", description="Update a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
+    partial_update=extend_schema(summary="Partial update notification", description="Partially update a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
+    destroy=extend_schema(summary="Delete notification", description="Delete a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
 )
 class NotificationViewSet(viewsets.ModelViewSet):
     """CRUD operations for notifications."""
@@ -40,6 +40,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get notifications for current user, filtered by subscription tier."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         qs = Notification.objects.filter(user=self.request.user)
         # Free users only see basic notification types
         if self.request.user.subscription == 'free':
@@ -56,7 +58,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """Create notification for current user."""
         serializer.save(user=self.request.user)
 
-    @extend_schema(summary="Mark as read", description="Mark a notification as read", tags=["Notifications"], responses={200: NotificationSerializer})
+    @extend_schema(summary="Mark as read", description="Mark a notification as read", tags=["Notifications"], responses={200: NotificationSerializer, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
         """Mark notification as read."""
@@ -88,7 +90,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
         return Response({'unread_count': count})
 
-    @extend_schema(summary="Mark as opened", description="Mark a notification as opened/interacted with", tags=["Notifications"], responses={200: NotificationSerializer})
+    @extend_schema(summary="Mark as opened", description="Mark a notification as opened/interacted with", tags=["Notifications"], responses={200: NotificationSerializer, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=True, methods=['post'])
     def opened(self, request, pk=None):
         """Mark notification as opened (for analytics tracking)."""
@@ -155,6 +157,8 @@ class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'delete']
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return WebPushSubscription.objects.none()
         return WebPushSubscription.objects.filter(
             user=self.request.user,
             is_active=True,

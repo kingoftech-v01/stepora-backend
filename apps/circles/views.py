@@ -8,6 +8,7 @@ and challenges. All endpoints require authentication.
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
 from drf_spectacular.utils import (
@@ -61,16 +62,27 @@ from .serializers import (
                 enum=['my', 'public', 'recommended'],
             ),
         ],
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Circles"],
     ),
     retrieve=extend_schema(
         summary="Get circle details",
         description="Retrieve detailed information about a specific circle including members and challenges.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     ),
     create=extend_schema(
         summary="Create a circle",
         description="Create a new Dream Circle. The creator is automatically added as an admin member.",
+        responses={
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Circles"],
     ),
 )
@@ -112,6 +124,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         return CircleListSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Circle.objects.none()
         return Circle.objects.annotate(
             members_count=Count('memberships')
         ).select_related('creator')
@@ -167,6 +181,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         responses={
             200: OpenApiResponse(description="Successfully joined the circle."),
             400: OpenApiResponse(description="Circle is full or user already a member."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -218,6 +234,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         responses={
             200: OpenApiResponse(description="Successfully left the circle."),
             400: OpenApiResponse(description="Cannot leave (e.g., last admin)."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -266,7 +284,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Get circle feed",
         description="Retrieve the feed of posts for a specific circle.",
-        responses={200: CirclePostSerializer(many=True)},
+        responses={
+            200: CirclePostSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['get'], url_path='feed')
@@ -306,7 +328,9 @@ class CircleViewSet(viewsets.ModelViewSet):
         request=CirclePostCreateSerializer,
         responses={
             201: CirclePostSerializer,
-            403: OpenApiResponse(description="Not a member of this circle."),
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description="Not a member or subscription required."),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -341,7 +365,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="List circle challenges",
         description="Retrieve active and upcoming challenges for a specific circle.",
-        responses={200: CircleChallengeSerializer(many=True)},
+        responses={
+            200: CircleChallengeSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['get'], url_path='challenges')
@@ -364,7 +392,12 @@ class CircleViewSet(viewsets.ModelViewSet):
         summary="Update a circle",
         description="Update circle details. Only admins can update.",
         request=CircleUpdateSerializer,
-        responses={200: CircleDetailSerializer},
+        responses={
+            200: CircleDetailSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     def update(self, request, *args, **kwargs):
@@ -391,7 +424,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Delete a circle",
         description="Delete a circle. Only the circle admin can delete it.",
-        responses={204: None},
+        responses={
+            204: None,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     def destroy(self, request, *args, **kwargs):
@@ -412,7 +449,11 @@ class CircleViewSet(viewsets.ModelViewSet):
         summary="Edit a circle post",
         description="Edit a post. Only the author or a moderator/admin can edit.",
         request=CirclePostUpdateSerializer,
-        responses={200: CirclePostSerializer},
+        responses={
+            200: CirclePostSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['put'], url_path=r'posts/(?P<post_id>[0-9a-f-]+)/edit')
@@ -446,7 +487,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Delete a circle post",
         description="Delete a post. Only the author or a moderator/admin can delete.",
-        responses={204: None},
+        responses={
+            204: None,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['delete'], url_path=r'posts/(?P<post_id>[0-9a-f-]+)/delete')
@@ -478,6 +523,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         responses={
             200: OpenApiResponse(description="Reaction updated."),
             201: OpenApiResponse(description="Reaction added."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -514,7 +561,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Remove reaction from a post",
         description="Remove your reaction from a circle post.",
-        responses={200: OpenApiResponse(description="Reaction removed.")},
+        responses={
+            200: OpenApiResponse(description="Reaction removed."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['delete'], url_path=r'posts/(?P<post_id>[0-9a-f-]+)/unreact')
@@ -540,7 +591,11 @@ class CircleViewSet(viewsets.ModelViewSet):
         summary="Promote a member",
         description="Promote a circle member to moderator. Only admins can promote.",
         request=MemberRoleSerializer,
-        responses={200: OpenApiResponse(description="Member role updated.")},
+        responses={
+            200: OpenApiResponse(description="Member role updated."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['post'], url_path=r'members/(?P<member_id>[0-9a-f-]+)/promote')
@@ -574,7 +629,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Demote a member",
         description="Demote a circle moderator to regular member. Only admins can demote.",
-        responses={200: OpenApiResponse(description="Member demoted.")},
+        responses={
+            200: OpenApiResponse(description="Member demoted."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['post'], url_path=r'members/(?P<member_id>[0-9a-f-]+)/demote')
@@ -608,7 +667,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Remove a member",
         description="Remove a member from the circle. Only admins and moderators can remove.",
-        responses={200: OpenApiResponse(description="Member removed.")},
+        responses={
+            200: OpenApiResponse(description="Member removed."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['delete'], url_path=r'members/(?P<member_id>[0-9a-f-]+)/remove')
@@ -643,7 +706,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         responses={
             201: CircleInvitationSerializer,
             400: OpenApiResponse(description="User already a member or already invited."),
-            403: OpenApiResponse(description="Not an admin or moderator."),
+            403: OpenApiResponse(description="Not an admin/moderator or subscription required."),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -699,7 +763,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Generate invite link",
         description="Generate a shareable invite code for a circle.",
-        responses={201: CircleInvitationSerializer},
+        responses={
+            201: CircleInvitationSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['post'], url_path='invite-link')
@@ -729,7 +797,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="List circle invitations",
         description="List all pending invitations for a circle.",
-        responses={200: CircleInvitationSerializer(many=True)},
+        responses={
+            200: CircleInvitationSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['get'], url_path='invitations')
@@ -754,7 +826,12 @@ class CircleViewSet(viewsets.ModelViewSet):
         summary="Submit challenge progress",
         description="Submit a progress entry for a circle challenge.",
         request=ChallengeProgressCreateSerializer,
-        responses={201: ChallengeProgressSerializer},
+        responses={
+            201: ChallengeProgressSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['post'], url_path=r'challenges/(?P<challenge_id>[0-9a-f-]+)/progress')
@@ -798,7 +875,11 @@ class CircleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Challenge leaderboard",
         description="Get a leaderboard for a specific challenge based on total progress.",
-        responses={200: dict},
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
         tags=["Circles"],
     )
     @action(detail=True, methods=['get'], url_path=r'challenges/(?P<challenge_id>[0-9a-f-]+)/leaderboard')
@@ -839,13 +920,6 @@ class CircleViewSet(viewsets.ModelViewSet):
         })
 
 
-@extend_schema_view(
-    list=extend_schema(
-        summary="List all challenges",
-        description="List all active and upcoming challenges across all circles.",
-        tags=["Circles"],
-    ),
-)
 class ChallengeViewSet(viewsets.GenericViewSet):
     """
     ViewSet for challenge actions that operate outside a specific circle context.
@@ -863,6 +937,8 @@ class ChallengeViewSet(viewsets.GenericViewSet):
         responses={
             200: OpenApiResponse(description="Successfully joined the challenge."),
             400: OpenApiResponse(description="Already joined or not a circle member."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
         },
         tags=["Circles"],
     )
@@ -901,7 +977,7 @@ class ChallengeViewSet(viewsets.GenericViewSet):
         })
 
 
-class JoinByInviteCodeView(generics.GenericAPIView):
+class JoinByInviteCodeView(APIView):
     """Join a circle using an invite code. Requires premium+ subscription."""
 
     permission_classes = [IsAuthenticated, CanUseCircles]
@@ -909,9 +985,11 @@ class JoinByInviteCodeView(generics.GenericAPIView):
     @extend_schema(
         summary="Join circle via invite code",
         description="Accept a circle invitation using a shareable invite code.",
+        request=None,
         responses={
             200: OpenApiResponse(description="Successfully joined the circle."),
             400: OpenApiResponse(description="Already a member or circle is full."),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description="Invalid or expired invite code."),
         },
         tags=["Circles"],
@@ -982,6 +1060,8 @@ class MyInvitationsView(generics.ListAPIView):
     serializer_class = CircleInvitationSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return CircleInvitation.objects.none()
         return CircleInvitation.objects.filter(
             invitee=self.request.user,
             status='pending',
@@ -990,6 +1070,9 @@ class MyInvitationsView(generics.ListAPIView):
     @extend_schema(
         summary="My circle invitations",
         description="List all pending circle invitations received by the current user.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+        },
         tags=["Circles"],
     )
     def list(self, request, *args, **kwargs):

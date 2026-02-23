@@ -2,6 +2,8 @@
 Serializers for Conversations app.
 """
 
+from typing import Optional
+
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
 from .models import Conversation, Message, ConversationSummary, ConversationTemplate
@@ -19,12 +21,26 @@ class MessageSerializer(serializers.ModelSerializer):
             'metadata', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the message.'},
+            'conversation': {'help_text': 'Conversation this message belongs to.'},
+            'role': {'help_text': 'Role of the message sender (user or assistant).'},
+            'content': {'help_text': 'Text content of the message.'},
+            'audio_url': {'help_text': 'URL to an attached audio recording.'},
+            'transcription': {'help_text': 'Transcription of the audio content.'},
+            'image_url': {'help_text': 'URL to an attached image.'},
+            'is_pinned': {'help_text': 'Whether this message is pinned.'},
+            'is_liked': {'help_text': 'Whether the user liked this message.'},
+            'reactions': {'help_text': 'Emoji reactions on this message.'},
+            'metadata': {'help_text': 'Additional metadata for the message.'},
+            'created_at': {'help_text': 'Timestamp when the message was created.'},
+        }
 
 
 class MessageCreateSerializer(serializers.Serializer):
     """Serializer for creating/sending a message."""
 
-    content = serializers.CharField(max_length=5000)
+    content = serializers.CharField(max_length=5000, help_text='Text content of the message to send.')
 
     def validate_content(self, value):
         """Validate and sanitize message content."""
@@ -36,8 +52,8 @@ class MessageCreateSerializer(serializers.Serializer):
 class ConversationSerializer(serializers.ModelSerializer):
     """Basic serializer for Conversation model."""
 
-    dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True)
-    last_message = serializers.SerializerMethodField()
+    dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True, help_text='Title of the linked dream.')
+    last_message = serializers.SerializerMethodField(help_text='Preview of the most recent message.')
 
     class Meta:
         model = Conversation
@@ -49,8 +65,21 @@ class ConversationSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'total_messages', 'total_tokens_used', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the conversation.'},
+            'user': {'help_text': 'Owner of the conversation.'},
+            'dream': {'help_text': 'Dream linked to this conversation.'},
+            'title': {'help_text': 'Title of the conversation.'},
+            'is_pinned': {'help_text': 'Whether the conversation is pinned.'},
+            'conversation_type': {'help_text': 'Type of conversation (e.g., general, planning).'},
+            'total_messages': {'help_text': 'Total number of messages in the conversation.'},
+            'total_tokens_used': {'help_text': 'Total AI tokens consumed in this conversation.'},
+            'is_active': {'help_text': 'Whether the conversation is still active.'},
+            'created_at': {'help_text': 'Timestamp when the conversation was created.'},
+            'updated_at': {'help_text': 'Timestamp when the conversation was last updated.'},
+        }
 
-    def get_last_message(self, obj):
+    def get_last_message(self, obj) -> Optional[dict]:
         """Get the last message in the conversation."""
         last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
@@ -65,8 +94,8 @@ class ConversationSerializer(serializers.ModelSerializer):
 class ConversationDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for Conversation with messages."""
 
-    messages = MessageSerializer(many=True, read_only=True)
-    dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True)
+    messages = MessageSerializer(many=True, read_only=True, help_text='List of messages in the conversation.')
+    dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True, help_text='Title of the linked dream.')
 
     class Meta:
         model = Conversation
@@ -78,6 +107,19 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'total_messages', 'total_tokens_used', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the conversation.'},
+            'user': {'help_text': 'Owner of the conversation.'},
+            'dream': {'help_text': 'Dream linked to this conversation.'},
+            'title': {'help_text': 'Title of the conversation.'},
+            'is_pinned': {'help_text': 'Whether the conversation is pinned.'},
+            'conversation_type': {'help_text': 'Type of conversation (e.g., general, planning).'},
+            'total_messages': {'help_text': 'Total number of messages in the conversation.'},
+            'total_tokens_used': {'help_text': 'Total AI tokens consumed in this conversation.'},
+            'is_active': {'help_text': 'Whether the conversation is still active.'},
+            'created_at': {'help_text': 'Timestamp when the conversation was created.'},
+            'updated_at': {'help_text': 'Timestamp when the conversation was last updated.'},
+        }
 
 
     def validate_title(self, value):
@@ -93,6 +135,10 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = ['conversation_type', 'dream']
+        extra_kwargs = {
+            'conversation_type': {'help_text': 'Type of conversation to create.'},
+            'dream': {'help_text': 'Dream to link to this conversation.'},
+        }
 
     def validate_conversation_type(self, value):
         """Validate conversation type."""
@@ -125,6 +171,15 @@ class ConversationSummarySerializer(serializers.ModelSerializer):
             'start_message', 'end_message', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the summary.'},
+            'conversation': {'help_text': 'Conversation this summary belongs to.'},
+            'summary': {'help_text': 'AI-generated summary of the conversation segment.'},
+            'key_points': {'help_text': 'Key points extracted from the conversation.'},
+            'start_message': {'help_text': 'First message covered by this summary.'},
+            'end_message': {'help_text': 'Last message covered by this summary.'},
+            'created_at': {'help_text': 'Timestamp when the summary was created.'},
+        }
 
 
 class ConversationTemplateSerializer(serializers.ModelSerializer):
@@ -138,3 +193,14 @@ class ConversationTemplateSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the template.'},
+            'name': {'help_text': 'Display name of the template.'},
+            'conversation_type': {'help_text': 'Type of conversation this template starts.'},
+            'description': {'help_text': 'Brief description of the template purpose.'},
+            'icon': {'help_text': 'Icon identifier for the template.'},
+            'starter_messages': {'help_text': 'Pre-defined starter messages for the template.'},
+            'is_active': {'help_text': 'Whether this template is currently available.'},
+            'created_at': {'help_text': 'Timestamp when the template was created.'},
+            'updated_at': {'help_text': 'Timestamp when the template was last updated.'},
+        }

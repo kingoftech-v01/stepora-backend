@@ -11,7 +11,8 @@ from django.db.models import Q
 from django.utils import timezone
 from django.http import HttpResponse
 from datetime import datetime, timedelta, timezone as dt_timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, inline_serializer
+from rest_framework import serializers as drf_serializers
 
 from .models import CalendarEvent, TimeBlock, GoogleCalendarIntegration
 from .serializers import (
@@ -50,6 +51,8 @@ class CalendarEventViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get calendar events for current user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return CalendarEvent.objects.none()
         return CalendarEvent.objects.filter(user=self.request.user)
 
     def get_serializer_class(self):
@@ -190,6 +193,8 @@ class TimeBlockViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Get time blocks for current user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return TimeBlock.objects.none()
         return TimeBlock.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
@@ -197,11 +202,11 @@ class TimeBlockViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-@extend_schema_view()
 class CalendarViewSet(viewsets.ViewSet):
     """Calendar views and operations."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = CalendarTaskSerializer
 
     @extend_schema(
         summary="Get calendar view",
@@ -448,7 +453,18 @@ class GoogleCalendarAuthView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Get Google OAuth URL", tags=["Calendar Integration"])
+    @extend_schema(
+        summary="Get Google OAuth URL",
+        tags=["Calendar Integration"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='GoogleCalendarAuthResponse',
+                fields={'auth_url': drf_serializers.URLField()},
+            ),
+            501: OpenApiResponse(description='Google Calendar integration not configured'),
+        },
+    )
     def get(self, request):
         from integrations.google_calendar import GoogleCalendarService
         from django.conf import settings
@@ -470,7 +486,25 @@ class GoogleCalendarCallbackView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Google OAuth callback", tags=["Calendar Integration"])
+    @extend_schema(
+        summary="Google OAuth callback",
+        tags=["Calendar Integration"],
+        request=inline_serializer(
+            name='GoogleCalendarCallbackRequest',
+            fields={'code': drf_serializers.CharField()},
+        ),
+        responses={
+            200: inline_serializer(
+                name='GoogleCalendarCallbackResponse',
+                fields={
+                    'status': drf_serializers.CharField(),
+                    'calendar_id': drf_serializers.CharField(),
+                    'ical_feed_token': drf_serializers.CharField(),
+                },
+            ),
+            400: OpenApiResponse(description='Invalid or missing authorization code'),
+        },
+    )
     def post(self, request):
         from integrations.google_calendar import GoogleCalendarService
         from django.conf import settings
@@ -509,7 +543,21 @@ class GoogleCalendarSyncView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Trigger Google Calendar sync", tags=["Calendar Integration"])
+    @extend_schema(
+        summary="Trigger Google Calendar sync",
+        tags=["Calendar Integration"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='GoogleCalendarSyncResponse',
+                fields={
+                    'status': drf_serializers.CharField(),
+                    'last_sync': drf_serializers.DateTimeField(),
+                },
+            ),
+            404: OpenApiResponse(description='Google Calendar not connected'),
+        },
+    )
     def post(self, request):
         from .tasks import sync_google_calendar
         try:
@@ -526,7 +574,18 @@ class GoogleCalendarDisconnectView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Disconnect Google Calendar", tags=["Calendar Integration"])
+    @extend_schema(
+        summary="Disconnect Google Calendar",
+        tags=["Calendar Integration"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='GoogleCalendarDisconnectResponse',
+                fields={'status': drf_serializers.CharField()},
+            ),
+            404: OpenApiResponse(description='No integration found'),
+        },
+    )
     def post(self, request):
         deleted, _ = GoogleCalendarIntegration.objects.filter(user=request.user).delete()
         if deleted:
@@ -543,7 +602,15 @@ class ICalFeedView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(summary="iCal feed export", tags=["Calendar Integration"])
+    @extend_schema(
+        summary="iCal feed export",
+        tags=["Calendar Integration"],
+        request=None,
+        responses={
+            200: OpenApiResponse(description='iCal feed content'),
+            404: OpenApiResponse(description='Feed not found'),
+        },
+    )
     def get(self, request, feed_token):
         try:
             integration = GoogleCalendarIntegration.objects.select_related('user').get(

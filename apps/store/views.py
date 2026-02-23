@@ -82,6 +82,8 @@ class StoreCategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return only active categories."""
+        if getattr(self, 'swagger_fake_view', False):
+            return StoreCategory.objects.none()
         return StoreCategory.objects.filter(
             is_active=True
         ).prefetch_related('items')
@@ -125,6 +127,8 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return only active store items within their availability window."""
+        if getattr(self, 'swagger_fake_view', False):
+            return StoreItem.objects.none()
         now = timezone.now()
         qs = StoreItem.objects.filter(
             is_active=True
@@ -201,6 +205,8 @@ class UserInventoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return inventory items for the authenticated user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return UserInventory.objects.none()
         return StoreService.get_user_inventory(self.request.user)
 
     @extend_schema(
@@ -273,6 +279,13 @@ class UserInventoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(summary='List wishlist items', description="Retrieve all items on the authenticated user's wishlist.", tags=['Store']),
+    create=extend_schema(summary='Add to wishlist', description="Add a store item to the authenticated user's wishlist.", tags=['Store'],
+                         responses={201: WishlistSerializer, 400: OpenApiResponse(description='Validation error.')}),
+    destroy=extend_schema(summary='Remove from wishlist', description="Remove an item from the authenticated user's wishlist.", tags=['Store'],
+                          responses={204: None, 404: OpenApiResponse(description='Wishlist item not found.')}),
+)
 class WishlistViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing the user's wishlist.
@@ -286,6 +299,8 @@ class WishlistViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Return wishlist items for the authenticated user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Wishlist.objects.none()
         return Wishlist.objects.filter(
             user=self.request.user
         ).select_related('item', 'item__category')
@@ -319,7 +334,9 @@ class PurchaseView(views.APIView):
         responses={
             201: OpenApiResponse(description='Payment intent created successfully'),
             400: OpenApiResponse(description='Validation error'),
+            403: OpenApiResponse(description='Subscription required.'),
             409: OpenApiResponse(description='Item already owned'),
+            502: OpenApiResponse(description='Payment service error.'),
         },
     )
     def post(self, request):
@@ -375,8 +392,10 @@ class PurchaseConfirmView(views.APIView):
         responses={
             200: UserInventorySerializer,
             400: OpenApiResponse(description='Validation error or payment not completed'),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description='Item not found'),
             409: OpenApiResponse(description='Item already owned'),
+            502: OpenApiResponse(description='Payment service error.'),
         },
     )
     def post(self, request):
@@ -430,6 +449,7 @@ class XPPurchaseView(views.APIView):
         responses={
             200: UserInventorySerializer,
             400: OpenApiResponse(description='Insufficient XP or item not purchasable with XP'),
+            403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description='Item not found'),
             409: OpenApiResponse(description='Item already owned'),
         },
@@ -485,7 +505,13 @@ class GiftSendView(views.APIView):
         description='Purchase a store item and gift it to another user.',
         tags=['Store'],
         request=GiftSendSerializer,
-        responses={201: dict, 400: OpenApiResponse(description='Error')},
+        responses={
+            201: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+            502: OpenApiResponse(description='Payment service error.'),
+        },
     )
     def post(self, request):
         from apps.users.models import User
@@ -527,7 +553,12 @@ class GiftClaimView(views.APIView):
         summary='Claim gift',
         description='Claim a gift and add the item to your inventory.',
         tags=['Store'],
-        responses={200: UserInventorySerializer},
+        request=None,
+        responses={
+            200: UserInventorySerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
     )
     def post(self, request, gift_id):
         try:

@@ -7,6 +7,7 @@ social features.
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_serializer
 
 from core.sanitizers import sanitize_text
 from apps.users.models import User
@@ -21,12 +22,12 @@ class UserPublicSerializer(serializers.ModelSerializer):
     but never private data like dreams or email.
     """
 
-    username = serializers.CharField(source='display_name', read_only=True)
-    avatar = serializers.URLField(source='avatar_url', read_only=True)
-    currentLevel = serializers.IntegerField(source='level', read_only=True)
-    influenceScore = serializers.IntegerField(source='xp', read_only=True)
-    currentStreak = serializers.IntegerField(source='streak_days', read_only=True)
-    title = serializers.SerializerMethodField()
+    username = serializers.CharField(source='display_name', read_only=True, help_text='Public display name.')
+    avatar = serializers.URLField(source='avatar_url', read_only=True, help_text='Avatar image URL.')
+    currentLevel = serializers.IntegerField(source='level', read_only=True, help_text='Current user level.')
+    influenceScore = serializers.IntegerField(source='xp', read_only=True, help_text='Total XP earned.')
+    currentStreak = serializers.IntegerField(source='streak_days', read_only=True, help_text='Current streak in days.')
+    title = serializers.SerializerMethodField(help_text='Title based on level (e.g., Dreamer, Explorer).')
 
     class Meta:
         model = User
@@ -40,8 +41,11 @@ class UserPublicSerializer(serializers.ModelSerializer):
             'title',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique user identifier.'},
+        }
 
-    def get_title(self, obj):
+    def get_title(self, obj) -> str:
         """Generate a title based on the user's level."""
         level = obj.level
         if level >= 50:
@@ -76,6 +80,7 @@ class FriendSerializer(serializers.Serializer):
     currentStreak = serializers.IntegerField(help_text='Current streak days.')
 
 
+@extend_schema_serializer(component_name='PendingFriendRequest')
 class FriendRequestSerializer(serializers.ModelSerializer):
     """
     Serializer for pending friend requests.
@@ -83,7 +88,7 @@ class FriendRequestSerializer(serializers.ModelSerializer):
     Shows the sender's public info for incoming requests.
     """
 
-    sender = serializers.SerializerMethodField()
+    sender = serializers.SerializerMethodField(help_text='Sender public profile info.')
 
     class Meta:
         model = Friendship
@@ -94,8 +99,13 @@ class FriendRequestSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Friend request identifier.'},
+            'status': {'help_text': 'Request status (pending, accepted, rejected).'},
+            'created_at': {'help_text': 'When the request was sent.'},
+        }
 
-    def get_sender(self, obj):
+    def get_sender(self, obj) -> dict:
         """Return the sender's public profile info."""
         user = obj.user1
         return {
@@ -133,9 +143,9 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
     Uses camelCase field names to match mobile app expectations.
     """
 
-    user = serializers.SerializerMethodField()
-    type = serializers.CharField(source='activity_type')
-    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    user = serializers.SerializerMethodField(help_text='Actor public profile info.')
+    type = serializers.CharField(source='activity_type', help_text='Activity type (e.g., dream_completed, task_done).')
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True, help_text='When the activity occurred.')
 
     class Meta:
         model = ActivityFeedItem
@@ -147,8 +157,12 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
             'createdAt',
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Activity feed item identifier.'},
+            'content': {'help_text': 'Activity description text.'},
+        }
 
-    def get_user(self, obj):
+    def get_user(self, obj) -> dict:
         """Return the actor's public profile info."""
         return {
             'id': str(obj.user.id),
@@ -212,11 +226,11 @@ class BlockedUserSerializer(serializers.Serializer):
     """Serializer for blocked user list items."""
 
     id = serializers.UUIDField(help_text='Block record ID.')
-    user = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField(help_text='Blocked user public profile.')
     reason = serializers.CharField(help_text='Reason for blocking.')
     created_at = serializers.DateTimeField(help_text='When the block was created.')
 
-    def get_user(self, obj):
+    def get_user(self, obj) -> dict:
         blocked = obj.blocked
         return {
             'id': str(blocked.id),
