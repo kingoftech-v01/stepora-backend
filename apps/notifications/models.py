@@ -214,6 +214,60 @@ class WebPushSubscription(models.Model):
         return f"WebPush - {self.user.email} ({self.browser or 'unknown'})"
 
 
+class UserDevice(models.Model):
+    """FCM device registration for push notifications."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
+
+    fcm_token = models.TextField(
+        unique=True,
+        help_text='Firebase Cloud Messaging registration token for this device.'
+    )
+
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    ]
+    platform = models.CharField(
+        max_length=10,
+        choices=PLATFORM_CHOICES,
+        help_text='Device platform (android, ios, web).'
+    )
+
+    device_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Human-readable device name, e.g. "iPhone 15 Pro".'
+    )
+    app_version = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='App version string at time of registration.'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text='Set to False when token is known invalid or user logs out.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_devices'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['platform']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.platform} ({'active' if self.is_active else 'inactive'})"
+
+
 class NotificationBatch(models.Model):
     """Batch of notifications sent together."""
 

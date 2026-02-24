@@ -477,3 +477,24 @@ def send_level_up_notification(self, user_id, new_level):
     except Exception as e:
         logger.error(f"Error sending level up notification: {str(e)}")
         raise self.retry(exc=e, countdown=60)
+
+
+@shared_task(bind=True, max_retries=3)
+def cleanup_stale_fcm_tokens(self):
+    """
+    Deactivate FCM device registrations not updated in 60+ days.
+    Stale tokens waste API calls and increase latency.
+    Runs weekly alongside cleanup_old_notifications.
+    """
+    try:
+        from .models import UserDevice
+        threshold = timezone.now() - timedelta(days=60)
+        deactivated = UserDevice.objects.filter(
+            is_active=True,
+            updated_at__lt=threshold,
+        ).update(is_active=False)
+        logger.info(f"Deactivated {deactivated} stale FCM device registrations")
+        return {'deactivated': deactivated}
+    except Exception as e:
+        logger.error(f"Error in cleanup_stale_fcm_tokens: {e}")
+        raise self.retry(exc=e, countdown=300)

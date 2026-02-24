@@ -1,5 +1,5 @@
 """
-Notification delivery service — orchestrates WebSocket, Email, and Web Push channels.
+Notification delivery service — orchestrates WebSocket, Email, FCM, and Web Push channels.
 """
 
 import logging
@@ -35,8 +35,14 @@ class NotificationDeliveryService:
         if prefs.get('email_enabled', False):
             results.append(self._send_email(notification))
 
-        # Web Push (default: enabled if user has subscriptions)
+        # FCM Push (default: enabled if user has devices)
+        fcm_sent = False
         if prefs.get('push_enabled', True):
+            fcm_sent = self._send_fcm(notification)
+            results.append(fcm_sent)
+
+        # Web Push VAPID fallback (only if FCM didn't send and user has subscriptions)
+        if prefs.get('push_enabled', True) and not fcm_sent:
             results.append(self._send_webpush(notification))
 
         return any(results)
@@ -100,8 +106,82 @@ class NotificationDeliveryService:
             logger.warning(f"Email delivery failed for {notification.id}: {e}")
             return False
 
+    def _send_fcm(self, notification):
+        """Send notification via Firebase Cloud Messaging to all user devices."""
+        try:
+            from .models import UserDevice
+            from .fcm_service import FCMService, InvalidTokenError
+
+            devices = UserDevice.objects.filter(
+                user=notification.user,
+                is_active=True,
+            )
+
+            tokens = list(devices.values_list('fcm_token', flat=True))
+            if not tokens:
+                return False
+
+            fcm = FCMService()
+
+            # Prepare data payload — all values must be strings
+            data = {}
+            if notification.data:
+                data = {k: str(v) for k, v in notification.data.items()}
+            data['notification_id'] = str(notification.id)
+            data['notification_type'] = notification.notification_type
+
+            if len(tokens) == 1:
+                try:
+                    message_id = fcm.send_to_token(
+                        token=tokens[0],
+                        title=notification.title,
+                        body=notification.body,
+                        data=data,
+                        image_url=notification.image_url,
+                    )
+                    if message_id:
+                        logger.debug(f"FCM sent for notification {notification.id}")
+                        return True
+                    return False
+                except InvalidTokenError:
+                    UserDevice.objects.filter(fcm_token=tokens[0]).update(is_active=False)
+                    logger.info(f"Deactivated invalid FCM token for user {notification.user.id}")
+                    return False
+            else:
+                result = fcm.send_multicast(
+                    tokens=tokens,
+                    title=notification.title,
+                    body=notification.body,
+                    data=data,
+                    image_url=notification.image_url,
+                )
+
+                # Deactivate invalid tokens
+                if result.invalid_tokens:
+                    UserDevice.objects.filter(
+                        fcm_token__in=result.invalid_tokens
+                    ).update(is_active=False)
+                    logger.info(
+                        f"Deactivated {len(result.invalid_tokens)} invalid FCM tokens "
+                        f"for user {notification.user.id}"
+                    )
+
+                if result.any_success:
+                    logger.debug(
+                        f"FCM multicast for notification {notification.id}: "
+                        f"{result.success_count}/{result.total} succeeded"
+                    )
+                return result.any_success
+
+        except ImportError:
+            logger.warning("firebase-admin not installed, skipping FCM delivery")
+            return False
+        except Exception as e:
+            logger.warning(f"FCM delivery failed for notification {notification.id}: {e}")
+            return False
+
     def _send_webpush(self, notification):
-        """Send notification via Web Push (VAPID)."""
+        """Send notification via Web Push (VAPID). Deprecated: use FCM instead."""
         try:
             from pywebpush import webpush, WebPushException
             from .models import WebPushSubscription
@@ -145,7 +225,6 @@ class NotificationDeliveryService:
                     sent = True
                 except WebPushException as e:
                     if e.response and e.response.status_code in (404, 410):
-                        # Subscription expired or invalid — deactivate
                         sub.is_active = False
                         sub.save(update_fields=['is_active'])
                         logger.info(f"Deactivated expired push subscription {sub.id}")

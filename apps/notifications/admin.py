@@ -3,7 +3,7 @@ Django admin configuration for Notifications app.
 """
 
 from django.contrib import admin
-from .models import Notification, NotificationTemplate, NotificationBatch
+from .models import Notification, NotificationTemplate, NotificationBatch, UserDevice
 
 
 @admin.register(Notification)
@@ -88,3 +88,14 @@ class NotificationBatchAdmin(admin.ModelAdmin):
         percentage = (obj.total_sent / obj.total_scheduled) * 100
         return f'{percentage:.1f}% ({obj.total_sent}/{obj.total_scheduled})'
     progress.short_description = 'Progress'
+
+
+@admin.register(UserDevice)
+class UserDeviceAdmin(admin.ModelAdmin):
+    """Admin interface for FCM device registrations."""
+
+    list_display = ['user', 'platform', 'device_name', 'is_active', 'created_at', 'updated_at']
+    list_filter = ['platform', 'is_active', 'created_at']
+    search_fields = ['user__email', 'device_name', 'fcm_token']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    raw_id_fields = ['user']

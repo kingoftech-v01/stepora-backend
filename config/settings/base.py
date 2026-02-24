@@ -194,6 +194,9 @@ WEBPUSH_SETTINGS = {
     'VAPID_ADMIN_EMAIL': os.getenv('VAPID_ADMIN_EMAIL', 'admin@dreamplanner.app'),
 }
 
+# Firebase Cloud Messaging (FCM)
+FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', '')
+
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

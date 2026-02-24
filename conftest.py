@@ -13,7 +13,7 @@ import uuid
 from apps.users.models import User, GamificationProfile
 from apps.dreams.models import Dream, Goal, Task, Obstacle
 from apps.conversations.models import Conversation, Message
-from apps.notifications.models import Notification, NotificationTemplate
+from apps.notifications.models import Notification, NotificationTemplate, UserDevice
 
 
 @pytest.fixture(scope='session')
@@ -417,6 +417,55 @@ def second_pro_client(second_pro_user):
     client = APIClient()
     client.force_authenticate(user=second_pro_user)
     return client
+
+
+@pytest.fixture
+def user_device(db, user):
+    """Create a test FCM device registration."""
+    return UserDevice.objects.create(
+        user=user,
+        fcm_token='fake-fcm-token-' + uuid.uuid4().hex,
+        platform='android',
+        device_name='Test Device',
+        app_version='1.0.0',
+    )
+
+
+@pytest.fixture
+def mock_fcm():
+    """Mock Firebase Admin SDK for FCM tests."""
+    mock_messaging = Mock()
+    mock_messaging.send.return_value = 'projects/test/messages/fake_id'
+    mock_send_response = Mock(exception=None, message_id='fake_id')
+    mock_messaging.send_each_for_multicast.return_value = Mock(
+        success_count=1,
+        failure_count=0,
+        responses=[mock_send_response],
+    )
+    mock_messaging.subscribe_to_topic.return_value = Mock(failure_count=0)
+    mock_messaging.unsubscribe_from_topic.return_value = Mock(failure_count=0)
+    mock_messaging.UnregisteredError = type('UnregisteredError', (Exception,), {})
+    mock_messaging.SenderIdMismatchError = type('SenderIdMismatchError', (Exception,), {})
+    # Mock message classes
+    mock_messaging.Notification = Mock
+    mock_messaging.AndroidConfig = Mock
+    mock_messaging.AndroidNotification = Mock
+    mock_messaging.APNSConfig = Mock
+    mock_messaging.APNSPayload = Mock
+    mock_messaging.Aps = Mock
+    mock_messaging.ApsAlert = Mock
+    mock_messaging.WebpushConfig = Mock
+    mock_messaging.WebpushNotification = Mock
+    mock_messaging.Message = Mock
+    mock_messaging.MulticastMessage = Mock
+
+    with patch('apps.notifications.fcm_service.get_firebase_app') as mock_app, \
+         patch.dict('sys.modules', {'firebase_admin.messaging': mock_messaging, 'firebase_admin': Mock(messaging=mock_messaging)}):
+        mock_app.return_value = Mock()
+        yield {
+            'app': mock_app,
+            'messaging': mock_messaging,
+        }
 
 
 @pytest.fixture(autouse=True)

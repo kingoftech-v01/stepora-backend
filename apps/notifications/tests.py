@@ -454,10 +454,10 @@ from channels.testing import WebsocketCommunicator
 from channels.db import database_sync_to_async
 from django.core import mail
 
-from .models import WebPushSubscription, NotificationBatch
+from .models import WebPushSubscription, NotificationBatch, UserDevice
 from .consumers import NotificationConsumer
 from .services import NotificationDeliveryService
-from .serializers import NotificationBatchSerializer, WebPushSubscriptionSerializer
+from .serializers import NotificationBatchSerializer, WebPushSubscriptionSerializer, UserDeviceSerializer
 
 
 class TestNotificationModelExtended:
@@ -977,3 +977,377 @@ class TestNotificationConsumer:
         assert response['count'] == 3
 
         await communicator.disconnect()
+
+
+# ============================================================
+# FCM / UserDevice tests
+# ============================================================
+
+
+class TestUserDeviceModel:
+    """Test UserDevice model."""
+
+    def test_create_device(self, db, user):
+        """Test creating a device registration."""
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token='test-token-abc123-' + uuid.uuid4().hex,
+            platform='android',
+            device_name='Pixel 8',
+        )
+        assert device.is_active is True
+        assert device.platform == 'android'
+        assert device.device_name == 'Pixel 8'
+
+    def test_device_str(self, db, user):
+        """Test string representation."""
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token='test-token-str-' + uuid.uuid4().hex,
+            platform='ios',
+        )
+        assert user.email in str(device)
+        assert 'ios' in str(device)
+        assert 'active' in str(device)
+
+    def test_device_str_inactive(self, db, user):
+        """Test string representation for inactive device."""
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token='test-token-inactive-' + uuid.uuid4().hex,
+            platform='web',
+            is_active=False,
+        )
+        assert 'inactive' in str(device)
+
+    def test_fcm_token_unique(self, db, user):
+        """Test that fcm_token is unique."""
+        token = 'unique-token-' + uuid.uuid4().hex
+        UserDevice.objects.create(
+            user=user,
+            fcm_token=token,
+            platform='android',
+        )
+        from django.db import IntegrityError
+        with pytest.raises(IntegrityError):
+            UserDevice.objects.create(
+                user=user,
+                fcm_token=token,
+                platform='ios',
+            )
+
+    def test_user_can_have_multiple_devices(self, db, user):
+        """Test a user can register multiple devices."""
+        for i in range(3):
+            UserDevice.objects.create(
+                user=user,
+                fcm_token=f'multi-device-{i}-{uuid.uuid4().hex}',
+                platform=['android', 'ios', 'web'][i],
+            )
+        assert UserDevice.objects.filter(user=user).count() == 3
+
+
+class TestUserDeviceSerializer:
+    """Test UserDeviceSerializer."""
+
+    def test_valid_data(self, db):
+        """Test serializer with valid data."""
+        data = {
+            'fcm_token': 'a' * 50,
+            'platform': 'android',
+            'device_name': 'Test Phone',
+            'app_version': '1.0.0',
+        }
+        serializer = UserDeviceSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+    def test_short_fcm_token_rejected(self, db):
+        """Test that short FCM tokens are rejected."""
+        data = {
+            'fcm_token': 'short',
+            'platform': 'android',
+        }
+        serializer = UserDeviceSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'fcm_token' in serializer.errors
+
+    def test_long_fcm_token_rejected(self, db):
+        """Test that overly long FCM tokens are rejected."""
+        data = {
+            'fcm_token': 'a' * 5000,
+            'platform': 'android',
+        }
+        serializer = UserDeviceSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'fcm_token' in serializer.errors
+
+    def test_invalid_platform_rejected(self, db):
+        """Test that invalid platform values are rejected."""
+        data = {
+            'fcm_token': 'a' * 50,
+            'platform': 'blackberry',
+        }
+        serializer = UserDeviceSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'platform' in serializer.errors
+
+
+class TestUserDeviceViewSet:
+    """Test device registration API endpoints."""
+
+    def test_register_device(self, authenticated_client, user, mock_fcm):
+        """Test POST /api/notifications/devices/."""
+        data = {
+            'fcm_token': 'new-fcm-token-' + uuid.uuid4().hex,
+            'platform': 'android',
+            'device_name': 'Test Phone',
+            'app_version': '2.0.0',
+        }
+        response = authenticated_client.post(
+            '/api/notifications/devices/', data, format='json'
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert UserDevice.objects.filter(user=user, is_active=True).count() == 1
+
+    def test_register_replaces_existing_token(self, authenticated_client, user, mock_fcm):
+        """Test that re-registering same token deletes old entry and creates new."""
+        token = 'reuse-token-' + uuid.uuid4().hex
+        old = UserDevice.objects.create(
+            user=user, fcm_token=token, platform='android',
+        )
+        old_id = old.id
+        data = {
+            'fcm_token': token,
+            'platform': 'android',
+        }
+        response = authenticated_client.post(
+            '/api/notifications/devices/', data, format='json'
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        # Old record should be deleted
+        assert not UserDevice.objects.filter(id=old_id).exists()
+        # New active device should exist
+        assert UserDevice.objects.filter(user=user, fcm_token=token, is_active=True).count() == 1
+
+    def test_list_devices(self, authenticated_client, user):
+        """Test GET /api/notifications/devices/."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='list-token-' + uuid.uuid4().hex,
+            platform='ios',
+        )
+        response = authenticated_client.get('/api/notifications/devices/')
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+
+    def test_list_only_active_devices(self, authenticated_client, user):
+        """Test that only active devices are listed."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='active-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='inactive-token-' + uuid.uuid4().hex,
+            platform='android',
+            is_active=False,
+        )
+        response = authenticated_client.get('/api/notifications/devices/')
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+
+    def test_delete_device_soft_deletes(self, authenticated_client, user, mock_fcm):
+        """Test DELETE soft-deactivates device."""
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token='del-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        response = authenticated_client.delete(
+            f'/api/notifications/devices/{device.id}/'
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        device.refresh_from_db()
+        assert device.is_active is False
+
+    def test_requires_auth(self, api_client):
+        """Test endpoint requires authentication."""
+        response = api_client.get('/api/notifications/devices/')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_user_isolation(self, authenticated_client, user, db):
+        """Test user can only see their own devices."""
+        other_user = User.objects.create_user(
+            email='other-device@example.com',
+            password='testpassword123',
+        )
+        UserDevice.objects.create(
+            user=other_user,
+            fcm_token='other-user-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='my-token-' + uuid.uuid4().hex,
+            platform='ios',
+        )
+        response = authenticated_client.get('/api/notifications/devices/')
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+
+
+class TestFCMDelivery:
+    """Test FCM delivery in NotificationDeliveryService."""
+
+    def test_send_fcm_single_device(self, db, user, mock_fcm):
+        """Test FCM send to single device."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='single-device-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='FCM test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is True
+
+    def test_send_fcm_no_devices(self, db, user):
+        """Test FCM returns False when no devices registered."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is False
+
+    def test_send_fcm_multicast(self, db, user, mock_fcm):
+        """Test FCM multicast for multiple devices."""
+        mock_fcm['messaging'].send_each_for_multicast.return_value = Mock(
+            success_count=3,
+            failure_count=0,
+            responses=[Mock(exception=None)] * 3,
+        )
+        for i in range(3):
+            UserDevice.objects.create(
+                user=user,
+                fcm_token=f'multi-token-{i}-{uuid.uuid4().hex}',
+                platform='android',
+            )
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='multicast test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is True
+
+    def test_send_fcm_invalid_token_deactivated(self, db, user, mock_fcm):
+        """Test that invalid FCM tokens are deactivated on single send."""
+        token = 'invalid-token-' + uuid.uuid4().hex
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token=token,
+            platform='android',
+        )
+        # Make send raise UnregisteredError (which send_to_token converts to InvalidTokenError)
+        mock_fcm['messaging'].send.side_effect = mock_fcm['messaging'].UnregisteredError('gone')
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is False
+        device.refresh_from_db()
+        assert device.is_active is False
+
+    def test_send_fcm_with_notification_data(self, db, user, mock_fcm):
+        """Test FCM sends notification data payload."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='data-token-' + uuid.uuid4().hex,
+            platform='ios',
+        )
+        notification = Notification.objects.create(
+            user=user, notification_type='achievement',
+            title='Level up!', body='You reached level 5',
+            scheduled_for=timezone.now(),
+            data={'screen': 'Profile', 'level': 5},
+        )
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is True
+
+    def test_deliver_tries_fcm_before_webpush(self, db, user, mock_fcm):
+        """Test that deliver() tries FCM before falling back to webpush."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='priority-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='priority test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        with patch.object(service, '_send_webpush') as mock_webpush:
+            service.deliver(notification)
+            # If FCM succeeds, webpush should NOT be called
+            mock_webpush.assert_not_called()
+
+    def test_deliver_falls_back_to_webpush(self, db, user):
+        """Test that deliver() falls back to webpush when FCM has no devices."""
+        notification = Notification.objects.create(
+            user=user, notification_type='system',
+            title='fallback test', body='body',
+            scheduled_for=timezone.now(),
+        )
+        service = NotificationDeliveryService()
+        with patch.object(service, '_send_webpush', return_value=False) as mock_webpush:
+            service.deliver(notification)
+            # FCM returns False (no devices), so webpush should be called
+            mock_webpush.assert_called_once()
+
+
+class TestCleanupStaleFCMTokens:
+    """Test cleanup_stale_fcm_tokens task."""
+
+    def test_deactivates_stale_tokens(self, db, user):
+        """Test that tokens older than 60 days are deactivated."""
+        device = UserDevice.objects.create(
+            user=user,
+            fcm_token='stale-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+        # Manually set updated_at to 61 days ago
+        UserDevice.objects.filter(pk=device.pk).update(
+            updated_at=timezone.now() - timedelta(days=61)
+        )
+
+        from apps.notifications.tasks import cleanup_stale_fcm_tokens
+        result = cleanup_stale_fcm_tokens()
+        assert result['deactivated'] == 1
+        device.refresh_from_db()
+        assert device.is_active is False
+
+    def test_keeps_fresh_tokens(self, db, user):
+        """Test that recently updated tokens are kept active."""
+        UserDevice.objects.create(
+            user=user,
+            fcm_token='fresh-token-' + uuid.uuid4().hex,
+            platform='android',
+        )
+
+        from apps.notifications.tasks import cleanup_stale_fcm_tokens
+        result = cleanup_stale_fcm_tokens()
+        assert result['deactivated'] == 0

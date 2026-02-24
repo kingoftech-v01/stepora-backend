@@ -72,6 +72,9 @@ google-auth-oauthlib>=1.1.0
 # Web Push notifications (VAPID)
 pywebpush>=2.0.0
 
+# Firebase Cloud Messaging
+firebase-admin>=6.2.0
+
 # Production server
 gunicorn==21.2.0
 uvicorn[standard]==0.25.0

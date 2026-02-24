@@ -4,7 +4,7 @@ Serializers for Notifications app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Notification, NotificationTemplate, NotificationBatch, WebPushSubscription
+from .models import Notification, NotificationTemplate, NotificationBatch, WebPushSubscription, UserDevice
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -136,3 +136,33 @@ class WebPushSubscriptionSerializer(serializers.ModelSerializer):
             'is_active': {'help_text': 'Whether this subscription is currently active.'},
             'created_at': {'help_text': 'Timestamp when the subscription was created.'},
         }
+
+
+class UserDeviceSerializer(serializers.ModelSerializer):
+    """Serializer for FCM device registration."""
+
+    class Meta:
+        model = UserDevice
+        fields = [
+            'id', 'fcm_token', 'platform', 'device_name',
+            'app_version', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'is_active', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for this device registration.'},
+            'fcm_token': {'help_text': 'Firebase Cloud Messaging token for this device.'},
+            'platform': {'help_text': 'Device platform: android, ios, or web.'},
+            'device_name': {'help_text': 'Optional human-readable device name.'},
+            'app_version': {'help_text': 'App version at time of registration.'},
+            'is_active': {'help_text': 'Whether this device registration is active.'},
+            'created_at': {'help_text': 'When this device was first registered.'},
+            'updated_at': {'help_text': 'When this device registration was last updated.'},
+        }
+
+    def validate_fcm_token(self, value):
+        """Validate FCM token is not empty and has reasonable length."""
+        if not value or len(value) < 20:
+            raise serializers.ValidationError("Invalid FCM token.")
+        if len(value) > 4096:
+            raise serializers.ValidationError("FCM token exceeds maximum length.")
+        return value

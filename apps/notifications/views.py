@@ -11,11 +11,15 @@ from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import Notification, NotificationTemplate, WebPushSubscription
+from .models import Notification, NotificationTemplate, WebPushSubscription, UserDevice
 from .serializers import (
     NotificationSerializer, NotificationCreateSerializer,
     NotificationTemplateSerializer, WebPushSubscriptionSerializer,
+    UserDeviceSerializer,
 )
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -174,3 +178,107 @@ class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
             ).update(is_active=False)
 
         serializer.save(user=self.request.user)
+
+
+@extend_schema_view(
+    create=extend_schema(
+        summary="Register device for push notifications",
+        description="Register an FCM token for the current user's device. "
+                    "If the token already exists, the existing registration is updated.",
+        tags=["Notifications"],
+    ),
+    list=extend_schema(
+        summary="List registered devices",
+        description="List all active device registrations for the current user.",
+        tags=["Notifications"],
+    ),
+    destroy=extend_schema(
+        summary="Unregister device",
+        description="Deactivate a device registration (e.g., on logout).",
+        tags=["Notifications"],
+    ),
+)
+class UserDeviceViewSet(viewsets.ModelViewSet):
+    """Manage FCM device registrations for push notifications."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserDeviceSerializer
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return UserDevice.objects.none()
+        return UserDevice.objects.filter(
+            user=self.request.user,
+            is_active=True,
+        )
+
+    def create(self, request, *args, **kwargs):
+        """
+        Register or re-register a device token.
+        Deletes any existing registration with the same token BEFORE
+        serializer validation (to avoid unique constraint rejection).
+        """
+        fcm_token = request.data.get('fcm_token', '')
+        if fcm_token:
+            UserDevice.objects.filter(fcm_token=fcm_token).delete()
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        device = serializer.save(user=request.user, is_active=True)
+
+        # Subscribe to FCM topics
+        self._subscribe_to_user_topics(device)
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_destroy(self, instance):
+        """Soft-delete: deactivate rather than hard-delete."""
+        instance.is_active = False
+        instance.save(update_fields=['is_active'])
+
+        # Unsubscribe from all topics
+        self._unsubscribe_from_all_topics(instance)
+
+    def _subscribe_to_user_topics(self, device):
+        """Subscribe device to FCM topics based on notification_prefs."""
+        try:
+            from .fcm_service import FCMService
+            fcm = FCMService()
+
+            # Always subscribe to user-specific topic
+            fcm.subscribe_to_topic(
+                [device.fcm_token],
+                f'user_{device.user.id}'
+            )
+
+            # Subscribe to notification type topics based on prefs
+            prefs = device.user.notification_prefs or {}
+            topic_map = {
+                'motivation': 'topic_motivation',
+                'weekly_report': 'topic_weekly_report',
+                'achievement': 'topic_achievement',
+            }
+            for pref_key, topic_name in topic_map.items():
+                if prefs.get(pref_key, True):
+                    fcm.subscribe_to_topic([device.fcm_token], topic_name)
+
+        except Exception as e:
+            logger.warning(f"Failed to subscribe device {device.id} to topics: {e}")
+
+    def _unsubscribe_from_all_topics(self, device):
+        """Unsubscribe device from all known FCM topics."""
+        try:
+            from .fcm_service import FCMService
+            fcm = FCMService()
+            topics = [
+                f'user_{device.user.id}',
+                'topic_motivation',
+                'topic_weekly_report',
+                'topic_achievement',
+            ]
+            for topic in topics:
+                fcm.unsubscribe_from_topic([device.fcm_token], topic)
+        except Exception as e:
+            logger.warning(f"Failed to unsubscribe device {device.id} from topics: {e}")
