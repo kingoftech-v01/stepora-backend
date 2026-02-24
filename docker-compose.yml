@@ -77,6 +77,7 @@ services:
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,localhost,127.0.0.1
       - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
     depends_on:
       db:
         condition: service_healthy
@@ -114,6 +115,7 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
     depends_on:
       - db
       - redis
@@ -142,6 +144,7 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
     depends_on:
       - db
       - redis
@@ -171,6 +174,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - REDIS_HOST=redis
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,localhost,127.0.0.1
+      - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
     depends_on:
       - db
       - redis

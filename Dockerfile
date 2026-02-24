@@ -55,7 +55,9 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Collect static files
+# Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
+ARG FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
+ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
 RUN python manage.py collectstatic --noinput --clear
 
 # Switch to non-root user
