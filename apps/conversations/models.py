@@ -4,6 +4,7 @@ Conversation and Message models for AI chat.
 
 import uuid
 from django.db import models
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from apps.users.models import User
 from apps.dreams.models import Dream
 
@@ -46,7 +47,7 @@ class Conversation(models.Model):
         db_index=True
     )
 
-    title = models.CharField(max_length=255, blank=True, help_text='Optional conversation title')
+    title = EncryptedCharField(max_length=255, blank=True, help_text='Optional conversation title (encrypted at rest)')
     is_pinned = models.BooleanField(default=False, help_text='Whether this conversation is pinned')
 
     # Metadata
@@ -197,7 +198,9 @@ class Message(models.Model):
         ('system', 'System'),
     ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, db_index=True)
-    content = models.TextField()
+    content = EncryptedTextField(
+        help_text='Message content (encrypted at rest).'
+    )
 
     # Voice message support
     audio_url = models.URLField(
@@ -205,9 +208,10 @@ class Message(models.Model):
         blank=True,
         help_text='URL to the uploaded audio file for voice messages.'
     )
-    transcription = models.TextField(
+    transcription = EncryptedTextField(
         blank=True,
-        help_text='Whisper transcription of the audio message.'
+        default='',
+        help_text='Whisper transcription of the audio message (encrypted at rest).'
     )
 
     # Image analysis support
@@ -250,7 +254,7 @@ class ConversationSummary(models.Model):
         related_name='summaries'
     )
 
-    summary = models.TextField()
+    summary = EncryptedTextField()
     key_points = models.JSONField(default=list)
 
     # Messages range this summary covers
@@ -273,6 +277,55 @@ class ConversationSummary(models.Model):
 
     def __str__(self):
         return f"Summary: {self.conversation.id} ({self.start_message.id} to {self.end_message.id})"
+
+
+class Call(models.Model):
+    """Voice/video call between two buddy users."""
+
+    CALL_TYPE_CHOICES = [
+        ('voice', 'Voice'),
+        ('video', 'Video'),
+    ]
+    STATUS_CHOICES = [
+        ('ringing', 'Ringing'),
+        ('accepted', 'Accepted'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+        ('missed', 'Missed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outgoing_calls')
+    callee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incoming_calls')
+    buddy_pairing = models.ForeignKey(
+        'buddies.BuddyPairing',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='calls',
+    )
+    call_type = models.CharField(max_length=5, choices=CALL_TYPE_CHOICES, default='voice')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='ringing', db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'calls'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['caller', '-created_at']),
+            models.Index(fields=['callee', '-created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.call_type} call: {self.caller} -> {self.callee} ({self.status})"
 
 
 class ConversationTemplate(models.Model):

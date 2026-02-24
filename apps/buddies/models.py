@@ -10,6 +10,7 @@ import uuid
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from encrypted_model_fields.fields import EncryptedTextField
 
 from apps.users.models import User
 
@@ -128,10 +129,10 @@ class BuddyEncouragement(models.Model):
         related_name='sent_encouragements',
         help_text='The user who sent the encouragement.'
     )
-    message = models.TextField(
+    message = EncryptedTextField(
         blank=True,
         default='',
-        help_text='Optional motivational message.'
+        help_text='Optional motivational message (encrypted at rest).'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -231,14 +231,12 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Get friend IDs from accepted friendships
-        friend_ids = set()
-        friendships = Friendship.objects.filter(
-            Q(user1=request.user) | Q(user2=request.user),
-            status='accepted'
+        # Get friend IDs from accepted friendships — 2 queries instead of loading all objects
+        friend_ids = set(
+            Friendship.objects.filter(user1=request.user, status='accepted').values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(user2=request.user, status='accepted').values_list('user1_id', flat=True)
         )
-        for f in friendships:
-            friend_ids.add(f.user2_id if f.user1_id == request.user.id else f.user1_id)
 
         # Also include active buddy pairings
         buddy_relations = BuddyPairing.objects.filter(

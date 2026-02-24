@@ -19,7 +19,11 @@ from drf_spectacular.utils import (
 )
 
 from apps.users.models import User
-from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser, RecentSearch
+from rest_framework.views import APIView
+from rest_framework import serializers as drf_serializers
+from drf_spectacular.utils import inline_serializer
+
+from .models import Friendship, UserFollow, ActivityFeedItem, ActivityLike, ActivityComment, BlockedUser, ReportedUser, RecentSearch
 from .serializers import (
     FriendSerializer,
     FriendRequestSerializer,
@@ -97,7 +101,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             friends.append(self._get_friend_data(friend_user))
 
         serializer = FriendSerializer(friends, many=True)
-        return Response({'friends': serializer.data})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Pending friend requests",
@@ -118,7 +122,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         ).select_related('user1').order_by('-created_at')
 
         serializer = FriendRequestSerializer(requests_qs, many=True)
-        return Response({'requests': serializer.data})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Send friend request",
@@ -425,7 +429,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 'created_at': fr.created_at,
             })
 
-        return Response({'requests': data})
+        return Response(data)
 
     @extend_schema(
         summary="Block a user",
@@ -532,7 +536,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         ).select_related('blocked').order_by('-created_at')
 
         serializer = BlockedUserSerializer(blocked, many=True)
-        return Response({'blocked_users': serializer.data})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Report a user",
@@ -623,7 +627,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         friends = [self._get_friend_data(u) for u in mutual_users]
         serializer = FriendSerializer(friends, many=True)
-        return Response({'friends': serializer.data, 'count': len(friends)})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Cancel friend request",
@@ -679,7 +683,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 data['last_seen'] = friend_user.last_seen
                 online.append(data)
 
-        return Response({'friends': online, 'count': len(online)})
+        return Response(online)
 
     @extend_schema(
         summary="Follower and following counts",
@@ -740,17 +744,12 @@ class ActivityFeedView(generics.ListAPIView):
                 activity_type='encouragement',
             ).select_related('user').order_by('-created_at')
 
-        # Get friend IDs (accepted friendships)
-        friend_ids = set()
-        friendships = Friendship.objects.filter(
-            Q(user1=user) | Q(user2=user),
-            status='accepted'
+        # Get friend IDs (accepted friendships) — 2 queries instead of loading all objects
+        friend_ids = set(
+            Friendship.objects.filter(user1=user, status='accepted').values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(user2=user, status='accepted').values_list('user1_id', flat=True)
         )
-        for f in friendships:
-            if f.user1_id == user.id:
-                friend_ids.add(f.user2_id)
-            else:
-                friend_ids.add(f.user1_id)
 
         # Get followed user IDs
         followed_ids = set(
@@ -760,17 +759,13 @@ class ActivityFeedView(generics.ListAPIView):
         )
 
         # Exclude blocked users (both directions)
-        blocked_ids = set(
-            BlockedUser.objects.filter(
-                Q(blocker=user) | Q(blocked=user)
-            ).values_list('blocker_id', 'blocked_id')
-            .distinct()
+        blocked_by_user = set(
+            BlockedUser.objects.filter(blocker=user).values_list('blocked_id', flat=True)
         )
-        excluded_ids = set()
-        for blocker_id, blocked_id in blocked_ids:
-            excluded_ids.add(blocker_id)
-            excluded_ids.add(blocked_id)
-        excluded_ids.discard(user.id)
+        blocked_user_by = set(
+            BlockedUser.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        )
+        excluded_ids = blocked_by_user | blocked_user_by
 
         # Combine friends and followed users
         all_ids = (friend_ids | followed_ids) - excluded_ids
@@ -859,10 +854,11 @@ class UserSearchView(generics.ListAPIView):
 
         Returns matching users with isFriend and isFollowing flags.
         Excludes the current user from results.
+        Paginated via LimitOffsetPagination (default).
         """
         query = request.query_params.get('q', '').strip()
         if len(query) < 2:
-            return Response({'users': []})
+            return Response({'count': 0, 'next': None, 'previous': None, 'results': []})
 
         # Get blocked user IDs (both directions)
         blocked_ids = set()
@@ -874,27 +870,29 @@ class UserSearchView(generics.ListAPIView):
             blocked_ids.add(blocked_id)
         blocked_ids.discard(request.user.id)
 
-        # Security: search by display_name only — never expose email in search
-        users = User.objects.filter(
-            display_name__icontains=query,
+        # Elasticsearch-backed search (display_name is encrypted, can't use DB icontains)
+        from apps.search.services import SearchService
+        matching_user_ids = SearchService.search_users(query)
+
+        users_qs = User.objects.filter(
+            id__in=matching_user_ids,
             is_active=True
         ).exclude(
             id=request.user.id
         ).exclude(
             id__in=blocked_ids
-        ).order_by('display_name')[:20]
-
-        # Pre-fetch friendship and follow status
-        friend_ids = set()
-        friendships = Friendship.objects.filter(
-            Q(user1=request.user) | Q(user2=request.user),
-            status='accepted'
         )
-        for f in friendships:
-            if f.user1_id == request.user.id:
-                friend_ids.add(f.user2_id)
-            else:
-                friend_ids.add(f.user1_id)
+
+        # Paginate the queryset (respects ?limit= and ?offset=)
+        page = self.paginate_queryset(users_qs)
+        users_page = page if page is not None else users_qs[:20]
+
+        # Pre-fetch friendship and follow status — 2 queries instead of loading all objects
+        friend_ids = set(
+            Friendship.objects.filter(user1=request.user, status='accepted').values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(user2=request.user, status='accepted').values_list('user1_id', flat=True)
+        )
 
         following_ids = set(
             UserFollow.objects.filter(
@@ -903,7 +901,7 @@ class UserSearchView(generics.ListAPIView):
         )
 
         results = []
-        for user in users:
+        for user in users_page:
             level = user.level
             if level >= 50:
                 title = 'Legend'
@@ -930,7 +928,9 @@ class UserSearchView(generics.ListAPIView):
             })
 
         serializer = UserSearchResultSerializer(results, many=True)
-        return Response({'users': serializer.data})
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
 
 class FollowSuggestionsView(generics.ListAPIView):
@@ -946,6 +946,7 @@ class FollowSuggestionsView(generics.ListAPIView):
     queryset = User.objects.none()
     permission_classes = [IsAuthenticated, CanUseSocialFeed]
     serializer_class = UserSearchResultSerializer
+    pagination_class = None  # bounded by scoring algorithm (top 20)
 
     @extend_schema(
         summary="Follow suggestions",
@@ -966,22 +967,18 @@ class FollowSuggestionsView(generics.ListAPIView):
         following_ids = set(
             UserFollow.objects.filter(follower=user).values_list('following_id', flat=True)
         )
-        friend_ids = set()
-        friendships = Friendship.objects.filter(
-            Q(user1=user) | Q(user2=user), status='accepted'
+        friend_ids = set(
+            Friendship.objects.filter(user1=user, status='accepted').values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(user2=user, status='accepted').values_list('user1_id', flat=True)
         )
-        for f in friendships:
-            friend_ids.add(f.user2_id if f.user1_id == user.id else f.user1_id)
 
         # Get blocked IDs
-        blocked_ids = set()
-        blocks = BlockedUser.objects.filter(
-            Q(blocker=user) | Q(blocked=user)
-        ).values_list('blocker_id', 'blocked_id')
-        for blocker_id, blocked_id in blocks:
-            blocked_ids.add(blocker_id)
-            blocked_ids.add(blocked_id)
-        blocked_ids.discard(user.id)
+        blocked_ids = set(
+            BlockedUser.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        ) | set(
+            BlockedUser.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        )
 
         exclude_ids = following_ids | friend_ids | blocked_ids | {user.id}
 
@@ -999,16 +996,17 @@ class FollowSuggestionsView(generics.ListAPIView):
             ).values_list('user_id', flat=True)
         )
 
-        # Strategy 2: Friends of friends (mutual friends)
+        # Strategy 2: Friends of friends (mutual friends) — single batch query
+        limited_friend_ids = list(friend_ids)[:20]
+        fof_friendships = Friendship.objects.filter(
+            Q(user1_id__in=limited_friend_ids) | Q(user2_id__in=limited_friend_ids),
+            status='accepted'
+        )
         fof_ids = set()
-        for fid in list(friend_ids)[:20]:  # Limit for performance
-            their_friendships = Friendship.objects.filter(
-                Q(user1_id=fid) | Q(user2_id=fid), status='accepted'
-            )
-            for f in their_friendships:
-                fof_id = f.user2_id if f.user1_id == fid else f.user1_id
-                if fof_id not in exclude_ids:
-                    fof_ids.add(fof_id)
+        for f in fof_friendships:
+            for uid in (f.user1_id, f.user2_id):
+                if uid not in exclude_ids:
+                    fof_ids.add(uid)
 
         # Strategy 3: Users with similar dream categories
         from apps.dreams.models import Dream
@@ -1074,7 +1072,120 @@ class FollowSuggestionsView(generics.ListAPIView):
             })
 
         serializer = UserSearchResultSerializer(results, many=True)
-        return Response({'suggestions': serializer.data})
+        return Response(serializer.data)
+
+
+class FeedLikeView(APIView):
+    """Toggle a like on an activity feed item."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Like a feed activity",
+        description="Toggle a like on an activity feed item. If already liked, the like is removed.",
+        tags=["Social"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='FeedLikeResponse',
+                fields={
+                    'liked': drf_serializers.BooleanField(),
+                    'like_count': drf_serializers.IntegerField(),
+                },
+            ),
+            404: OpenApiResponse(description="Activity not found."),
+        },
+    )
+    def post(self, request, activity_id):
+        try:
+            activity = ActivityFeedItem.objects.get(id=activity_id)
+        except ActivityFeedItem.DoesNotExist:
+            return Response(
+                {'error': 'Activity not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        like, created = ActivityLike.objects.get_or_create(
+            user=request.user, activity=activity,
+        )
+
+        if not created:
+            # Already liked — toggle off
+            like.delete()
+            liked = False
+        else:
+            liked = True
+
+        like_count = ActivityLike.objects.filter(activity=activity).count()
+        return Response({'liked': liked, 'like_count': like_count})
+
+
+class FeedCommentView(APIView):
+    """Add a comment to an activity feed item."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Comment on a feed activity",
+        description="Add a comment to an activity feed item.",
+        tags=["Social"],
+        request=inline_serializer(
+            name='FeedCommentRequest',
+            fields={'text': drf_serializers.CharField()},
+        ),
+        responses={
+            201: inline_serializer(
+                name='FeedCommentResponse',
+                fields={
+                    'id': drf_serializers.UUIDField(),
+                    'text': drf_serializers.CharField(),
+                    'user': drf_serializers.DictField(),
+                    'created_at': drf_serializers.DateTimeField(),
+                },
+            ),
+            400: OpenApiResponse(description="Text is required."),
+            404: OpenApiResponse(description="Activity not found."),
+        },
+    )
+    def post(self, request, activity_id):
+        from core.sanitizers import sanitize_text
+
+        try:
+            activity = ActivityFeedItem.objects.get(id=activity_id)
+        except ActivityFeedItem.DoesNotExist:
+            return Response(
+                {'error': 'Activity not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        text = request.data.get('text', '').strip()
+        if not text:
+            return Response(
+                {'error': 'text is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        text = sanitize_text(text)
+
+        comment = ActivityComment.objects.create(
+            user=request.user,
+            activity=activity,
+            text=text,
+        )
+
+        return Response(
+            {
+                'id': comment.id,
+                'text': comment.text,
+                'user': {
+                    'id': str(request.user.id),
+                    'username': request.user.display_name or 'Anonymous',
+                    'avatar': request.user.avatar_url or '',
+                },
+                'created_at': comment.created_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class RecentSearchViewSet(viewsets.GenericViewSet):
@@ -1102,7 +1213,7 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
             }
             for s in searches
         ]
-        return Response({'recent_searches': data})
+        return Response(data)
 
     @extend_schema(
         summary="Record a search",
@@ -1139,3 +1250,26 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
         """Clear all recent searches."""
         RecentSearch.objects.filter(user=request.user).delete()
         return Response({'message': 'Recent searches cleared.'})
+
+    @extend_schema(
+        summary="Remove a recent search",
+        description="Delete a single recent search by its ID.",
+        tags=["Social"],
+        responses={
+            200: OpenApiResponse(description="Search removed."),
+            404: OpenApiResponse(description="Search not found."),
+        },
+    )
+    @action(detail=False, methods=['delete'], url_path=r'(?P<pk>[0-9a-f-]+)/remove')
+    def remove_search(self, request, pk=None):
+        """Delete a single recent search by ID."""
+        try:
+            search = RecentSearch.objects.get(id=pk, user=request.user)
+        except RecentSearch.DoesNotExist:
+            return Response(
+                {'error': 'Search not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        search.delete()
+        return Response({'message': 'Search removed.'})

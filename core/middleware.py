@@ -46,12 +46,18 @@ class SecurityHeadersMiddleware:
         response['Content-Security-Policy'] = csp
         response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response['Permissions-Policy'] = (
-            'geolocation=(), microphone=(), camera=(), payment=()'
+            'geolocation=(), microphone=(self), camera=(self), payment=()'
         )
         response['X-Content-Type-Options'] = 'nosniff'
         response['X-Frame-Options'] = 'DENY'
         response['Cross-Origin-Opener-Policy'] = 'same-origin'
         response['Cross-Origin-Resource-Policy'] = 'same-origin'
+
+        # HSTS — enforce HTTPS for 1 year, include subdomains
+        if not settings.DEBUG:
+            response['Strict-Transport-Security'] = (
+                'max-age=31536000; includeSubDomains; preload'
+            )
 
         return response
 

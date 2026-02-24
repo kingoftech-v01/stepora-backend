@@ -3,6 +3,7 @@ WebSocket consumer for real-time notification delivery.
 """
 
 import json
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
@@ -35,8 +36,23 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'unread_count': unread,
         }))
 
+        self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
+
+    async def _heartbeat_loop(self):
+        """Send periodic pings to keep the connection alive."""
+        try:
+            while True:
+                await asyncio.sleep(45)
+                await self.send(text_data=json.dumps({'type': 'ping'}))
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
+        if hasattr(self, '_heartbeat_task'):
+            self._heartbeat_task.cancel()
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(
                 self.group_name,

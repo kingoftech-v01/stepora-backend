@@ -42,8 +42,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, db_index=True)
-    display_name = models.CharField(max_length=255, blank=True)
-    avatar_url = models.URLField(max_length=500, blank=True)
+    display_name = EncryptedCharField(max_length=255, blank=True)
+    avatar_url = EncryptedCharField(max_length=500, blank=True)
     avatar_image = models.ImageField(
         upload_to='avatars/',
         blank=True,

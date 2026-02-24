@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from django.db import models
 from django.core.validators import MinValueValidator
+from encrypted_model_fields.fields import EncryptedTextField
 
 from apps.users.models import User
 
@@ -315,9 +316,9 @@ class Gift(models.Model):
         StoreItem, on_delete=models.CASCADE, related_name='gifts',
         help_text='The gifted store item.',
     )
-    message = models.TextField(
+    message = EncryptedTextField(
         blank=True, default='',
-        help_text='Optional personal message from the sender.',
+        help_text='Optional personal message from the sender (encrypted at rest).',
     )
     stripe_payment_intent_id = models.CharField(
         max_length=255, blank=True, default='',
@@ -358,8 +359,8 @@ class RefundRequest(models.Model):
     inventory_entry = models.ForeignKey(
         UserInventory, on_delete=models.CASCADE, related_name='refund_requests',
     )
-    reason = models.TextField(
-        help_text='User-provided reason for the refund.',
+    reason = EncryptedTextField(
+        help_text='User-provided reason for the refund (encrypted at rest).',
     )
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='pending',

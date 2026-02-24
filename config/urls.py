@@ -47,6 +47,9 @@ urlpatterns = [
     path('api/', include('apps.circles.urls')),
     path('api/social/', include('apps.social.urls')),
     path('api/buddies/', include('apps.buddies.urls')),
+
+    # Search (Elasticsearch)
+    path('api/search/', include('apps.search.urls')),
 ]
 
 # Serve media files in development

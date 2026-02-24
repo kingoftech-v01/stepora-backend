@@ -11,6 +11,7 @@ import uuid
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone as django_timezone
+from encrypted_model_fields.fields import EncryptedTextField
 
 from apps.users.models import User
 
@@ -47,9 +48,9 @@ class Circle(models.Model):
         max_length=200,
         help_text='Display name of the circle.'
     )
-    description = models.TextField(
+    description = EncryptedTextField(
         blank=True,
-        help_text='Description of the circle and its goals.'
+        help_text='Description of the circle and its goals (encrypted at rest).'
     )
     category = models.CharField(
         max_length=30,
@@ -189,8 +190,8 @@ class CirclePost(models.Model):
         related_name='circle_posts',
         help_text='The user who created this post.'
     )
-    content = models.TextField(
-        help_text='The text content of the post.'
+    content = EncryptedTextField(
+        help_text='The text content of the post (encrypted at rest).'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -242,9 +243,9 @@ class CircleChallenge(models.Model):
         max_length=200,
         help_text='Title of the challenge.'
     )
-    description = models.TextField(
+    description = EncryptedTextField(
         blank=True,
-        help_text='Detailed description of the challenge.'
+        help_text='Detailed description of the challenge (encrypted at rest).'
     )
     start_date = models.DateTimeField(
         help_text='When this challenge starts.'
@@ -445,9 +446,9 @@ class ChallengeProgress(models.Model):
         default=0,
         help_text='Numeric progress value (interpretation depends on challenge).',
     )
-    notes = models.TextField(
+    notes = EncryptedTextField(
         blank=True,
-        help_text='Optional notes about this progress update.',
+        help_text='Optional notes about this progress update (encrypted at rest).',
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

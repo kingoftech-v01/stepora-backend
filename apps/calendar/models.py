@@ -4,6 +4,7 @@ Calendar models for scheduling and time management.
 
 import uuid
 from django.db import models
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from apps.users.models import User
 from apps.dreams.models import Task
 
@@ -21,14 +22,14 @@ class CalendarEvent(models.Model):
         related_name='calendar_events'
     )
 
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField(blank=True, default='')
 
     start_time = models.DateTimeField(db_index=True)
     end_time = models.DateTimeField()
 
     # Location/context
-    location = models.CharField(max_length=255, blank=True)
+    location = EncryptedCharField(max_length=255, blank=True)
 
     # Reminder
     reminder_minutes_before = models.IntegerField(default=15)
@@ -101,6 +102,9 @@ class TimeBlock(models.Model):
     class Meta:
         db_table = 'time_blocks'
         ordering = ['day_of_week', 'start_time']
+        indexes = [
+            models.Index(fields=['user', 'day_of_week', 'is_active']),
+        ]
 
     def __str__(self):
         days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -112,8 +116,8 @@ class GoogleCalendarIntegration(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='google_calendar')
-    access_token = models.TextField()
-    refresh_token = models.TextField()
+    access_token = EncryptedTextField()
+    refresh_token = EncryptedTextField()
     token_expiry = models.DateTimeField()
     calendar_id = models.CharField(
         max_length=255,

@@ -22,7 +22,9 @@ def get_user_from_token(token_key):
     try:
         token = Token.objects.select_related('user').get(key=token_key)
         user = token.user
-        user.update_activity()
+        # Removed user.update_activity() for scalability — updating on every
+        # WS connection causes unnecessary DB writes under high concurrency.
+        # Activity should be tracked at a lower frequency (e.g. periodic task).
         return user
     except Token.DoesNotExist:
         return AnonymousUser()

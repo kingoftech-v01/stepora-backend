@@ -120,15 +120,17 @@ class SubscriptionCreateSerializer(serializers.Serializer):
     plan_slug = serializers.SlugField(
         help_text='Slug of the plan to subscribe to (e.g., "premium", "pro")',
     )
-    success_url = serializers.URLField(
+    success_url = serializers.CharField(
+        max_length=500,
         required=False,
         allow_blank=True,
-        help_text='URL to redirect to after successful payment',
+        help_text='URL to redirect to after successful payment (supports custom schemes)',
     )
-    cancel_url = serializers.URLField(
+    cancel_url = serializers.CharField(
+        max_length=500,
         required=False,
         allow_blank=True,
-        help_text='URL to redirect to if the user cancels checkout',
+        help_text='URL to redirect to if the user cancels checkout (supports custom schemes)',
     )
     coupon_code = serializers.CharField(
         required=False,

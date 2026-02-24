@@ -101,7 +101,6 @@ class FCMService:
         android_config = messaging.AndroidConfig(
             priority='high',
             notification=messaging.AndroidNotification(
-                click_action='FLUTTER_NOTIFICATION_CLICK',
                 channel_id='dreamplanner_default',
                 icon='ic_notification',
                 color='#6C63FF',

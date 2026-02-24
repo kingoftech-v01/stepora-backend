@@ -51,6 +51,10 @@ INSTALLED_APPS = [
     # Encryption
     'encrypted_model_fields',
 
+    # Search
+    'django_elasticsearch_dsl',
+    'apps.search',
+
     # Local apps
     'apps.users',
     'apps.dreams',
@@ -205,8 +209,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardLimitOffsetPagination',
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -328,6 +331,9 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             "hosts": [(os.getenv('REDIS_HOST', 'localhost'), int(os.getenv('REDIS_PORT', 6379)))],
+            "capacity": 5000,          # Max messages per channel before oldest dropped
+            "expiry": 300,             # Message expiry in seconds
+            "group_expiry": 86400,     # Group membership expiry (24 hours)
         },
     },
 }
@@ -360,6 +366,13 @@ CACHES = {
         'KEY_PREFIX': 'dreamplanner',
         'TIMEOUT': 300,  # 5 minutes default
     }
+}
+
+# Elasticsearch Configuration
+ELASTICSEARCH_DSL = {
+    'default': {
+        'hosts': os.getenv('ELASTICSEARCH_URL', 'http://localhost:9200'),
+    },
 }
 
 # OpenAI Configuration
@@ -503,11 +516,14 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Field-level encryption key for PII (required for encrypted model fields)
-# In production, set FIELD_ENCRYPTION_KEY env var. For dev, a default is used.
-FIELD_ENCRYPTION_KEY = os.getenv(
-    'FIELD_ENCRYPTION_KEY',
-    'XT94MCe7dwrIRNEwVri4TzphlFiVnkj6xF3y3gpT2mg='
-)
+# MUST be set via FIELD_ENCRYPTION_KEY env var in all environments.
+FIELD_ENCRYPTION_KEY = os.environ['FIELD_ENCRYPTION_KEY']
+
+# WebRTC TURN server (required for NAT traversal behind symmetric NATs)
+# Set these env vars when deploying with a TURN server (e.g. coturn)
+TURN_SERVER_URL = os.getenv('TURN_SERVER_URL', '')          # e.g. turn:turn.example.com:3478
+TURN_SERVER_USERNAME = os.getenv('TURN_SERVER_USERNAME', '')
+TURN_SERVER_CREDENTIAL = os.getenv('TURN_SERVER_CREDENTIAL', '')
 
 # Logging
 LOGGING = {

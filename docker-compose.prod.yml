@@ -100,6 +100,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Elasticsearch (production)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: dreamplanner_elasticsearch_prod
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Nginx reverse proxy (production)
   nginx:
     image: nginx:alpine
@@ -125,6 +149,7 @@ services:
 volumes:
   static_volume:
   media_volume:
+  elasticsearch_data:
 
 networks:
   default:

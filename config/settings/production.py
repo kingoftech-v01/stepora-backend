@@ -65,9 +65,16 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
 
-# Database connection pooling
+# Database connection pooling + SSL
 DATABASES['default']['CONN_MAX_AGE'] = 600
 DATABASES['default']['OPTIONS'] = {
     'connect_timeout': 10,
     'options': '-c statement_timeout=30000',  # 30 seconds
+    'sslmode': os.getenv('DB_SSLMODE', 'require'),
 }
+
+# Redis SSL for production (use rediss:// scheme)
+_redis_url = os.getenv('REDIS_URL', '')
+if _redis_url.startswith('rediss://'):
+    CACHES['default']['LOCATION'] = _redis_url
+    CHANNEL_LAYERS['default']['CONFIG']['hosts'] = [_redis_url]

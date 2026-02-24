@@ -6,6 +6,7 @@ import uuid
 import zoneinfo
 from django.db import models
 from django.utils import timezone
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from apps.users.models import User
 
 
@@ -33,8 +34,13 @@ class Notification(models.Model):
         db_index=True
     )
 
-    title = models.CharField(max_length=255)
-    body = models.TextField()
+    title = EncryptedCharField(
+        max_length=255,
+        help_text='Notification title (encrypted at rest).'
+    )
+    body = EncryptedTextField(
+        help_text='Notification body (encrypted at rest).'
+    )
 
     # Additional data for deep linking
     data = models.JSONField(
@@ -236,10 +242,10 @@ class UserDevice(models.Model):
         help_text='Device platform (android, ios, web).'
     )
 
-    device_name = models.CharField(
+    device_name = EncryptedCharField(
         max_length=255,
         blank=True,
-        help_text='Human-readable device name, e.g. "iPhone 15 Pro".'
+        help_text='Human-readable device name (encrypted at rest).'
     )
     app_version = models.CharField(
         max_length=50,

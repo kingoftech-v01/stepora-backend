@@ -21,6 +21,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils import timezone as django_timezone
 
+from django.core.cache import cache
 from apps.users.models import User
 
 
@@ -201,7 +202,13 @@ class Season(models.Model):
     @classmethod
     def get_active_season(cls):
         """Return the currently active season, or None if none is active."""
-        return cls.objects.filter(is_active=True).first()
+        key = 'active_season'
+        season = cache.get(key)
+        if season is None:
+            season = cls.objects.filter(is_active=True).first()
+            if season:
+                cache.set(key, season, 3600)
+        return season
 
 
 class LeagueStanding(models.Model):

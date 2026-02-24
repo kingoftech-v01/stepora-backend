@@ -162,12 +162,10 @@ class CircleViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            response = self.get_paginated_response(serializer.data)
-            response.data['circles'] = response.data.pop('results')
-            return response
+            return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response({'circles': serializer.data})
+        return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
         """Retrieve circle detail with members and challenges."""
@@ -315,12 +313,10 @@ class CircleViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(posts)
         if page is not None:
             serializer = CirclePostSerializer(page, many=True)
-            response = self.get_paginated_response(serializer.data)
-            response.data['feed'] = response.data.pop('results')
-            return response
+            return self.get_paginated_response(serializer.data)
 
         serializer = CirclePostSerializer(posts, many=True)
-        return Response({'feed': serializer.data})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Create a circle post",
@@ -386,7 +382,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         ).order_by('-start_date')
 
         serializer = CircleChallengeSerializer(challenges, many=True)
-        return Response({'challenges': serializer.data})
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Update a circle",
@@ -1062,22 +1058,9 @@ class MyInvitationsView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return CircleInvitation.objects.none()
+        from django.utils import timezone as django_timezone
         return CircleInvitation.objects.filter(
             invitee=self.request.user,
             status='pending',
+            expires_at__gt=django_timezone.now(),  # filter expired at DB level
         ).select_related('circle', 'inviter').order_by('-created_at')
-
-    @extend_schema(
-        summary="My circle invitations",
-        description="List all pending circle invitations received by the current user.",
-        responses={
-            403: OpenApiResponse(description='Subscription required.'),
-        },
-        tags=["Circles"],
-    )
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        # Filter out expired
-        active = [inv for inv in queryset if not inv.is_expired]
-        serializer = self.get_serializer(active, many=True)
-        return Response({'invitations': serializer.data})

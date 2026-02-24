@@ -448,6 +448,41 @@ class CalendarViewSet(viewsets.ViewSet):
         })
 
 
+class GoogleCalendarStatusView(APIView):
+    """Check Google Calendar connection status for the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Google Calendar connection status",
+        tags=["Calendar Integration"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='GoogleCalendarStatusResponse',
+                fields={
+                    'connected': drf_serializers.BooleanField(),
+                    'last_sync_at': drf_serializers.DateTimeField(allow_null=True),
+                },
+            ),
+        },
+    )
+    def get(self, request):
+        try:
+            integration = GoogleCalendarIntegration.objects.get(
+                user=request.user, sync_enabled=True
+            )
+            return Response({
+                'connected': True,
+                'last_sync_at': integration.last_sync_at,
+            })
+        except GoogleCalendarIntegration.DoesNotExist:
+            return Response({
+                'connected': False,
+                'last_sync_at': None,
+            })
+
+
 class GoogleCalendarAuthView(APIView):
     """Initiate Google Calendar OAuth2 flow."""
 
@@ -469,7 +504,11 @@ class GoogleCalendarAuthView(APIView):
         from integrations.google_calendar import GoogleCalendarService
         from django.conf import settings
 
-        redirect_uri = getattr(settings, 'GOOGLE_CALENDAR_REDIRECT_URI', '')
+        # Allow frontend to override redirect_uri for native OAuth flow
+        redirect_uri = request.query_params.get(
+            'redirect_uri',
+            getattr(settings, 'GOOGLE_CALENDAR_REDIRECT_URI', ''),
+        )
         if not redirect_uri:
             return Response(
                 {'error': 'Google Calendar integration is not configured.'},
@@ -513,7 +552,10 @@ class GoogleCalendarCallbackView(APIView):
         if not code:
             return Response({'error': 'Authorization code is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        redirect_uri = getattr(settings, 'GOOGLE_CALENDAR_REDIRECT_URI', '')
+        redirect_uri = request.data.get(
+            'redirect_uri',
+            getattr(settings, 'GOOGLE_CALENDAR_REDIRECT_URI', ''),
+        )
         service = GoogleCalendarService()
 
         try:
@@ -657,6 +699,44 @@ class ICalFeedView(APIView):
         response = HttpResponse(ical_content, content_type='text/calendar; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="dreamplanner.ics"'
         return response
+
+
+class GoogleCalendarNativeRedirectView(APIView):
+    """
+    Intermediate redirect for native OAuth flow.
+
+    Google OAuth redirects here with ?code=..., and this view redirects
+    the user back to the native app via the custom URL scheme.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(
+        summary="Native OAuth redirect",
+        tags=["Calendar Integration"],
+        responses={200: OpenApiResponse(description='HTML redirect page')},
+    )
+    def get(self, request):
+        import html
+        code = request.query_params.get('code', '')
+        error = request.query_params.get('error', '')
+
+        if error:
+            deep_link = f"com.dreamplanner.app://calendar/callback?error={html.escape(error)}"
+        elif code:
+            deep_link = f"com.dreamplanner.app://calendar/callback?code={html.escape(code)}"
+        else:
+            return HttpResponse('Missing authorization code.', status=400)
+
+        page = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body>
+<p>Redirecting to DreamPlanner...</p>
+<script>window.location.href = "{deep_link}";</script>
+<noscript><a href="{deep_link}">Click here to return to the app</a></noscript>
+</body></html>"""
+        return HttpResponse(page, content_type='text/html')
 
 
 def _ical_escape(text):

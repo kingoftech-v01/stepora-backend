@@ -29,6 +29,23 @@ services:
       timeout: 3s
       retries: 5
 
+  # Elasticsearch for full-text search on encrypted fields
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: dreamplanner_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # Django web application
   web:
     build:
@@ -59,10 +76,13 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,localhost,127.0.0.1
       - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -159,6 +179,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  elasticsearch_data:
   static_volume:
   media_volume:
 

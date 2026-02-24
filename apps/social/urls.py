@@ -24,7 +24,10 @@ Routes:
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView, RecentSearchViewSet
+from .views import (
+    FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView,
+    FeedLikeView, FeedCommentView, RecentSearchViewSet,
+)
 
 router = DefaultRouter()
 router.register(r'', FriendshipViewSet, basename='social')
@@ -32,6 +35,8 @@ router.register(r'recent-searches', RecentSearchViewSet, basename='recent-search
 
 urlpatterns = [
     path('feed/friends', ActivityFeedView.as_view(), name='friends-feed'),
+    path('feed/<uuid:activity_id>/like/', FeedLikeView.as_view(), name='feed-like'),
+    path('feed/<uuid:activity_id>/comment/', FeedCommentView.as_view(), name='feed-comment'),
     path('users/search', UserSearchView.as_view(), name='user-search'),
     path('follow-suggestions/', FollowSuggestionsView.as_view(), name='follow-suggestions'),
     path('', include(router.urls)),

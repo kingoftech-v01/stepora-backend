@@ -15,7 +15,7 @@ from core.openapi_examples import AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPO
 from django.conf import settings
 from django.http import JsonResponse
 
-from .models import Conversation, Message, ConversationTemplate
+from .models import Conversation, Message, ConversationTemplate, Call
 from .serializers import (
     ConversationSerializer, ConversationDetailSerializer, ConversationCreateSerializer,
     MessageSerializer, MessageCreateSerializer, ConversationTemplateSerializer
@@ -27,6 +27,7 @@ from core.permissions import CanUseAI
 from core.ai_validators import validate_chat_response, validate_function_call, AIValidationError, validate_ai_output_safety
 from core.moderation import ContentModerationService
 from core.throttles import AIRateThrottle, AIChatDailyThrottle, AIVoiceDailyThrottle
+from core.pagination import StandardResultsSetPagination
 from core.ai_usage import AIUsageTracker
 
 
@@ -251,8 +252,25 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if audio_file.size > 25 * 1024 * 1024:
             return Response({'error': 'Audio file too large. Max 25MB.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate audio file type
+        ALLOWED_AUDIO_TYPES = {
+            'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a',
+            'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg',
+            'audio/flac', 'audio/aac',
+        }
+        content_type = getattr(audio_file, 'content_type', '')
+        if content_type not in ALLOWED_AUDIO_TYPES:
+            return Response(
+                {'error': f'Unsupported audio format: {content_type}. Allowed: mp3, m4a, wav, webm, ogg, flac, aac.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Sanitize filename to prevent path traversal
+        import re
+        safe_name = re.sub(r'[^\w\-.]', '_', audio_file.name)[:100]
+
         # Save audio file
-        file_path = f'voice_messages/{conversation.id}/{audio_file.name}'
+        file_path = f'voice_messages/{conversation.id}/{safe_name}'
         saved_path = default_storage.save(file_path, audio_file)
         audio_url = default_storage.url(saved_path)
 
@@ -486,12 +504,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         query = request.query_params.get('q', '').strip()
         if len(query) < 2:
-            return Response({'messages': []})
+            return Response([])
 
-        messages = conversation.messages.filter(
-            content__icontains=query
-        ).order_by('-created_at')[:50]
-        return Response({'messages': MessageSerializer(messages, many=True).data})
+        # Use Elasticsearch for message search (content is encrypted at rest)
+        from apps.search.services import SearchService
+        message_ids = SearchService.search_messages(
+            request.user, query, conversation_id=str(conversation.id)
+        )
+        matched = Message.objects.filter(id__in=message_ids).order_by('-created_at')[:50]
+        return Response(MessageSerializer(matched, many=True).data)
 
     @extend_schema(
         summary="Export conversation",
@@ -509,7 +530,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         export_format = request.query_params.get('format', 'json')
 
-        messages = conversation.messages.order_by('created_at')
+        # Cap exported messages to prevent DoS via memory-heavy PDF generation
+        MAX_EXPORT_MESSAGES = 2000
+        messages = conversation.messages.order_by('created_at')[:MAX_EXPORT_MESSAGES]
 
         if export_format == 'pdf':
             try:
@@ -586,12 +609,15 @@ class MessageViewSet(viewsets.ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated]
     serializer_class = MessageSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         """Get messages for current user's conversations."""
         if getattr(self, 'swagger_fake_view', False):
             return Message.objects.none()
-        return Message.objects.filter(conversation__user=self.request.user)
+        return Message.objects.filter(
+            conversation__user=self.request.user
+        ).select_related('conversation').order_by('-created_at')
 
 
 @extend_schema_view(
@@ -604,3 +630,184 @@ class ConversationTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ConversationTemplateSerializer
     queryset = ConversationTemplate.objects.filter(is_active=True)
+
+
+class CallViewSet(viewsets.GenericViewSet):
+    """Manage voice/video calls between buddies."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Call.objects.none()
+        from django.db.models import Q
+        return Call.objects.filter(Q(caller=self.request.user) | Q(callee=self.request.user))
+
+    @extend_schema(
+        summary="Initiate a call",
+        description="Create a call and notify the callee via FCM.",
+        tags=["Calls"],
+        responses={201: dict, 400: OpenApiResponse(description="Validation error")},
+    )
+    @action(detail=False, methods=['post'])
+    def initiate(self, request):
+        """Initiate a voice or video call."""
+        callee_id = request.data.get('callee_id')
+        call_type = request.data.get('call_type', 'voice')
+
+        if not callee_id:
+            return Response({'detail': 'callee_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if call_type not in ('voice', 'video'):
+            return Response({'detail': 'call_type must be voice or video.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.users.models import User
+        try:
+            callee = User.objects.get(id=callee_id)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if callee == request.user:
+            return Response({'detail': 'Cannot call yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        call = Call.objects.create(
+            caller=request.user,
+            callee=callee,
+            call_type=call_type,
+            status='ringing',
+        )
+
+        # Send FCM push to callee
+        self._notify_callee(call, request.user)
+
+        return Response({
+            'callId': str(call.id),
+            'callType': call.call_type,
+            'status': call.status,
+            'calleeId': str(callee.id),
+        }, status=status.HTTP_201_CREATED)
+
+    @extend_schema(summary="Accept a call", tags=["Calls"])
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """Accept an incoming call."""
+        call = self._get_call(pk)
+        if not call:
+            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if call.callee != request.user:
+            return Response({'detail': 'Only the callee can accept.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if call.status != 'ringing':
+            return Response({'detail': f'Call is {call.status}, cannot accept.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.utils import timezone
+        call.status = 'accepted'
+        call.started_at = timezone.now()
+        call.save(update_fields=['status', 'started_at', 'updated_at'])
+
+        return Response({
+            'callId': str(call.id),
+            'status': call.status,
+            'startedAt': call.started_at.isoformat(),
+        })
+
+    @extend_schema(summary="Reject a call", tags=["Calls"])
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject an incoming call."""
+        call = self._get_call(pk)
+        if not call:
+            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if call.callee != request.user:
+            return Response({'detail': 'Only the callee can reject.'}, status=status.HTTP_403_FORBIDDEN)
+
+        call.status = 'rejected'
+        call.save(update_fields=['status', 'updated_at'])
+
+        return Response({'callId': str(call.id), 'status': call.status})
+
+    @extend_schema(summary="End a call", tags=["Calls"])
+    @action(detail=True, methods=['post'])
+    def end(self, request, pk=None):
+        """End an active call."""
+        call = self._get_call(pk)
+        if not call:
+            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user not in (call.caller, call.callee):
+            return Response({'detail': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.utils import timezone
+        call.status = 'completed'
+        call.ended_at = timezone.now()
+        if call.started_at:
+            call.duration_seconds = int((call.ended_at - call.started_at).total_seconds())
+        call.save(update_fields=['status', 'ended_at', 'duration_seconds', 'updated_at'])
+
+        return Response({
+            'callId': str(call.id),
+            'status': call.status,
+            'durationSeconds': call.duration_seconds,
+        })
+
+    @extend_schema(summary="Cancel a call", tags=["Calls"])
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a ringing call (caller only)."""
+        call = self._get_call(pk)
+        if not call:
+            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if call.caller != request.user:
+            return Response({'detail': 'Only the caller can cancel.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if call.status != 'ringing':
+            return Response({'detail': f'Call is {call.status}, cannot cancel.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        call.status = 'cancelled'
+        call.save(update_fields=['status', 'updated_at'])
+
+        return Response({'callId': str(call.id), 'status': call.status})
+
+    def _get_call(self, pk):
+        try:
+            from django.db.models import Q
+            return Call.objects.get(id=pk)
+        except Call.DoesNotExist:
+            return None
+
+    def _notify_callee(self, call, caller):
+        """Send FCM push notification to the callee about incoming call."""
+        try:
+            from apps.notifications.fcm_service import FCMService
+            from apps.notifications.models import UserDevice
+
+            devices = UserDevice.objects.filter(user=call.callee, is_active=True)
+            tokens = [d.fcm_token for d in devices if d.fcm_token]
+            if not tokens:
+                return
+
+            fcm = FCMService()
+            caller_name = caller.display_name or caller.username or 'Someone'
+            data = {
+                'type': 'incoming_call',
+                'call_id': str(call.id),
+                'caller_id': str(caller.id),
+                'caller_name': caller_name,
+                'call_type': call.call_type,
+            }
+
+            for token in tokens:
+                try:
+                    fcm.send_to_token(
+                        token=token,
+                        title=f'Incoming {call.call_type} call',
+                        body=f'{caller_name} is calling you',
+                        data=data,
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass

@@ -9,7 +9,7 @@ acceptance), while follows are unidirectional.
 import uuid
 
 from django.db import models
-from encrypted_model_fields.fields import EncryptedTextField
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
 from apps.users.models import User
 
@@ -326,6 +326,84 @@ class ActivityFeedItem(models.Model):
         return f"{self.user.display_name or self.user.email}: {self.activity_type}"
 
 
+class ActivityLike(models.Model):
+    """
+    Represents a like on an activity feed item.
+
+    Each user can like an activity item at most once. Liking is idempotent:
+    re-liking an already-liked item is a no-op.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='activity_likes',
+        help_text='The user who liked the activity.',
+    )
+    activity = models.ForeignKey(
+        ActivityFeedItem,
+        on_delete=models.CASCADE,
+        related_name='likes',
+        help_text='The activity feed item that was liked.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'activity_likes'
+        ordering = ['-created_at']
+        verbose_name = 'Activity Like'
+        verbose_name_plural = 'Activity Likes'
+        unique_together = [['user', 'activity']]
+        indexes = [
+            models.Index(fields=['activity'], name='idx_activity_like_activity'),
+            models.Index(fields=['user'], name='idx_activity_like_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} liked {self.activity_id}"
+
+
+class ActivityComment(models.Model):
+    """
+    Represents a comment on an activity feed item.
+
+    Users can leave multiple comments on any activity item visible
+    in their feed.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='activity_comments',
+        help_text='The user who wrote the comment.',
+    )
+    activity = models.ForeignKey(
+        ActivityFeedItem,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        help_text='The activity feed item that was commented on.',
+    )
+    text = EncryptedTextField(help_text='The comment text (encrypted at rest).')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'activity_comments'
+        ordering = ['created_at']
+        verbose_name = 'Activity Comment'
+        verbose_name_plural = 'Activity Comments'
+        indexes = [
+            models.Index(fields=['activity', 'created_at'], name='idx_activity_comment_activity'),
+            models.Index(fields=['user'], name='idx_activity_comment_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} commented on {self.activity_id}"
+
+
 class RecentSearch(models.Model):
     """Stores recent search queries for a user."""
 
@@ -339,7 +417,7 @@ class RecentSearch(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='recent_searches',
     )
-    query = models.CharField(max_length=200)
+    query = EncryptedCharField(max_length=200)
     search_type = models.CharField(
         max_length=10, choices=SEARCH_TYPE_CHOICES, default='all',
     )

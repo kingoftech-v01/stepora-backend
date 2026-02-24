@@ -102,9 +102,8 @@ class DreamViewSet(viewsets.ModelViewSet):
     """CRUD operations for dreams."""
 
     permission_classes = [IsAuthenticated, IsOwner]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['status', 'category']
-    search_fields = ['title', 'description']
     ordering_fields = ['created_at', 'target_date', 'priority']
     ordering = ['-created_at']
 
@@ -116,9 +115,18 @@ class DreamViewSet(viewsets.ModelViewSet):
         collab_dream_ids = DreamCollaborator.objects.filter(
             user=self.request.user
         ).values_list('dream_id', flat=True)
-        return Dream.objects.filter(
+        qs = Dream.objects.filter(
             Q(user=self.request.user) | Q(id__in=collab_dream_ids)
         ).prefetch_related('goals__tasks').distinct()
+
+        # Elasticsearch-backed search (encrypted fields can't use DB icontains)
+        search_query = self.request.query_params.get('search', '').strip()
+        if search_query:
+            from apps.search.services import SearchService
+            dream_ids = SearchService.search_dreams(self.request.user, search_query)
+            qs = qs.filter(id__in=dream_ids)
+
+        return qs
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -529,34 +537,45 @@ class DreamViewSet(viewsets.ModelViewSet):
             dream.ai_analysis = analysis_data
             dream.save(update_fields=['ai_analysis'])
 
-            # Create Goals and Tasks from validated plan
-            for goal in plan.goals:
-                db_goal = Goal.objects.create(
+            # Create Goals and Tasks from validated plan using bulk_create
+            goals_to_create = [
+                Goal(
                     dream=dream,
                     title=goal.title,
                     description=goal.description,
                     order=goal.order,
                     estimated_minutes=goal.estimated_minutes,
                 )
+                for goal in plan.goals
+            ]
+            db_goals = Goal.objects.bulk_create(goals_to_create)
 
-                for task in goal.tasks:
-                    Task.objects.create(
-                        goal=db_goal,
-                        title=task.title,
-                        description=task.description,
-                        order=task.order,
-                        duration_mins=task.duration_mins,
+            tasks_to_create = []
+            for i, goal_data in enumerate(plan.goals):
+                for task in goal_data.tasks:
+                    tasks_to_create.append(
+                        Task(
+                            goal=db_goals[i],
+                            title=task.title,
+                            description=task.description,
+                            order=task.order,
+                            duration_mins=task.duration_mins,
+                        )
                     )
+            Task.objects.bulk_create(tasks_to_create)
 
-            # Create obstacles (fixed: uses .description not .title for description)
-            for obstacle in plan.potential_obstacles:
-                Obstacle.objects.create(
+            # Create obstacles using bulk_create
+            obstacles_to_create = [
+                Obstacle(
                     dream=dream,
                     title=obstacle.title,
                     description=obstacle.description,
                     solution=obstacle.solution,
                     obstacle_type='predicted',
                 )
+                for obstacle in plan.potential_obstacles
+            ]
+            Obstacle.objects.bulk_create(obstacles_to_create)
 
             response_data = DreamDetailSerializer(dream).data
             # Include evidence so frontend can show the user WHY each step exists
@@ -1130,18 +1149,8 @@ class DreamTagListView(generics.ListAPIView):
 
     permission_classes = [IsAuthenticated]
     serializer_class = DreamTagSerializer
+    pagination_class = None  # tags are a small finite set
     queryset = DreamTag.objects.all()
-
-    @extend_schema(
-        summary="List dream tags",
-        description="Get all available dream tags.",
-        tags=["Dreams"],
-        responses={200: DreamTagSerializer(many=True)},
-    )
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({'tags': serializer.data})
 
 
 @extend_schema_view(

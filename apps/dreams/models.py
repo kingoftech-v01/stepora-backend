@@ -5,6 +5,7 @@ Dreams, Goals, and Tasks models for DreamPlanner.
 import uuid
 from django.db import models
 from django.utils import timezone
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from apps.users.models import User
 
 
@@ -14,8 +15,8 @@ class Dream(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dreams')
 
-    title = models.CharField(max_length=255)
-    description = models.TextField()
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField()
     category = models.CharField(max_length=50, blank=True, db_index=True)
     target_date = models.DateTimeField(null=True, blank=True)
     priority = models.IntegerField(default=1)
@@ -113,8 +114,8 @@ class Goal(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='goals')
 
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField(blank=True, default='')
     order = models.IntegerField()
 
     estimated_minutes = models.IntegerField(null=True, blank=True)
@@ -191,8 +192,8 @@ class Task(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='tasks')
 
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField(blank=True, default='')
     order = models.IntegerField()
 
     scheduled_date = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -232,6 +233,7 @@ class Task(models.Model):
             models.Index(fields=['goal', 'scheduled_date']),
             models.Index(fields=['status']),
             models.Index(fields=['scheduled_date']),
+            models.Index(fields=['status', '-created_at']),
         ]
 
     def __str__(self):
@@ -293,8 +295,8 @@ class Obstacle(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='obstacles')
 
-    title = models.CharField(max_length=255)
-    description = models.TextField()
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField()
 
     TYPE_CHOICES = [
         ('predicted', 'Predicted'),
@@ -303,7 +305,7 @@ class Obstacle(models.Model):
     obstacle_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='predicted')
 
     # AI-generated solution
-    solution = models.TextField(blank=True)
+    solution = EncryptedTextField(blank=True, default='')
 
     # Status
     STATUS_CHOICES = [
@@ -331,7 +333,7 @@ class CalibrationResponse(models.Model):
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='calibration_responses')
 
     question = models.TextField(help_text='AI-generated calibration question')
-    answer = models.TextField(blank=True, help_text='User response to the question')
+    answer = EncryptedTextField(blank=True, default='', help_text='User response to the question (encrypted at rest)')
     question_number = models.IntegerField(help_text='Order of question in the calibration flow')
 
     # Metadata about the question
