@@ -444,7 +444,7 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 # CORS Configuration
 _cors_raw = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
-CORS_ALLOW_CREDENTIALS = False  # Token auth via header, no cross-origin cookies needed
+CORS_ALLOW_CREDENTIALS = True  # Required: frontend sends credentials: "include" cross-origin
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-Request-Id']
 CORS_ALLOWED_METHODS = [
     'DELETE',
