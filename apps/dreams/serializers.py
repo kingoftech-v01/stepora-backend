@@ -291,7 +291,7 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
         extra_kwargs = {
             'title': {'help_text': 'Short title for the new dream.'},
-            'description': {'help_text': 'Detailed description of the dream.', 'required': False, 'allow_blank': True, 'default': ''},
+            'description': {'help_text': 'Detailed description of the dream.'},
             'category': {'help_text': 'Category the dream belongs to.'},
             'target_date': {'help_text': 'Target date for achieving the dream.', 'required': False},
             'priority': {'help_text': 'Priority level of the dream.', 'required': False},
@@ -311,14 +311,15 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_description(self, value):
-        """Sanitize and moderate dream description."""
+        """Validate, sanitize, and moderate dream description."""
         value = sanitize_text(value)
+        if len(value) < 10:
+            raise serializers.ValidationError("Description must be at least 10 characters long")
 
-        if value:
-            from core.moderation import ContentModerationService
-            result = ContentModerationService().moderate_text(value, context='dream_description')
-            if result.is_flagged:
-                raise serializers.ValidationError(result.user_message)
+        from core.moderation import ContentModerationService
+        result = ContentModerationService().moderate_text(value, context='dream_description')
+        if result.is_flagged:
+            raise serializers.ValidationError(result.user_message)
 
         return value
 
