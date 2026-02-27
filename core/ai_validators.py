@@ -59,7 +59,7 @@ class PlanTaskSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=500)
-    day_number: Optional[int] = Field(default=None, ge=1, le=730, description="Day number from start (1 = first day)")
+    day_number: Optional[int] = Field(default=None, ge=1, le=1095, description="Day number from start (1 = first day, max 3 years)")
     duration_mins: int = Field(default=30, ge=1, le=1440)
     reasoning: str = Field(
         default="",

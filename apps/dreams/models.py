@@ -118,14 +118,18 @@ class Dream(models.Model):
         AchievementService.check_achievements(self.user)
 
 
-class Milestone(models.Model):
+class DreamMilestone(models.Model):
     """
-    Time-based milestone within a dream.
+    Time-based milestone within a dream plan.
 
-    Milestones divide the dream's timeline into equal periods (e.g., 12 months = 12 milestones).
+    DreamMilestones divide the dream's timeline into equal periods (e.g., 12 months = 12 milestones).
     Each milestone contains multiple goals, and goals contain tasks.
 
-    Hierarchy: Dream -> Milestone -> Goal -> Task
+    Hierarchy: Dream -> DreamMilestone -> Goal -> Task
+
+    NOTE: This is different from "streak milestones" (7/14/30/60/100/365-day streaks in notifications)
+    and "progress milestones" (25%/50%/75% in dreams/tasks.py). DreamMilestone is specifically
+    for the AI-generated plan structure.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -214,7 +218,7 @@ class Goal(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='goals')
     milestone = models.ForeignKey(
-        Milestone, on_delete=models.CASCADE, related_name='goals',
+        DreamMilestone, on_delete=models.CASCADE, related_name='goals',
         null=True, blank=True,
         help_text='The milestone this goal belongs to (null for legacy goals without milestones)'
     )
@@ -418,7 +422,7 @@ class Obstacle(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='obstacles')
     milestone = models.ForeignKey(
-        Milestone, on_delete=models.CASCADE, related_name='obstacles',
+        DreamMilestone, on_delete=models.CASCADE, related_name='obstacles',
         null=True, blank=True,
         help_text='The milestone this obstacle is linked to (optional)'
     )

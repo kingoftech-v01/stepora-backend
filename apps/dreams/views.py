@@ -18,13 +18,13 @@ from core.openapi_examples import (
     DREAM_CREATE_REQUEST, DREAM_LIST_RESPONSE, DREAM_ANALYZE_RESPONSE,
     GOAL_CREATE_REQUEST,
 )
-from .models import Dream, Goal, Task, Obstacle, Milestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
     TaskSerializer, TaskCreateSerializer,
     ObstacleSerializer, CalibrationResponseSerializer,
-    MilestoneSerializer,
+    DreamMilestoneSerializer,
     DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
     VisionBoardImageSerializer,
@@ -590,7 +590,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 # NEW: Milestone-based plan creation
                 # Dream -> Milestones -> Goals -> Tasks, with Obstacles on milestones/goals
                 milestones_to_create = [
-                    Milestone(
+                    DreamMilestone(
                         dream=dream,
                         title=ms.title,
                         description=ms.description,
@@ -599,7 +599,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                     )
                     for ms in plan.milestones
                 ]
-                db_milestones = Milestone.objects.bulk_create(milestones_to_create)
+                db_milestones = DreamMilestone.objects.bulk_create(milestones_to_create)
 
                 # Build milestone lookup by order for obstacle linking
                 milestone_by_order = {ms.order: db_ms for ms, db_ms in zip(plan.milestones, db_milestones)}
@@ -733,12 +733,19 @@ class DreamViewSet(viewsets.ModelViewSet):
                 ]
                 Obstacle.objects.bulk_create(obstacles_to_create)
 
+            # Refresh dream from DB with prefetch for serialization
+            dream.refresh_from_db()
             response_data = DreamDetailSerializer(dream).data
             # Include evidence so frontend can show the user WHY each step exists
             response_data['plan_evidence'] = {
                 'calibration_references': plan.calibration_references,
                 'coherence_warnings': coherence_warnings,
             }
+            # Include generation info (chunk count, etc.) if available
+            if hasattr(plan, 'generation_info') and plan.generation_info:
+                response_data['generation_info'] = plan.generation_info
+            elif isinstance(analysis_data.get('generation_info'), dict):
+                response_data['generation_info'] = analysis_data['generation_info']
 
             return Response(response_data)
 
@@ -1620,46 +1627,46 @@ class DreamPDFExportView(views.APIView):
 )
 @extend_schema_view(
     list=extend_schema(
-        summary="List milestones",
-        description="Get all milestones for the current user's dreams",
-        tags=["Milestones"],
-        responses={200: MilestoneSerializer(many=True)},
+        summary="List dream milestones",
+        description="Get all dream milestones for the current user's dreams",
+        tags=["Dream Milestones"],
+        responses={200: DreamMilestoneSerializer(many=True)},
     ),
     retrieve=extend_schema(
-        summary="Get milestone",
-        description="Get a specific milestone with its goals and tasks",
-        tags=["Milestones"],
+        summary="Get dream milestone",
+        description="Get a specific dream milestone with its goals and tasks",
+        tags=["Dream Milestones"],
         responses={
-            200: MilestoneSerializer,
-            404: OpenApiResponse(description='Milestone not found.'),
+            200: DreamMilestoneSerializer,
+            404: OpenApiResponse(description='Dream milestone not found.'),
         },
     ),
     destroy=extend_schema(
-        summary="Delete milestone",
-        description="Delete a milestone",
-        tags=["Milestones"],
+        summary="Delete dream milestone",
+        description="Delete a dream milestone",
+        tags=["Dream Milestones"],
         responses={
-            204: OpenApiResponse(description='Milestone deleted.'),
-            404: OpenApiResponse(description='Milestone not found.'),
+            204: OpenApiResponse(description='Dream milestone deleted.'),
+            404: OpenApiResponse(description='Dream milestone not found.'),
         },
     ),
 )
-class MilestoneViewSet(viewsets.ModelViewSet):
-    """CRUD operations for milestones."""
+class DreamMilestoneViewSet(viewsets.ModelViewSet):
+    """CRUD operations for dream milestones (plan structure, not streak milestones)."""
 
     permission_classes = [IsAuthenticated]
-    serializer_class = MilestoneSerializer
+    serializer_class = DreamMilestoneSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['status']
     ordering_fields = ['order', 'created_at']
     ordering = ['order']
 
     def get_queryset(self):
-        """Get milestones for current user's dreams."""
+        """Get dream milestones for current user's dreams."""
         if getattr(self, 'swagger_fake_view', False):
-            return Milestone.objects.none()
+            return DreamMilestone.objects.none()
         dream_id = self.request.query_params.get('dream')
-        queryset = Milestone.objects.filter(
+        queryset = DreamMilestone.objects.filter(
             dream__user=self.request.user
         ).prefetch_related('goals__tasks', 'obstacles')
 
@@ -1669,25 +1676,25 @@ class MilestoneViewSet(viewsets.ModelViewSet):
         return queryset
 
     @extend_schema(
-        summary="Complete milestone",
-        description="Mark a milestone as completed",
-        tags=["Milestones"],
+        summary="Complete dream milestone",
+        description="Mark a dream milestone as completed",
+        tags=["Dream Milestones"],
         responses={
-            200: MilestoneSerializer,
-            404: OpenApiResponse(description='Milestone not found.'),
+            200: DreamMilestoneSerializer,
+            404: OpenApiResponse(description='Dream milestone not found.'),
         },
     )
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """Mark milestone as completed."""
+        """Mark dream milestone as completed."""
         milestone = self.get_object()
         if milestone.status == 'completed':
             return Response(
-                {'error': 'Milestone is already completed.'},
+                {'error': 'Dream milestone is already completed.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         milestone.complete()
-        return Response(MilestoneSerializer(milestone).data)
+        return Response(DreamMilestoneSerializer(milestone).data)
 
 
 class GoalViewSet(viewsets.ModelViewSet):

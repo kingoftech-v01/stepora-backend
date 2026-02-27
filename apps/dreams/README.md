@@ -6,10 +6,13 @@ Django application for managing dreams, goals, tasks, obstacles, calibration, vi
 
 The Dreams app is the core of DreamPlanner. It manages the complete hierarchy:
 - **Dream** - The user's main objective/vision with AI analysis and calibration
-- **Goal** - Intermediate steps to achieve the dream
-- **Task** - Concrete actions to complete (with recurrence, scheduling, XP rewards)
-- **Obstacle** - Challenges and blockers (predicted by AI or reported by user)
+- **DreamMilestone** - Time-based milestone within a dream plan (1 per month). NOT to be confused with "streak milestones" (7/14/30-day streaks in notifications) or "progress milestones" (25/50/75% in tasks.py)
+- **Goal** - Intermediate steps within a milestone (min 4 per milestone)
+- **Task** - Concrete actions to complete (min 4 per goal, with recurrence, scheduling, XP rewards)
+- **Obstacle** - Challenges and blockers linked to milestones and/or goals (predicted by AI or reported by user)
 - **CalibrationResponse** - Q&A pairs from the calibration questionnaire for personalized plans
+
+**Plan Hierarchy:** Dream → DreamMilestone → Goal → Task (with Obstacles on milestones/goals)
 - **DreamTemplate** - Pre-built templates for quick dream creation
 - **DreamTag / DreamTagging** - Custom tags for organizing dreams
 - **SharedDream** - Share dreams with other users (view/comment permissions)
@@ -48,14 +51,41 @@ Main dream/objective model.
 - `update_progress()` - Recalculate progress from completed goals, record snapshot
 - `complete()` - Mark as completed, award 500 XP, check achievements
 
+### DreamMilestone
+
+Time-based milestone within a dream plan. Each milestone represents one month of the plan timeline. Milestones contain goals, and goals contain tasks. For long dreams (> 6 months), the plan is generated in 6-month chunks to maintain quality.
+
+**NOTE:** This is different from "streak milestones" (7/14/30/60/100/365-day streaks in `notifications/tasks.py`) and "progress milestones" (25%/50%/75% progress thresholds in `dreams/tasks.py::_check_milestone`).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| dream | FK(Dream) | Parent dream (related_name: `milestones`) |
+| title | EncryptedCharField(255) | Milestone title |
+| description | EncryptedTextField | Description of what this milestone achieves |
+| order | IntegerField | Order within the dream (1 = first milestone) |
+| target_date | DateTimeField | Target date for this milestone (nullable) |
+| status | CharField(20) | `pending`, `in_progress`, `completed`, `skipped` (default: `pending`) |
+| completed_at | DateTimeField | Completion timestamp (nullable) |
+| progress_percentage | FloatField | Progress (default: 0.0) |
+| created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
+
+**DB table:** `milestones`
+
+**Methods:**
+- `update_progress()` - Recalculate progress from completed goals, update parent dream
+- `complete()` - Mark as completed, update dream progress, award 200 XP
+
 ### Goal
 
-Intermediate step/milestone within a dream.
+Intermediate step within a milestone (or legacy: directly within a dream).
 
 | Field | Type | Description |
 |-------|------|-------------|
 | id | UUID | Primary key |
 | dream | FK(Dream) | Parent dream (related_name: `goals`) |
+| milestone | FK(DreamMilestone) | Parent milestone (related_name: `goals`, nullable for legacy) |
 | title | CharField(255) | Goal title |
 | description | TextField | Description |
 | order | IntegerField | Order in the sequence |
@@ -104,12 +134,14 @@ Individual action within a goal.
 
 ### Obstacle
 
-Predicted or actual obstacle for a dream.
+Predicted or actual obstacle for a dream, optionally linked to a milestone and/or goal.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | id | UUID | Primary key |
 | dream | FK(Dream) | Associated dream (related_name: `obstacles`) |
+| milestone | FK(DreamMilestone) | Linked milestone (related_name: `obstacles`, nullable) |
+| goal | FK(Goal) | Linked goal (nullable) |
 | title | CharField(255) | Obstacle title |
 | description | TextField | Description |
 | obstacle_type | CharField(20) | `predicted` or `actual` (default: `predicted`) |
@@ -304,9 +336,27 @@ Image in a dream's vision board gallery.
 
 #### Calibration Flow
 
-1. `POST /{id}/start-calibration/` - Generates 7 initial questions via AI
-2. `POST /{id}/answer-calibration/` - Submit answers as `{answers: [{question_id, answer}]}`. Returns either follow-up questions or completion status. Max 15 questions total. Each answer is moderated.
-3. `POST /{id}/generate-plan/` - If calibration completed, generates a calibration summary first, then uses it for a personalized plan. Includes `plan_evidence` with `calibration_references` and `coherence_warnings`.
+1. `POST /{id}/start-calibration/` - Generates 7 initial questions via AI across 8 mandatory areas (experience, time, resources, motivation, constraints, specifics, lifestyle, preferences)
+2. `POST /{id}/answer-calibration/` - Submit answers as `{answers: [{question_id, answer}]}`. Returns either follow-up questions or completion status. Max 25 questions total. AI must reach 0.95+ confidence. Each answer is moderated.
+3. `POST /{id}/generate-plan/` - If calibration completed, generates a calibration summary first, then uses it for a personalized milestone-based plan. For dreams > 6 months, the plan is generated in **6-month chunks** (multiple API calls) to maintain full quality. Includes `plan_evidence` with `calibration_references` and `coherence_warnings`.
+
+#### Date Validation
+
+- `target_date` must be at least **1 month** from now (30 days minimum)
+- `target_date` must be within **3 years** from now (1095 days maximum)
+- Enforced on both create and update
+
+### Dream Milestones
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/milestones/` | List dream milestones (query param `dream` to filter by dream) |
+| GET | `/milestones/{id}/` | Milestone detail with nested goals, tasks, obstacles |
+| DELETE | `/milestones/{id}/` | Delete a milestone |
+| POST | `/milestones/{id}/complete/` | Mark as completed (awards 200 XP) |
+
+**ViewSet:** `DreamMilestoneViewSet` (ModelViewSet)
+- Permission: `IsAuthenticated`
 
 ### Goals
 
@@ -399,11 +449,12 @@ Image in a dream's vision board gallery.
 | Serializer | Purpose |
 |------------|---------|
 | `DreamSerializer` | Dream with computed `goals_count`, `tasks_count`, `tags`, `sparkline_data` (last 7 snapshots) |
-| `DreamDetailSerializer` | Full dream with nested `goals` (with tasks), `obstacles`, `calibration_responses` |
-| `DreamCreateSerializer` | Input: `title` (min 3 chars, sanitized, moderated), `description` (sanitized, moderated), `category`, `target_date`, `priority` |
-| `DreamUpdateSerializer` | Input: `title`, `description`, `category`, `target_date`, `priority`, `status` (all sanitized and moderated) |
-| `GoalSerializer` | Goal with nested `tasks`, computed `tasks_count`, `completed_tasks_count` |
-| `GoalCreateSerializer` | Input: `dream`, `title`, `description`, `order`, `estimated_minutes`, `scheduled_start/end`, `reminder_enabled`, `reminder_time` |
+| `DreamDetailSerializer` | Full dream with nested `milestones` (with goals/tasks/obstacles), `goals`, `obstacles`, `calibration_responses`, `milestones_count`, `completed_milestones_count` |
+| `DreamCreateSerializer` | Input: `title` (min 3 chars, sanitized, moderated), `description` (sanitized, moderated), `category`, `target_date` (min 1mo, max 3yr), `priority` |
+| `DreamUpdateSerializer` | Input: `title`, `description`, `category`, `target_date` (min 1mo, max 3yr), `priority`, `status` (all sanitized and moderated) |
+| `DreamMilestoneSerializer` | Milestone with nested `goals` (with tasks), `obstacles`, computed `goals_count`, `completed_goals_count` |
+| `GoalSerializer` | Goal with nested `tasks`, `milestone` FK, computed `tasks_count`, `completed_tasks_count` |
+| `GoalCreateSerializer` | Input: `dream`, `milestone` (optional), `title`, `description`, `order`, `estimated_minutes`, `scheduled_start/end`, `reminder_enabled`, `reminder_time` |
 | `TaskSerializer` | Full task with all fields including `recurrence`, `is_two_minute_start` |
 | `TaskCreateSerializer` | Input: `goal`, `title`, `description`, `order`, `scheduled_date/time`, `duration_mins`, `recurrence`, `is_two_minute_start` |
 | `ObstacleSerializer` | Full obstacle with `solution` |
@@ -433,6 +484,7 @@ Image in a dream's vision board gallery.
 |--------|-----------|
 | Complete a **Task** | `max(10, duration_mins / 3)` - minimum 10 XP |
 | Complete a **Goal** | 100 XP |
+| Complete a **DreamMilestone** | 200 XP |
 | Complete a **Dream** | 500 XP |
 
 Streaks are updated on each task completion based on consecutive day activity.
@@ -490,8 +542,8 @@ All 4 core models are registered with Django admin:
 
 **AI features:**
 - `analyze` - AI analysis of dream feasibility and insights
-- `start_calibration` / `answer_calibration` - AI-generated calibration questions (7-15 questions)
-- `generate_plan` - AI plan generation with goals, tasks, obstacles (uses calibration profile if available)
+- `start_calibration` / `answer_calibration` - AI-generated calibration questions (7-25 questions across 8 mandatory areas). AI must reach 95% confidence before marking as sufficient. Vague answers trigger deeper follow-ups.
+- `generate_plan` - AI milestone-based plan generation (Dream → DreamMilestone → Goal → Task). Always 1 milestone/month. For dreams > 6 months, generated in **6-month chunks** (multiple API calls) to maintain full quality. Uses calibration profile if available. Each chunk passes a summary to the next for continuity.
 - `generate_two_minute_start` - AI micro-action generation
 - `generate_vision` - DALL-E image generation for vision board
 - `detect_obstacles` (Celery) - AI obstacle prediction

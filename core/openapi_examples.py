@@ -40,8 +40,8 @@ DREAM_LIST_RESPONSE = OpenApiExample(
         'category': 'health',
         'status': 'active',
         'progress_percentage': 35.0,
-        'goals_count': 5,
-        'tasks_count': 18,
+        'goals_count': 48,
+        'tasks_count': 192,
         'tags': ['fitness', 'endurance'],
         'sparkline_data': [
             {'date': '2026-02-16', 'progress': 20.0},
@@ -73,6 +73,7 @@ GOAL_CREATE_REQUEST = OpenApiExample(
     'Create Goal',
     value={
         'dream': '550e8400-e29b-41d4-a716-446655440000',
+        'milestone': '660e8400-e29b-41d4-a716-446655440001',
         'title': 'Complete 5K training',
         'description': 'Build up to running 5K without stopping',
         'order': 1,

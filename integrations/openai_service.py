@@ -181,13 +181,10 @@ Required JSON format:
 }
 
 MILESTONE RULES:
-- Number of milestones ADAPTS to the dream duration:
-  * 1-3 months → 1 milestone per month (1-3 milestones)
-  * 4-6 months → 1 milestone per month (4-6 milestones)
-  * 7-12 months → 1 milestone per month (7-12 milestones)
-  * 1-2 years → 1 milestone per month or per quarter, depending on complexity
-  * 2+ years → quarterly milestones
+- ALWAYS 1 milestone per month, no exceptions
+- For long dreams (> 6 months), the plan is generated in chunks — you will be told which months to cover
 - Each milestone MUST have a target_day (day number from start)
+- Descriptions must be detailed and specific
 
 GOAL RULES:
 - Each milestone MUST have at least 4 goals (minimum)
@@ -413,8 +410,10 @@ IMPORTANT: Respond in the user's language.""",
         """
         Generate a complete structured plan for a dream.
 
-        If calibration data is present in user_context, uses the enriched profile
-        for highly personalized plan generation.
+        For dreams <= 6 months: generates in a single API call.
+        For dreams > 6 months: splits into 6-month chunks, each call generating
+        ~6 milestones with full detail. Previous chunk summaries are passed as
+        context to maintain continuity and progressive difficulty.
 
         Args:
             dream_title: Title of the dream/goal
@@ -423,16 +422,37 @@ IMPORTANT: Respond in the user's language.""",
             target_date: The target date for achieving this dream
 
         Returns:
-            Dict with structured plan including goals, tasks, tips, obstacles
+            Dict with structured plan including milestones, goals, tasks, tips, obstacles
         """
         # Build calibration context if available
-        calibration_section = ""
-        if user_context.get('calibration_profile'):
-            profile = user_context['calibration_profile']
-            recommendations = user_context.get('plan_recommendations', {})
-            enriched = user_context.get('enriched_description', '')
+        calibration_section = self._build_calibration_section(user_context, dream_description)
 
-            calibration_section = f"""
+        # Parse target_date and calculate duration
+        total_days, total_months = self._parse_duration(target_date)
+
+        if total_months is None or total_months <= 6:
+            # Short dream: single call
+            return self._generate_plan_single(
+                dream_title, dream_description, user_context,
+                calibration_section, target_date, total_days, total_months
+            )
+        else:
+            # Long dream: chunked generation
+            return self._generate_plan_chunked(
+                dream_title, dream_description, user_context,
+                calibration_section, target_date, total_days, total_months
+            )
+
+    def _build_calibration_section(self, user_context, dream_description):
+        """Build calibration context string from user_context."""
+        if not user_context.get('calibration_profile'):
+            return ""
+
+        profile = user_context['calibration_profile']
+        recommendations = user_context.get('plan_recommendations', {})
+        enriched = user_context.get('enriched_description', '')
+
+        return f"""
 CALIBRATION PROFILE (from user interview):
 - Experience Level: {profile.get('experience_level', 'unknown')}
 - Experience Details: {profile.get('experience_details', 'N/A')}
@@ -466,44 +486,43 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
 - Fill "calibration_references" with every calibration answer you used (e.g. "User said X -> plan does Y")
 - Do NOT produce a generic plan. Every element must trace back to something the user told you"""
 
-        # Calculate duration in days/weeks and determine milestone count
+    def _parse_duration(self, target_date):
+        """Parse target_date and return (total_days, total_months) or (None, None)."""
+        if not target_date:
+            return None, None
+        from datetime import date
+        if isinstance(target_date, str):
+            try:
+                target_date = date.fromisoformat(target_date)
+            except ValueError:
+                return None, None
+        today = date.today()
+        total_days = max(1, (target_date - today).days)
+        total_months = max(1, total_days // 30)
+        return total_days, total_months
+
+    def _generate_plan_single(self, dream_title, dream_description, user_context,
+                               calibration_section, target_date, total_days, total_months):
+        """Generate plan in a single API call (for dreams <= 6 months)."""
         duration_info = ""
-        num_milestones = 4  # default
-        if target_date:
-            from datetime import date
-            if isinstance(target_date, str):
-                try:
-                    target_date = date.fromisoformat(target_date)
-                except ValueError:
-                    target_date = None
-            if target_date:
-                today = date.today()
-                total_days = max(1, (target_date - today).days)
-                total_weeks = max(1, total_days // 7)
-                total_months = max(1, total_days // 30)
+        if total_days and total_months:
+            num_milestones = max(1, total_months)  # Always 1 per month
+            min_goals = num_milestones * 4
+            min_tasks = min_goals * 4
+            total_weeks = max(1, total_days // 7)
 
-                # Determine number of milestones based on duration
-                if total_months <= 12:
-                    num_milestones = max(1, total_months)  # 1 per month
-                elif total_months <= 24:
-                    num_milestones = max(6, total_months)  # still monthly up to 24
-                else:
-                    num_milestones = max(8, total_months // 3)  # quarterly for 2+ years
-
-                min_goals = num_milestones * 4
-                min_tasks = min_goals * 4
-
-                duration_info = f"""
+            duration_info = f"""
 TIMELINE:
 - Target date: {target_date}
 - Total days from now: {total_days}
 - Total weeks: {total_weeks}
 - Total months: {total_months}
-- You MUST create exactly {num_milestones} milestones (one per {'month' if total_months <= 24 else 'quarter'})
+- You MUST create exactly {num_milestones} milestones (1 per month)
 - Each milestone MUST have at least 4 goals (minimum {min_goals} goals total)
 - Each goal MUST have at least 4 tasks (minimum {min_tasks} tasks total)
 - Tasks must span the ENTIRE timeline using day_number (1 to {total_days})
-- Include rest/recovery days every 6-7 days"""
+- Include rest/recovery days every 6-7 days
+- Task descriptions must be HIGHLY detailed step-by-step instructions"""
 
         prompt = f"""Generate a COMPREHENSIVE milestone-based plan to achieve this goal:
 
@@ -518,7 +537,7 @@ USER CONTEXT:
 
 STRUCTURE REQUIREMENTS:
 - Use the "milestones" array (NOT the "goals" array at the top level)
-- Each milestone = a time period (month/quarter) with a target_day
+- Each milestone = one month with a target_day
 - Each milestone MUST have at least 4 goals
 - Each goal MUST have at least 4 tasks with day_number
 - Obstacles can be per-milestone (inside milestone.obstacles) and per-dream (in potential_obstacles)
@@ -530,9 +549,6 @@ STRUCTURE REQUIREMENTS:
 
 Respond ONLY with the plan JSON."""
 
-        # Let openai exceptions propagate so @openai_retry can catch them.
-        # Only wrap non-retryable errors (like JSON parsing) in OpenAIError.
-        # Use higher max_tokens for milestone-based plans (more content)
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
@@ -540,18 +556,169 @@ Respond ONLY with the plan JSON."""
                 {'role': 'user', 'content': prompt}
             ],
             temperature=0.5,
-            max_tokens=32000,
+            max_tokens=16384,
             response_format={"type": "json_object"},
             timeout=180,
         )
 
         content = response.choices[0].message.content
         try:
-            plan = json.loads(content)
+            return json.loads(content)
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Failed to parse JSON response: {str(e)}")
 
-        return plan
+    def _generate_plan_chunked(self, dream_title, dream_description, user_context,
+                                calibration_section, target_date, total_days, total_months):
+        """
+        Generate plan in chunks of 6 months for long dreams.
+
+        Each chunk generates ~6 milestones with full detail. Previous chunk
+        summaries are passed as context to maintain continuity.
+
+        Returns a merged plan dict with all milestones combined.
+        """
+        # Split into 6-month chunks
+        chunk_size_months = 6
+        chunks = []
+        month_start = 1
+        while month_start <= total_months:
+            month_end = min(month_start + chunk_size_months - 1, total_months)
+            chunks.append((month_start, month_end))
+            month_start = month_end + 1
+
+        all_milestones = []
+        all_potential_obstacles = []
+        all_calibration_references = []
+        all_tips = []
+        analysis = ""
+        previous_summary = ""
+
+        for chunk_idx, (month_start, month_end) in enumerate(chunks):
+            chunk_milestones_count = month_end - month_start + 1
+            day_start = (month_start - 1) * 30 + 1
+            day_end = min(month_end * 30, total_days)
+            milestone_order_start = month_start
+
+            is_first_chunk = chunk_idx == 0
+            is_last_chunk = chunk_idx == len(chunks) - 1
+
+            chunk_prompt = f"""Generate CHUNK {chunk_idx + 1} of {len(chunks)} for this dream plan:
+
+DREAM/GOAL: {dream_title}
+DESCRIPTION: {dream_description}
+
+OVERALL TIMELINE: {total_months} months ({total_days} days total), target date: {target_date}
+
+THIS CHUNK COVERS: Months {month_start} to {month_end} (days {day_start} to {day_end})
+- Generate exactly {chunk_milestones_count} milestones (1 per month)
+- Milestone order numbers start at {milestone_order_start}
+- Each milestone MUST have at least 4 goals
+- Each goal MUST have at least 4 tasks with day_number (range: {day_start} to {day_end})
+- Task descriptions must be HIGHLY detailed step-by-step instructions
+- Include rest/recovery days every 6-7 days
+
+USER CONTEXT:
+- Timezone: {user_context.get('timezone', 'UTC')}
+- Work schedule: {json.dumps(user_context.get('work_schedule', {}), ensure_ascii=False)}
+{calibration_section}"""
+
+            if previous_summary:
+                chunk_prompt += f"""
+
+PREVIOUS CHUNKS SUMMARY (maintain continuity and progressive difficulty):
+{previous_summary}
+
+IMPORTANT: Build on what was covered in previous chunks. DO NOT repeat content.
+Increase difficulty progressively. Reference skills/knowledge from earlier months."""
+
+            if is_first_chunk:
+                chunk_prompt += """
+
+Since this is the FIRST chunk, also include:
+- "analysis": Overall analysis of the goal and strategy
+- "tips": Practical tips for the entire journey"""
+
+            if is_last_chunk:
+                chunk_prompt += """
+
+Since this is the LAST chunk, also include:
+- "potential_obstacles": Top-level obstacles for the entire dream
+- Final milestone should include a review/celebration goal"""
+
+            chunk_prompt += """
+
+STRUCTURE: Respond ONLY with JSON:
+{
+  "analysis": "..." (first chunk only),
+  "milestones": [...],
+  "tips": [...] (first chunk only),
+  "potential_obstacles": [...] (last chunk only),
+  "calibration_references": ["User said X -> chunk does Y"],
+  "chunk_summary": "Brief 2-3 sentence summary of what this chunk covers for continuity"
+}"""
+
+            # Generate this chunk
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
+                    {'role': 'user', 'content': chunk_prompt}
+                ],
+                temperature=0.5,
+                max_tokens=16384,
+                response_format={"type": "json_object"},
+                timeout=180,
+            )
+
+            content = response.choices[0].message.content
+            try:
+                chunk_plan = json.loads(content)
+            except json.JSONDecodeError as e:
+                raise OpenAIError(f"Failed to parse chunk {chunk_idx + 1} JSON: {str(e)}")
+
+            # Collect results
+            chunk_ms = chunk_plan.get('milestones', [])
+            all_milestones.extend(chunk_ms)
+
+            if chunk_plan.get('analysis'):
+                analysis = chunk_plan['analysis']
+            if chunk_plan.get('tips'):
+                all_tips.extend(chunk_plan['tips'])
+            if chunk_plan.get('potential_obstacles'):
+                all_potential_obstacles.extend(chunk_plan['potential_obstacles'])
+            if chunk_plan.get('calibration_references'):
+                all_calibration_references.extend(chunk_plan['calibration_references'])
+
+            # Build summary of this chunk for next iteration
+            chunk_summary = chunk_plan.get('chunk_summary', '')
+            if not chunk_summary:
+                # Auto-generate summary from milestone titles
+                ms_titles = [ms.get('title', '') for ms in chunk_ms]
+                chunk_summary = f"Months {month_start}-{month_end}: {', '.join(ms_titles)}"
+
+            if previous_summary:
+                previous_summary += f"\n\nChunk {chunk_idx + 1} (months {month_start}-{month_end}): {chunk_summary}"
+            else:
+                previous_summary = f"Chunk {chunk_idx + 1} (months {month_start}-{month_end}): {chunk_summary}"
+
+            logger.info(f"Plan chunk {chunk_idx + 1}/{len(chunks)} generated: {len(chunk_ms)} milestones")
+
+        # Merge all chunks into a single plan
+        merged_plan = {
+            'analysis': analysis,
+            'estimated_duration_weeks': max(1, total_days // 7),
+            'milestones': all_milestones,
+            'tips': all_tips,
+            'potential_obstacles': all_potential_obstacles,
+            'calibration_references': all_calibration_references,
+            'generation_info': {
+                'total_chunks': len(chunks),
+                'total_milestones': len(all_milestones),
+                'total_months': total_months,
+            },
+        }
+
+        return merged_plan
 
     def generate_calibration_questions(self, dream_title, dream_description, existing_qa=None, batch_size=7, target_date=None, category=None):
         """

@@ -4,7 +4,7 @@ Serializers for Dreams app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, Milestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -83,8 +83,34 @@ class GoalSerializer(serializers.ModelSerializer):
         return len([t for t in obj.tasks.all() if t.status == 'completed'])
 
 
-class MilestoneSerializer(serializers.ModelSerializer):
-    """Serializer for Milestone model with nested goals."""
+class ObstacleSerializer(serializers.ModelSerializer):
+    """Serializer for Obstacle model."""
+
+    class Meta:
+        model = Obstacle
+        fields = [
+            'id', 'dream', 'milestone', 'goal', 'title', 'description',
+            'obstacle_type', 'solution', 'status',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the obstacle.'},
+            'dream': {'help_text': 'The dream this obstacle is associated with.'},
+            'milestone': {'help_text': 'The dream milestone this obstacle is linked to (optional).'},
+            'goal': {'help_text': 'The goal this obstacle is linked to (optional).'},
+            'title': {'help_text': 'Short title of the obstacle.'},
+            'description': {'help_text': 'Detailed description of the obstacle.'},
+            'obstacle_type': {'help_text': 'Category or type of the obstacle.'},
+            'solution': {'help_text': 'Proposed solution to overcome the obstacle.'},
+            'status': {'help_text': 'Current status of the obstacle.'},
+            'created_at': {'help_text': 'Timestamp when the obstacle was created.'},
+            'updated_at': {'help_text': 'Timestamp when the obstacle was last updated.'},
+        }
+
+
+class DreamMilestoneSerializer(serializers.ModelSerializer):
+    """Serializer for DreamMilestone model with nested goals."""
 
     goals = GoalSerializer(many=True, read_only=True, help_text='List of goals under this milestone.')
     obstacles = ObstacleSerializer(many=True, read_only=True, help_text='List of obstacles for this milestone.')
@@ -92,7 +118,7 @@ class MilestoneSerializer(serializers.ModelSerializer):
     completed_goals_count = serializers.SerializerMethodField(help_text='Number of completed goals.')
 
     class Meta:
-        model = Milestone
+        model = DreamMilestone
         fields = [
             'id', 'dream', 'title', 'description', 'order',
             'target_date', 'status', 'completed_at',
@@ -103,7 +129,7 @@ class MilestoneSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'progress_percentage', 'created_at', 'updated_at', 'completed_at']
         extra_kwargs = {
-            'id': {'help_text': 'Unique identifier for the milestone.'},
+            'id': {'help_text': 'Unique identifier for the dream milestone.'},
             'dream': {'help_text': 'The dream this milestone belongs to.'},
             'title': {'help_text': 'Short title of the milestone.'},
             'description': {'help_text': 'Detailed description of what this milestone achieves.'},
@@ -121,32 +147,6 @@ class MilestoneSerializer(serializers.ModelSerializer):
 
     def get_completed_goals_count(self, obj) -> int:
         return len([g for g in obj.goals.all() if g.status == 'completed'])
-
-
-class ObstacleSerializer(serializers.ModelSerializer):
-    """Serializer for Obstacle model."""
-
-    class Meta:
-        model = Obstacle
-        fields = [
-            'id', 'dream', 'milestone', 'goal', 'title', 'description',
-            'obstacle_type', 'solution', 'status',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-        extra_kwargs = {
-            'id': {'help_text': 'Unique identifier for the obstacle.'},
-            'dream': {'help_text': 'The dream this obstacle is associated with.'},
-            'milestone': {'help_text': 'The milestone this obstacle is linked to (optional).'},
-            'goal': {'help_text': 'The goal this obstacle is linked to (optional).'},
-            'title': {'help_text': 'Short title of the obstacle.'},
-            'description': {'help_text': 'Detailed description of the obstacle.'},
-            'obstacle_type': {'help_text': 'Category or type of the obstacle.'},
-            'solution': {'help_text': 'Proposed solution to overcome the obstacle.'},
-            'status': {'help_text': 'Current status of the obstacle.'},
-            'created_at': {'help_text': 'Timestamp when the obstacle was created.'},
-            'updated_at': {'help_text': 'Timestamp when the obstacle was last updated.'},
-        }
 
 
 class DreamSerializer(serializers.ModelSerializer):
@@ -241,7 +241,7 @@ class CalibrationResponseSerializer(serializers.ModelSerializer):
 class DreamDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for Dream with nested milestones, goals and tasks."""
 
-    milestones = MilestoneSerializer(many=True, read_only=True, help_text='List of milestones for this dream.')
+    milestones = DreamMilestoneSerializer(many=True, read_only=True, help_text='List of milestones for this dream.')
     goals = GoalSerializer(many=True, read_only=True, help_text='List of goals for this dream.')
     obstacles = ObstacleSerializer(many=True, read_only=True, help_text='List of obstacles for this dream.')
     calibration_responses = CalibrationResponseSerializer(many=True, read_only=True, help_text='List of calibration responses for this dream.')
@@ -350,9 +350,28 @@ class DreamCreateSerializer(serializers.ModelSerializer):
             'title': {'help_text': 'Short title for the new dream.'},
             'description': {'help_text': 'Detailed description of the dream.'},
             'category': {'help_text': 'Category the dream belongs to.'},
-            'target_date': {'help_text': 'Target date for achieving the dream.', 'required': False},
+            'target_date': {'help_text': 'Target date for achieving the dream (min 1 month, max 3 years from now).', 'required': False},
             'priority': {'help_text': 'Priority level of the dream.', 'required': False},
         }
+
+    def validate_target_date(self, value):
+        """Validate target_date is between 1 month and 3 years from now."""
+        if value is None:
+            return value
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        now = tz.now()
+        min_date = now + timedelta(days=30)
+        max_date = now + timedelta(days=1095)  # ~3 years
+        if value < min_date:
+            raise serializers.ValidationError(
+                "Target date must be at least 1 month from now."
+            )
+        if value > max_date:
+            raise serializers.ValidationError(
+                "Target date must be within 3 years from now."
+            )
+        return value
 
     def validate_title(self, value):
         """Validate, sanitize, and moderate dream title."""
@@ -398,10 +417,29 @@ class DreamUpdateSerializer(serializers.ModelSerializer):
             'title': {'help_text': 'Updated title for the dream.'},
             'description': {'help_text': 'Updated description of the dream.'},
             'category': {'help_text': 'Updated category for the dream.'},
-            'target_date': {'help_text': 'Updated target date for achieving the dream.'},
+            'target_date': {'help_text': 'Updated target date (min 1 month, max 3 years from now).'},
             'priority': {'help_text': 'Updated priority level of the dream.'},
             'status': {'help_text': 'Updated status of the dream.'},
         }
+
+    def validate_target_date(self, value):
+        """Validate target_date is between 1 month and 3 years from now."""
+        if value is None:
+            return value
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        now = tz.now()
+        min_date = now + timedelta(days=30)
+        max_date = now + timedelta(days=1095)  # ~3 years
+        if value < min_date:
+            raise serializers.ValidationError(
+                "Target date must be at least 1 month from now."
+            )
+        if value > max_date:
+            raise serializers.ValidationError(
+                "Target date must be within 3 years from now."
+            )
+        return value
 
     def validate_title(self, value):
         """Sanitize and moderate title."""
