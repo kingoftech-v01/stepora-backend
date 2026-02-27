@@ -144,6 +144,14 @@ class DreamMilestone(models.Model):
         null=True, blank=True,
         help_text='Date by which this milestone should be achieved'
     )
+    expected_date = models.DateField(
+        null=True, blank=True,
+        help_text='Ideal/soft date to complete this milestone (no penalty if missed)'
+    )
+    deadline_date = models.DateField(
+        null=True, blank=True,
+        help_text='Hard deadline — must be done by this date'
+    )
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -172,6 +180,8 @@ class DreamMilestone(models.Model):
             models.Index(fields=['dream', 'order']),
             models.Index(fields=['status']),
             models.Index(fields=['target_date']),
+            models.Index(fields=['expected_date']),
+            models.Index(fields=['deadline_date']),
         ]
 
     def __str__(self):
@@ -230,6 +240,14 @@ class Goal(models.Model):
     estimated_minutes = models.IntegerField(null=True, blank=True)
     scheduled_start = models.DateTimeField(null=True, blank=True)
     scheduled_end = models.DateTimeField(null=True, blank=True)
+    expected_date = models.DateField(
+        null=True, blank=True,
+        help_text='Ideal/soft date to complete this goal (no penalty if missed)'
+    )
+    deadline_date = models.DateField(
+        null=True, blank=True,
+        help_text='Hard deadline — must be done by this date'
+    )
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -263,6 +281,8 @@ class Goal(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['scheduled_start']),
             models.Index(fields=['milestone', 'order']),
+            models.Index(fields=['expected_date']),
+            models.Index(fields=['deadline_date']),
         ]
 
     def __str__(self):
@@ -323,6 +343,14 @@ class Task(models.Model):
     scheduled_date = models.DateTimeField(null=True, blank=True, db_index=True)
     scheduled_time = models.CharField(max_length=5, blank=True, help_text='HH:MM format')
     duration_mins = models.IntegerField(null=True, blank=True)
+    expected_date = models.DateField(
+        null=True, blank=True,
+        help_text='Ideal/soft date to do this task (no penalty if missed)'
+    )
+    deadline_date = models.DateField(
+        null=True, blank=True,
+        help_text='Hard deadline — must be done by this date'
+    )
 
     # Recurrence
     recurrence = models.JSONField(
@@ -358,6 +386,8 @@ class Task(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['scheduled_date']),
             models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['expected_date']),
+            models.Index(fields=['deadline_date']),
         ]
 
     def __str__(self):

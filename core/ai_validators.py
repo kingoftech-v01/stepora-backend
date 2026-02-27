@@ -60,6 +60,14 @@ class PlanTaskSchema(BaseModel):
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=500)
     day_number: Optional[int] = Field(default=None, ge=1, le=1095, description="Day number from start (1 = first day, max 3 years)")
+    expected_date: Optional[str] = Field(
+        default=None,
+        description="Ideal/soft date (YYYY-MM-DD) — the best day to do this task",
+    )
+    deadline_date: Optional[str] = Field(
+        default=None,
+        description="Hard deadline (YYYY-MM-DD) — must be done by this date",
+    )
     duration_mins: int = Field(default=30, ge=1, le=1440)
     reasoning: str = Field(
         default="",
@@ -71,6 +79,18 @@ class PlanTaskSchema(BaseModel):
     @classmethod
     def sanitize_strings(cls, v):
         return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("expected_date", "deadline_date", mode="before")
+    @classmethod
+    def validate_date_str(cls, v):
+        if v is None or v == "":
+            return None
+        v = str(v).strip()[:10]
+        # Accept YYYY-MM-DD format
+        import re as _re
+        if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            return None
+        return v
 
     @field_validator("order", "duration_mins", mode="before")
     @classmethod
@@ -87,6 +107,14 @@ class PlanGoalSchema(BaseModel):
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=100)
     estimated_minutes: Optional[int] = Field(default=None, ge=0, le=100000)
+    expected_date: Optional[str] = Field(
+        default=None,
+        description="Ideal/soft date (YYYY-MM-DD) to complete this goal",
+    )
+    deadline_date: Optional[str] = Field(
+        default=None,
+        description="Hard deadline (YYYY-MM-DD) for this goal",
+    )
     tasks: list[PlanTaskSchema] = Field(default_factory=list, min_length=1)
     reasoning: str = Field(
         default="",
@@ -98,6 +126,17 @@ class PlanGoalSchema(BaseModel):
     @classmethod
     def sanitize_strings(cls, v):
         return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("expected_date", "deadline_date", mode="before")
+    @classmethod
+    def validate_date_str(cls, v):
+        if v is None or v == "":
+            return None
+        v = str(v).strip()[:10]
+        import re as _re
+        if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            return None
+        return v
 
     @field_validator("order", mode="before")
     @classmethod
@@ -157,6 +196,14 @@ class PlanMilestoneSchema(BaseModel):
         default=None, ge=1, le=3650,
         description="Day number by which this milestone should be reached",
     )
+    expected_date: Optional[str] = Field(
+        default=None,
+        description="Ideal/soft date (YYYY-MM-DD) to complete this milestone",
+    )
+    deadline_date: Optional[str] = Field(
+        default=None,
+        description="Hard deadline (YYYY-MM-DD) for this milestone",
+    )
     goals: list[PlanGoalSchema] = Field(default_factory=list, min_length=1)
     obstacles: list[PlanObstacleSchema] = Field(
         default_factory=list,
@@ -172,6 +219,17 @@ class PlanMilestoneSchema(BaseModel):
     @classmethod
     def sanitize_strings(cls, v):
         return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("expected_date", "deadline_date", mode="before")
+    @classmethod
+    def validate_date_str(cls, v):
+        if v is None or v == "":
+            return None
+        v = str(v).strip()[:10]
+        import re as _re
+        if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            return None
+        return v
 
     @field_validator("order", mode="before")
     @classmethod

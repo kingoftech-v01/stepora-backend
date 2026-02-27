@@ -15,6 +15,7 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'goal', 'title', 'description', 'order',
             'scheduled_date', 'scheduled_time', 'duration_mins',
+            'expected_date', 'deadline_date',
             'recurrence', 'status', 'completed_at',
             'is_two_minute_start',
             'created_at', 'updated_at'
@@ -29,6 +30,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'scheduled_date': {'help_text': 'Date when the task is scheduled.'},
             'scheduled_time': {'help_text': 'Time when the task is scheduled.'},
             'duration_mins': {'help_text': 'Estimated duration in minutes.'},
+            'expected_date': {'help_text': 'Ideal/soft date to do this task (calendar event).'},
+            'deadline_date': {'help_text': 'Hard deadline for this task (calendar deadline).'},
             'recurrence': {'help_text': 'Recurrence pattern for the task.'},
             'status': {'help_text': 'Current status of the task.'},
             'completed_at': {'help_text': 'Timestamp when the task was completed.'},
@@ -50,6 +53,7 @@ class GoalSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'dream', 'milestone', 'title', 'description', 'order',
             'estimated_minutes', 'scheduled_start', 'scheduled_end',
+            'expected_date', 'deadline_date',
             'status', 'completed_at', 'progress_percentage',
             'reminder_enabled', 'reminder_time',
             'tasks', 'tasks_count', 'completed_tasks_count',
@@ -66,6 +70,8 @@ class GoalSerializer(serializers.ModelSerializer):
             'estimated_minutes': {'help_text': 'Estimated time to complete in minutes.'},
             'scheduled_start': {'help_text': 'Scheduled start date for the goal.'},
             'scheduled_end': {'help_text': 'Scheduled end date for the goal.'},
+            'expected_date': {'help_text': 'Ideal/soft date to complete this goal (calendar event).'},
+            'deadline_date': {'help_text': 'Hard deadline for this goal (calendar deadline).'},
             'status': {'help_text': 'Current status of the goal.'},
             'completed_at': {'help_text': 'Timestamp when the goal was completed.'},
             'progress_percentage': {'help_text': 'Percentage of goal completion.'},
@@ -121,7 +127,8 @@ class DreamMilestoneSerializer(serializers.ModelSerializer):
         model = DreamMilestone
         fields = [
             'id', 'dream', 'title', 'description', 'order',
-            'target_date', 'status', 'completed_at',
+            'target_date', 'expected_date', 'deadline_date',
+            'status', 'completed_at',
             'progress_percentage',
             'goals', 'obstacles',
             'goals_count', 'completed_goals_count',
@@ -135,6 +142,8 @@ class DreamMilestoneSerializer(serializers.ModelSerializer):
             'description': {'help_text': 'Detailed description of what this milestone achieves.'},
             'order': {'help_text': 'Order within the dream timeline.'},
             'target_date': {'help_text': 'Target date for this milestone.'},
+            'expected_date': {'help_text': 'Ideal/soft date to complete this milestone (calendar event).'},
+            'deadline_date': {'help_text': 'Hard deadline for this milestone (calendar deadline).'},
             'status': {'help_text': 'Current status of the milestone.'},
             'completed_at': {'help_text': 'Timestamp when the milestone was completed.'},
             'progress_percentage': {'help_text': 'Percentage of milestone completion.'},
@@ -478,6 +487,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         fields = [
             'goal', 'title', 'description', 'order',
             'scheduled_date', 'scheduled_time', 'duration_mins',
+            'expected_date', 'deadline_date',
             'recurrence', 'is_two_minute_start'
         ]
         extra_kwargs = {
@@ -488,6 +498,8 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             'scheduled_date': {'help_text': 'Date when the task is scheduled.'},
             'scheduled_time': {'help_text': 'Time when the task is scheduled.'},
             'duration_mins': {'help_text': 'Estimated duration in minutes.'},
+            'expected_date': {'help_text': 'Ideal/soft date to do this task.'},
+            'deadline_date': {'help_text': 'Hard deadline for this task.'},
             'recurrence': {'help_text': 'Recurrence pattern for the task.'},
             'is_two_minute_start': {'help_text': 'Whether this is a two-minute quick-start task.'},
         }
@@ -666,6 +678,7 @@ class GoalCreateSerializer(serializers.ModelSerializer):
         fields = [
             'dream', 'milestone', 'title', 'description', 'order',
             'estimated_minutes', 'scheduled_start', 'scheduled_end',
+            'expected_date', 'deadline_date',
             'reminder_enabled', 'reminder_time'
         ]
         extra_kwargs = {
@@ -677,6 +690,8 @@ class GoalCreateSerializer(serializers.ModelSerializer):
             'estimated_minutes': {'help_text': 'Estimated time to complete in minutes.'},
             'scheduled_start': {'help_text': 'Scheduled start date for the goal.'},
             'scheduled_end': {'help_text': 'Scheduled end date for the goal.'},
+            'expected_date': {'help_text': 'Ideal/soft date to complete this goal.'},
+            'deadline_date': {'help_text': 'Hard deadline for this goal.'},
             'reminder_enabled': {'help_text': 'Whether reminders are enabled for this goal.'},
             'reminder_time': {'help_text': 'Time of day to send the reminder.'},
         }

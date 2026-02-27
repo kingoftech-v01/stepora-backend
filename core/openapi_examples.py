@@ -54,6 +54,26 @@ DREAM_LIST_RESPONSE = OpenApiExample(
     status_codes=['200'],
 )
 
+MILESTONE_DETAIL_RESPONSE = OpenApiExample(
+    'Milestone Detail',
+    value={
+        'id': '660e8400-e29b-41d4-a716-446655440001',
+        'dream': '550e8400-e29b-41d4-a716-446655440000',
+        'title': 'Month 1: Build Running Foundation',
+        'description': 'Establish a consistent running routine with proper form',
+        'order': 1,
+        'target_date': '2026-04-01T00:00:00Z',
+        'expected_date': '2026-03-28',
+        'deadline_date': '2026-04-05',
+        'status': 'in_progress',
+        'progress_percentage': 50.0,
+        'goals_count': 4,
+        'completed_goals_count': 2,
+    },
+    response_only=True,
+    status_codes=['200'],
+)
+
 DREAM_ANALYZE_RESPONSE = OpenApiExample(
     'AI Analysis Response',
     value={
@@ -78,6 +98,8 @@ GOAL_CREATE_REQUEST = OpenApiExample(
         'description': 'Build up to running 5K without stopping',
         'order': 1,
         'estimated_minutes': 1800,
+        'expected_date': '2026-03-20',
+        'deadline_date': '2026-03-25',
     },
     request_only=True,
 )

@@ -65,6 +65,8 @@ Time-based milestone within a dream plan. Each milestone represents one month of
 | description | EncryptedTextField | Description of what this milestone achieves |
 | order | IntegerField | Order within the dream (1 = first milestone) |
 | target_date | DateTimeField | Target date for this milestone (nullable) |
+| expected_date | DateField | Ideal/soft date to complete (no penalty if missed, nullable) |
+| deadline_date | DateField | Hard deadline — must be done by this date (nullable) |
 | status | CharField(20) | `pending`, `in_progress`, `completed`, `skipped` (default: `pending`) |
 | completed_at | DateTimeField | Completion timestamp (nullable) |
 | progress_percentage | FloatField | Progress (default: 0.0) |
@@ -92,6 +94,8 @@ Intermediate step within a milestone (or legacy: directly within a dream).
 | estimated_minutes | IntegerField | Estimated duration (nullable) |
 | scheduled_start | DateTimeField | Scheduled start date (nullable) |
 | scheduled_end | DateTimeField | Scheduled end date (nullable) |
+| expected_date | DateField | Ideal/soft date to complete (no penalty if missed, nullable) |
+| deadline_date | DateField | Hard deadline — must be done by this date (nullable) |
 | status | CharField(20) | `pending`, `in_progress`, `completed`, `skipped` (default: `pending`) |
 | completed_at | DateTimeField | Completion timestamp (nullable) |
 | reminder_enabled | BooleanField | Reminders enabled (default: True) |
@@ -115,11 +119,13 @@ Individual action within a goal.
 | id | UUID | Primary key |
 | goal | FK(Goal) | Parent goal (related_name: `tasks`) |
 | title | CharField(255) | Task title |
-| description | TextField | Description |
+| description | TextField | Detailed execution instructions (step-by-step) |
 | order | IntegerField | Order within the goal |
 | scheduled_date | DateTimeField | Scheduled date (nullable) |
 | scheduled_time | CharField(5) | Time in HH:MM format |
 | duration_mins | IntegerField | Duration in minutes (nullable) |
+| expected_date | DateField | Ideal/soft date to do this task (calendar event, nullable) |
+| deadline_date | DateField | Hard deadline for this task (calendar deadline, nullable) |
 | recurrence | JSONField | Recurrence pattern: `{type: "daily|weekly|monthly", interval: 1, ...}` (nullable) |
 | status | CharField(20) | `pending`, `completed`, `skipped` (default: `pending`) |
 | completed_at | DateTimeField | Completion timestamp (nullable) |
@@ -346,6 +352,26 @@ Image in a dream's vision board gallery.
 - `target_date` must be within **3 years** from now (1095 days maximum)
 - Enforced on both create and update
 
+#### Dual Date System (Calendar Integration)
+
+Every DreamMilestone, Goal, and Task has two date fields for calendar integration:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `expected_date` | DateField | **Soft target** — the ideal date to complete. If missed, no penalty. Shows as a regular calendar event. |
+| `deadline_date` | DateField | **Hard deadline** — must be done by this date. Shows as a deadline alert in the calendar. |
+
+**Buffer rules** (AI-generated):
+- **Tasks**: 2-5 days between expected and deadline
+- **Goals**: 3-7 days between expected and deadline
+- **Milestones**: 5-10 days between expected and deadline
+
+**Scheduling philosophy:**
+- AI accounts for weekends, rest days, and natural pauses
+- Not every day has tasks — breathing room is built in
+- Dates are realistic for a human (not a machine)
+- The user receives notifications on both dates (expected = reminder, deadline = alert)
+
 ### Dream Milestones
 
 | Method | Path | Description |
@@ -452,11 +478,11 @@ Image in a dream's vision board gallery.
 | `DreamDetailSerializer` | Full dream with nested `milestones` (with goals/tasks/obstacles), `goals`, `obstacles`, `calibration_responses`, `milestones_count`, `completed_milestones_count` |
 | `DreamCreateSerializer` | Input: `title` (min 3 chars, sanitized, moderated), `description` (sanitized, moderated), `category`, `target_date` (min 1mo, max 3yr), `priority` |
 | `DreamUpdateSerializer` | Input: `title`, `description`, `category`, `target_date` (min 1mo, max 3yr), `priority`, `status` (all sanitized and moderated) |
-| `DreamMilestoneSerializer` | Milestone with nested `goals` (with tasks), `obstacles`, computed `goals_count`, `completed_goals_count` |
-| `GoalSerializer` | Goal with nested `tasks`, `milestone` FK, computed `tasks_count`, `completed_tasks_count` |
-| `GoalCreateSerializer` | Input: `dream`, `milestone` (optional), `title`, `description`, `order`, `estimated_minutes`, `scheduled_start/end`, `reminder_enabled`, `reminder_time` |
-| `TaskSerializer` | Full task with all fields including `recurrence`, `is_two_minute_start` |
-| `TaskCreateSerializer` | Input: `goal`, `title`, `description`, `order`, `scheduled_date/time`, `duration_mins`, `recurrence`, `is_two_minute_start` |
+| `DreamMilestoneSerializer` | Milestone with nested `goals` (with tasks), `obstacles`, `expected_date`, `deadline_date`, computed `goals_count`, `completed_goals_count` |
+| `GoalSerializer` | Goal with nested `tasks`, `milestone` FK, `expected_date`, `deadline_date`, computed `tasks_count`, `completed_tasks_count` |
+| `GoalCreateSerializer` | Input: `dream`, `milestone` (optional), `title`, `description`, `order`, `estimated_minutes`, `scheduled_start/end`, `expected_date`, `deadline_date`, `reminder_enabled`, `reminder_time` |
+| `TaskSerializer` | Full task with all fields including `expected_date`, `deadline_date`, `recurrence`, `is_two_minute_start` |
+| `TaskCreateSerializer` | Input: `goal`, `title`, `description`, `order`, `scheduled_date/time`, `duration_mins`, `expected_date`, `deadline_date`, `recurrence`, `is_two_minute_start` |
 | `ObstacleSerializer` | Full obstacle with `solution` |
 | `CalibrationResponseSerializer` | Calibration Q&A pair with `question_number`, `category` |
 | `DreamTagSerializer` | Tag with `id`, `name`, `created_at` |

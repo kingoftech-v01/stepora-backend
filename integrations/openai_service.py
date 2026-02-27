@@ -128,6 +128,8 @@ Required JSON format:
       "description": "Detailed description of what will be achieved by the end of this milestone",
       "order": 1,
       "target_day": 30,
+      "expected_date": "2026-04-01",
+      "deadline_date": "2026-04-05",
       "reasoning": "WHY this milestone at this point in the timeline",
       "goals": [
         {
@@ -135,22 +137,28 @@ Required JSON format:
           "description": "Detailed description of this goal and what the user will achieve",
           "order": 1,
           "estimated_minutes": 600,
+          "expected_date": "2026-03-15",
+          "deadline_date": "2026-03-20",
           "reasoning": "WHY this goal is needed for this specific user based on calibration",
           "tasks": [
             {
               "title": "Day 1: Specific concrete task description",
               "order": 1,
               "day_number": 1,
+              "expected_date": "2026-03-02",
+              "deadline_date": "2026-03-03",
               "duration_mins": 30,
-              "description": "Detailed step-by-step instructions on exactly what to do",
+              "description": "DETAILED execution instructions:\\n1. Step one...\\n2. Step two...\\n3. Step three...\\nTips: ...",
               "reasoning": "Why this task on this day"
             },
             {
               "title": "Day 2: Next specific task",
               "order": 2,
               "day_number": 2,
+              "expected_date": "2026-03-03",
+              "deadline_date": "2026-03-04",
               "duration_mins": 30,
-              "description": "Detailed instructions",
+              "description": "DETAILED execution instructions:\\n1. First do X...\\n2. Then do Y...\\n3. Finally Z...",
               "reasoning": "Progressive from day 1"
             }
           ]
@@ -184,22 +192,42 @@ MILESTONE RULES:
 - ALWAYS 1 milestone per month, no exceptions
 - For long dreams (> 6 months), the plan is generated in chunks — you will be told which months to cover
 - Each milestone MUST have a target_day (day number from start)
+- Each milestone MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
 - Descriptions must be detailed and specific
 
 GOAL RULES:
 - Each milestone MUST have at least 4 goals (minimum)
 - Goals represent distinct sub-objectives within the milestone period
 - Each goal must have a clear, measurable outcome
+- Each goal MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
 
 TASK RULES:
 - Each goal MUST have at least 4 tasks (minimum)
 - EVERY task must have a "day_number" field (1 = first day, 2 = second day, etc.)
+- EVERY task MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
 - Include REST DAYS (e.g., "Day 7: Rest & Recovery — Review your progress this week")
 - Tasks must be SPECIFIC and ACTIONABLE (not vague like "work on goal")
 - Good: "Do 3 sets of 15 crunches, 3 sets of 20 bicycle crunches, and a 60-second plank"
 - Bad: "Do ab exercises"
 - Task durations MUST respect the user's available time
 - Build PROGRESSIVE difficulty
+
+DATE RULES (CRITICAL):
+- "expected_date": The IDEAL date to complete this item — a soft target. If missed, no penalty.
+- "deadline_date": The HARD deadline — the item MUST be done by this date.
+- deadline_date should always be AFTER expected_date (give 2-5 days buffer for tasks, 3-7 days for goals, 5-10 days for milestones)
+- Dates MUST be realistic: account for weekends, rest days, and natural pauses
+- Do NOT schedule tasks on every single day — leave breathing room (1-2 rest days per week)
+- The user is a human, not a machine: space tasks out with recovery time
+- All dates must be in YYYY-MM-DD format and fall within the dream's timeline
+
+TASK DESCRIPTION RULES (CRITICAL):
+- EVERY task description MUST contain DETAILED execution instructions
+- Write step-by-step instructions so the user knows EXACTLY what to do
+- Include specific quantities, durations, tools, and techniques
+- Good description: "1. Open YouTube and search for 'beginner 5K training plan week 1'\\n2. Watch a 10-15 min video on proper running form\\n3. Note down the key posture points: head up, shoulders relaxed, arms at 90 degrees\\n4. Go outside and do a 5-minute warm-up walk\\n5. Alternate: jog 1 minute, walk 2 minutes, repeat 5 times\\n6. Cool down with a 5-minute walk and 3 stretches (hamstring, quad, calf) for 30 seconds each"
+- Bad description: "Go for a run"
+- The description is the user's INSTRUCTION MANUAL for the task — make it complete and actionable
 
 OBSTACLE RULES:
 - Each milestone can have 0 or more obstacles (they're NOT 1:1 with goals)
@@ -209,7 +237,7 @@ OBSTACLE RULES:
 QUALITY RULES:
 - Do NOT generate generic plans — personalize EVERYTHING based on calibration data
 - Every task MUST have a unique, descriptive title starting with "Day N:"
-- Descriptions must be highly detailed with step-by-step instructions
+- Descriptions must be highly detailed with step-by-step execution instructions
 - The plan must cover the ENTIRE timeline from day 1 to the target date
 
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it. Task titles, descriptions, and all text must be in the user's language.""",
@@ -511,8 +539,12 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
             min_tasks = min_goals * 4
             total_weeks = max(1, total_days // 7)
 
+            from datetime import date, timedelta
+            today = date.today()
+
             duration_info = f"""
 TIMELINE:
+- Today's date: {today.isoformat()}
 - Target date: {target_date}
 - Total days from now: {total_days}
 - Total weeks: {total_weeks}
@@ -522,7 +554,11 @@ TIMELINE:
 - Each goal MUST have at least 4 tasks (minimum {min_tasks} tasks total)
 - Tasks must span the ENTIRE timeline using day_number (1 to {total_days})
 - Include rest/recovery days every 6-7 days
-- Task descriptions must be HIGHLY detailed step-by-step instructions"""
+- Task descriptions must be HIGHLY detailed step-by-step execution instructions
+- EVERY milestone, goal, and task MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
+- expected_date = ideal date to finish (soft), deadline_date = hard deadline (must finish by)
+- Leave buffer between expected and deadline: tasks 2-5 days, goals 3-7 days, milestones 5-10 days
+- Account for weekends and rest days — do NOT schedule tasks every single day"""
 
         prompt = f"""Generate a COMPREHENSIVE milestone-based plan to achieve this goal:
 
@@ -537,12 +573,12 @@ USER CONTEXT:
 
 STRUCTURE REQUIREMENTS:
 - Use the "milestones" array (NOT the "goals" array at the top level)
-- Each milestone = one month with a target_day
-- Each milestone MUST have at least 4 goals
-- Each goal MUST have at least 4 tasks with day_number
+- Each milestone = one month with a target_day, expected_date, and deadline_date
+- Each milestone MUST have at least 4 goals with expected_date and deadline_date
+- Each goal MUST have at least 4 tasks with day_number, expected_date, and deadline_date
 - Obstacles can be per-milestone (inside milestone.obstacles) and per-dream (in potential_obstacles)
 - Not every goal/milestone needs an obstacle — only where relevant
-- Tasks must be SPECIFIC and ACTIONABLE with detailed step-by-step descriptions
+- Tasks must be SPECIFIC and ACTIONABLE with detailed step-by-step execution instructions
 - Build PROGRESSIVE difficulty from milestone 1 to the last
 - Descriptions must be highly detailed — not vague
 - Personalize EVERYTHING based on calibration data if available
@@ -593,11 +629,18 @@ Respond ONLY with the plan JSON."""
         analysis = ""
         previous_summary = ""
 
+        from datetime import date, timedelta
+        today = date.today()
+
         for chunk_idx, (month_start, month_end) in enumerate(chunks):
             chunk_milestones_count = month_end - month_start + 1
             day_start = (month_start - 1) * 30 + 1
             day_end = min(month_end * 30, total_days)
             milestone_order_start = month_start
+
+            # Calculate approximate date range for this chunk
+            chunk_date_start = (today + timedelta(days=day_start - 1)).isoformat()
+            chunk_date_end = (today + timedelta(days=day_end)).isoformat()
 
             is_first_chunk = chunk_idx == 0
             is_last_chunk = chunk_idx == len(chunks) - 1
@@ -608,13 +651,19 @@ DREAM/GOAL: {dream_title}
 DESCRIPTION: {dream_description}
 
 OVERALL TIMELINE: {total_months} months ({total_days} days total), target date: {target_date}
+TODAY'S DATE: {today.isoformat()}
 
 THIS CHUNK COVERS: Months {month_start} to {month_end} (days {day_start} to {day_end})
+DATE RANGE FOR THIS CHUNK: {chunk_date_start} to {chunk_date_end}
 - Generate exactly {chunk_milestones_count} milestones (1 per month)
 - Milestone order numbers start at {milestone_order_start}
 - Each milestone MUST have at least 4 goals
 - Each goal MUST have at least 4 tasks with day_number (range: {day_start} to {day_end})
-- Task descriptions must be HIGHLY detailed step-by-step instructions
+- EVERY milestone, goal, and task MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
+- expected_date = ideal date to finish (soft), deadline_date = hard deadline (must finish by)
+- Leave buffer: tasks 2-5 days, goals 3-7 days, milestones 5-10 days between expected and deadline
+- Account for weekends and rest days — do NOT schedule tasks every single day
+- Task descriptions must be HIGHLY detailed step-by-step execution instructions
 - Include rest/recovery days every 6-7 days
 
 USER CONTEXT:

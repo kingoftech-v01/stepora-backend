@@ -583,7 +583,17 @@ class DreamViewSet(viewsets.ModelViewSet):
             dream.ai_analysis = analysis_data
             dream.save(update_fields=['ai_analysis'])
 
-            from datetime import timedelta
+            from datetime import timedelta, date as date_type
+
+            def _parse_date(date_str):
+                """Safely parse YYYY-MM-DD string to date object."""
+                if not date_str:
+                    return None
+                try:
+                    return date_type.fromisoformat(str(date_str).strip()[:10])
+                except (ValueError, TypeError):
+                    return None
+
             plan_start = dream.created_at or timezone.now()
 
             if plan.milestones:
@@ -596,6 +606,8 @@ class DreamViewSet(viewsets.ModelViewSet):
                         description=ms.description,
                         order=ms.order,
                         target_date=(plan_start + timedelta(days=ms.target_day)) if ms.target_day else None,
+                        expected_date=_parse_date(ms.expected_date),
+                        deadline_date=_parse_date(ms.deadline_date),
                     )
                     for ms in plan.milestones
                 ]
@@ -617,6 +629,8 @@ class DreamViewSet(viewsets.ModelViewSet):
                                 description=goal_data.description,
                                 order=goal_data.order,
                                 estimated_minutes=goal_data.estimated_minutes,
+                                expected_date=_parse_date(goal_data.expected_date),
+                                deadline_date=_parse_date(goal_data.deadline_date),
                             )
                         )
                         goal_data_pairs.append((goal_data, ms_idx))
@@ -643,6 +657,8 @@ class DreamViewSet(viewsets.ModelViewSet):
                                 order=task.order,
                                 duration_mins=task.duration_mins,
                                 scheduled_date=scheduled,
+                                expected_date=_parse_date(task.expected_date),
+                                deadline_date=_parse_date(task.deadline_date),
                             )
                         )
                 Task.objects.bulk_create(tasks_to_create)
