@@ -75,10 +75,11 @@ class GoalSerializer(serializers.ModelSerializer):
         }
 
     def get_tasks_count(self, obj) -> int:
-        return obj.tasks.count()
+        # Use len() to leverage prefetched data instead of .count() which hits DB
+        return len(obj.tasks.all())
 
     def get_completed_tasks_count(self, obj) -> int:
-        return obj.tasks.filter(status='completed').count()
+        return len([t for t in obj.tasks.all() if t.status == 'completed'])
 
 
 class ObstacleSerializer(serializers.ModelSerializer):
@@ -148,10 +149,8 @@ class DreamSerializer(serializers.ModelSerializer):
         return obj.goals.count()
 
     def get_tasks_count(self, obj) -> int:
-        total = 0
-        for goal in obj.goals.all():
-            total += goal.tasks.count()
-        return total
+        # Use len() on prefetched data to avoid N+1 queries
+        return sum(len(goal.tasks.all()) for goal in obj.goals.all())
 
     def get_tags(self, obj) -> list:
         return list(obj.taggings.values_list('tag__name', flat=True))

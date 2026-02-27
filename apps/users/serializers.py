@@ -306,3 +306,14 @@ class GamificationProfileSerializer(serializers.ModelSerializer):
         ]
 
 
+class Verify2FASerializer(serializers.Serializer):
+    """Serializer to verify a TOTP code during 2FA setup or login."""
+
+    code = serializers.CharField(max_length=6, min_length=6)
+
+
+class Disable2FASerializer(serializers.Serializer):
+    """Serializer to disable 2FA (requires password + TOTP code)."""
+
+    password = serializers.CharField()
+    code = serializers.CharField(max_length=6, min_length=6)

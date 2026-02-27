@@ -95,6 +95,9 @@ class Dream(models.Model):
 
     def complete(self):
         """Mark dream as completed."""
+        if self.status == 'completed':
+            return  # Already completed, idempotent no-op
+
         self.status = 'completed'
         self.completed_at = timezone.now()
         self.progress_percentage = 100.0
@@ -174,6 +177,9 @@ class Goal(models.Model):
 
     def complete(self):
         """Mark goal as completed."""
+        if self.status == 'completed':
+            return  # Already completed, idempotent no-op
+
         self.status = 'completed'
         self.completed_at = timezone.now()
         self.progress_percentage = 100.0
@@ -184,6 +190,10 @@ class Goal(models.Model):
 
         # Award XP
         self.dream.user.add_xp(100)  # Completing a goal gives 100 XP
+
+        # Check achievements
+        from apps.users.services import AchievementService
+        AchievementService.check_achievements(self.dream.user)
 
 
 class Task(models.Model):
@@ -241,6 +251,9 @@ class Task(models.Model):
 
     def complete(self):
         """Mark task as completed."""
+        if self.status == 'completed':
+            return  # Already completed, idempotent no-op
+
         self.status = 'completed'
         self.completed_at = timezone.now()
         self.save()

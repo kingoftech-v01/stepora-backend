@@ -13,21 +13,21 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
     if response is not None:
-        # Customize the response data
-        custom_response_data = {
-            'error': True,
-            'message': str(exc),
+        # Build a human-readable error message
+        detail = getattr(exc, 'detail', None)
+        if detail is not None:
+            message = str(detail)
+        else:
+            message = str(exc)
+
+        error_code = getattr(exc, 'default_code', 'error')
+
+        # Customize the response data with a consistent format
+        response.data = {
+            'error': message,
+            'code': str(error_code),
             'status_code': response.status_code,
         }
-
-        # Add detail if available
-        if hasattr(response, 'data') and isinstance(response.data, dict):
-            if 'detail' in response.data:
-                custom_response_data['detail'] = response.data['detail']
-            else:
-                custom_response_data['details'] = response.data
-
-        response.data = custom_response_data
 
     return response
 

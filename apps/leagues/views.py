@@ -11,6 +11,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone as django_timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -103,6 +105,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         },
         tags=["Leagues"],
     )
+    @method_decorator(cache_page(300))  # Cache for 5 minutes
     @action(detail=False, methods=['get'], url_path='global')
     def global_leaderboard(self, request):
         """

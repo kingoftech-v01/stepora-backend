@@ -271,10 +271,23 @@ class CircleViewSet(viewsets.ModelViewSet):
             ).exclude(user=request.user).count()
 
             if other_members > 0 and other_admins == 0:
-                return Response(
-                    {'error': 'You are the only admin. Please assign another admin before leaving.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                # Auto-transfer ownership to the oldest moderator or member
+                new_admin = CircleMembership.objects.filter(
+                    circle=circle,
+                    role='moderator',
+                ).exclude(user=request.user).order_by('joined_at').first()
+
+                if not new_admin:
+                    new_admin = CircleMembership.objects.filter(
+                        circle=circle,
+                        role='member',
+                    ).exclude(user=request.user).order_by('joined_at').first()
+
+                if new_admin:
+                    new_admin.role = 'admin'
+                    new_admin.save(update_fields=['role'])
+                    circle.creator = new_admin.user
+                    circle.save(update_fields=['creator'])
 
         membership.delete()
         return Response({'message': f'Successfully left {circle.name}.'})

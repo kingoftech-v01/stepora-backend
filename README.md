@@ -108,6 +108,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 ### Dream Buddies
 - **Buddy Matching**: AI-powered compatibility matching for accountability partners
 - **Acceptance Flow**: Send, accept, and reject buddy pairing requests
+- **Auto-Expiration**: Pending buddy requests automatically expire after 7 days
 - **Real-Time Chat**: WebSocket-based buddy-to-buddy messaging
 - **Encouragement**: Send encouragement messages to your buddy
 - **Check-In Reminders**: Automatic daily reminders when no encouragement sent in 3+ days
@@ -117,7 +118,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 
 ### Smart Notifications
 - **3-Channel Delivery**: WebSocket (real-time), Email, and Web Push (VAPID) with per-user preference toggles
-- **12+ Notification Types**: Reminders, motivation, progress milestones, achievements, rescue, buddy check-in, overdue tasks, weekly report, dream completed, dream paused, dream archived, coaching suggestions
+- **12+ Notification Types**: Reminders, motivation, progress milestones, achievement unlocks, rescue, buddy check-in, overdue tasks, weekly report, dream completed, dream paused, dream archived, dream sharing, coaching suggestions
 - **DND Support**: Respects Do Not Disturb hours with automatic rescheduling (including midnight-crossing windows)
 - **Granular Preferences**: Per-type and per-channel notification toggle for each user
 - **Personalized Messages**: AI-generated notification content based on user context
@@ -134,7 +135,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Password Management**: Change password, forgot password flow
 
 ### GDPR Compliance
-- **Account Deletion**: Soft-delete with data anonymization, permanent deletion after 30 days
+- **Account Deletion**: Soft-delete with data anonymization, automatic GDPR hard-delete after 30-day grace period
 - **Data Export**: Export all user data (profile, dreams, goals, tasks, notifications) as JSON
 - **Email Data Export**: Async data export via Celery with download link emailed to user
 

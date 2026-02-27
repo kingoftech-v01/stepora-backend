@@ -1,79 +1,79 @@
-# Politique de Sécurité
+# Security Policy
 
-## Versions Supportées
+## Supported Versions
 
-| Version | Supportée          |
+| Version | Supported          |
 | ------- | ------------------ |
 | 1.x.x   | :white_check_mark: |
 | < 1.0   | :x:                |
 
-## Signaler une Vulnérabilité
+## Reporting a Vulnerability
 
-Nous prenons la sécurité de DreamPlanner très au sérieux. Si vous découvrez une vulnérabilité de sécurité, merci de nous la signaler de manière responsable.
+We take the security of DreamPlanner very seriously. If you discover a security vulnerability, please report it to us responsibly.
 
-### Comment Signaler
+### How to Report
 
-1. **Ne pas** créer d'issue publique sur GitHub
-2. Envoyez un email à **security@dreamplanner.example.com** avec :
-   - Description détaillée de la vulnérabilité
-   - Étapes pour reproduire le problème
-   - Impact potentiel
-   - Suggestions de correction (si possible)
+1. **Do not** create a public issue on GitHub
+2. Send an email to **security@dreamplanner.app** with:
+   - Detailed description of the vulnerability
+   - Steps to reproduce the issue
+   - Potential impact
+   - Suggested fixes (if possible)
 
-### Ce à quoi s'attendre
+### What to Expect
 
-- **Accusé de réception** : Dans les 48 heures
-- **Évaluation initiale** : Dans les 7 jours
-- **Résolution** : Selon la sévérité (critique: 7 jours, haute: 14 jours, moyenne: 30 jours)
+- **Acknowledgment**: Within 48 hours
+- **Initial Assessment**: Within 7 days
+- **Resolution**: Depending on severity (critical: 7 days, high: 14 days, medium: 30 days)
 
-### Portée
+### Scope
 
-Les vulnérabilités suivantes sont dans notre portée :
+The following vulnerabilities are within our scope:
 
-- Injection SQL
+- SQL Injection
 - Cross-Site Scripting (XSS)
 - Cross-Site Request Forgery (CSRF)
-- Authentification/Autorisation cassée
-- Exposition de données sensibles
-- Mauvaise configuration de sécurité
-- Composants avec vulnérabilités connues
+- Broken Authentication/Authorization
+- Sensitive Data Exposure
+- Security Misconfiguration
+- Components with Known Vulnerabilities
 
-### Hors Portée
+### Out of Scope
 
-- Attaques par déni de service (DoS)
-- Spam ou ingénierie sociale
-- Problèmes sur des systèmes que nous ne contrôlons pas
+- Denial of Service (DoS) attacks
+- Spam or social engineering
+- Issues on systems we do not control
 
-## Mesures de Sécurité Implémentées
+## Implemented Security Measures
 
-### Authentification
-- Tokens avec expiration courte
-- Refresh tokens sécurisés
+### Authentication
+- Tokens with short expiration
+- Secure refresh tokens
 
-### Autorisation
-- Vérification de propriété sur toutes les ressources
-- Permissions basées sur les rôles
-- Rate limiting par utilisateur et IP
+### Authorization
+- Ownership verification on all resources
+- Role-based permissions
+- Rate limiting per user and IP
 
-### Protection des Données
-- Chiffrement en transit (HTTPS/TLS)
-- Sanitization des entrées utilisateur
-- Validation avec Zod schemas
-- Protection CORS configurée
+### Data Protection
+- Encryption in transit (HTTPS/TLS)
+- User input sanitization
+- Validation with Zod schemas
+- Configured CORS protection
 
 ### Infrastructure
-- Headers de sécurité (Helmet.js)
-- Protection CSRF
-- Logging et monitoring avec Sentry
+- Security headers (Helmet.js)
+- CSRF protection
+- Logging and monitoring with Sentry
 
-## Bonnes Pratiques pour les Contributeurs
+## Best Practices for Contributors
 
-1. Ne jamais commiter de secrets ou credentials
-2. Utiliser des variables d'environnement
-3. Valider toutes les entrées utilisateur
-4. Utiliser des requêtes paramétrées (Prisma/Django ORM)
-5. Suivre le principe du moindre privilège
+1. Never commit secrets or credentials
+2. Use environment variables
+3. Validate all user input
+4. Use parameterized queries (Prisma/Django ORM)
+5. Follow the principle of least privilege
 
-## Reconnaissance
+## Acknowledgments
 
-Nous remercions tous les chercheurs en sécurité qui nous aident à améliorer DreamPlanner.
+We thank all security researchers who help us improve DreamPlanner.

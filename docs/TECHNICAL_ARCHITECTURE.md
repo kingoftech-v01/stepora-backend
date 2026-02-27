@@ -1,13 +1,13 @@
-# Architecture Technique - DreamPlanner
+# Technical Architecture - DreamPlanner
 
-## 1. Vue d'Ensemble de l'Architecture
+## 1. Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENTS                                   │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │  Web App     │  │  Mobile App  │  │  API Clients │          │
-│  │  (Frontend)  │  │  (externe)   │  │  (tiers)     │          │
+│  │  (Frontend)  │  │  (external)  │  │  (third-party)│          │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
 └─────────┼─────────────────┼─────────────────┼───────────────────┘
           │                 │                 │
@@ -43,7 +43,7 @@
                    └─────────────┘                     └─────────────┘
 ```
 
-## 2. Stack Technique Détaillé
+## 2. Detailed Tech Stack
 
 ### 2.1 Backend Services (Django)
 
@@ -63,39 +63,39 @@
 }
 ```
 
-### 2.2 Base de Données
+### 2.2 Database
 
-**PostgreSQL 15** - Données principales:
-- Utilisateurs (User, GamificationProfile, DreamBuddy, Badge)
-- Rêves et objectifs (Dream, Goal, Task, Obstacle)
-- Conversations IA (Conversation, Message)
+**PostgreSQL 15** - Primary data:
+- Users (User, GamificationProfile, BuddyPairing, Badge)
+- Dreams and goals (Dream, Goal, Task, Obstacle)
+- AI Conversations (Conversation, Message)
 - Notifications (Notification, NotificationTemplate)
 
-**Redis 7** - Cache et temps réel:
-- Sessions WebSocket (Channels layer)
-- Cache des réponses IA
-- File d'attente Celery (broker + result backend)
+**Redis 7** - Cache and real-time:
+- WebSocket sessions (Channels layer)
+- AI response cache
+- Celery queue (broker + result backend)
 - Rate limiting
-- Données de session
+- Session data
 
-### 2.3 Services Cloud
+### 2.3 Cloud Services
 
 | Service | Provider | Usage |
 |---------|----------|-------|
-| Hosting Backend | AWS ECS (Fargate) | Containers Django |
-| Database | AWS RDS PostgreSQL | Base de données |
+| Backend Hosting | AWS ECS (Fargate) | Django Containers |
+| Database | AWS RDS PostgreSQL | Database |
 | Cache | AWS ElastiCache Redis | Cache + Celery |
-| Storage | AWS S3 | Vision boards, médias |
-| CDN | CloudFront | Assets statiques |
-| Load Balancer | AWS ALB | Distribution du trafic |
-| Authentication | dj-rest-auth + allauth | Authentification |
-| AI | OpenAI GPT-4 + DALL-E 3 | IA conversationnelle |
+| Storage | AWS S3 | Vision boards, media |
+| CDN | CloudFront | Static assets |
+| Load Balancer | AWS ALB | Traffic distribution |
+| Authentication | dj-rest-auth + allauth | Authentication |
+| AI | OpenAI GPT-4 + DALL-E 3 | Conversational AI |
 | Monitoring | Sentry | Error tracking |
-| Logs | CloudWatch | Logging centralisé |
+| Logs | CloudWatch | Centralized logging |
 
-## 3. Modèle de Données Django
+## 3. Django Data Model
 
-### 3.1 Schéma de Base de Données
+### 3.1 Database Schema
 
 ```python
 # users/models.py
@@ -131,7 +131,7 @@ class GamificationProfile(models.Model):
     level = models.IntegerField(default=1)
     attributes = models.JSONField(default=dict)  # health, career, education, etc.
 
-class DreamBuddy(models.Model):
+class BuddyPairing(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='buddy_requests')
     buddy = models.ForeignKey(User, on_delete=models.CASCADE, related_name='buddies')
     status = models.CharField(max_length=20, default='pending')  # pending, active, ended
@@ -276,7 +276,7 @@ class NotificationTemplate(models.Model):
     is_active = models.BooleanField(default=True)
 ```
 
-## 4. API Endpoints Django REST Framework
+## 4. Django REST Framework API Endpoints
 
 ### Base URL
 - **Development**: `http://localhost:8000/api`
@@ -284,73 +284,73 @@ class NotificationTemplate(models.Model):
 
 ### 4.1 Authentication (dj-rest-auth)
 ```
-Toutes les requêtes API nécessitent un token dans le header:
+All API requests require a token in the header:
 Authorization: Token <key>
-ou
+or
 Authorization: Bearer <key>
 ```
 
 ### 4.2 Users
 ```
-GET    /api/users/me/                      # Profil utilisateur actuel
-PUT    /api/users/me/                      # Modifier profil
-PATCH  /api/users/me/                      # Modifier partiellement
-POST   /api/users/me/update-preferences/  # Mettre à jour préférences
-GET    /api/users/me/stats/                # Statistiques utilisateur
+GET    /api/users/me/                      # Current user profile
+PUT    /api/users/me/                      # Update profile
+PATCH  /api/users/me/                      # Partially update profile
+POST   /api/users/me/update-preferences/  # Update preferences
+GET    /api/users/me/stats/                # User statistics
 ```
 
-### 4.3 Dreams (Rêves/Objectifs)
+### 4.3 Dreams (Dreams/Goals)
 ```
-GET    /api/dreams/                        # Liste des rêves
-POST   /api/dreams/                        # Créer un rêve
-GET    /api/dreams/{id}/                   # Détail d'un rêve
-PUT    /api/dreams/{id}/                   # Modifier un rêve
-PATCH  /api/dreams/{id}/                   # Modifier partiellement
-DELETE /api/dreams/{id}/                   # Supprimer un rêve
-POST   /api/dreams/{id}/analyze/           # Analyser avec IA (GPT-4)
-POST   /api/dreams/{id}/generate-plan/     # Générer planning complet avec IA
-POST   /api/dreams/{id}/generate-two-minute-start/  # Créer micro-action de démarrage
-POST   /api/dreams/{id}/generate-vision/   # Générer vision board (DALL-E)
+GET    /api/dreams/                        # List dreams
+POST   /api/dreams/                        # Create a dream
+GET    /api/dreams/{id}/                   # Dream detail
+PUT    /api/dreams/{id}/                   # Update a dream
+PATCH  /api/dreams/{id}/                   # Partially update a dream
+DELETE /api/dreams/{id}/                   # Delete a dream
+POST   /api/dreams/{id}/analyze/           # Analyze with AI (GPT-4)
+POST   /api/dreams/{id}/generate-plan/     # Generate full plan with AI
+POST   /api/dreams/{id}/generate-two-minute-start/  # Create startup micro-action
+POST   /api/dreams/{id}/generate-vision/   # Generate vision board (DALL-E)
 ```
 
 ### 4.4 Goals & Tasks
 ```
-GET    /api/dreams/{dream_id}/goals/       # Liste des objectifs
-POST   /api/dreams/{dream_id}/goals/       # Créer un objectif
-GET    /api/goals/{id}/                    # Détail d'un objectif
-PUT    /api/goals/{id}/                    # Modifier un objectif
-DELETE /api/goals/{id}/                    # Supprimer un objectif
-POST   /api/goals/{id}/complete/           # Marquer comme terminé (XP)
+GET    /api/dreams/{dream_id}/goals/       # List goals
+POST   /api/dreams/{dream_id}/goals/       # Create a goal
+GET    /api/goals/{id}/                    # Goal detail
+PUT    /api/goals/{id}/                    # Update a goal
+DELETE /api/goals/{id}/                    # Delete a goal
+POST   /api/goals/{id}/complete/           # Mark as completed (XP)
 
-GET    /api/goals/{goal_id}/tasks/         # Liste des tâches
-POST   /api/goals/{goal_id}/tasks/         # Créer une tâche
-GET    /api/tasks/{id}/                    # Détail d'une tâche
-PUT    /api/tasks/{id}/                    # Modifier une tâche
-DELETE /api/tasks/{id}/                    # Supprimer une tâche
-POST   /api/tasks/{id}/complete/           # Marquer comme terminée (XP + streak)
-POST   /api/tasks/{id}/reschedule/         # Replanifier une tâche
+GET    /api/goals/{goal_id}/tasks/         # List tasks
+POST   /api/goals/{goal_id}/tasks/         # Create a task
+GET    /api/tasks/{id}/                    # Task detail
+PUT    /api/tasks/{id}/                    # Update a task
+DELETE /api/tasks/{id}/                    # Delete a task
+POST   /api/tasks/{id}/complete/           # Mark as completed (XP + streak)
+POST   /api/tasks/{id}/reschedule/         # Reschedule a task
 ```
 
-### 4.5 Conversations (Chat IA)
+### 4.5 Conversations (AI Chat)
 ```
-GET    /api/conversations/                 # Liste des conversations
-POST   /api/conversations/                 # Nouvelle conversation
-GET    /api/conversations/{id}/            # Détail conversation
-GET    /api/conversations/{id}/messages/   # Messages d'une conversation
-POST   /api/conversations/{id}/messages/   # Envoyer un message (GPT-4)
-DELETE /api/conversations/{id}/            # Supprimer conversation
+GET    /api/conversations/                 # List conversations
+POST   /api/conversations/                 # New conversation
+GET    /api/conversations/{id}/            # Conversation detail
+GET    /api/conversations/{id}/messages/   # Conversation messages
+POST   /api/conversations/{id}/messages/   # Send a message (GPT-4)
+DELETE /api/conversations/{id}/            # Delete conversation
 ```
 
-### 4.6 WebSocket (Chat en temps réel)
+### 4.6 WebSocket (Real-time Chat)
 ```
 ws://localhost:9000/ws/conversations/{conversation_id}/
 wss://api.dreamplanner.app/ws/conversations/{conversation_id}/
 
 Messages:
-- Envoi: {"type": "message", "message": "Bonjour IA"}
-- Réception streaming:
+- Send: {"type": "message", "message": "Hello AI"}
+- Receive streaming:
   {"type": "stream_start"}
-  {"type": "stream_chunk", "chunk": "Bonjour"}
+  {"type": "stream_chunk", "chunk": "Hello"}
   {"type": "stream_end"}
   {"type": "message", "message": {...}}
 - Typing: {"type": "typing", "is_typing": true}
@@ -358,34 +358,34 @@ Messages:
 
 ### 4.7 Calendar
 ```
-GET    /api/calendar/                      # Vue calendrier (query: start_date, end_date)
-GET    /api/calendar/today/                # Tâches du jour
-GET    /api/calendar/week/                 # Vue hebdomadaire
-GET    /api/calendar/month/                # Vue mensuelle
-GET    /api/calendar/overdue/              # Tâches en retard
-POST   /api/calendar/reschedule/           # Replanifier plusieurs tâches
-POST   /api/calendar/auto-schedule/        # Auto-planification IA
+GET    /api/calendar/                      # Calendar view (query: start_date, end_date)
+GET    /api/calendar/today/                # Today's tasks
+GET    /api/calendar/week/                 # Weekly view
+GET    /api/calendar/month/                # Monthly view
+GET    /api/calendar/overdue/              # Overdue tasks
+POST   /api/calendar/reschedule/           # Reschedule multiple tasks
+POST   /api/calendar/auto-schedule/        # AI auto-scheduling
 ```
 
 ### 4.8 Notifications
 ```
-GET    /api/notifications/                 # Liste des notifications
-GET    /api/notifications/{id}/            # Détail notification
-POST   /api/notifications/{id}/mark_read/  # Marquer comme lue
-POST   /api/notifications/mark_all_read/   # Tout marquer comme lu
-GET    /api/notifications/unread_count/    # Nombre de non-lues
+GET    /api/notifications/                 # List notifications
+GET    /api/notifications/{id}/            # Notification detail
+POST   /api/notifications/{id}/mark_read/  # Mark as read
+POST   /api/notifications/mark_all_read/   # Mark all as read
+GET    /api/notifications/unread_count/    # Unread count
 ```
 
 ### 4.9 Health Checks
 ```
-GET    /health/                            # Health check général
+GET    /health/                            # General health check
 GET    /health/liveness/                   # Liveness probe (K8s)
 GET    /health/readiness/                  # Readiness probe (DB check)
 ```
 
-## 5. Intégration OpenAI GPT-4
+## 5. OpenAI GPT-4 Integration
 
-### 5.1 Service d'Intégration Django
+### 5.1 Django Integration Service
 
 ```python
 # openai_service.py
@@ -397,37 +397,37 @@ openai.api_key = settings.OPENAI_API_KEY
 
 class OpenAIService:
     SYSTEM_PROMPTS = {
-        'dream_creation': """Tu es DreamPlanner, un assistant bienveillant qui aide les utilisateurs à réaliser leurs rêves.
+        'dream_creation': """You are DreamPlanner, a caring assistant that helps users achieve their dreams.
 
-TON RÔLE:
-1. Écouter attentivement les rêves et objectifs
-2. Poser des questions pertinentes pour bien comprendre
-3. Décomposer les grands objectifs en étapes réalisables
-4. Créer un planning réaliste tenant compte des contraintes
-5. Motiver et encourager sans être condescendant
+YOUR ROLE:
+1. Listen carefully to dreams and goals
+2. Ask relevant questions to understand well
+3. Break down large goals into achievable steps
+4. Create a realistic schedule accounting for constraints
+5. Motivate and encourage without being condescending
 
-RÈGLES:
-- Demander des précisions si l'objectif est vague
-- Proposer des délais réalistes
-- Tenir compte de l'équilibre vie pro/perso
-- Inclure des pauses et temps de repos
-- Être encourageant mais honnête sur la faisabilité""",
+RULES:
+- Ask for clarification if the goal is vague
+- Suggest realistic deadlines
+- Account for work-life balance
+- Include breaks and rest time
+- Be encouraging but honest about feasibility""",
 
-        'planning': """Tu es expert en planification. Génère un plan détaillé et réaliste.""",
+        'planning': """You are a planning expert. Generate a detailed and realistic plan.""",
 
-        'motivation': """Tu génères des messages de motivation courts et personnalisés.""",
+        'motivation': """You generate short and personalized motivational messages.""",
 
-        'coaching': """Tu analyses les patterns d'activité et suggères des ajustements.""",
+        'coaching': """You analyze activity patterns and suggest adjustments.""",
 
-        'rescue': """Tu créés des messages bienveillants pour réengager les utilisateurs inactifs."""
+        'rescue': """You create caring messages to re-engage inactive users."""
     }
 
     def chat(self, messages, conversation_type='general'):
-        """Chat synchrone avec GPT-4"""
+        """Synchronous chat with GPT-4"""
         system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, self.SYSTEM_PROMPTS['dream_creation'])
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 *messages
@@ -439,11 +439,11 @@ RÈGLES:
         return response.choices[0].message.content
 
     async def chat_stream_async(self, messages, conversation_type='general'):
-        """Chat asynchrone avec streaming pour WebSocket"""
+        """Asynchronous chat with streaming for WebSocket"""
         system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, self.SYSTEM_PROMPTS['dream_creation'])
 
-        response = await openai.ChatCompletion.acreate(
-            model='gpt-4-turbo-preview',
+        response = await client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 *messages
@@ -458,38 +458,38 @@ RÈGLES:
                 yield content
 
     def generate_plan(self, dream, user):
-        """Génère un plan complet avec goals et tasks"""
+        """Generate a complete plan with goals and tasks"""
         prompt = f"""
-Génère un plan détaillé pour atteindre cet objectif:
+Generate a detailed plan to achieve this goal:
 
-RÊVE/OBJECTIF: {dream.title}
+DREAM/GOAL: {dream.title}
 DESCRIPTION: {dream.description}
-DATE CIBLE: {dream.target_date or 'Non spécifiée'}
-CATÉGORIE: {dream.category}
+TARGET DATE: {dream.target_date or 'Not specified'}
+CATEGORY: {dream.category}
 
-Contexte utilisateur:
-- Horaires de travail: {user.work_schedule}
+User context:
+- Work schedule: {user.work_schedule}
 - Timezone: {user.timezone}
 
-Réponds UNIQUEMENT avec un JSON structuré contenant:
+Respond ONLY with a structured JSON containing:
 {{
-  "analysis": "Analyse du rêve",
+  "analysis": "Dream analysis",
   "feasibility": "high|medium|low",
   "goals": [
     {{
-      "title": "Titre de l'étape",
+      "title": "Step title",
       "description": "Description",
       "order": 0,
       "tasks": [
-        {{"title": "Tâche", "order": 0, "duration": 30}}
+        {{"title": "Task", "order": 0, "duration": 30}}
       ]
     }}
   ]
 }}
 """
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
                 {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
                 {'role': 'user', 'content': prompt}
@@ -501,11 +501,11 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return json.loads(response.choices[0].message.content)
 
     def generate_motivational_message(self, user):
-        """Message de motivation quotidien personnalisé"""
-        prompt = f"""Génère un message de motivation court (max 150 caractères) pour {user.display_name}.
-        Contexte: XP={user.xp}, Niveau={user.level}, Série={user.streak_days} jours"""
+        """Personalized daily motivational message"""
+        prompt = f"""Generate a short motivational message (max 150 characters) for {user.display_name}.
+        Context: XP={user.xp}, Level={user.level}, Streak={user.streak_days} days"""
 
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model='gpt-3.5-turbo',
             messages=[
                 {'role': 'system', 'content': self.SYSTEM_PROMPTS['motivation']},
@@ -518,15 +518,15 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return response.choices[0].message.content
 
     def generate_two_minute_start(self, dream):
-        """Génère une micro-action de démarrage (2 minutes max)"""
-        prompt = f"""Pour l'objectif "{dream.title}", génère UNE micro-action très simple
-        qui prend 30 secondes à 2 minutes maximum. Réponds uniquement avec l'action,
-        sans guillemets ni formatage."""
+        """Generate a startup micro-action (2 minutes max)"""
+        prompt = f"""For the goal "{dream.title}", generate ONE very simple micro-action
+        that takes 30 seconds to 2 minutes maximum. Respond only with the action,
+        without quotes or formatting."""
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
-                {'role': 'system', 'content': 'Tu suggères des micro-actions ultra-simples.'},
+                {'role': 'system', 'content': 'You suggest ultra-simple micro-actions.'},
                 {'role': 'user', 'content': prompt}
             ],
             temperature=0.7,
@@ -536,7 +536,7 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return response.choices[0].message.content
 
     def generate_vision_board_image(self, dream):
-        """Génère une image de vision board avec DALL-E 3"""
+        """Generate a vision board image with DALL-E 3"""
         prompt = f"""Create an inspiring, photorealistic image representing someone
         who has achieved: {dream.title}. Focus on success, happiness, and fulfillment."""
 
@@ -551,15 +551,15 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return response.data[0].url
 
     def generate_rescue_message(self, user):
-        """Message de réengagement pour utilisateurs inactifs (Rescue Mode)"""
+        """Re-engagement message for inactive users (Rescue Mode)"""
         recent_dream = user.dreams.filter(status='active').order_by('-updated_at').first()
 
-        prompt = f"""Génère un message bienveillant pour réengager {user.display_name}
-        qui n'a pas été actif depuis quelques jours. Son objectif: "{recent_dream.title if recent_dream else 'ses rêves'}".
-        Sois encourageant et compréhensif. Max 200 caractères."""
+        prompt = f"""Generate a caring message to re-engage {user.display_name}
+        who has not been active for a few days. Their goal: "{recent_dream.title if recent_dream else 'their dreams'}".
+        Be encouraging and understanding. Max 200 characters."""
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
                 {'role': 'system', 'content': self.SYSTEM_PROMPTS['rescue']},
                 {'role': 'user', 'content': prompt}
@@ -571,15 +571,15 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return response.choices[0].message.content
 
     def predict_obstacles(self, dream):
-        """Prédiction d'obstacles avec suggestions de solutions"""
-        prompt = f"""Pour l'objectif "{dream.title}: {dream.description}",
-        prédis 3-5 obstacles potentiels avec leurs solutions.
-        Réponds en JSON: [{{"title": "...", "description": "...", "likelihood": "high|medium|low", "solution": "..."}}]"""
+        """Obstacle prediction with solution suggestions"""
+        prompt = f"""For the goal "{dream.title}: {dream.description}",
+        predict 3-5 potential obstacles with their solutions.
+        Respond in JSON: [{{"title": "...", "description": "...", "likelihood": "high|medium|low", "solution": "..."}}]"""
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
-                {'role': 'system', 'content': 'Tu prédis des obstacles et proposes des solutions.'},
+                {'role': 'system', 'content': 'You predict obstacles and propose solutions.'},
                 {'role': 'user', 'content': prompt}
             ],
             temperature=0.6,
@@ -590,13 +590,13 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return result.get('obstacles', [])
 
     def generate_task_adjustments(self, user, tasks, completion_rate):
-        """Analyse patterns et suggère des ajustements (Proactive AI Coach)"""
-        prompt = f"""L'utilisateur a un taux de complétion de {completion_rate}% sur {len(tasks)} tâches.
-        Analyse et suggère 3 ajustements concrets pour améliorer la productivité.
+        """Analyze patterns and suggest adjustments (Proactive AI Coach)"""
+        prompt = f"""The user has a completion rate of {completion_rate}% on {len(tasks)} tasks.
+        Analyze and suggest 3 concrete adjustments to improve productivity.
         JSON: {{"summary": "...", "detailed": ["suggestion1", "suggestion2", "suggestion3"]}}"""
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
                 {'role': 'system', 'content': self.SYSTEM_PROMPTS['coaching']},
                 {'role': 'user', 'content': prompt}
@@ -608,15 +608,15 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return json.loads(response.choices[0].message.content)
 
     def generate_weekly_report(self, user, completed_tasks, total_tasks, xp_gained):
-        """Génère rapport hebdomadaire personnalisé"""
-        prompt = f"""Génère un rapport hebdomadaire encourageant pour {user.display_name}.
-        Stats: {completed_tasks}/{total_tasks} tâches, +{xp_gained} XP.
-        Max 250 caractères."""
+        """Generate personalized weekly report"""
+        prompt = f"""Generate an encouraging weekly report for {user.display_name}.
+        Stats: {completed_tasks}/{total_tasks} tasks, +{xp_gained} XP.
+        Max 250 characters."""
 
-        response = openai.ChatCompletion.create(
-            model='gpt-4-turbo-preview',
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
             messages=[
-                {'role': 'system', 'content': 'Tu génères des rapports hebdomadaires encourageants.'},
+                {'role': 'system', 'content': 'You generate encouraging weekly reports.'},
                 {'role': 'user', 'content': prompt}
             ],
             temperature=0.7,
@@ -626,9 +626,9 @@ Réponds UNIQUEMENT avec un JSON structuré contenant:
         return response.choices[0].message.content
 ```
 
-## 6. Système de Notifications avec Celery
+## 6. Notification System with Celery
 
-### 6.1 Tâches Celery Périodiques
+### 6.1 Periodic Celery Tasks
 
 ```python
 # celery.py (config/celery.py)
@@ -640,55 +640,55 @@ app = Celery('dreamplanner')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 app.conf.beat_schedule = {
-    # Traiter notifications en attente (chaque minute)
+    # Process pending notifications (every minute)
     'process-pending-notifications': {
         'task': 'notifications.tasks.process_pending_notifications',
         'schedule': 60.0,
     },
 
-    # Rappels de tâches (toutes les 15 minutes)
+    # Task reminders (every 15 minutes)
     'send-reminder-notifications': {
         'task': 'notifications.tasks.send_reminder_notifications',
         'schedule': 900.0,
     },
 
-    # Message de motivation quotidien (8h du matin)
+    # Daily motivational message (8 AM)
     'generate-daily-motivation': {
         'task': 'notifications.tasks.generate_daily_motivation',
         'schedule': crontab(hour=8, minute=0),
     },
 
-    # Rescue Mode - utilisateurs inactifs (9h du matin)
+    # Rescue Mode - inactive users (9 AM)
     'check-inactive-users': {
         'task': 'notifications.tasks.check_inactive_users',
         'schedule': crontab(hour=9, minute=0),
     },
 
-    # Rapport hebdomadaire (dimanche 10h)
+    # Weekly report (Sunday 10 AM)
     'send-weekly-report': {
         'task': 'notifications.tasks.send_weekly_report',
         'schedule': crontab(day_of_week=0, hour=10, minute=0),
     },
 
-    # Mettre à jour progression des rêves (3h du matin)
+    # Update dream progress (3 AM)
     'update-dream-progress': {
         'task': 'dreams.tasks.update_dream_progress',
         'schedule': crontab(hour=3, minute=0),
     },
 
-    # Vérifier tâches en retard (10h du matin)
+    # Check overdue tasks (10 AM)
     'check-overdue-tasks': {
         'task': 'dreams.tasks.check_overdue_tasks',
         'schedule': crontab(hour=10, minute=0),
     },
 
-    # Nettoyage notifications anciennes (lundi 2h)
+    # Clean up old notifications (Monday 2 AM)
     'cleanup-old-notifications': {
         'task': 'notifications.tasks.cleanup_old_notifications',
         'schedule': crontab(day_of_week=1, hour=2, minute=0),
     },
 
-    # Archiver rêves abandonnés (dimanche 3h)
+    # Archive abandoned dreams (Sunday 3 AM)
     'cleanup-abandoned-dreams': {
         'task': 'dreams.tasks.cleanup_abandoned_dreams',
         'schedule': crontab(day_of_week=0, hour=3, minute=0),
@@ -696,23 +696,23 @@ app.conf.beat_schedule = {
 }
 ```
 
-### 6.2 Types de Notifications
+### 6.2 Notification Types
 
-| Type | Déclencheur | Exemple | Celery Task |
-|------|-------------|---------|-------------|
-| `reminder` | Tâche programmée | "C'est l'heure de pratiquer l'anglais!" | `send_reminder_notifications` |
-| `motivation` | Quotidien 8h | "Tu as déjà accompli 3 tâches cette semaine!" | `generate_daily_motivation` |
-| `progress` | Milestone atteint | "50% de ton objectif atteint!" | Déclenché par completion |
-| `achievement` | Badge débloqué | "Badge 'Régulier' obtenu!" | Déclenché par XP/streak |
-| `rescue` | Inactivité 3+ jours | "On est toujours là pour toi!" | `check_inactive_users` |
-| `weekly_report` | Dimanche 10h | "Ton rapport hebdomadaire" | `send_weekly_report` |
-| `task_created` | 2-minute start généré | "Prêt à démarrer en 2 minutes?" | `generate_two_minute_start` |
-| `vision_ready` | Image DALL-E générée | "Ta vision est prête!" | `generate_vision_board` |
-| `coaching` | Taux complétion < 50% | "Suggestions pour mieux réussir" | `suggest_task_adjustments` |
+| Type | Trigger | Example | Celery Task |
+|------|---------|---------|-------------|
+| `reminder` | Scheduled task | "It's time to practice English!" | `send_reminder_notifications` |
+| `motivation` | Daily 8 AM | "You've already completed 3 tasks this week!" | `generate_daily_motivation` |
+| `progress` | Milestone reached | "50% of your goal achieved!" | Triggered by completion |
+| `achievement` | Badge unlocked | "Badge 'Regular' earned!" | Triggered by XP/streak |
+| `rescue` | Inactivity 3+ days | "We're still here for you!" | `check_inactive_users` |
+| `weekly_report` | Sunday 10 AM | "Your weekly report" | `send_weekly_report` |
+| `task_created` | 2-minute start generated | "Ready to get started in 2 minutes?" | `generate_two_minute_start` |
+| `vision_ready` | DALL-E image generated | "Your vision is ready!" | `generate_vision_board` |
+| `coaching` | Completion rate < 50% | "Suggestions for better success" | `suggest_task_adjustments` |
 
-## 7. WebSocket avec Django Channels
+## 7. WebSocket with Django Channels
 
-### 7.1 Configuration ASGI
+### 7.1 ASGI Configuration
 
 ```python
 # asgi.py (config/asgi.py)
@@ -729,7 +729,7 @@ application = ProtocolTypeRouter({
 })
 ```
 
-### 7.2 Consumer WebSocket
+### 7.2 WebSocket Consumer
 
 ```python
 # conversations/consumers.py
@@ -742,13 +742,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f'conversation_{self.conversation_id}'
         self.user = self.scope['user']
 
-        # Vérifier accès
+        # Check access
         has_access = await self.check_conversation_access()
         if not has_access:
             await self.close(code=4003)
             return
 
-        # Rejoindre groupe
+        # Join group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -756,7 +756,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Confirmation de connexion
+        # Connection confirmation
         await self.send(text_data=json.dumps({
             'type': 'connection',
             'status': 'connected',
@@ -775,10 +775,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def handle_message(self, data):
         message_content = data.get('message', '').strip()
 
-        # Sauvegarder message utilisateur
+        # Save user message
         user_message = await self.save_message('user', message_content)
 
-        # Broadcaster message utilisateur
+        # Broadcast user message
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -792,7 +792,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
-        # Obtenir réponse IA en streaming
+        # Get AI response via streaming
         await self.get_ai_response_stream(message_content)
 
     async def get_ai_response_stream(self, user_message):
@@ -801,10 +801,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         ai_service = OpenAIService()
 
-        # Indiquer démarrage du streaming
+        # Indicate streaming start
         await self.send(text_data=json.dumps({'type': 'stream_start'}))
 
-        # Streamer réponse IA
+        # Stream AI response
         full_response = ""
         async for chunk in ai_service.chat_stream_async(
             messages=messages,
@@ -816,13 +816,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'chunk': chunk
             }))
 
-        # Fin du streaming
+        # End of streaming
         await self.send(text_data=json.dumps({'type': 'stream_end'}))
 
-        # Sauvegarder réponse complète
+        # Save complete response
         assistant_message = await self.save_message('assistant', full_response)
 
-        # Broadcaster message complet
+        # Broadcast complete message
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -837,9 +837,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 ```
 
-## 8. Déploiement AWS
+## 8. AWS Deployment
 
-### 8.1 Architecture de Production
+### 8.1 Production Architecture
 
 ```
 CloudFront (CDN)
@@ -864,23 +864,23 @@ ALB (Load Balancer)
 └─────────┘
 ```
 
-### 8.2 Services AWS Utilisés
+### 8.2 AWS Services Used
 
-- **ECS Fargate**: Containers Django (HTTP + WebSocket + Celery)
-- **RDS PostgreSQL**: Multi-AZ pour haute disponibilité
-- **ElastiCache Redis**: Cluster mode pour Channels + Celery
-- **S3**: Vision boards et médias utilisateurs
-- **ALB**: Load balancer avec health checks
-- **CloudFront**: CDN pour static files
-- **CloudWatch**: Logs et monitoring
-- **Secrets Manager**: Gestion des secrets
-- **ECR**: Registry Docker privé
+- **ECS Fargate**: Django containers (HTTP + WebSocket + Celery)
+- **RDS PostgreSQL**: Multi-AZ for high availability
+- **ElastiCache Redis**: Cluster mode for Channels + Celery
+- **S3**: Vision boards and user media
+- **ALB**: Load balancer with health checks
+- **CloudFront**: CDN for static files
+- **CloudWatch**: Logs and monitoring
+- **Secrets Manager**: Secrets management
+- **ECR**: Private Docker registry
 
-## 9. Structure des Dossiers
+## 9. Directory Structure
 
 ```
 dreamplanner/
-├── config/                       # Configuration Django
+├── config/                       # Django Configuration
 │   ├── settings/
 │   │   ├── base.py
 │   │   ├── development.py
@@ -891,29 +891,29 @@ dreamplanner/
 │   ├── wsgi.py                  # HTTP config
 │   └── celery.py                # Celery config
 │
-├── apps/                         # Applications Django
-│   ├── users/                   # Gestion utilisateurs
+├── apps/                         # Django Applications
+│   ├── users/                   # User management
 │   ├── dreams/                  # Dreams, Goals, Tasks
-│   ├── conversations/           # Chat IA (WebSocket)
+│   ├── conversations/           # AI Chat (WebSocket)
 │   ├── notifications/           # Push notifications
-│   └── calendar/                # Vues calendrier
+│   └── calendar/                # Calendar views
 │
-├── core/                         # Utilitaires centraux
+├── core/                         # Core utilities
 │   ├── authentication.py        # Token auth backend
 │   ├── permissions.py           # DRF permissions
-│   ├── exceptions.py            # Exceptions custom
+│   ├── exceptions.py            # Custom exceptions
 │   └── pagination.py            # Pagination
 │
-├── integrations/                 # Services externes
+├── integrations/                 # External services
 │   ├── openai_service.py        # OpenAI GPT-4
 │
-├── requirements/                 # Dépendances Python
+├── requirements/                 # Python dependencies
 │   ├── base.txt
 │   ├── development.txt
 │   ├── production.txt
 │   └── testing.txt
 │
-├── docker/                       # Configuration Docker
+├── docker/                       # Docker configuration
 │   └── nginx.conf
 │
 ├── docs/                         # Documentation
@@ -925,78 +925,78 @@ dreamplanner/
 ├── .github/                      # CI/CD
 │   └── workflows/
 │
-├── Dockerfile                   # Image production
-├── docker-compose.yml           # Dev local
+├── Dockerfile                   # Production image
+├── docker-compose.yml           # Local dev
 ├── docker-compose.prod.yml      # Production
-├── Makefile                     # Commandes utiles
-├── pytest.ini                   # Config tests
+├── Makefile                     # Useful commands
+├── pytest.ini                   # Test config
 ├── manage.py                    # Django CLI
 └── README.md
 ```
 
-## 10. Performance et Sécurité
+## 10. Performance and Security
 
-### 10.1 Optimisations Performance
+### 10.1 Performance Optimizations
 
-- **Caching Redis**: Réponses API, sessions, rate limiting
-- **Database Indexing**: Indexes sur email, user_id, dates
+- **Redis Caching**: API responses, sessions, rate limiting
+- **Database Indexing**: Indexes on email, user_id, dates
 - **Query Optimization**: select_related(), prefetch_related()
 - **Connection Pooling**: PostgreSQL pooling via Django
-- **Static Files**: Servis via CloudFront CDN
-- **Gunicorn Workers**: 4 workers + threads pour concurrence
-- **Celery**: Background tasks pour opérations lourdes
+- **Static Files**: Served via CloudFront CDN
+- **Gunicorn Workers**: 4 workers + threads for concurrency
+- **Celery**: Background tasks for heavy operations
 
-### 10.2 Sécurité
+### 10.2 Security
 
-- ✅ **Token Authentication**: dj-rest-auth tokens vérifiés côté serveur
-- ✅ **HTTPS Only**: TLS 1.2+ en production
-- ✅ **CORS**: Whitelist origins autorisées
+- ✅ **Token Authentication**: dj-rest-auth tokens verified server-side
+- ✅ **HTTPS Only**: TLS 1.2+ in production
+- ✅ **CORS**: Whitelisted allowed origins
 - ✅ **SQL Injection**: Protection via Django ORM
 - ✅ **XSS Protection**: Django middleware
 - ✅ **CSRF Protection**: Django REST Framework
 - ✅ **Rate Limiting**: Nginx + DRF throttling
 - ✅ **Secrets Management**: AWS Secrets Manager
-- ✅ **Container Security**: Non-root user dans Docker
+- ✅ **Container Security**: Non-root user in Docker
 - ✅ **Security Headers**: Nginx config (HSTS, X-Frame-Options, etc.)
 - ✅ **Input Validation**: DRF Serializers
 
 ### 10.3 Monitoring
 
-- **Sentry**: Error tracking et performance monitoring
-- **CloudWatch**: Logs centralisés et métriques
+- **Sentry**: Error tracking and performance monitoring
+- **CloudWatch**: Centralized logs and metrics
 - **Health Checks**: /health/, /health/liveness/, /health/readiness/
-- **Flower**: Monitoring Celery tasks
+- **Flower**: Celery tasks monitoring
 - **Database Metrics**: RDS Performance Insights
 
 ## 11. Tests
 
-### 11.1 Stack de Tests
+### 11.1 Test Stack
 
-- **pytest**: Framework de tests
-- **pytest-django**: Plugin Django
-- **pytest-cov**: Couverture de code
-- **pytest-asyncio**: Tests async (WebSocket)
-- **Factory Boy**: Fixtures de données
-- **Coverage Target**: 80%+
+- **pytest**: Test framework
+- **pytest-django**: Django plugin
+- **pytest-cov**: Code coverage
+- **pytest-asyncio**: Async tests (WebSocket)
+- **Factory Boy**: Data fixtures
+- **Coverage Target**: 84%
 
-### 11.2 Types de Tests
+### 11.2 Test Types
 
 ```bash
-# Tests unitaires
+# Unit tests
 pytest -m unit
 
-# Tests d'intégration
+# Integration tests
 pytest -m integration
 
-# Tests async (WebSocket)
+# Async tests (WebSocket)
 pytest -m asyncio
 
-# Couverture complète
+# Full coverage
 pytest --cov --cov-report=html
 ```
 
 ---
 
-**Architecture complétée**: Django 5.0.1 + DRF 3.14.0 + Channels 4.0.0 + Celery 5.3.4
+**Architecture completed**: Django 5.0.1 + DRF 3.14.0 + Channels 4.0.0 + Celery 5.3.4
 **Status**: ✅ Backend production-ready
-**Dernière mise à jour**: 2026-01-28
+**Last updated**: 2026-01-28

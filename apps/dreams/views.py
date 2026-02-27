@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
@@ -115,8 +117,12 @@ class DreamViewSet(viewsets.ModelViewSet):
         collab_dream_ids = DreamCollaborator.objects.filter(
             user=self.request.user
         ).values_list('dream_id', flat=True)
+        from .models import SharedDream
+        shared_dream_ids = SharedDream.objects.filter(
+            shared_with=self.request.user
+        ).values_list('dream_id', flat=True)
         qs = Dream.objects.filter(
-            Q(user=self.request.user) | Q(id__in=collab_dream_ids)
+            Q(user=self.request.user) | Q(id__in=collab_dream_ids) | Q(id__in=shared_dream_ids)
         ).prefetch_related('goals__tasks').distinct()
 
         # Elasticsearch-backed search (encrypted fields can't use DB icontains)
@@ -852,6 +858,11 @@ class DreamViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark dream as completed."""
         dream = self.get_object()
+        if dream.status == 'completed':
+            return Response(
+                {'error': 'Dream is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         dream.complete()
 
         return Response(DreamSerializer(dream).data)
@@ -958,6 +969,24 @@ class DreamViewSet(viewsets.ModelViewSet):
             shared_with=target_user,
             permission=permission,
         )
+
+        # Notify the recipient
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=target_user,
+                notification_type='progress',
+                title=f'{request.user.display_name or "Someone"} shared a dream with you!',
+                body=f'You now have access to view this dream.',
+                scheduled_for=timezone.now(),
+                data={
+                    'type': 'dream_shared',
+                    'dream_id': str(dream.id),
+                    'shared_by_id': str(request.user.id),
+                },
+            )
+        except Exception:
+            pass  # Don't fail the share if notification fails
 
         return Response(
             SharedDreamSerializer(shared).data,
@@ -1210,6 +1239,10 @@ class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated]
     serializer_class = DreamTemplateSerializer
+
+    @method_decorator(cache_page(300))  # Cache for 5 minutes
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         """Return active templates, optionally filtered by category."""
@@ -1510,6 +1543,11 @@ class GoalViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark goal as completed."""
         goal = self.get_object()
+        if goal.status == 'completed':
+            return Response(
+                {'error': 'Goal is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         goal.complete()
 
         return Response(GoalSerializer(goal).data)
@@ -1610,6 +1648,11 @@ class TaskViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark task as completed."""
         task = self.get_object()
+        if task.status == 'completed':
+            return Response(
+                {'error': 'Task is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         task.complete()
 
         return Response(TaskSerializer(task).data)

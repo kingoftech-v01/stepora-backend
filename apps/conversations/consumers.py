@@ -109,7 +109,7 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             pass
         except Exception:
-            pass
+            logger.debug("Cleanup error during disconnect", exc_info=True)
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""

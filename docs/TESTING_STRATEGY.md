@@ -1,16 +1,16 @@
-# Stratégie de Tests - DreamPlanner
+# Testing Strategy - DreamPlanner
 
-## Vue d'Ensemble
+## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    PYRAMIDE DE TESTS                            │
+│                    TESTING PYRAMID                               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │                         /\                                       │
 │                        /  \      E2E Tests                      │
 │                       /    \     (API end-to-end)               │
-│                      /──────\    ~10% - Parcours critiques      │
+│                      /──────\    ~10% - Critical paths           │
 │                     /        \                                   │
 │                    /          \  Integration Tests              │
 │                   /            \ (API + Database)               │
@@ -18,30 +18,30 @@
 │                 /                \                               │
 │                /                  \ Unit Tests                  │
 │               /                    \(pytest)                    │
-│              /______________________\~60% - Logique métier      │
+│              /______________________\~60% - Business logic      │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 1. Tests Unitaires (60%)
+## 1. Unit Tests (60%)
 
 ### 1.1 Backend (pytest + pytest-django)
 
-**Fichiers à tester:**
+**Files to test:**
 ```
 apps/
 ├── dreams/
 │   └── tests/
-│       ├── test_models.py          ✅ Priorité haute
-│       ├── test_views.py           ✅ Priorité haute
+│       ├── test_models.py          ✅ High priority
+│       ├── test_views.py           ✅ High priority
 │       └── test_tasks.py
 ├── conversations/
 │   └── tests/
 │       ├── test_models.py
 │       ├── test_views.py
-│       └── test_consumers.py       ✅ Priorité haute
+│       └── test_consumers.py       ✅ High priority
 ├── notifications/
 │   └── tests/
 │       ├── test_models.py
@@ -55,10 +55,10 @@ apps/
     └── tests/
         └── test_views.py
 integrations/
-├── test_openai_service.py          ✅ Priorité haute
+├── test_openai_service.py          ✅ High priority
 ```
 
-**Exemple de test - AI Service:**
+**Example test - AI Service:**
 
 ```python
 # integrations/tests/test_openai_service.py
@@ -73,7 +73,7 @@ class TestOpenAIService:
 
     @patch('integrations.openai_service.openai')
     def test_generate_plan_returns_valid_structure(self, mock_openai):
-        mock_openai.ChatCompletion.create.return_value = MagicMock(
+        mock_openai.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content='{"analysis": "...", "feasibility": "high", "goals": [{"title": "Les bases", "order": 0, "tasks": []}]}'))]
         )
 
@@ -98,7 +98,7 @@ class TestOpenAIService:
 
     @patch('integrations.openai_service.openai')
     def test_generate_motivational_message_under_limit(self, mock_openai):
-        mock_openai.ChatCompletion.create.return_value = MagicMock(
+        mock_openai.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content='Continue comme ça!'))]
         )
 
@@ -108,7 +108,7 @@ class TestOpenAIService:
         assert len(message) <= 150
 ```
 
-**Exemple de test - Dream Views:**
+**Example test - Dream Views:**
 
 ```python
 # apps/dreams/tests/test_views.py
@@ -170,7 +170,7 @@ class TestDreamViewSet:
 
 ---
 
-## 2. Tests d'Intégration (30%)
+## 2. Integration Tests (30%)
 
 ### 2.1 API Integration Tests
 
@@ -299,9 +299,9 @@ class TestChatConsumer:
 
 ---
 
-## 3. Tests E2E (10%)
+## 3. E2E Tests (10%)
 
-### 3.1 Tests E2E API (Parcours Critiques)
+### 3.1 E2E API Tests (Critical Paths)
 
 ```python
 # tests/e2e/test_dream_flow.py
@@ -312,13 +312,13 @@ from apps.users.models import User
 
 @pytest.mark.django_db
 class TestCreateDreamFlow:
-    """Test du parcours complet: inscription -> création rêve -> génération plan"""
+    """Test of the complete flow: registration -> dream creation -> plan generation"""
 
     def setup_method(self):
         self.client = APIClient()
 
     def test_full_dream_creation_flow(self):
-        # 1. Inscription
+        # 1. Registration
         response = self.client.post('/api/auth/registration/', {
             'email': 'e2e@test.com',
             'password1': 'TestPass123A',
@@ -327,10 +327,10 @@ class TestCreateDreamFlow:
         assert response.status_code == 201
         token = response.data['key']
 
-        # 2. Authentification
+        # 2. Authentication
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token}')
 
-        # 3. Créer un rêve
+        # 3. Create a dream
         response = self.client.post('/api/dreams/', {
             'title': 'Apprendre la guitare',
             'description': 'Je veux jouer mes chansons préférées',
@@ -340,22 +340,22 @@ class TestCreateDreamFlow:
         assert response.status_code == 201
         dream_id = response.data['id']
 
-        # 4. Récupérer le rêve
+        # 4. Retrieve the dream
         response = self.client.get(f'/api/dreams/{dream_id}/')
         assert response.status_code == 200
         assert response.data['title'] == 'Apprendre la guitare'
 
-        # 5. Vérifier le rêve dans la liste
+        # 5. Verify the dream in the list
         response = self.client.get('/api/dreams/')
         assert response.status_code == 200
         assert len(response.data['results']) == 1
 
     def test_task_completion_flow(self):
-        # Setup: créer utilisateur, rêve, goal, task
+        # Setup: create user, dream, goal, task
         user = User.objects.create_user(email='task@test.com', password='TestPass123A')
         self.client.force_authenticate(user=user)
 
-        # Créer rêve -> goal -> task
+        # Create dream -> goal -> task
         dream_res = self.client.post('/api/dreams/', {
             'title': 'Test Dream', 'description': 'Test',
         }, format='json')
@@ -371,18 +371,18 @@ class TestCreateDreamFlow:
         }, format='json')
         task_id = task_res.data['id']
 
-        # Compléter la tâche
+        # Complete the task
         response = self.client.post(f'/api/tasks/{task_id}/complete/')
         assert response.status_code == 200
 
-        # Vérifier la progression
+        # Verify progress
         response = self.client.get(f'/api/dreams/{dream_id}/')
         assert response.data['progress_percentage'] > 0
 ```
 
 ---
 
-## 4. Tests de Performance
+## 4. Performance Tests
 
 ### 4.1 Backend Load Testing (k6)
 
@@ -399,8 +399,8 @@ export const options = {
     { duration: '30s', target: 0 },    // Ramp down
   ],
   thresholds: {
-    http_req_duration: ['p(95)<500'],  // 95% des requêtes < 500ms
-    http_req_failed: ['rate<0.01'],    // < 1% d'erreurs
+    http_req_duration: ['p(95)<500'],  // 95% of requests < 500ms
+    http_req_failed: ['rate<0.01'],    // < 1% errors
   },
 };
 
@@ -446,9 +446,9 @@ export default function () {
 
 ---
 
-## 5. Couverture de Code
+## 5. Code Coverage
 
-### Objectifs de Couverture
+### Coverage Goals
 
 | Module | Minimum | Target |
 |--------|---------|--------|
@@ -459,7 +459,7 @@ export default function () {
 | Celery Tasks | 90% | 99% |
 | WebSocket Consumers | 90% | 99% |
 
-### Configuration pytest
+### pytest Configuration
 
 ```ini
 # pytest.ini
@@ -568,15 +568,15 @@ jobs:
 
 ---
 
-## 7. Checklist de Test Avant Release
+## 7. Pre-Release Test Checklist
 
 ### Pre-Release Checklist
 
-- [ ] Tous les tests unitaires passent (>80% coverage)
-- [ ] Tous les tests d'intégration passent
-- [ ] Tests E2E API passent
-- [ ] Tests de charge passent (p95 < 500ms)
-- [ ] Pas de régression de performance
-- [ ] Tests WebSocket fonctionnent
-- [ ] Revue de sécurité effectuée
-- [ ] Migrations Django vérifiées
+- [ ] All unit tests pass (84% coverage)
+- [ ] All integration tests pass
+- [ ] E2E API tests pass
+- [ ] Load tests pass (p95 < 500ms)
+- [ ] No performance regression
+- [ ] WebSocket tests work
+- [ ] Security review completed
+- [ ] Django migrations verified

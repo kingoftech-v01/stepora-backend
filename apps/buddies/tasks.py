@@ -71,3 +71,23 @@ def send_buddy_checkin_reminders():
 
     logger.info("Sent %d buddy check-in reminders", sent)
     return sent
+
+
+@shared_task(name='apps.buddies.tasks.expire_pending_buddy_requests')
+def expire_pending_buddy_requests():
+    """
+    Cancel pending buddy requests that have expired.
+    Runs daily to clean up requests older than 7 days.
+    """
+    from django.utils import timezone
+    from .models import BuddyPairing
+
+    now = timezone.now()
+    expired = BuddyPairing.objects.filter(
+        status='pending',
+        expires_at__lt=now,
+        expires_at__isnull=False,
+    )
+    count = expired.update(status='cancelled', ended_at=now)
+    logger.info("Expired %d pending buddy requests", count)
+    return count

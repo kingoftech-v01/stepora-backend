@@ -6,9 +6,12 @@ Includes:
 - LastActivityMiddleware: online status tracking
 """
 
+import logging
 import time
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityHeadersMiddleware:
@@ -94,6 +97,6 @@ class LastActivityMiddleware:
                         last_seen=timezone.now(),
                     )
                 except Exception:
-                    pass
+                    logger.debug("Failed to update last activity", exc_info=True)
 
         return response

@@ -1,9 +1,9 @@
-# Fonctionnalités Prioritaires - DreamPlanner 2.0
+# Priority Features - DreamPlanner 2.0
 
-## Matrice de Priorisation
+## Prioritization Matrix
 
 ```
-                        IMPACT ÉLEVÉ
+                        HIGH IMPACT
                             │
          ┌──────────────────┼──────────────────┐
          │                  │                  │
@@ -13,8 +13,8 @@
          │  • Micro-Wins    │  • AI Coach Pro  │
          │  • Streak Ins.   │  • Dream Circles │
          │                  │  • Vision Board  │
-EFFORT   │                  │                  │
-FAIBLE ──┼──────────────────┼──────────────────┼── EFFORT ÉLEVÉ
+LOW      │                  │                  │
+EFFORT ──┼──────────────────┼──────────────────┼── HIGH EFFORT
          │                  │                  │
          │  FILL-INS        │   MONEY PITS     │
          │                  │                  │
@@ -24,57 +24,57 @@ FAIBLE ──┼──────────────────┼──�
          │                  │                  │
          └──────────────────┼──────────────────┘
                             │
-                        IMPACT FAIBLE
+                        LOW IMPACT
 ```
 
 ---
 
-## Phase 1: MVP+ (Semaines 1-4)
+## Phase 1: MVP+ (Weeks 1-4)
 
 ### P1.1 - "2-Minute Start"
 
-**User Story**: En tant qu'utilisateur, je veux qu'on me propose une première action simple de 2 minutes pour que je puisse commencer immédiatement sans réfléchir.
+**User Story**: As a user, I want to be offered a simple first action of 2 minutes so that I can start immediately without overthinking.
 
 **Acceptance Criteria**:
-- [ ] L'IA génère automatiquement une micro-tâche de démarrage
-- [ ] La tâche est affichée immédiatement après la création d'un objectif
-- [ ] Timer visuel de 2 minutes
-- [ ] Célébration après complétion
-- [ ] Transition vers la prochaine étape
+- [ ] The AI automatically generates a micro starting task
+- [ ] The task is displayed immediately after creating a goal
+- [ ] Visual 2-minute timer
+- [ ] Celebration after completion
+- [ ] Transition to the next step
 
-**Implémentation**:
+**Implementation**:
 ```typescript
-// Exemple de prompt IA pour générer le 2-minute start
+// Example AI prompt to generate the 2-minute start
 const MICRO_START_PROMPT = `
-Pour cet objectif: {objective}
+For this objective: {objective}
 
-Génère UNE SEULE action qui:
-1. Prend MAXIMUM 2 minutes
-2. Ne nécessite aucune préparation
-3. Peut être faite MAINTENANT
-4. Crée un premier engagement
+Generate ONE SINGLE action that:
+1. Takes MAXIMUM 2 minutes
+2. Requires no preparation
+3. Can be done NOW
+4. Creates an initial commitment
 
 Format: { action: string, duration: "30s" | "1min" | "2min", why: string }
 `;
 ```
 
-**Effort**: 3 jours
-**Impact**: Très élevé (réduit l'abandon initial de 60%)
+**Effort**: 3 days
+**Impact**: Very high (reduces initial dropout by 60%)
 
 ---
 
-### P1.2 - "Rescue Mode" (Détection d'abandon)
+### P1.2 - "Rescue Mode" (Dropout Detection)
 
-**User Story**: En tant qu'utilisateur qui a arrêté de faire mes tâches, je veux être contacté gentiment pour comprendre ce qui bloque et recevoir de l'aide adaptée.
+**User Story**: As a user who has stopped doing my tasks, I want to be contacted gently to understand what is blocking me and receive tailored help.
 
 **Acceptance Criteria**:
-- [ ] Détection après 3 jours d'inactivité
-- [ ] Notification empathique (pas culpabilisante)
-- [ ] Questionnaire rapide (4 options max)
-- [ ] Réponse adaptée selon la raison
-- [ ] Proposition de plan adapté
+- [ ] Detection after 3 days of inactivity
+- [ ] Empathetic notification (not guilt-inducing)
+- [ ] Quick questionnaire (4 options max)
+- [ ] Adapted response based on the reason
+- [ ] Adapted plan proposal
 
-**Logique de détection**:
+**Detection Logic**:
 ```typescript
 interface AbandonSignals {
   daysSinceLastActivity: number;
@@ -92,175 +92,175 @@ function shouldTriggerRescue(signals: AbandonSignals): boolean {
 }
 ```
 
-**Effort**: 5 jours
-**Impact**: Très élevé (récupère 40% des abandons)
+**Effort**: 5 days
+**Impact**: Very high (recovers 40% of dropouts)
 
 ---
 
 ### P1.3 - "Micro-Wins" Celebrations
 
-**User Story**: En tant qu'utilisateur, je veux que mes petits progrès soient célébrés pour rester motivé.
+**User Story**: As a user, I want my small progress to be celebrated to stay motivated.
 
 **Acceptance Criteria**:
-- [ ] Animation de célébration pour chaque tâche
-- [ ] Célébration spéciale pour les milestones (3, 7, 14, 30 jours)
-- [ ] Comparaison positive ("Tu fais mieux que 80%...")
-- [ ] Option de partage social
-- [ ] Son et vibration (optionnels)
+- [ ] Celebration animation for each task
+- [ ] Special celebration for milestones (3, 7, 14, 30 days)
+- [ ] Positive comparison ("You're doing better than 80%...")
+- [ ] Social sharing option
+- [ ] Sound and vibration (optional)
 
-**Milestones à célébrer**:
+**Milestones to celebrate**:
 ```typescript
 const MILESTONES = [
-  { days: 1, badge: "Premier Pas", message: "Le plus dur est fait!" },
-  { days: 3, badge: "Momentum", message: "Tu construis une habitude!" },
-  { days: 7, badge: "Semaine Parfaite", message: "Une semaine complète!" },
-  { days: 14, badge: "Déterminé", message: "2 semaines, c'est sérieux!" },
-  { days: 30, badge: "Unstoppable", message: "Un mois! Tu es incroyable!" },
-  { days: 60, badge: "Habitude Ancrée", message: "C'est devenu naturel!" },
-  { days: 100, badge: "Centurion", message: "100 jours légendaires!" },
+  { days: 1, badge: "First Step", message: "The hardest part is done!" },
+  { days: 3, badge: "Momentum", message: "You're building a habit!" },
+  { days: 7, badge: "Perfect Week", message: "A full week completed!" },
+  { days: 14, badge: "Determined", message: "2 weeks, this is serious!" },
+  { days: 30, badge: "Unstoppable", message: "One month! You're amazing!" },
+  { days: 60, badge: "Rooted Habit", message: "It's become second nature!" },
+  { days: 100, badge: "Centurion", message: "100 legendary days!" },
 ];
 ```
 
-**Effort**: 4 jours
-**Impact**: Élevé (augmente rétention de 35%)
+**Effort**: 4 days
+**Impact**: High (increases retention by 35%)
 
 ---
 
-## Phase 2: Social (Semaines 5-8)
+## Phase 2: Social (Weeks 5-8)
 
 ### P2.1 - "Dream Buddy" System
 
-**User Story**: En tant qu'utilisateur, je veux être connecté avec quelqu'un qui a le même objectif pour qu'on se motive mutuellement.
+**User Story**: As a user, I want to be connected with someone who has the same goal so that we can motivate each other.
 
 **Acceptance Criteria**:
-- [ ] Matching basé sur: objectif similaire, timezone, langue
-- [ ] Profil limité (prénom, avatar, objectif, progression)
-- [ ] Chat intégré
-- [ ] Notifications mutuelles ("Ton buddy a complété sa tâche!")
-- [ ] Option de changer de buddy
-- [ ] Rapport de comportement toxique
+- [ ] Matching based on: similar goal, timezone, language
+- [ ] Limited profile (first name, avatar, goal, progress)
+- [ ] Integrated chat
+- [ ] Mutual notifications ("Your buddy completed their task!")
+- [ ] Option to change buddy
+- [ ] Toxic behavior reporting
 
-**Algorithme de matching**:
+**Matching Algorithm**:
 ```typescript
 interface MatchingCriteria {
-  objectiveCategory: string;      // Poids: 40%
-  targetTimeframe: DateRange;     // Poids: 20%
-  timezone: string;               // Poids: 15%
-  language: string;               // Poids: 15%
-  activityLevel: 'low' | 'medium' | 'high'; // Poids: 10%
+  objectiveCategory: string;      // Weight: 40%
+  targetTimeframe: DateRange;     // Weight: 20%
+  timezone: string;               // Weight: 15%
+  language: string;               // Weight: 15%
+  activityLevel: 'low' | 'medium' | 'high'; // Weight: 10%
 }
 
 function calculateMatchScore(user1: User, user2: User): number {
-  // Retourne un score de 0 à 100
+  // Returns a score from 0 to 100
 }
 ```
 
-**Effort**: 2 semaines
-**Impact**: Très élevé (rétention x2 avec buddy actif)
+**Effort**: 2 weeks
+**Impact**: Very high (retention x2 with active buddy)
 
 ---
 
 ### P2.2 - "Public Commitment"
 
-**User Story**: En tant qu'utilisateur, je veux pouvoir annoncer publiquement mon objectif pour créer de la responsabilité sociale.
+**User Story**: As a user, I want to be able to publicly announce my goal to create social accountability.
 
 **Acceptance Criteria**:
-- [ ] Création d'un "engagement" avec date limite
-- [ ] Partage sur réseaux sociaux (template design)
-- [ ] Inviter des "témoins" (amis)
-- [ ] Notifications aux témoins sur la progression
-- [ ] Célébration publique si réussi
-- [ ] Gestion discrète si échoué (pas de shame)
+- [ ] Creation of a "commitment" with deadline
+- [ ] Social media sharing (design template)
+- [ ] Invite "witnesses" (friends)
+- [ ] Notifications to witnesses about progress
+- [ ] Public celebration if successful
+- [ ] Discreet handling if failed (no shaming)
 
-**Effort**: 1 semaine
-**Impact**: Élevé (engagement +50%)
+**Effort**: 1 week
+**Impact**: High (engagement +50%)
 
 ---
 
 ### P2.3 - Gamification "Life RPG"
 
-**User Story**: En tant qu'utilisateur, je veux que ma progression ressemble à un jeu pour que ce soit fun.
+**User Story**: As a user, I want my progress to feel like a game so that it's fun.
 
 **Acceptance Criteria**:
-- [ ] Avatar personnalisable
-- [ ] Système de XP et niveaux
-- [ ] Attributs par domaine de vie
-- [ ] Badges et achievements
-- [ ] Récompenses débloquables (thèmes, avatars)
-- [ ] Quêtes spéciales limitées dans le temps
+- [ ] Customizable avatar
+- [ ] XP and level system
+- [ ] Attributes by life domain
+- [ ] Badges and achievements
+- [ ] Unlockable rewards (themes, avatars)
+- [ ] Time-limited special quests
 
-**Système d'XP**:
+**XP System**:
 ```typescript
 const XP_REWARDS = {
   taskCompleted: 10,
   dailyGoalMet: 25,
-  streakDay: 5 * streakLength, // Bonus progressif
+  streakDay: 5 * streakLength, // Progressive bonus
   milestoneReached: 100,
   buddyHelped: 15,
   challengeCompleted: 50,
 };
 
 const LEVELS = [
-  { level: 1, xpRequired: 0, title: "Rêveur" },
-  { level: 5, xpRequired: 500, title: "Planificateur" },
+  { level: 1, xpRequired: 0, title: "Dreamer" },
+  { level: 5, xpRequired: 500, title: "Planner" },
   { level: 10, xpRequired: 1500, title: "Achiever" },
   { level: 20, xpRequired: 5000, title: "Dream Warrior" },
-  { level: 50, xpRequired: 25000, title: "Légende" },
+  { level: 50, xpRequired: 25000, title: "Legend" },
 ];
 ```
 
-**Effort**: 2 semaines
-**Impact**: Élevé (engagement quotidien +40%)
+**Effort**: 2 weeks
+**Impact**: High (daily engagement +40%)
 
 ---
 
-## Phase 3: AI Avancée (Semaines 9-12)
+## Phase 3: Advanced AI (Weeks 9-12)
 
 ### P3.1 - "Proactive AI Coach"
 
-**User Story**: En tant qu'utilisateur, je veux que l'IA anticipe mes difficultés et me propose des solutions avant que j'abandonne.
+**User Story**: As a user, I want the AI to anticipate my difficulties and suggest solutions before I give up.
 
 **Acceptance Criteria**:
-- [ ] Analyse des patterns personnels
-- [ ] Intégration calendrier (Google/Apple)
-- [ ] Prédiction des semaines à risque
-- [ ] Suggestions proactives d'adaptation
-- [ ] Apprentissage continu des préférences
+- [ ] Personal pattern analysis
+- [ ] Calendar integration (Google/Apple)
+- [ ] At-risk week prediction
+- [ ] Proactive adaptation suggestions
+- [ ] Continuous preference learning
 
-**Données analysées**:
+**Data Analyzed**:
 ```typescript
 interface UserPatterns {
-  // Temporel
+  // Temporal
   bestDaysOfWeek: number[];
   bestTimeOfDay: string;
   worstDaysOfWeek: number[];
 
-  // Comportemental
+  // Behavioral
   averageSessionLength: number;
   abandonTriggers: string[];
   motivationPeaks: string[];
 
-  // Contextuel
+  // Contextual
   calendarBusyDays: Date[];
   stressIndicators: string[];
 }
 ```
 
-**Effort**: 3 semaines
-**Impact**: Très élevé (réduit abandon de 50%)
+**Effort**: 3 weeks
+**Impact**: Very high (reduces dropout by 50%)
 
 ---
 
-### P3.2 - "Vision Board" avec IA Générative
+### P3.2 - "Vision Board" with Generative AI
 
-**User Story**: En tant qu'utilisateur, je veux visualiser mon objectif accompli avec une image générée par IA pour rester motivé.
+**User Story**: As a user, I want to visualize my accomplished goal with an AI-generated image to stay motivated.
 
 **Acceptance Criteria**:
-- [ ] Génération d'image basée sur l'objectif
-- [ ] Personnalisation (ton visage si permis)
-- [ ] Option fond d'écran
-- [ ] Rappel quotidien avec l'image
-- [ ] Évolution de l'image selon progression
+- [ ] Image generation based on the goal
+- [ ] Personalization (your face if permitted)
+- [ ] Wallpaper option
+- [ ] Daily reminder with the image
+- [ ] Image evolution based on progress
 
 **Prompt engineering**:
 ```typescript
@@ -276,75 +276,75 @@ Important: Make it feel achievable, not fantasy
 `;
 ```
 
-**Effort**: 2 semaines
-**Impact**: Moyen-Élevé (motivation +30%)
+**Effort**: 2 weeks
+**Impact**: Medium-High (motivation +30%)
 
 ---
 
-## Phase 4: Viralité (Semaines 13-16)
+## Phase 4: Virality (Weeks 13-16)
 
-### P4.1 - "Dream Circles" (Groupes)
+### P4.1 - "Dream Circles" (Groups)
 
-**User Story**: En tant qu'utilisateur, je veux rejoindre un petit groupe de personnes avec le même objectif pour partager notre parcours.
+**User Story**: As a user, I want to join a small group of people with the same goal to share our journey.
 
 **Acceptance Criteria**:
-- [ ] Groupes de 5-10 personnes max
-- [ ] Création manuelle ou matching auto
-- [ ] Défis de groupe hebdomadaires
-- [ ] Feed d'activité du groupe
-- [ ] Classement amical
-- [ ] Appels vidéo optionnels
-- [ ] Modération IA
+- [ ] Groups of 5-10 people max
+- [ ] Manual creation or auto matching
+- [ ] Weekly group challenges
+- [ ] Group activity feed
+- [ ] Friendly leaderboard
+- [ ] Optional video calls
+- [ ] AI moderation
 
-**Effort**: 3 semaines
-**Impact**: Très élevé (rétention x3, viralité élevée)
+**Effort**: 3 weeks
+**Impact**: Very high (retention x3, high virality)
 
 ---
 
-### P4.2 - Partage Social Optimisé
+### P4.2 - Optimized Social Sharing
 
-**User Story**: En tant qu'utilisateur, je veux pouvoir partager mes victoires sur les réseaux avec un design professionnel automatique.
+**User Story**: As a user, I want to be able to share my wins on social media with an automatic professional design.
 
 **Acceptance Criteria**:
-- [ ] Templates Instagram Story
-- [ ] Templates TikTok
-- [ ] Personnalisation couleurs/style
-- [ ] Inclusion automatique des stats
-- [ ] Hashtags suggérés
-- [ ] Deep link vers l'app
+- [ ] Instagram Story templates
+- [ ] TikTok templates
+- [ ] Color/style customization
+- [ ] Automatic stats inclusion
+- [ ] Suggested hashtags
+- [ ] Deep link to the app
 
-**Templates à créer**:
-- Streak milestone (7, 14, 30 jours)
-- Objectif complété
-- Nouveau défi lancé
-- Badge débloqué
-- Comparaison avant/après
+**Templates to create**:
+- Streak milestone (7, 14, 30 days)
+- Goal completed
+- New challenge launched
+- Badge unlocked
+- Before/after comparison
 
-**Effort**: 1 semaine
-**Impact**: Très élevé (acquisition virale)
-
----
-
-## Récapitulatif du Planning
-
-| Phase | Semaines | Fonctionnalités | Impact Clé |
-|-------|----------|-----------------|------------|
-| **MVP+** | 1-4 | 2-Min Start, Rescue Mode, Micro-Wins | Réduire abandon initial |
-| **Social** | 5-8 | Dream Buddy, Commitment, Gamification | Créer engagement social |
-| **AI+** | 9-12 | Proactive Coach, Vision Board | Prévenir abandon |
-| **Viral** | 13-16 | Dream Circles, Social Sharing | Croissance organique |
+**Effort**: 1 week
+**Impact**: Very high (viral acquisition)
 
 ---
 
-## Métriques de Succès
+## Planning Summary
+
+| Phase | Weeks | Features | Key Impact |
+|-------|-------|----------|------------|
+| **MVP+** | 1-4 | 2-Min Start, Rescue Mode, Micro-Wins | Reduce initial dropout |
+| **Social** | 5-8 | Dream Buddy, Commitment, Gamification | Create social engagement |
+| **AI+** | 9-12 | Proactive Coach, Vision Board | Prevent dropout |
+| **Viral** | 13-16 | Dream Circles, Social Sharing | Organic growth |
+
+---
+
+## Success Metrics
 
 ### North Star Metric
-**WAU (Weekly Active Users) qui complètent au moins 1 tâche**
+**WAU (Weekly Active Users) who complete at least 1 task**
 
-### Métriques Secondaires
+### Secondary Metrics
 
-| Métrique | Cible MVP | Cible 6 mois |
-|----------|-----------|--------------|
+| Metric | MVP Target | 6-Month Target |
+|--------|-----------|--------------|
 | D1 Retention | 60% | 70% |
 | D7 Retention | 35% | 50% |
 | D30 Retention | 15% | 30% |

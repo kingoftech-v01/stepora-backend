@@ -119,6 +119,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(null=True, blank=True)
 
+    # Two-Factor Authentication
+    totp_enabled = models.BooleanField(default=False)
+    totp_secret = EncryptedCharField(max_length=64, blank=True, default='')
+    backup_codes = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Hashed 2FA backup codes'
+    )
+
+    # Onboarding
+    onboarding_completed = models.BooleanField(default=False)
+
     # Django admin
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

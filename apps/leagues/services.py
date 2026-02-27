@@ -220,7 +220,8 @@ class LeagueService:
                 badges = gamification.badges or []
                 badges_count = len(badges)
             except Exception:
-                pass
+                logger.debug("Failed to load badges for user %s", standing.user.id, exc_info=True)
+                badges_count = 0
 
             entries.append({
                 'rank': idx,
@@ -401,7 +402,8 @@ class LeagueService:
             try:
                 badges_count = len(s.user.gamification.badges or [])
             except Exception:
-                pass
+                logger.debug("Failed to load badges for user %s", s.user.id, exc_info=True)
+                badges_count = 0
 
             return {
                 'rank': s.rank,

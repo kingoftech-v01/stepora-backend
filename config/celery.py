@@ -105,6 +105,12 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=11, minute=0),
     },
 
+    # Expire pending buddy requests daily at 2 AM
+    'expire-pending-buddy-requests': {
+        'task': 'apps.buddies.tasks.expire_pending_buddy_requests',
+        'schedule': crontab(hour=2, minute=0),
+    },
+
     # === League Tasks ===
 
     # Check if the active season has ended (daily at 12:05 AM)
@@ -123,6 +129,14 @@ app.conf.beat_schedule = {
     'weekly-league-promotions': {
         'task': 'apps.leagues.tasks.send_league_change_notifications',
         'schedule': crontab(day_of_week=0, hour=23, minute=0),
+    },
+
+    # === User Tasks ===
+
+    # Hard-delete accounts soft-deleted 30+ days ago (GDPR)
+    'hard-delete-expired-accounts': {
+        'task': 'apps.users.tasks.hard_delete_expired_accounts',
+        'schedule': crontab(hour=3, minute=30),
     },
 }
 

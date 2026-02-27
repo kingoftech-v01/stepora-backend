@@ -96,3 +96,36 @@ def export_user_data(user_id: int):
     )
 
     logger.info('Data export completed and emailed for user %s', user_id)
+
+
+@shared_task(name='apps.users.tasks.hard_delete_expired_accounts')
+def hard_delete_expired_accounts():
+    """
+    Hard-delete accounts that have been soft-deleted for 30+ days.
+
+    GDPR compliance: ensures full data removal after the grace period.
+    Users who soft-deleted their account have 30 days to recover it.
+    After that, all data is permanently removed via CASCADE delete.
+    """
+    from datetime import timedelta as td
+    from django.utils import timezone
+    from .models import User
+
+    cutoff = timezone.now() - td(days=30)
+    expired_users = User.objects.filter(
+        is_active=False,
+        updated_at__lt=cutoff,
+    )
+
+    count = 0
+    for user in expired_users:
+        try:
+            user_id = user.id
+            user.delete()  # CASCADE deletes all related data
+            count += 1
+            logger.info("Hard-deleted expired account %s", user_id)
+        except Exception:
+            logger.exception("Failed to hard-delete user %s", user.id)
+
+    logger.info("Hard-deleted %d expired accounts", count)
+    return count

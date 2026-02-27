@@ -10,6 +10,8 @@ require authentication.
 import logging
 
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework import viewsets, status, views
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -120,6 +122,10 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
     lookup_field = 'slug'
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+    @method_decorator(cache_page(300))  # Cache for 5 minutes
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
     filterset_fields = ['category__slug', 'item_type', 'rarity']
     search_fields = ['name', 'description']
     ordering_fields = ['price', 'created_at', 'name', 'rarity']

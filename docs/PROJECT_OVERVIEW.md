@@ -1,82 +1,82 @@
-# DreamPlanner - Application de Planification de Rêves
+# DreamPlanner - Dream Planning Application
 
-## Vision du Projet
+## Project Vision
 
-**DreamPlanner** est une application web backend (API Django) qui utilise l'intelligence artificielle de ChatGPT pour aider les utilisateurs à transformer leurs rêves en objectifs concrets et atteignables.
+**DreamPlanner** is a backend web application (Django API) that uses ChatGPT artificial intelligence to help users transform their dreams into concrete and achievable goals.
 
-## Problème Résolu
+## Problem Solved
 
-Beaucoup de personnes ont des rêves et des objectifs mais manquent de:
-- Structure pour les décomposer en étapes réalisables
-- Planification temporelle réaliste
-- Suivi régulier et motivation
-- Adaptation à leur emploi du temps existant
+Many people have dreams and goals but lack:
+- Structure to break them down into actionable steps
+- Realistic time planning
+- Regular tracking and motivation
+- Adaptation to their existing schedule
 
 ## Solution
 
-Un assistant IA personnel qui:
-1. **Écoute** - Comprend vos rêves et objectifs en détail
-2. **Analyse** - Évalue la faisabilité et les ressources nécessaires
-3. **Planifie** - Crée un calendrier personnalisé avec des étapes claires
-4. **Accompagne** - Envoie des rappels et notifications au bon moment
-5. **Adapte** - Ajuste le plan selon vos contraintes (travail, pauses, vie personnelle)
+A personal AI assistant that:
+1. **Listens** - Understands your dreams and goals in detail
+2. **Analyzes** - Evaluates feasibility and required resources
+3. **Plans** - Creates a personalized schedule with clear milestones
+4. **Supports** - Sends reminders and notifications at the right time
+5. **Adapts** - Adjusts the plan according to your constraints (work, breaks, personal life)
 
-## Fonctionnalités Principales
+## Main Features
 
-### 1. Conversation Intelligente avec ChatGPT
-- Discussion naturelle pour définir les rêves
-- Questions de clarification automatiques
-- Extraction des objectifs et délais souhaités
+### 1. Intelligent Conversation with ChatGPT
+- Natural discussion to define dreams
+- Automatic clarification questions
+- Extraction of goals and desired deadlines
 
-### 2. Calendrier Intelligent
-- Génération automatique d'un planning
-- Intégration des heures de travail existantes
-- Respect des temps de pause
-- Vue jour/semaine/mois
+### 2. Smart Calendar
+- Automatic schedule generation
+- Integration of existing work hours
+- Respect for break times
+- Day/week/month views
 
-### 3. Système de Notifications
-- Rappels pour chaque étape
-- Notifications motivationnelles
-- Alertes de progression
-- Mode "Ne pas déranger" intelligent
+### 3. Notification System
+- Reminders for each step
+- Motivational notifications
+- Progress alerts
+- Smart "Do Not Disturb" mode
 
-### 4. Suivi de Progression
-- Visualisation de l'avancement
-- Statistiques et métriques
-- Célébration des accomplissements
+### 4. Progress Tracking
+- Progress visualization
+- Statistics and metrics
+- Achievement celebrations
 
-## Public Cible
+## Target Audience
 
-- Professionnels souhaitant développer de nouvelles compétences
-- Étudiants préparant des examens ou projets
-- Entrepreneurs lançant leur business
-- Toute personne avec un objectif personnel (fitness, voyage, apprentissage)
+- Professionals looking to develop new skills
+- Students preparing for exams or projects
+- Entrepreneurs launching their business
+- Anyone with a personal goal (fitness, travel, learning)
 
-## Modèle Économique
+## Business Model
 
 - **Freemium**:
-  - Gratuit: 3 objectifs actifs, notifications basiques
-  - Premium (9.99€/mois): Objectifs illimités, notifications avancées, export calendrier
-  - Pro (19.99€/mois): Coaching IA avancé, intégrations calendrier, analytics détaillés
+  - Free: 3 active goals, basic notifications
+  - Premium ($14.99/month): Unlimited goals, advanced notifications, calendar export
+  - Pro ($29.99/month): Advanced AI coaching, calendar integrations, detailed analytics
 
-## Stack Technique
+## Tech Stack
 
 - **Framework**: Django 5.0.1 + Django REST Framework
-- **Langage**: Python 3.11
-- **Base de données**: PostgreSQL + Redis
-- **IA**: OpenAI ChatGPT API (GPT-4)
+- **Language**: Python 3.11
+- **Database**: PostgreSQL + Redis
+- **AI**: OpenAI ChatGPT API (GPT-4)
 - **WebSocket**: Django Channels (Daphne)
-- **Tâches asynchrones**: Celery
+- **Asynchronous Tasks**: Celery
 - **Notifications**: Celery + WebSocket
 - **Auth**: dj-rest-auth + django-allauth
 
-## Timeline Estimée
+## Estimated Timeline
 
-| Phase | Durée | Livrables |
-|-------|-------|-----------|
-| Phase 1 - MVP | 8 semaines | API basique avec conversation et calendrier |
-| Phase 2 - Notifications | 4 semaines | Système de notifications complet |
-| Phase 3 - Polish | 4 semaines | API finalisée, tests, optimisations |
-| Phase 4 - Launch | 2 semaines | Déploiement production, marketing |
+| Phase | Duration | Deliverables |
+|-------|----------|--------------|
+| Phase 1 - MVP | 8 weeks | Basic API with conversation and calendar |
+| Phase 2 - Notifications | 4 weeks | Complete notification system |
+| Phase 3 - Polish | 4 weeks | Finalized API, tests, optimizations |
+| Phase 4 - Launch | 2 weeks | Production deployment, marketing |
 
-**Total: ~18 semaines pour la v1.0**
+**Total: ~18 weeks for v1.0**

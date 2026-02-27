@@ -6,6 +6,7 @@ creating pairings, tracking progress, sending encouragement, and ending
 partnerships. All endpoints require authentication.
 """
 
+import logging
 import random
 from datetime import timedelta
 
@@ -14,6 +15,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
+from django.utils import timezone
 from django.utils import timezone as django_timezone
 from drf_spectacular.utils import (
     extend_schema,
@@ -31,6 +33,8 @@ from .serializers import (
     BuddyEncourageSerializer,
     BuddyHistorySerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BuddyViewSet(viewsets.GenericViewSet):
@@ -116,6 +120,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status='completed'
             ).count()
         except (ImportError, Exception):
+            logger.debug("Failed to compute shared interests", exc_info=True)
             recent_tasks = 0
 
         buddy_data = {
@@ -316,7 +321,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 },
             )
         except Exception:
-            pass
+            logger.warning("Failed to send buddy notification", exc_info=True)
 
         return Response({
             'id': str(msg.id),
@@ -377,7 +382,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 status='completed'
             ).count()
         except (ImportError, Exception):
-            pass
+            logger.debug("Failed to compute shared interests", exc_info=True)
 
         progress_data = {
             'user': {
@@ -467,6 +472,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 if user_xp_attr > 0 and match_xp_attr > 0:
                     shared_interests.append(cat)
         except Exception:
+            logger.debug("Failed to compute shared interests", exc_info=True)
             shared_interests = []
 
         match_data = {
@@ -542,7 +548,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
             user1=request.user,
             user2=partner,
             status='pending',
-            compatibility_score=compatibility
+            compatibility_score=compatibility,
+            expires_at=timezone.now() + timedelta(days=7),
         )
 
         return Response(
@@ -689,7 +696,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 data={'pairing_id': str(pairing.id)},
             )
         except (ImportError, Exception):
-            pass
+            logger.warning("Failed to send buddy notification", exc_info=True)
 
         return Response({
             'message': f'Encouragement sent to {partner.display_name or "your buddy"}.',

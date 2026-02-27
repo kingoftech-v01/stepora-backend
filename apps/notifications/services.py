@@ -23,6 +23,10 @@ class NotificationDeliveryService:
         Deliver notification via all enabled channels.
         Returns True if at least one channel succeeded.
         """
+        if notification.retry_count >= notification.max_retries:
+            logger.warning("Notification %s exceeded max retries, skipping", notification.id)
+            return False
+
         user = notification.user
         prefs = user.notification_prefs or {}
         results = []
@@ -32,7 +36,8 @@ class NotificationDeliveryService:
             results.append(self._send_websocket(notification))
 
         # Email (default: disabled — opt-in)
-        if prefs.get('email_enabled', False):
+        email_enabled = prefs.get('email_enabled', False)
+        if email_enabled:
             results.append(self._send_email(notification))
 
         # FCM Push (default: enabled if user has devices)
@@ -44,6 +49,10 @@ class NotificationDeliveryService:
         # Web Push VAPID fallback (only if FCM didn't send and user has subscriptions)
         if prefs.get('push_enabled', True) and not fcm_sent:
             results.append(self._send_webpush(notification))
+
+        # Email fallback: if no channel succeeded and email was not already tried, send email
+        if not any(results) and not email_enabled:
+            results.append(self._send_email(notification))
 
         return any(results)
 

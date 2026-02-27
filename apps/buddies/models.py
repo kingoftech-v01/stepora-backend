@@ -83,6 +83,11 @@ class BuddyPairing(models.Model):
         blank=True,
         help_text='Timestamp when the pairing ended (completed or cancelled).'
     )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When a pending buddy request expires (auto-cancelled after 7 days).'
+    )
 
     class Meta:
         db_table = 'buddy_pairings'

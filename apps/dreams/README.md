@@ -509,7 +509,7 @@ pytest apps/dreams/tests.py -v
 
 Environment variables:
 - `OPENAI_API_KEY` - OpenAI API key
-- `OPENAI_MODEL` - Model (default: gpt-4-turbo-preview)
+- `OPENAI_MODEL` - Model (default: gpt-4o-mini)
 - `OPENAI_TIMEOUT` - Timeout in seconds (default: 30)
 
 ## Dependencies

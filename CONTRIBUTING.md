@@ -145,7 +145,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
 **Required**:
 - Write tests for all new features
-- Maintain 80%+ code coverage
+- Maintain 84% code coverage
 - Test happy path AND error cases
 - Use fixtures for test data
 

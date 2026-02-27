@@ -1,193 +1,193 @@
-# Spécifications Fonctionnelles - DreamPlanner
+# Feature Specifications - DreamPlanner
 
-## 1. Onboarding & Inscription
+## 1. Onboarding & Registration
 
-### 1.1 Écrans d'Onboarding (3 slides)
+### 1.1 Onboarding Screens (3 slides)
 
-**Slide 1 - Bienvenue**
-- Titre: "Transformez vos rêves en réalité"
-- Description: "DreamPlanner utilise l'IA pour créer un plan personnalisé vers vos objectifs"
-- Illustration: Personne atteignant un sommet
+**Slide 1 - Welcome**
+- Title: "Transform your dreams into reality"
+- Description: "DreamPlanner uses AI to create a personalized plan toward your goals"
+- Illustration: Person reaching a summit
 
-**Slide 2 - Comment ça marche**
-- Titre: "Parlez, nous planifions"
-- Description: "Décrivez votre rêve, nous créons un calendrier adapté à votre vie"
-- Illustration: Chat avec IA + Calendrier
+**Slide 2 - How it works**
+- Title: "You talk, we plan"
+- Description: "Describe your dream, we create a schedule adapted to your life"
+- Illustration: AI Chat + Calendar
 
-**Slide 3 - Restez motivé**
-- Titre: "Ne perdez jamais le cap"
-- Description: "Notifications intelligentes et suivi de progression pour rester sur la bonne voie"
-- Illustration: Notifications + Graphique de progression
+**Slide 3 - Stay motivated**
+- Title: "Never lose track"
+- Description: "Smart notifications and progress tracking to keep you on the right path"
+- Illustration: Notifications + Progress chart
 
-### 1.2 Inscription
+### 1.2 Registration
 
-**Options d'inscription:**
-- Email + Mot de passe
+**Registration options:**
+- Email + Password
 - Google Sign-In
 - Apple Sign-In
 
-**Informations collectées:**
-1. Nom d'affichage
+**Information collected:**
+1. Display name
 2. Email
-3. Fuseau horaire (détection auto)
+3. Timezone (auto-detection)
 
-### 1.3 Configuration Initiale
+### 1.3 Initial Setup
 
-**Étape 1 - Horaires de travail**
+**Step 1 - Work schedule**
 ```
-"Pour mieux planifier, dis-moi quand tu travailles"
+"To plan better, tell me when you work"
 
-[ ] Je ne travaille pas actuellement
-[x] J'ai des horaires réguliers
+[ ] I am not currently working
+[x] I have a regular schedule
 
-Jours de travail: [L] [M] [M] [J] [V] [ ] [ ]
-Heure début: [09:00]
-Heure fin: [18:00]
-```
-
-**Étape 2 - Préférences de notifications**
-```
-"Comment veux-tu que je te rappelle tes tâches?"
-
-Rappels avant une tâche: [15 minutes ▼]
-
-Mode "Ne pas déranger":
-De [22:00] à [07:00]
-
-Types de notifications:
-[x] Rappels de tâches
-[x] Messages de motivation
-[x] Progression hebdomadaire
-[ ] Tips et conseils
+Work days: [M] [T] [W] [T] [F] [ ] [ ]
+Start time: [09:00]
+End time: [18:00]
 ```
 
-**Étape 3 - Premier rêve**
+**Step 2 - Notification preferences**
 ```
-"Quel est ton premier rêve ou objectif?"
+"How would you like me to remind you of your tasks?"
 
-[Entrée texte libre - suggestion: "Apprendre l'espagnol en 6 mois"]
+Reminders before a task: [15 minutes ▼]
 
-ou
+"Do Not Disturb" mode:
+From [22:00] to [07:00]
 
-[Choisir une catégorie]
-- 💼 Carrière
-- 🏋️ Santé & Fitness
-- 📚 Apprentissage
-- 💰 Finances
-- ✈️ Voyage
-- 🎨 Créativité
-- 🧘 Bien-être
+Notification types:
+[x] Task reminders
+[x] Motivational messages
+[x] Weekly progress
+[ ] Tips and advice
+```
+
+**Step 3 - First dream**
+```
+"What is your first dream or goal?"
+
+[Free text input - suggestion: "Learn Spanish in 6 months"]
+
+or
+
+[Choose a category]
+- 💼 Career
+- 🏋️ Health & Fitness
+- 📚 Learning
+- 💰 Finance
+- ✈️ Travel
+- 🎨 Creativity
+- 🧘 Wellness
 ```
 
 ---
 
-## 2. Conversation avec l'IA (Écran Principal)
+## 2. AI Conversation (Main Screen)
 
-### 2.1 Interface de Chat
+### 2.1 Chat Interface
 
 ```
 ┌────────────────────────────────────────┐
-│ ← DreamPlanner            [+] Nouveau  │
+│ ← DreamPlanner            [+] New      │
 ├────────────────────────────────────────┤
 │                                        │
-│   🤖 Bonjour Marie ! Je suis ravi de  │
-│   t'accompagner vers tes rêves.       │
+│   🤖 Hello Marie! I'm delighted to    │
+│   accompany you toward your dreams.    │
 │                                        │
-│   Parle-moi de ce que tu voudrais     │
-│   accomplir. Quel est ton prochain    │
-│   grand objectif ?                     │
+│   Tell me about what you would like    │
+│   to accomplish. What is your next     │
+│   big goal?                            │
 │                                        │
 │                        ┌──────────────┐│
-│                        │ Je voudrais  ││
-│                        │ apprendre à  ││
-│                        │ jouer de la  ││
-│                        │ guitare      ││
+│                        │ I would like ││
+│                        │ to learn to  ││
+│                        │ play the     ││
+│                        │ guitar       ││
 │                        └──────────────┘│
 │                                        │
-│   🤖 Super choix ! La guitare est un  │
-│   instrument gratifiant.              │
+│   🤖 Great choice! The guitar is a    │
+│   rewarding instrument.               │
 │                                        │
-│   Quelques questions pour mieux       │
-│   planifier :                         │
+│   A few questions to plan better:      │
 │                                        │
-│   1. As-tu déjà une guitare ?         │
-│   2. Quel style veux-tu jouer ?       │
-│   3. Combien de temps par jour peux-  │
-│      tu consacrer à la pratique ?     │
-│   4. As-tu une date cible en tête ?   │
+│   1. Do you already have a guitar?     │
+│   2. What style do you want to play?   │
+│   3. How much time per day can you     │
+│      dedicate to practice?             │
+│   4. Do you have a target date in      │
+│      mind?                             │
 │                                        │
 ├────────────────────────────────────────┤
 │ [Message...                    ] [📤] │
 │                                        │
-│ Suggestions rapides:                   │
-│ [Oui j'ai déjà une guitare]           │
-│ [Je veux jouer du rock]               │
-│ [30 min par jour]                     │
+│ Quick suggestions:                     │
+│ [Yes I already have a guitar]          │
+│ [I want to play rock]                  │
+│ [30 min per day]                       │
 └────────────────────────────────────────┘
 ```
 
-### 2.2 Génération du Plan
+### 2.2 Plan Generation
 
-Après la conversation, l'IA génère un plan:
+After the conversation, the AI generates a plan:
 
 ```
 ┌────────────────────────────────────────┐
-│ 🎯 Ton Plan: Apprendre la Guitare     │
+│ 🎯 Your Plan: Learn Guitar             │
 ├────────────────────────────────────────┤
 │                                        │
-│ 📊 Analyse                             │
+│ 📊 Analysis                            │
 │ ──────────────────────────────────────│
-│ Faisabilité: ████████░░ 80% Élevée    │
-│ Durée estimée: 6 mois                  │
-│ Temps requis: 3h30/semaine            │
+│ Feasibility: ████████░░ 80% High      │
+│ Estimated duration: 6 months           │
+│ Time required: 3h30/week              │
 │                                        │
-│ 🎯 Étapes du parcours                  │
+│ 🎯 Journey milestones                  │
 │ ──────────────────────────────────────│
 │                                        │
-│ ○ Semaines 1-2: Les bases             │
-│   • Posture et position               │
-│   • Accords de base (La, Ré, Mi)      │
-│   • 30 min/jour                        │
+│ ○ Weeks 1-2: The basics               │
+│   • Posture and positioning            │
+│   • Basic chords (A, D, E)            │
+│   • 30 min/day                         │
 │                                        │
-│ ○ Semaines 3-4: Premiers morceaux     │
-│   • Enchaînement d'accords            │
-│   • Premier morceau simple            │
-│   • 30 min/jour                        │
+│ ○ Weeks 3-4: First songs              │
+│   • Chord transitions                  │
+│   • First simple song                  │
+│   • 30 min/day                         │
 │                                        │
-│ ○ Semaines 5-8: Rythme & Strumming    │
-│   • Patterns de strumming             │
-│   • Garder le tempo                   │
-│   • 30 min/jour                        │
+│ ○ Weeks 5-8: Rhythm & Strumming       │
+│   • Strumming patterns                 │
+│   • Keeping tempo                      │
+│   • 30 min/day                         │
 │                                        │
-│ [Voir toutes les étapes ▼]            │
+│ [View all steps ▼]                     │
 │                                        │
-│ 💡 Conseils                            │
-│ • Échauffer ses doigts avant          │
-│ • Pratiquer avec un métronome         │
-│ • Filmer sa progression               │
+│ 💡 Tips                                │
+│ • Warm up your fingers beforehand      │
+│ • Practice with a metronome            │
+│ • Record your progress                 │
 │                                        │
-│ ⚠️ Obstacles potentiels               │
-│ • Douleur aux doigts (normal!)        │
-│ • Plateau de progression              │
+│ ⚠️ Potential obstacles                 │
+│ • Finger pain (normal!)               │
+│ • Progress plateau                     │
 │                                        │
 ├────────────────────────────────────────┤
 │                                        │
-│ [Modifier le plan]  [✓ Adopter ce plan]│
+│ [Edit plan]  [✓ Adopt this plan]       │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Calendrier
+## 3. Calendar
 
-### 3.1 Vue Mensuelle
+### 3.1 Monthly View
 
 ```
 ┌────────────────────────────────────────┐
-│ ←  Janvier 2026  →                     │
+│ ←  January 2026  →                     │
 ├────────────────────────────────────────┤
-│  L    M    M    J    V    S    D      │
+│  M    T    W    T    F    S    S      │
 │                 1    2    3    4      │
 │       ○         ●    ○              │
 │  5    6    7    8    9   10   11     │
@@ -199,157 +199,157 @@ Après la conversation, l'IA génère un plan:
 │ 26   27   28   29   30   31          │
 │  ●    ●    ●    ●    ●              │
 ├────────────────────────────────────────┤
-│ Légende: ● Tâche prévue  ○ Complétée  │
-│          🔴 En retard                  │
+│ Legend: ● Scheduled task  ○ Completed  │
+│         🔴 Overdue                     │
 └────────────────────────────────────────┘
 ```
 
-### 3.2 Vue Journée
+### 3.2 Day View
 
 ```
 ┌────────────────────────────────────────┐
-│ ← Aujourd'hui, Lundi 27 Janvier →     │
+│ ← Today, Monday January 27 →          │
 ├────────────────────────────────────────┤
 │                                        │
 │ 06:00  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
-│ 07:00  ████ Réveil & routine          │
+│ 07:00  ████ Wake up & routine         │
 │ 08:00  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
-│ 09:00  ▓▓▓▓▓▓▓▓▓▓▓▓ Travail          │
+│ 09:00  ▓▓▓▓▓▓▓▓▓▓▓▓ Work             │
 │ ...                                    │
-│ 12:00  ████ Pause déjeuner            │
-│ 13:00  ▓▓▓▓▓▓▓▓▓▓▓▓ Travail          │
+│ 12:00  ████ Lunch break               │
+│ 13:00  ▓▓▓▓▓▓▓▓▓▓▓▓ Work             │
 │ ...                                    │
 │ 18:00  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
 │ 18:30  ┌──────────────────────────┐   │
-│        │ 🎸 Pratique guitare      │   │
+│        │ 🎸 Guitar practice       │   │
 │        │    30 min                │   │
-│        │    Objectif: Bases       │   │
-│        │ [Commencer] [Reporter]   │   │
+│        │    Goal: Basics          │   │
+│        │ [Start] [Postpone]       │   │
 │        └──────────────────────────┘   │
 │ 19:00  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
-│ 19:30  ████ Dîner                     │
+│ 19:30  ████ Dinner                    │
 │ 20:00  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
 │                                        │
-│ Légende: ▓▓ Travail  ██ Autre  ░░ Libre│
+│ Legend: ▓▓ Work  ██ Other  ░░ Free     │
 └────────────────────────────────────────┘
 ```
 
-### 3.3 Vue Semaine
+### 3.3 Week View
 
 ```
 ┌────────────────────────────────────────┐
-│ ← Semaine du 27 Janvier →             │
+│ ← Week of January 27 →                │
 ├────────────────────────────────────────┤
-│      L   M   M   J   V   S   D       │
-│ 7h  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
-│ 8h  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
-│ 9h  ▓▓  ▓▓  ▓▓  ▓▓  ▓▓  ░░  ░░      │
+│      M   T   W   T   F   S   S       │
+│ 7am ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
+│ 8am ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
+│ 9am ▓▓  ▓▓  ▓▓  ▓▓  ▓▓  ░░  ░░      │
 │ ...      ...                          │
-│18h  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
-│18h30 🎸  🎸  🎸  🎸  🎸  ░░  ░░      │
-│19h  ░░  ░░  ░░  ░░  ░░  🎸  ░░      │
-│20h  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
+│6pm  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
+│6:30pm 🎸  🎸  🎸  🎸  🎸  ░░  ░░      │
+│7pm  ░░  ░░  ░░  ░░  ░░  🎸  ░░      │
+│8pm  ░░  ░░  ░░  ░░  ░░  ░░  ░░      │
 ├────────────────────────────────────────┤
-│ Cette semaine: 5 tâches • 2h30 total  │
+│ This week: 5 tasks • 2h30 total       │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Mes Rêves (Dashboard)
+## 4. My Dreams (Dashboard)
 
-### 4.1 Liste des Rêves
+### 4.1 Dream List
 
 ```
 ┌────────────────────────────────────────┐
-│ Mes Rêves                    [+ Nouveau]│
+│ My Dreams                      [+ New] │
 ├────────────────────────────────────────┤
 │                                        │
-│ 🔥 En cours                            │
+│ 🔥 In Progress                         │
 │ ──────────────────────────────────────│
 │ ┌──────────────────────────────────┐  │
-│ │ 🎸 Apprendre la guitare          │  │
+│ │ 🎸 Learn guitar                  │  │
 │ │ ████████░░░░░░░░ 35%             │  │
-│ │ 📅 Objectif: Juin 2026           │  │
-│ │ ⏰ Prochaine: Aujourd'hui 18h30  │  │
+│ │ 📅 Goal: June 2026              │  │
+│ │ ⏰ Next: Today 6:30 PM           │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ 🏃 Courir un marathon            │  │
+│ │ 🏃 Run a marathon               │  │
 │ │ ██░░░░░░░░░░░░░░ 12%             │  │
-│ │ 📅 Objectif: Octobre 2026        │  │
-│ │ ⏰ Prochaine: Demain 6h30        │  │
+│ │ 📅 Goal: October 2026           │  │
+│ │ ⏰ Next: Tomorrow 6:30 AM        │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ ✅ Complétés                           │
+│ ✅ Completed                           │
 │ ──────────────────────────────────────│
 │ ┌──────────────────────────────────┐  │
-│ │ ✓ Lire 12 livres en 2025         │  │
-│ │ Terminé le 28 Décembre 2025      │  │
+│ │ ✓ Read 12 books in 2025          │  │
+│ │ Completed on December 28, 2025   │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ 💤 En pause                            │
+│ 💤 Paused                              │
 │ ──────────────────────────────────────│
 │ ┌──────────────────────────────────┐  │
-│ │ ⏸ Apprendre le japonais          │  │
-│ │ Mis en pause le 15 Janvier       │  │
+│ │ ⏸ Learn Japanese                 │  │
+│ │ Paused on January 15             │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-### 4.2 Détail d'un Rêve
+### 4.2 Dream Detail
 
 ```
 ┌────────────────────────────────────────┐
-│ ← 🎸 Apprendre la guitare    [⋮ Menu] │
+│ ← 🎸 Learn guitar              [⋮ Menu] │
 ├────────────────────────────────────────┤
 │                                        │
-│ Progression                            │
+│ Progress                               │
 │ ████████████░░░░░░░░░░░░░ 35%         │
 │                                        │
-│ 📅 Objectif: 15 Juin 2026              │
-│ 🕐 Temps investi: 12h30                │
-│ 🔥 Série actuelle: 5 jours             │
+│ 📅 Goal: June 15, 2026                │
+│ 🕐 Time invested: 12h30               │
+│ 🔥 Current streak: 5 days             │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ 📊 Cette semaine                  │  │
-│ │   L  M  M  J  V  S  D            │  │
+│ │ 📊 This week                     │  │
+│ │   M  T  W  T  F  S  S            │  │
 │ │   ✓  ✓  ✓  ✓  ✓  ·  ·            │  │
-│ │   5/5 tâches complétées          │  │
+│ │   5/5 tasks completed            │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ 🎯 Étapes                              │
+│ 🎯 Steps                              │
 │ ──────────────────────────────────────│
-│ ✅ Semaines 1-2: Les bases     [100%] │
-│    Terminé le 10 Janvier              │
+│ ✅ Weeks 1-2: The basics      [100%] │
+│    Completed on January 10           │
 │                                        │
-│ 🔄 Semaines 3-4: Premiers morceaux    │
+│ 🔄 Weeks 3-4: First songs            │
 │    ████████░░░░ 60%                   │
-│    • ✓ Enchaînement La-Ré-Mi          │
-│    • ✓ Premier morceau: Knockin'...   │
-│    • ○ Transitions fluides            │
-│    • ○ Jouer sans regarder            │
+│    • ✓ A-D-E chord transitions       │
+│    • ✓ First song: Knockin'...       │
+│    • ○ Smooth transitions            │
+│    • ○ Play without looking          │
 │                                        │
-│ ○ Semaines 5-8: Rythme         [0%]   │
-│ ○ Semaines 9-12: Barrés        [0%]   │
-│ ○ Mois 4-5: Techniques         [0%]   │
-│ ○ Mois 6: Perfectionnement     [0%]   │
+│ ○ Weeks 5-8: Rhythm          [0%]    │
+│ ○ Weeks 9-12: Barre chords   [0%]    │
+│ ○ Months 4-5: Techniques     [0%]    │
+│ ○ Month 6: Refinement        [0%]    │
 │                                        │
 ├────────────────────────────────────────┤
-│ [💬 Discuter] [📅 Calendrier] [✏️ Modifier]│
+│ [💬 Chat] [📅 Calendar] [✏️ Edit]      │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Profil & Paramètres
+## 5. Profile & Settings
 
-### 5.1 Écran Profil
+### 5.1 Profile Screen
 
 ```
 ┌────────────────────────────────────────┐
-│ Mon Profil                             │
+│ My Profile                             │
 ├────────────────────────────────────────┤
 │                                        │
 │          ┌─────┐                       │
@@ -359,177 +359,176 @@ Après la conversation, l'IA génère un plan:
 │      marie@email.com                   │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ 📊 Mes statistiques               │  │
+│ │ 📊 My statistics                 │  │
 │ │                                   │  │
-│ │ 🎯 3 rêves en cours               │  │
-│ │ ✅ 45 tâches complétées           │  │
-│ │ 🔥 Meilleure série: 12 jours      │  │
-│ │ ⏱ 28h de temps investi            │  │
+│ │ 🎯 3 dreams in progress          │  │
+│ │ ✅ 45 tasks completed            │  │
+│ │ 🔥 Best streak: 12 days          │  │
+│ │ ⏱ 28h of time invested          │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 │ 🏆 Badges                              │
-│ [🌱 Débutant] [🔥 5 jours] [📚 10 tâches]│
+│ [🌱 Beginner] [🔥 5 days] [📚 10 tasks]│
 │                                        │
-│ ⚙️ Paramètres                          │
+│ ⚙️ Settings                            │
 │ ──────────────────────────────────────│
-│ > Horaires de travail                  │
+│ > Work schedule                        │
 │ > Notifications                        │
-│ > Apparence (Clair/Sombre)            │
-│ > Langue                               │
-│ > Abonnement (Free)                    │
-│ > Aide & Support                       │
-│ > Politique de confidentialité         │
-│ > Se déconnecter                       │
+│ > Appearance (Light/Dark)              │
+│ > Language                             │
+│ > Subscription (Free)                  │
+│ > Help & Support                       │
+│ > Privacy policy                       │
+│ > Log out                              │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-### 5.2 Paramètres de Notifications
+### 5.2 Notification Settings
 
 ```
 ┌────────────────────────────────────────┐
 │ ← Notifications                        │
 ├────────────────────────────────────────┤
 │                                        │
-│ 🔔 Général                             │
+│ 🔔 General                             │
 │ ──────────────────────────────────────│
-│ Notifications push          [====○]   │
+│ Push notifications          [====○]   │
 │                                        │
-│ 📋 Types de notifications              │
+│ 📋 Notification types                  │
 │ ──────────────────────────────────────│
-│ Rappels de tâches           [====○]   │
-│   Avance: [15 minutes ▼]              │
+│ Task reminders              [====○]   │
+│   Lead time: [15 minutes ▼]           │
 │                                        │
-│ Messages de motivation      [====○]   │
-│   Fréquence: [Quotidien ▼]            │
-│   Heure: [08:00]                       │
+│ Motivational messages       [====○]   │
+│   Frequency: [Daily ▼]               │
+│   Time: [08:00]                        │
 │                                        │
-│ Rapport hebdomadaire        [====○]   │
-│   Jour: [Dimanche ▼]                  │
-│   Heure: [10:00]                       │
+│ Weekly report               [====○]   │
+│   Day: [Sunday ▼]                     │
+│   Time: [10:00]                        │
 │                                        │
-│ Rappels d'inactivité        [○====]   │
-│   Après: [3 jours ▼]                  │
+│ Inactivity reminders        [○====]   │
+│   After: [3 days ▼]                   │
 │                                        │
-│ 🌙 Ne pas déranger                     │
+│ 🌙 Do Not Disturb                      │
 │ ──────────────────────────────────────│
-│ Activer                     [====○]   │
-│ De [22:00] à [07:00]                  │
+│ Enable                      [====○]   │
+│ From [22:00] to [07:00]               │
 │                                        │
-│ [ ] Respecter les préférences          │
-│     utilisateur                        │
+│ [ ] Respect user preferences           │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. Système de Notifications
+## 6. Notification System
 
-### 6.1 Types de Notifications
+### 6.1 Notification Types
 
-**Rappel de tâche (15 min avant)**
+**Task reminder (15 min before)**
 ```
 ┌────────────────────────────────────────┐
 │ 🔔 DreamPlanner                        │
-│ Dans 15 minutes: Pratique guitare      │
-│ Durée: 30 min                          │
-│                        [Voir] [Reporter]│
+│ In 15 minutes: Guitar practice         │
+│ Duration: 30 min                       │
+│                      [View] [Postpone] │
 └────────────────────────────────────────┘
 ```
 
-**Motivation quotidienne (matin)**
+**Daily motivation (morning)**
 ```
 ┌────────────────────────────────────────┐
 │ 🔔 DreamPlanner                        │
-│ 🔥 5 jours consécutifs ! Tu es sur la │
-│ bonne voie pour maîtriser la guitare! │
-│                               [Voir]   │
+│ 🔥 5 consecutive days! You are on      │
+│ track to master the guitar!            │
+│                               [View]   │
 └────────────────────────────────────────┘
 ```
 
-**Progression (milestone)**
+**Progress (milestone)**
 ```
 ┌────────────────────────────────────────┐
 │ 🔔 DreamPlanner                        │
-│ 🎉 Félicitations ! Tu as atteint 50%  │
-│ de ton objectif "Apprendre la guitare"│
-│                               [Voir]   │
+│ 🎉 Congratulations! You have reached  │
+│ 50% of your goal "Learn guitar"       │
+│                               [View]   │
 └────────────────────────────────────────┘
 ```
 
-**Check-in (après inactivité)**
+**Check-in (after inactivity)**
 ```
 ┌────────────────────────────────────────┐
 │ 🔔 DreamPlanner                        │
-│ 👋 Ça fait 3 jours qu'on ne s'est pas │
-│ vus. Comment avance ton projet ?      │
-│                        [Reprendre]     │
+│ 👋 It's been 3 days since we last      │
+│ connected. How is your project going?  │
+│                        [Resume]        │
 └────────────────────────────────────────┘
 ```
 
-### 6.2 Planification Intelligente
+### 6.2 Smart Scheduling
 
-Le système de notifications prend en compte:
+The notification system takes into account:
 
-1. **Horaires de travail** - Pas de notifications pendant le travail
-2. **Mode Ne pas déranger** - Respect des heures de repos
-3. **Préférences utilisateur** - Fréquence et types personnalisés
-4. **Contexte** - Messages adaptés à la progression
-5. **Timezone** - Notifications à l'heure locale
+1. **Work schedule** - No notifications during work
+2. **Do Not Disturb mode** - Respects rest hours
+3. **User preferences** - Customized frequency and types
+4. **Context** - Messages adapted to progress
+5. **Timezone** - Notifications at local time
 
 ---
 
-## 7. Fonctionnalités Premium
+## 7. Premium Features
 
-### 7.1 Tableau Comparatif
+### 7.1 Comparison Table
 
-| Fonctionnalité | Free | Premium | Pro |
-|----------------|------|---------|-----|
-| Rêves actifs | 3 | Illimité | Illimité |
-| Historique conversations | 7 jours | Illimité | Illimité |
-| Notifications basiques | ✅ | ✅ | ✅ |
-| Notifications personnalisées | ❌ | ✅ | ✅ |
-| Export calendrier (iCal, Google) | ❌ | ✅ | ✅ |
-| Thèmes personnalisés | ❌ | ✅ | ✅ |
-| Statistiques détaillées | ❌ | ❌ | ✅ |
-| Coaching IA avancé | ❌ | ❌ | ✅ |
-| Intégration Notion/Todoist | ❌ | ❌ | ✅ |
-| Support prioritaire | ❌ | ❌ | ✅ |
-| Prix | Gratuit | 9.99€/mois | 19.99€/mois |
+| Feature | Free | Premium | Pro |
+|---------|------|---------|-----|
+| Active dreams | 3 | Unlimited | Unlimited |
+| Conversation history | 7 days | Unlimited | Unlimited |
+| Basic notifications | ✅ | ✅ | ✅ |
+| Custom notifications | ❌ | ✅ | ✅ |
+| Calendar export (iCal, Google) | ❌ | ✅ | ✅ |
+| Custom themes | ❌ | ✅ | ✅ |
+| Detailed statistics | ❌ | ❌ | ✅ |
+| Advanced AI coaching | ❌ | ❌ | ✅ |
+| Notion/Todoist integration | ❌ | ❌ | ✅ |
+| Priority support | ❌ | ❌ | ✅ |
+| Price | Free | $14.99/month | $29.99/month |
 
-### 7.2 Écran d'Upgrade
+### 7.2 Upgrade Screen
 
 ```
 ┌────────────────────────────────────────┐
-│ ← Passer à Premium                     │
+│ ← Upgrade to Premium                   │
 ├────────────────────────────────────────┤
 │                                        │
 │      ⭐ DreamPlanner Premium ⭐        │
 │                                        │
-│ Débloquez tout le potentiel de vos    │
-│ rêves avec Premium                     │
+│ Unlock the full potential of your      │
+│ dreams with Premium                    │
 │                                        │
-│ ✅ Rêves illimités                     │
-│ ✅ Notifications personnalisées        │
-│ ✅ Export vers Google Calendar         │
-│ ✅ Thèmes et personnalisation         │
-│ ✅ Sans publicité                      │
+│ ✅ Unlimited dreams                    │
+│ ✅ Custom notifications               │
+│ ✅ Export to Google Calendar           │
+│ ✅ Themes and customization           │
+│ ✅ Ad-free                             │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ Mensuel                          │  │
-│ │ 9.99€/mois                       │  │
+│ │ Monthly                         │  │
+│ │ $14.99/month                     │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ Annuel (Économisez 33%)   ⭐     │  │
-│ │ 79.99€/an (6.66€/mois)          │  │
+│ │ Annual (Save 33%)        ⭐     │  │
+│ │ $119.99/year ($10.00/month)     │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ 7 jours d'essai gratuit               │
-│ Annulez à tout moment                  │
+│ 7-day free trial                       │
+│ Cancel at any time                     │
 │                                        │
-│ [Commencer l'essai gratuit]           │
+│ [Start free trial]                     │
 │                                        │
 └────────────────────────────────────────┘
 ```

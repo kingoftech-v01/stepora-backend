@@ -2,12 +2,15 @@
 Services for Users app.
 """
 
+import logging
 from typing import Optional, List, Tuple
 from datetime import timedelta
 from django.db.models import Q, Count
 from django.utils import timezone
 from .models import User
 from apps.buddies.models import BuddyPairing
+
+logger = logging.getLogger(__name__)
 
 
 class BuddyMatchingService:
@@ -378,6 +381,27 @@ class AchievementService:
             if current_val >= ach.condition_value:
                 UserAchievement.objects.create(user=user, achievement=ach)
                 user.add_xp(ach.xp_reward)
+                # Send achievement notification
+                try:
+                    from apps.notifications.models import Notification
+                    Notification.objects.create(
+                        user=user,
+                        notification_type='achievement',
+                        title=f'Achievement Unlocked: {ach.name}!',
+                        body=f'You earned the "{ach.name}" achievement! +{ach.xp_reward} XP',
+                        scheduled_for=timezone.now(),
+                        data={
+                            'type': 'achievement',
+                            'achievement_id': str(ach.id),
+                            'achievement_name': ach.name,
+                            'xp_reward': ach.xp_reward,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to create achievement notification for user %s, achievement %s",
+                        user.id, ach.id
+                    )
                 newly_unlocked.append(ach)
 
         return newly_unlocked

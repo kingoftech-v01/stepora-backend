@@ -2,6 +2,8 @@
 Views for Conversations app.
 """
 
+import logging
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -30,6 +32,8 @@ from core.moderation import ContentModerationService
 from core.throttles import AIRateThrottle, AIChatDailyThrottle, AIVoiceDailyThrottle
 from core.pagination import StandardResultsSetPagination
 from core.ai_usage import AIUsageTracker
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -233,7 +237,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     }
                 })
             except Exception:
-                pass  # Don't fail the REST response if WS broadcast fails
+                logger.debug("WebSocket broadcast failed", exc_info=True)
 
             return Response({
                 'user_message': {
@@ -810,7 +814,7 @@ class CallViewSet(viewsets.GenericViewSet):
                 data={'call_id': str(call.id), 'type': 'call_rejected'},
             )
         except Exception:
-            pass
+            logger.warning("Failed to send notification", exc_info=True)
 
         # Send WebSocket event to caller
         try:
@@ -829,7 +833,7 @@ class CallViewSet(viewsets.GenericViewSet):
                 },
             )
         except Exception:
-            pass
+            logger.debug("WebSocket broadcast failed", exc_info=True)
 
         return Response({'callId': str(call.id), 'status': call.status})
 
@@ -896,7 +900,7 @@ class CallViewSet(viewsets.GenericViewSet):
             try:
                 caller_name = c.caller.display_name or c.caller.username or ''
             except Exception:
-                pass
+                logger.debug("Failed to get display name", exc_info=True)
             results.append({
                 'callId': str(c.id),
                 'callerId': str(c.caller_id),
@@ -979,6 +983,6 @@ class CallViewSet(viewsets.GenericViewSet):
                         data=data,
                     )
                 except Exception:
-                    pass
+                    logger.warning("Failed to send notification", exc_info=True)
         except Exception:
-            pass
+            logger.warning("Failed to send notification", exc_info=True)

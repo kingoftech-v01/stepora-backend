@@ -1,9 +1,44 @@
 # Changelog
 
-Toutes les modifications notables de ce projet seront documentées dans ce fichier.
+All notable changes to this project will be documented in this file.
 
-Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
-et ce projet adhère au [Versionnement Sémantique](https://semver.org/lang/fr/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.2.0] - 2026-02-27
+
+### Added
+- Two-Factor Authentication (TOTP) with backup codes via `/api/users/2fa/*` endpoints
+- Onboarding completion tracking (`POST /api/users/complete-onboarding/`)
+- GDPR hard-delete: automatic permanent deletion of soft-deleted accounts after 30-day grace period
+- Buddy request auto-expiration after 7 days for pending requests
+- Dream sharing notifications sent to recipients
+- Achievement unlock notifications
+- Progress recalculation signal on task deletion
+- `IsOwnerOrSharedWith` permission class for shared dreams
+- Subscription downgrade feature revocation
+- Circle ownership auto-transfer on creator departure
+- Notification email fallback when FCM fails
+- Search app test suite (17 tests)
+- New features test suite (40 tests covering 2FA, GDPR, buddies, idempotency, sharing, signals)
+
+### Fixed
+- Double-completion bug: tasks/goals/dreams now return 400 if already completed (idempotent)
+- Dream progress corruption when tasks are deleted (post_delete signal)
+- Account deletion now cancels Stripe subscription and cleans up buddy pairings/circle memberships
+- 25 bare `except: pass` blocks replaced with proper logging
+- N+1 query fix in dream serializers (use prefetch cache)
+- Standardized error response format in custom exception handler
+
+### Changed
+- Added caching (5 min) to leaderboard, store items, and dream templates endpoints
+- All documentation translated from French to English
+- Unified pricing to USD ($14.99 Premium / $29.99 Pro)
+- Unified coverage target to 84%
+- Updated OpenAI SDK syntax in docs
+- Replaced all "DreamBuddy" references with "BuddyPairing"
+
+---
 
 ## [1.1.0] - 2026-02-22
 
@@ -24,7 +59,7 @@ et ce projet adhère au [Versionnement Sémantique](https://semver.org/lang/fr/)
 - **Buddies test suite**: 72 tests covering pairing, encouragement, streaks, progress comparison, history
 - **Notification test suite expanded**: 45+ new tests for WebSocket consumer, delivery service, Web Push, batch serializer
 - **AI validators test suite**: 80+ tests covering all Pydantic schemas, validation functions, coherence checker
-- **Coverage target raised**: 80% → 99%
+- **Coverage target raised**: 80% → 84%
 
 ### Fixed
 - Fixed broken `conftest.py` imports (`DreamBuddy` model removed, replaced with `BuddyPairing`)
@@ -36,63 +71,63 @@ et ce projet adhère au [Versionnement Sémantique](https://semver.org/lang/fr/)
 
 ## [1.0.0] - 2025-01-28
 
-### Ajouté
+### Added
 
-#### Backend Django
-- **App Users** - Gestion des profils, préférences
-- **App Dreams** - CRUD complet pour rêves, objectifs, tâches, obstacles
-- **App Conversations** - Chat en temps réel avec WebSocket et GPT-4
-- **App Notifications** - Push notifications et templates
-- **App Calendar** - Vues calendrier et planification intelligente
-- **Gamification** - Système XP, niveaux, badges, streaks
-- **Dream Buddy** - Système de partenariat d'accountability
+#### Django Backend
+- **Users App** - Profile management, preferences
+- **Dreams App** - Full CRUD for dreams, goals, tasks, obstacles
+- **Conversations App** - Real-time chat with WebSocket and GPT-4
+- **Notifications App** - Push notifications and templates
+- **Calendar App** - Calendar views and smart scheduling
+- **Gamification** - XP system, levels, badges, streaks
+- **Dream Buddy** - Accountability partnership system
 
-#### Intégrations
-- OpenAI GPT-4 pour génération de plans et coaching
-- DALL-E 3 pour génération de vision boards
-- Redis pour cache et Celery broker
-- PostgreSQL comme base de données principale
+#### Integrations
+- OpenAI GPT-4 for plan generation and coaching
+- DALL-E 3 for vision board generation
+- Redis for cache and Celery broker
+- PostgreSQL as the primary database
 
 #### Documentation
-- README complet avec instructions de setup
-- Documentation technique d'architecture
-- Spécifications des fonctionnalités
-- Guide de contribution
-- Guide de déploiement
+- Complete README with setup instructions
+- Technical architecture documentation
+- Feature specifications
+- Contributing guide
+- Deployment guide
 
-#### Sécurité
-- Rate limiting multi-tier
-- Validation des entrées avec Zod/Django validators
-- Protection CORS
-- Headers de sécurité avec Helmet
+#### Security
+- Multi-tier rate limiting
+- Input validation with Zod/Django validators
+- CORS protection
+- Security headers with Helmet
 
 #### Tests
-- Tests unitaires pour tous les modèles
-- Tests d'intégration pour les API endpoints
-- Tests WebSocket pour le chat en temps réel
-- Configuration pytest avec fixtures réutilisables
-- Couverture de code > 80%
+- Unit tests for all models
+- Integration tests for API endpoints
+- WebSocket tests for real-time chat
+- Pytest configuration with reusable fixtures
+- Code coverage > 80%
 
 ### Infrastructure
-- Docker et Docker Compose pour développement local
-- Configuration production pour Railway/AWS
-- CI/CD avec GitHub Actions
-- Monitoring avec Sentry
+- Docker and Docker Compose for local development
+- Production configuration for Railway/AWS
+- CI/CD with GitHub Actions
+- Monitoring with Sentry
 
 ## [0.1.0] - 2024-12-01
 
-### Ajouté
-- Structure initiale du projet
-- Structure initiale du projet Django
-- Schéma de base de données initial
+### Added
+- Initial project structure
+- Initial Django project structure
+- Initial database schema
 
 ---
 
-## Types de Changements
+## Types of Changes
 
-- `Ajouté` pour les nouvelles fonctionnalités
-- `Modifié` pour les changements dans les fonctionnalités existantes
-- `Déprécié` pour les fonctionnalités qui seront supprimées prochainement
-- `Supprimé` pour les fonctionnalités supprimées
-- `Corrigé` pour les corrections de bugs
-- `Sécurité` pour les vulnérabilités corrigées
+- `Added` for new features
+- `Changed` for changes to existing features
+- `Deprecated` for features that will be removed soon
+- `Removed` for removed features
+- `Fixed` for bug fixes
+- `Security` for fixed vulnerabilities

@@ -21,6 +21,11 @@ build/
 .env.local
 .env.*.local
 
+# Service account keys (NEVER commit)
+firebase-service-account.json
+*-service-account.json
+*.pem
+
 # IDE
 .idea/
 .vscode/

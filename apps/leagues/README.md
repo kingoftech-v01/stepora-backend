@@ -148,7 +148,7 @@ Tracks rewards earned by a user at season end.
 |--------|------|-------------|
 | GET | `/leaderboard/global/` | Top 100 users by XP (query: `?limit=N`, max 100) |
 | GET | `/leaderboard/league/` | Users in same league (query: `?league_id=UUID&limit=N`) |
-| GET | `/leaderboard/friends/` | Friends leaderboard (via DreamBuddy model) |
+| GET | `/leaderboard/friends/` | Friends leaderboard (via BuddyPairing model) |
 | GET | `/leaderboard/me/` | Current user's standing (creates if missing) |
 | GET | `/leaderboard/nearby/` | Users ranked above/below (query: `?count=N`, max 10) |
 

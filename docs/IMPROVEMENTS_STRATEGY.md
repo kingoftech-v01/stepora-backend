@@ -1,278 +1,280 @@
-# DreamPlanner 2.0 - Stratégie d'Amélioration
+# DreamPlanner 2.0 - Improvement Strategy
 
-## Le Vrai Problème à Résoudre
+## The Real Problem to Solve
 
-### Pourquoi les gens abandonnent leurs projets ?
+### Why do people abandon their projects?
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CYCLE DE L'ABANDON                           │
+│                    THE ABANDONMENT CYCLE                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   ENTHOUSIASME    →    CONFUSION    →    DÉCOURAGEMENT          │
-│   "Je vais le      "Par où           "C'est trop                │
-│    faire!"          commencer?"       compliqué..."             │
+│   ENTHUSIASM      →    CONFUSION      →    DISCOURAGEMENT       │
+│   "I'm going to    "Where do I         "It's too                │
+│    do it!"          start?"             complicated..."          │
 │                                                                  │
 │         ↑                                    ↓                   │
 │         │                                    │                   │
-│         │         ←    ABANDON    ←          │                   │
-│                    "La prochaine                                 │
-│                     fois..."                                     │
+│         │         ←    ABANDONMENT  ←        │                   │
+│                    "Next time..."                                 │
+│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Les 7 Causes Racines
+### The 7 Root Causes
 
-| # | Cause | Impact | Solution DreamPlanner |
+| # | Cause | Impact | DreamPlanner Solution |
 |---|-------|--------|----------------------|
-| 1 | **Objectif trop vague** | Ne sait pas mesurer le progrès | IA qui clarifie et décompose |
-| 2 | **Pas de premier pas clair** | Paralysie d'analyse | "Start in 2 minutes" feature |
-| 3 | **Solitude** | Pas de support | Communauté + Buddy system |
-| 4 | **Pas de responsabilité** | Facile d'abandonner | Accountability partners |
-| 5 | **Obstacles imprévus** | Blocage total | IA coach proactif |
-| 6 | **Perte de momentum** | Oubli progressif | Streaks + Engagement loops |
-| 7 | **Pas de récompense** | Effort sans gratification | Gamification avancée |
+| 1 | **Goal too vague** | Cannot measure progress | AI that clarifies and breaks down |
+| 2 | **No clear first step** | Analysis paralysis | "Start in 2 minutes" feature |
+| 3 | **Loneliness** | No support | Community + Buddy system |
+| 4 | **No accountability** | Easy to give up | Accountability partners |
+| 5 | **Unexpected obstacles** | Total blockage | Proactive AI coach |
+| 6 | **Loss of momentum** | Gradual forgetting | Streaks + Engagement loops |
+| 7 | **No reward** | Effort without gratification | Advanced gamification |
 
 ---
 
-## Fonctionnalités Différenciantes
+## Differentiating Features
 
-### 1. "2-Minute Start" - Éliminer la Paralysie
+### 1. "2-Minute Start" - Eliminating Paralysis
 
-**Concept**: Chaque objectif commence par une action de 2 minutes maximum.
+**Concept**: Every goal starts with an action of 2 minutes maximum.
 
 ```
 ┌────────────────────────────────────────┐
-│ 🚀 Ton premier pas (2 min)            │
+│ 🚀 Your first step (2 min)            │
 ├────────────────────────────────────────┤
 │                                        │
-│ Objectif: Apprendre l'espagnol        │
+│ Goal: Learn Spanish                    │
 │                                        │
-│ Au lieu de: "Étudier 1h par jour"     │
+│ Instead of: "Study 1h per day"        │
 │                                        │
-│ Commence par:                          │
+│ Start with:                            │
 │ ┌──────────────────────────────────┐  │
-│ │ 📱 Télécharge Duolingo           │  │
-│ │    (30 secondes)                 │  │
+│ │ 📱 Download Duolingo             │  │
+│ │    (30 seconds)                  │  │
 │ │                                   │  │
-│ │    [C'est fait ✓]                │  │
+│ │    [Done ✓]                      │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ "Le plus dur c'est de commencer.      │
-│  Une fois l'app installée, tu feras   │
-│  ta première leçon naturellement."    │
+│ "The hardest part is getting started.  │
+│  Once the app is installed, you'll     │
+│  naturally do your first lesson."      │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Pourquoi ça marche**: Principe de l'engagement progressif (pied dans la porte)
+**Why it works**: Progressive commitment principle (foot-in-the-door technique)
 
 ---
 
-### 2. "Dream Buddy" - Système de Partenariat
+### 2. "Dream Buddy" - Partnership System
 
-**Concept**: Matcher des utilisateurs avec des objectifs similaires pour s'entraider.
+**Concept**: Match users with similar goals to help each other.
 
 ```
 ┌────────────────────────────────────────┐
-│ 👥 Ton Dream Buddy                     │
+│ 👥 Your Dream Buddy                    │
 ├────────────────────────────────────────┤
 │                                        │
 │   ┌─────┐                              │
-│   │ 😊  │  Sarah, 28 ans               │
+│   │ 😊  │  Sarah, 28 years old         │
 │   └─────┘  Paris                       │
 │                                        │
-│   Objectif commun:                     │
-│   🏃 Courir un marathon                │
+│   Shared goal:                         │
+│   🏃 Run a marathon                    │
 │                                        │
-│   "J'en suis à la semaine 4 de mon    │
-│    programme. On se motive?"           │
+│   "I'm on week 4 of my                │
+│    program. Shall we motivate          │
+│    each other?"                        │
 │                                        │
 │   ┌────────────────────────────────┐  │
-│   │ 💬 Envoyer un message          │  │
+│   │ 💬 Send a message              │  │
 │   └────────────────────────────────┘  │
 │                                        │
-│   📊 Son avancement: ████████░░ 65%   │
-│   🔥 Sa série: 12 jours               │
+│   📊 Their progress: ████████░░ 65%   │
+│   🔥 Their streak: 12 days            │
 │                                        │
-│   [Voir son parcours] [Encourager 👏] │
+│   [View their journey] [Encourage 👏] │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Fonctionnalités**:
-- Matching IA basé sur objectifs + personnalité + timezone
-- Check-ins mutuels quotidiens
-- Défis à deux
-- Mode "Buddy Accountability" - ton buddy est notifié si tu manques une tâche
+**Features**:
+- AI-based matching on goals + personality + timezone
+- Daily mutual check-ins
+- Two-person challenges
+- "Buddy Accountability" mode - your buddy is notified if you miss a task
 
 ---
 
-### 3. "Rescue Mode" - Détection d'Abandon
+### 3. "Rescue Mode" - Dropout Detection
 
-**Concept**: L'IA détecte les signes d'abandon et intervient proactivement.
+**Concept**: The AI detects signs of abandonment and intervenes proactively.
 
 ```
 ┌────────────────────────────────────────┐
-│ 🆘 Mode Sauvetage Activé              │
+│ 🆘 Rescue Mode Activated              │
 ├────────────────────────────────────────┤
 │                                        │
-│ Hey Marie, j'ai remarqué que tu n'as  │
-│ pas pratiqué la guitare depuis 5 jours│
+│ Hey Marie, I noticed you haven't      │
+│ practiced guitar for 5 days           │
 │                                        │
-│ C'est normal d'avoir des hauts et bas!│
+│ It's normal to have ups and downs!    │
 │                                        │
-│ Qu'est-ce qui se passe?               │
+│ What's going on?                       │
 │                                        │
-│ ○ J'ai manqué de temps                │
-│ ○ J'ai perdu la motivation            │
-│ ○ C'est devenu trop difficile         │
-│ ○ J'ai eu un imprévu                  │
-│ ○ Je veux changer d'objectif          │
+│ ○ I ran out of time                    │
+│ ○ I lost motivation                    │
+│ ○ It became too difficult              │
+│ ○ Something unexpected came up         │
+│ ○ I want to change my goal             │
 │                                        │
-│ [Parlons-en 💬]                       │
+│ [Let's talk about it 💬]              │
 │                                        │
-│ PS: 73% des utilisateurs qui          │
-│ reprennent après une pause            │
-│ atteignent leur objectif!             │
+│ PS: 73% of users who resume           │
+│ after a break reach                    │
+│ their goal!                            │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Actions automatiques**:
-- Notification buddy: "Marie a besoin d'encouragement"
-- Proposition d'adapter le plan (réduire intensité)
-- Mini-challenge de reprise "1 minute aujourd'hui"
-- Rappel des progrès déjà accomplis
+**Automatic actions**:
+- Buddy notification: "Marie needs encouragement"
+- Proposal to adapt the plan (reduce intensity)
+- Mini restart challenge "1 minute today"
+- Reminder of progress already made
 
 ---
 
-### 4. "Dream Circles" - Communautés Thématiques
+### 4. "Dream Circles" - Themed Communities
 
-**Concept**: Groupes de 5-10 personnes avec le même objectif.
+**Concept**: Groups of 5-10 people with the same goal.
 
 ```
 ┌────────────────────────────────────────┐
 │ 🎸 Guitar Heroes Club                  │
-│ 8 membres • Créé il y a 3 semaines    │
+│ 8 members • Created 3 weeks ago       │
 ├────────────────────────────────────────┤
 │                                        │
-│ 📊 Progression du groupe              │
+│ 📊 Group progress                     │
 │ ████████████████░░░░ 72%              │
 │                                        │
-│ 🔥 Défi de la semaine:                │
-│ "Poster une vidéo de 30 sec"          │
-│ 5/8 ont participé                      │
+│ 🔥 Challenge of the week:             │
+│ "Post a 30-sec video"                 │
+│ 5/8 have participated                  │
 │                                        │
-│ 💬 Derniers messages                   │
+│ 💬 Latest messages                     │
 │ ┌──────────────────────────────────┐  │
-│ │ Alex: "Enfin réussi le barré F!" │  │
+│ │ Alex: "Finally nailed the F bar  │  │
+│ │ chord!"                          │  │
 │ │ 👏 6  💪 3  🎸 2                  │  │
 │ │                                   │  │
-│ │ Julie: "Voici ma cover de..."    │  │
-│ │ 🎵 [Vidéo]                       │  │
+│ │ Julie: "Here's my cover of..."   │  │
+│ │ 🎵 [Video]                       │  │
 │ │ 👏 8  🔥 5  ❤️ 4                  │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ [Poster] [Voir le classement]         │
+│ [Post] [View leaderboard]             │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Éléments clés**:
-- Limite de 10 personnes (intimité)
-- Défis hebdomadaires votés par le groupe
-- Classement amical
-- Appels de groupe optionnels
-- Modération IA pour garder une ambiance positive
+**Key elements**:
+- Limit of 10 people (intimacy)
+- Weekly challenges voted by the group
+- Friendly leaderboard
+- Optional group calls
+- AI moderation to maintain a positive atmosphere
 
 ---
 
-### 5. Gamification Avancée - "Life RPG"
+### 5. Advanced Gamification - "Life RPG"
 
-**Concept**: Transformer la vie en jeu de rôle.
+**Concept**: Turn life into a role-playing game.
 
 ```
 ┌────────────────────────────────────────┐
-│ ⚔️ Ton Personnage                      │
+│ ⚔️ Your Character                      │
 ├────────────────────────────────────────┤
 │                                        │
 │        ┌─────────┐                     │
-│        │  🧙‍♂️   │  Niveau 12          │
+│        │  🧙‍♂️   │  Level 12           │
 │        │ Avatar  │  "Dream Warrior"    │
 │        └─────────┘                     │
 │                                        │
 │ XP: ████████████░░░░ 2,450 / 3,000    │
 │                                        │
-│ 📊 Attributs                           │
+│ 📊 Attributes                          │
 │ ├─ 💪 Discipline:    ████████░░ 78    │
-│ ├─ 🧠 Apprentissage: ██████░░░░ 56    │
-│ ├─ ❤️ Bien-être:     ███████░░░ 65    │
-│ ├─ 💼 Carrière:      █████░░░░░ 45    │
-│ └─ 🎨 Créativité:    ████████░░ 72    │
+│ ├─ 🧠 Learning:      ██████░░░░ 56    │
+│ ├─ ❤️ Wellbeing:     ███████░░░ 65    │
+│ ├─ 💼 Career:        █████░░░░░ 45    │
+│ └─ 🎨 Creativity:    ████████░░ 72    │
 │                                        │
-│ 🏆 Badges Récents                      │
-│ [🌅 Lève-tôt] [🔥 7 jours] [🎯 Focus] │
+│ 🏆 Recent Badges                       │
+│ [🌅 Early Bird] [🔥 7 Days] [🎯 Focus]│
 │                                        │
-│ 🎁 Récompense débloquée!              │
-│ "Thème Nuit Étoilée" pour ton app     │
+│ 🎁 Reward unlocked!                   │
+│ "Starry Night Theme" for your app     │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Système de progression**:
-- XP pour chaque tâche complétée
-- Niveaux qui débloquent des fonctionnalités
-- Attributs qui reflètent les domaines de vie
-- Badges et achievements
-- Récompenses réelles (thèmes, avatars, features premium)
-- Quêtes spéciales (défis limités dans le temps)
+**Progression system**:
+- XP for every completed task
+- Levels that unlock features
+- Attributes that reflect life domains
+- Badges and achievements
+- Real rewards (themes, avatars, premium features)
+- Special quests (time-limited challenges)
 
 ---
 
-### 6. "AI Coach Proactif" - Anticipation des Obstacles
+### 6. "Proactive AI Coach" - Obstacle Anticipation
 
-**Concept**: L'IA prédit les difficultés et propose des solutions avant qu'elles n'arrivent.
+**Concept**: The AI predicts difficulties and proposes solutions before they happen.
 
 ```
 ┌────────────────────────────────────────┐
-│ 🔮 Alerte Prédictive                   │
+│ 🔮 Predictive Alert                    │
 ├────────────────────────────────────────┤
 │                                        │
-│ J'ai analysé ton calendrier et ton    │
-│ historique...                          │
+│ I've analyzed your calendar and your  │
+│ history...                             │
 │                                        │
-│ ⚠️ Semaine prochaine risquée          │
+│ ⚠️ Risky week ahead                   │
 │                                        │
-│ • Lundi: Réunion importante au travail│
-│ • Mardi-Mercredi: Deadlines projet    │
-│ • Tu as tendance à sauter tes tâches  │
-│   quand tu es stressé (73% du temps)  │
+│ • Monday: Important work meeting      │
+│ • Tuesday-Wednesday: Project deadlines│
+│ • You tend to skip your tasks          │
+│   when stressed (73% of the time)     │
 │                                        │
-│ 💡 Ma suggestion:                      │
+│ 💡 My suggestion:                      │
 │                                        │
-│ Déplacer tes sessions de guitare      │
-│ au matin (avant le stress) ou         │
-│ réduire à 15 min cette semaine.       │
+│ Move your guitar sessions             │
+│ to the morning (before the stress) or │
+│ reduce to 15 min this week.           │
 │                                        │
-│ [Adapter mon planning]                 │
-│ [Garder comme prévu]                   │
+│ [Adapt my schedule]                    │
+│ [Keep as planned]                      │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Capacités IA**:
-- Analyse des patterns d'abandon
-- Intégration calendrier (Google, Apple)
-- Détection du stress (patterns de sommeil, activité)
-- Suggestions personnalisées
-- Apprentissage continu des préférences
+**AI capabilities**:
+- Abandonment pattern analysis
+- Calendar integration (Google, Apple)
+- Stress detection (sleep patterns, activity)
+- Personalized suggestions
+- Continuous preference learning
 
 ---
 
-### 7. "Micro-Wins" - Célébration des Petites Victoires
+### 7. "Micro-Wins" - Celebrating Small Victories
 
-**Concept**: Célébrer chaque petit progrès pour maintenir la motivation.
+**Concept**: Celebrate every small step of progress to maintain motivation.
 
 ```
 ┌────────────────────────────────────────┐
@@ -282,163 +284,164 @@
 │         🎸                             │
 │        ✨✨✨                           │
 │                                        │
-│  Tu viens de pratiquer 7 jours        │
-│  d'affilée!                           │
+│  You just practiced 7 days            │
+│  in a row!                            │
 │                                        │
-│  C'est plus que 89% des débutants     │
-│  en guitare!                          │
+│  That's more than 89% of guitar       │
+│  beginners!                           │
 │                                        │
-│  +150 XP  🏆 Badge "Semaine Parfaite" │
+│  +150 XP  🏆 Badge "Perfect Week"     │
 │                                        │
 │  ┌──────────────────────────────────┐ │
-│  │ 📸 Partager sur Instagram        │ │
-│  │ 👥 Envoyer à mon Buddy           │ │
-│  │ 🎁 Réclamer ma récompense        │ │
+│  │ 📸 Share on Instagram            │ │
+│  │ 👥 Send to my Buddy              │ │
+│  │ 🎁 Claim my reward               │ │
 │  └──────────────────────────────────┘ │
 │                                        │
-│  [Continuer 🚀]                       │
+│  [Continue 🚀]                        │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Types de célébrations**:
-- Animations de victoire
-- Comparaisons positives ("mieux que X%")
-- Partage social formaté (stories Instagram)
-- Récompenses tangibles
-- Messages personnalisés de l'IA
+**Types of celebrations**:
+- Victory animations
+- Positive comparisons ("better than X%")
+- Formatted social sharing (Instagram stories)
+- Tangible rewards
+- Personalized AI messages
 
 ---
 
-### 8. "Vision Board" Interactif
+### 8. Interactive "Vision Board"
 
-**Concept**: Visualisation du rêve accompli avec IA générative.
+**Concept**: Visualization of the accomplished dream with generative AI.
 
 ```
 ┌────────────────────────────────────────┐
-│ 🖼️ Ta Vision                           │
+│ 🖼️ Your Vision                         │
 ├────────────────────────────────────────┤
 │                                        │
 │ ┌──────────────────────────────────┐  │
 │ │                                   │  │
-│ │    [Image générée par IA]        │  │
+│ │    [AI-generated image]          │  │
 │ │                                   │  │
-│ │    Toi sur scène, jouant de la   │  │
-│ │    guitare devant tes amis       │  │
+│ │    You on stage, playing         │  │
+│ │    guitar in front of friends    │  │
 │ │                                   │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ "Dans 6 mois, tu pourras jouer        │
-│  Wonderwall à la fête de Marine."     │
+│ "In 6 months, you'll be able to play  │
+│  Wonderwall at Marine's party."       │
 │                                        │
-│ 🎯 Ton Pourquoi:                       │
-│ "Impressionner mes amis et me         │
-│  prouver que je peux apprendre"       │
+│ 🎯 Your Why:                           │
+│ "Impress my friends and prove         │
+│  to myself that I can learn"          │
 │                                        │
-│ [Voir cette image chaque matin ☀️]    │
+│ [See this image every morning ☀️]     │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Fonctionnalités**:
-- Génération d'images IA du "futur toi"
-- Affichage en fond d'écran
-- Rappel quotidien du "pourquoi"
-- Évolution de l'image selon la progression
+**Features**:
+- AI image generation of "future you"
+- Wallpaper display
+- Daily reminder of your "why"
+- Image evolution based on progress
 
 ---
 
-### 9. "Streak Insurance" - Protection des Séries
+### 9. "Streak Insurance" - Streak Protection
 
-**Concept**: Système de "jokers" pour ne pas perdre sa série.
+**Concept**: A "joker" system to avoid losing your streak.
 
 ```
 ┌────────────────────────────────────────┐
 │ 🛡️ Streak Insurance                    │
 ├────────────────────────────────────────┤
 │                                        │
-│ Ta série: 🔥 23 jours                  │
+│ Your streak: 🔥 23 days                │
 │                                        │
-│ Protections disponibles: 🛡️🛡️🛡️       │
+│ Available protections: 🛡️🛡️🛡️         │
 │                                        │
-│ Tu as manqué hier?                     │
+│ Did you miss yesterday?                │
 │                                        │
-│ [Utiliser une protection]             │
+│ [Use a protection]                    │
 │                                        │
-│ Ta série sera préservée!              │
+│ Your streak will be preserved!        │
 │                                        │
 │ ───────────────────────────────────── │
 │                                        │
-│ Comment gagner des protections:        │
-│ • Compléter un défi spécial           │
-│ • Atteindre 30 jours de série         │
-│ • Aider un buddy                       │
-│ • Acheter (Premium)                    │
+│ How to earn protections:               │
+│ • Complete a special challenge         │
+│ • Reach a 30-day streak               │
+│ • Help a buddy                         │
+│ • Purchase (Premium)                   │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-### 10. "Public Commitment" - Engagement Public
+### 10. "Public Commitment" - Public Commitment
 
-**Concept**: Annoncer son objectif publiquement pour créer de la responsabilité.
+**Concept**: Publicly announce your goal to create accountability.
 
 ```
 ┌────────────────────────────────────────┐
-│ 📢 Mon Engagement Public               │
+│ 📢 My Public Commitment                │
 ├────────────────────────────────────────┤
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ "Je m'engage à courir mon        │  │
-│ │  premier 10km avant le           │  │
-│ │  1er Juin 2026"                  │  │
+│ │ "I commit to running my          │  │
+│ │  first 10K before                │  │
+│ │  June 1st, 2026"                 │  │
 │ │                                   │  │
 │ │  - Marie D.                      │  │
-│ │    Suivi par 12 personnes       │  │
+│ │    Followed by 12 people        │  │
 │ └──────────────────────────────────┘  │
 │                                        │
-│ 👥 Témoins: 12 personnes te suivent   │
+│ 👥 Witnesses: 12 people are following  │
+│    you                                 │
 │                                        │
-│ Si tu réussis:                         │
-│ • Notification à tous tes témoins     │
-│ • Badge "Promise Keeper"              │
-│ • Story de victoire générée           │
+│ If you succeed:                        │
+│ • Notification to all your witnesses  │
+│ • "Promise Keeper" badge              │
+│ • Victory story generated             │
 │                                        │
-│ [Partager sur les réseaux]            │
-│ [Inviter des témoins]                 │
+│ [Share on social media]               │
+│ [Invite witnesses]                    │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## Fonctionnalités Virales
+## Viral Features
 
-### Mécanismes de Croissance
+### Growth Mechanisms
 
-| Mécanisme | Description | Viralité |
+| Mechanism | Description | Virality |
 |-----------|-------------|----------|
-| **Buddy Invites** | Inviter un ami comme accountability partner | ⭐⭐⭐⭐⭐ |
-| **Dream Circles** | Groupes limités créant FOMO | ⭐⭐⭐⭐ |
-| **Share Wins** | Stories Instagram auto-générées | ⭐⭐⭐⭐⭐ |
-| **Challenges** | Défis viraux ("30 jours de...") | ⭐⭐⭐⭐ |
-| **Referral Rewards** | Premium gratuit pour invitations | ⭐⭐⭐⭐⭐ |
-| **Leaderboards** | Classements entre amis | ⭐⭐⭐ |
+| **Buddy Invites** | Invite a friend as an accountability partner | ⭐⭐⭐⭐⭐ |
+| **Dream Circles** | Limited groups creating FOMO | ⭐⭐⭐⭐ |
+| **Share Wins** | Auto-generated Instagram stories | ⭐⭐⭐⭐⭐ |
+| **Challenges** | Viral challenges ("30 days of...") | ⭐⭐⭐⭐ |
+| **Referral Rewards** | Free premium for invitations | ⭐⭐⭐⭐⭐ |
+| **Leaderboards** | Rankings among friends | ⭐⭐⭐ |
 
-### Templates de Partage Social
+### Social Sharing Templates
 
 ```
 ┌────────────────────────────────────────┐
-│ 📱 Story Instagram Auto-Générée        │
+│ 📱 Auto-Generated Instagram Story      │
 ├────────────────────────────────────────┤
 │                                        │
 │  ┌──────────────────────────────────┐ │
 │  │                                   │ │
-│  │   🔥 7 JOURS                      │ │
+│  │   🔥 7 DAYS                       │ │
 │  │                                   │ │
-│  │   J'apprends la guitare          │ │
-│  │   avec @DreamPlanner             │ │
+│  │   I'm learning guitar            │ │
+│  │   with @DreamPlanner             │ │
 │  │                                   │ │
 │  │   ████████░░░░ 35%               │ │
 │  │                                   │ │
@@ -446,75 +449,75 @@
 │  │                                   │ │
 │  └──────────────────────────────────┘ │
 │                                        │
-│  Design automatique selon objectif    │
+│  Automatic design based on goal       │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
 ---
 
-## Monétisation Améliorée
+## Enhanced Monetization
 
-### Nouveau Modèle
+### New Model
 
-| Tier | Prix | Fonctionnalités |
-|------|------|-----------------|
-| **Free** | 0€ | 1 objectif, communauté basique, 1 buddy |
-| **Dreamer** | 6.99€/mois | 5 objectifs, AI coach, Dream Circles |
-| **Achiever** | 12.99€/mois | Illimité, Vision Board IA, Analytics avancés |
-| **Lifetime** | 149€ one-time | Tout à vie (offre limitée au lancement) |
+| Tier | Price | Features |
+|------|-------|----------|
+| **Free** | $0 | 1 goal, basic community, 1 buddy |
+| **Dreamer** | $14.99/month | 5 goals, AI coach, Dream Circles |
+| **Achiever** | $29.99/month | Unlimited, AI Vision Board, Advanced analytics |
+| **Lifetime** | $149 one-time | Everything for life (limited launch offer) |
 
-### Revenus Additionnels
+### Additional Revenue
 
-- **Streak Insurance** - 0.99€ pour 3 protections
-- **Custom Themes** - 2.99€ chacun
-- **Premium Avatars** - 1.99€ chacun
-- **B2B** - Version entreprise pour objectifs d'équipe
+- **Streak Insurance** - $0.99 for 3 protections
+- **Custom Themes** - $2.99 each
+- **Premium Avatars** - $1.99 each
+- **B2B** - Enterprise version for team goals
 
 ---
 
-## Différenciation Concurrentielle
+## Competitive Differentiation
 
 ### vs Habitica
-- Focus objectifs long-terme vs habitudes quotidiennes
-- IA conversationnelle vs gamification pure
-- Communauté intime vs massive
+- Focus on long-term goals vs daily habits
+- Conversational AI vs pure gamification
+- Intimate community vs massive
 
 ### vs Notion/Todoist
-- Accompagnement vs simple liste
-- Motivation intégrée vs outil froid
-- Social vs individuel
+- Guidance vs simple list
+- Built-in motivation vs cold tool
+- Social vs individual
 
-### vs Coach humain
-- 24/7 disponible
-- Prix accessible
-- Pas de jugement
-- Données et patterns
+### vs Human coach
+- Available 24/7
+- Accessible pricing
+- No judgment
+- Data and patterns
 
 ---
 
-## Positionnement Marketing
+## Marketing Positioning
 
-### Taglines Possibles
+### Possible Taglines
 
-1. "Tes rêves méritent un plan"
-2. "De l'idée à la réalité, ensemble"
-3. "L'app qui ne te laisse pas abandonner"
-4. "Ton coach IA qui croit en toi"
+1. "Your dreams deserve a plan"
+2. "From idea to reality, together"
+3. "The app that won't let you give up"
+4. "Your AI coach that believes in you"
 
-### Cible Principale
+### Primary Target
 
-**Persona**: Marie, 25-35 ans
-- A des projets depuis des années
-- Commence mais n'finit jamais
-- Se sent seule dans ses objectifs
-- Cherche structure et motivation
-- Active sur les réseaux sociaux
+**Persona**: Marie, 25-35 years old
+- Has had projects for years
+- Starts but never finishes
+- Feels alone in her goals
+- Looking for structure and motivation
+- Active on social media
 
-### Canaux d'Acquisition
+### Acquisition Channels
 
-1. **TikTok/Reels** - Contenus "transformation"
-2. **Influenceurs développement personnel**
+1. **TikTok/Reels** - "Transformation" content
+2. **Personal development influencers**
 3. **Podcast sponsoring**
-4. **SEO** - "Comment atteindre ses objectifs"
-5. **Referral viral** - Buddy system
+4. **SEO** - "How to reach your goals"
+5. **Viral referral** - Buddy system

@@ -1,263 +1,263 @@
-# Roadmap de Développement - DreamPlanner
+# Development Roadmap - DreamPlanner
 
-## Vue d'Ensemble des Phases
+## Phase Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        TIMELINE DE DÉVELOPPEMENT                         │
+│                        DEVELOPMENT TIMELINE                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  Phase 1: MVP          Phase 2: Notifs    Phase 3: Polish    Phase 4    │
 │  ████████████████      ████████          ████████          ████        │
-│  8 semaines            4 semaines        4 semaines        2 sem       │
+│  8 weeks               4 weeks           4 weeks           2 wks       │
 │                                                                          │
-│  S1  S2  S3  S4  S5  S6  S7  S8  S9  S10 S11 S12 S13 S14 S15 S16 S17 S18│
+│  W1  W2  W3  W4  W5  W6  W7  W8  W9  W10 W11 W12 W13 W14 W15 W16 W17 W18│
 │  │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │  │
 │  └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘  │
 │                                                                          │
 │  MILESTONES:                                                             │
-│  ▲ S4: Backend API ready                                                │
-│  ▲ S8: MVP interne testable                                             │
-│  ▲ S12: Beta fermée                                                     │
-│  ▲ S16: Release Candidate                                               │
-│  ▲ S18: Launch v1.0                                                     │
+│  ▲ W4: Backend API ready                                                │
+│  ▲ W8: Internal testable MVP                                            │
+│  ▲ W12: Closed beta                                                     │
+│  ▲ W16: Release Candidate                                               │
+│  ▲ W18: Launch v1.0                                                     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Phase 1: MVP (Semaines 1-8)
+## Phase 1: MVP (Weeks 1-8)
 
-### Semaine 1-2: Setup & Infrastructure
+### Week 1-2: Setup & Infrastructure
 
 **Backend**
-- [ ] Initialiser le projet Django avec Python
-- [ ] Configurer Django ORM avec PostgreSQL
-- [ ] Setup Redis pour cache
-- [ ] Créer le schéma de base de données
-- [ ] Configurer l'authentification (dj-rest-auth)
+- [ ] Initialize the Django project with Python
+- [ ] Configure Django ORM with PostgreSQL
+- [ ] Setup Redis for cache
+- [ ] Create the database schema
+- [ ] Configure authentication (dj-rest-auth)
 - [ ] Setup CI/CD (GitHub Actions)
-- [ ] Déployer environnement staging
+- [ ] Deploy staging environment
 
-**Livrables S2:**
-- Projet initialisé et déployable
-- Auth fonctionnel (login/register)
-- API de base
+**W2 Deliverables:**
+- Project initialized and deployable
+- Auth functional (login/register)
+- Base API
 
-### Semaine 3-4: Core Features - Backend
+### Week 3-4: Core Features - Backend
 
 **API Endpoints**
-- [ ] CRUD Utilisateurs (profil, préférences)
-- [ ] CRUD Rêves (dreams)
-- [ ] CRUD Objectifs (goals)
-- [ ] CRUD Tâches (tasks)
-- [ ] Endpoint conversations
+- [ ] CRUD Users (profile, preferences)
+- [ ] CRUD Dreams (dreams)
+- [ ] CRUD Goals (goals)
+- [ ] CRUD Tasks (tasks)
+- [ ] Conversations endpoint
 
-**Intégration ChatGPT**
-- [ ] Service OpenAI avec prompts
-- [ ] Endpoint chat streaming
-- [ ] Endpoint génération de plan
-- [ ] Rate limiting et quotas
-- [ ] Gestion des erreurs API
+**ChatGPT Integration**
+- [ ] OpenAI service with prompts
+- [ ] Chat streaming endpoint
+- [ ] Plan generation endpoint
+- [ ] Rate limiting and quotas
+- [ ] API error handling
 
-**Livrables S4:**
-- API complète documentée
-- Tests unitaires > 80%
-- Intégration ChatGPT fonctionnelle
+**W4 Deliverables:**
+- Complete documented API
+- Unit tests > 84%
+- Functional ChatGPT integration
 
-### Semaine 5-8: Calendrier & Intégration
+### Week 5-8: Calendar & Integration
 
-**Calendrier**
-- [ ] Vue mensuelle
-- [ ] Vue journée
-- [ ] Vue semaine
-- [ ] Affichage des tâches planifiées
-- [ ] Gestion des horaires de travail
+**Calendar**
+- [ ] Monthly view
+- [ ] Daily view
+- [ ] Weekly view
+- [ ] Display of scheduled tasks
+- [ ] Work schedule management
 
-**Intégration**
-- [ ] Synchronisation temps réel
-- [ ] Gestion offline basique
-- [ ] Écran de profil
-- [ ] Paramètres de base
+**Integration**
+- [ ] Real-time synchronization
+- [ ] Basic offline management
+- [ ] Profile screen
+- [ ] Basic settings
 
-**Livrables S8:**
-- MVP complet et testable
-- Démo interne
-- Documentation utilisateur basique
+**W8 Deliverables:**
+- Complete and testable MVP
+- Internal demo
+- Basic user documentation
 
 ---
 
-## Phase 2: Notifications (Semaines 9-12)
+## Phase 2: Notifications (Weeks 9-12)
 
-### Semaine 9-10: Infrastructure Notifications
+### Week 9-10: Notification Infrastructure
 
 **Backend**
-- [ ] Service de planification (Bull/Redis)
-- [ ] API gestion des notifications
-- [ ] Scheduler pour notifications récurrentes
+- [ ] Scheduling service (Bull/Redis)
+- [ ] Notification management API
+- [ ] Scheduler for recurring notifications
 
-**Livrables S10:**
-- Notifications push fonctionnelles
-- Rappels de tâches automatiques
+**W10 Deliverables:**
+- Functional push notifications
+- Automatic task reminders
 
-### Semaine 11-12: Notifications Avancées
+### Week 11-12: Advanced Notifications
 
-**Types de Notifications**
-- [ ] Rappels configurables (X min avant)
-- [ ] Messages de motivation (IA générés)
-- [ ] Alertes de progression
-- [ ] Check-ins après inactivité
+**Notification Types**
+- [ ] Configurable reminders (X min before)
+- [ ] Motivational messages (AI generated)
+- [ ] Progress alerts
+- [ ] Check-ins after inactivity
 
-**Paramètres**
-- [ ] API de configuration des notifications
-- [ ] Mode "Ne pas déranger"
-- [ ] Préférences par type
-- [ ] Tests des notifications
+**Settings**
+- [ ] Notification configuration API
+- [ ] "Do Not Disturb" mode
+- [ ] Preferences by type
+- [ ] Notification tests
 
-**Livrables S12:**
-- Système de notifications complet
-- Beta fermée prête
-- Recrutement beta testeurs
+**W12 Deliverables:**
+- Complete notification system
+- Closed beta ready
+- Beta tester recruitment
 
 ---
 
-## Phase 3: Polish (Semaines 13-16)
+## Phase 3: Polish (Weeks 13-16)
 
-### Semaine 13-14: UX & Performance
+### Week 13-14: UX & Performance
 
-**Améliorations API**
-- [ ] États de chargement et réponses cohérentes
-- [ ] Gestion des erreurs gracieuse
-- [ ] Documentation API (Swagger/OpenAPI)
+**API Improvements**
+- [ ] Loading states and consistent responses
+- [ ] Graceful error handling
+- [ ] API documentation (Swagger/OpenAPI)
 
 **Performance**
-- [ ] Optimisation des requêtes
-- [ ] Cache intelligent
-- [ ] Optimisation des réponses API
-- [ ] Réduction temps de réponse
+- [ ] Query optimization
+- [ ] Smart caching
+- [ ] API response optimization
+- [ ] Response time reduction
 
-**Livrables S14:**
-- API performante et stable
-- Feedback beta intégré
+**W14 Deliverables:**
+- Performant and stable API
+- Beta feedback integrated
 
-### Semaine 15-16: Features Complémentaires
+### Week 15-16: Additional Features
 
-**Fonctionnalités**
-- [ ] Système de badges/gamification basique
-- [ ] Export calendrier (iCal)
-- [ ] Multi-langue (FR/EN)
+**Features**
+- [ ] Basic badges/gamification system
+- [ ] Calendar export (iCal)
+- [ ] Multi-language (FR/EN)
 
-**Qualité**
-- [ ] Tests de charge backend
-- [ ] Audit sécurité
-- [ ] Fix bugs beta
+**Quality**
+- [ ] Backend load tests
+- [ ] Security audit
+- [ ] Beta bug fixes
 
-**Livrables S16:**
+**W16 Deliverables:**
 - Release Candidate
-- Documentation complète
-- Assets marketing prêts
+- Complete documentation
+- Marketing assets ready
 
 ---
 
-## Phase 4: Launch (Semaines 17-18)
+## Phase 4: Launch (Weeks 17-18)
 
-### Semaine 17: Préparation Déploiement
+### Week 17: Deployment Preparation
 
 **Infrastructure**
-- [ ] Configuration serveur production
-- [ ] Déploiement AWS (ECS/Fargate)
-- [ ] Configuration CDN et load balancer
+- [ ] Production server configuration
+- [ ] AWS deployment (ECS/Fargate)
+- [ ] CDN and load balancer configuration
 - [ ] Privacy policy
 - [ ] Landing page live
 
-**Livrables S17:**
-- Backend déployé en production
+**W17 Deliverables:**
+- Backend deployed to production
 - Landing page live
 
-### Semaine 18: Launch
+### Week 18: Launch
 
 **Launch Day**
-- [ ] Mise en production
-- [ ] Monitoring actif
-- [ ] Support utilisateurs
-- [ ] Annonce réseaux sociaux
+- [ ] Production release
+- [ ] Active monitoring
+- [ ] User support
+- [ ] Social media announcement
 
 **Post-Launch**
-- [ ] Analyse métriques
-- [ ] Hotfixes si nécessaire
-- [ ] Collecte feedback
-- [ ] Planification v1.1
+- [ ] Metrics analysis
+- [ ] Hotfixes if needed
+- [ ] Feedback collection
+- [ ] v1.1 planning
 
 ---
 
-## Roadmap Post-Launch (v1.x)
+## Post-Launch Roadmap (v1.x)
 
-### v1.1 (Mois 1-2 post-launch)
-- Intégration Google Calendar
-- Amélioration suggestions IA
-- Corrections bugs remontés
+### v1.1 (Month 1-2 post-launch)
+- Google Calendar integration
+- AI suggestions improvement
+- Reported bug fixes
 
-### v1.2 (Mois 3-4)
-- Mode collaboratif (partager un rêve)
-- Intégration Notion
-- Templates de rêves populaires
-- Analytics utilisateur avancés
+### v1.2 (Month 3-4)
+- Collaborative mode (share a dream)
+- Notion integration
+- Popular dream templates
+- Advanced user analytics
 
-### v1.3 (Mois 5-6)
-- Coach IA proactif
-- API publique pour intégrations tierces
-- Webhooks pour événements
+### v1.3 (Month 5-6)
+- Proactive AI Coach
+- Public API for third-party integrations
+- Webhooks for events
 
 ---
 
-## Ressources Nécessaires
+## Required Resources
 
-### Équipe Minimale
+### Minimum Team
 
-| Rôle | Nombre | Responsabilités |
-|------|--------|-----------------|
-| Product Manager | 1 | Vision, priorités, roadmap |
+| Role | Count | Responsibilities |
+|------|-------|-----------------|
+| Product Manager | 1 | Vision, priorities, roadmap |
 | Lead Developer | 1 | Architecture, code review |
-| Backend Dev | 1-2 | API Django, infrastructure |
+| Backend Dev | 1-2 | Django API, infrastructure |
 | UI/UX Designer | 1 | Design, prototypes |
-| QA Engineer | 0.5 | Tests, qualité |
+| QA Engineer | 0.5 | Tests, quality |
 
-### Budget Estimé (18 semaines)
+### Estimated Budget (18 weeks)
 
-| Poste | Coût estimé |
-|-------|-------------|
-| Développement | Variable selon équipe |
-| Infrastructure (AWS) | ~500€/mois |
-| OpenAI API | ~200-500€/mois (selon usage) |
-| Outils (Figma, GitHub, etc.) | ~200€/mois |
+| Item | Estimated Cost |
+|------|---------------|
+| Development | Variable depending on team |
+| Infrastructure (AWS) | ~$500/month |
+| OpenAI API | ~$200-500/month (depending on usage) |
+| Tools (Figma, GitHub, etc.) | ~$200/month |
 
 ---
 
-## KPIs de Succès
+## Success KPIs
 
-### Phase MVP
-- [ ] 100% features MVP implémentées
-- [ ] < 500ms temps de réponse API (p95)
-- [ ] 0 erreur critique
+### MVP Phase
+- [ ] 100% MVP features implemented
+- [ ] < 500ms API response time (p95)
+- [ ] 0 critical errors
 
-### Phase Beta
-- [ ] 50+ beta testeurs actifs
+### Beta Phase
+- [ ] 50+ active beta testers
 - [ ] NPS > 40
 - [ ] Uptime > 99.5%
 
 ### Launch
-- [ ] 1000 utilisateurs inscrits semaine 1
+- [ ] 1000 registered users week 1
 - [ ] DAU/MAU > 30%
-- [ ] Rétention D7 > 40%
+- [ ] D7 Retention > 40%
 
 ---
 
-## Risques et Mitigation
+## Risks and Mitigation
 
-| Risque | Impact | Probabilité | Mitigation |
-|--------|--------|-------------|------------|
-| Coûts API OpenAI élevés | Haut | Moyen | Cache agressif, quotas free tier |
-| Performance insuffisante | Haut | Moyen | Profiling continu, optimisation |
-| Bugs critiques au launch | Haut | Moyen | Tests d'intégration, beta étendue |
-| Faible adoption | Haut | Moyen | Marketing pré-launch, SEO |
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|------------|
+| High OpenAI API costs | High | Medium | Aggressive caching, free tier quotas |
+| Insufficient performance | High | Medium | Continuous profiling, optimization |
+| Critical bugs at launch | High | Medium | Integration tests, extended beta |
+| Low adoption | High | Medium | Pre-launch marketing, SEO |

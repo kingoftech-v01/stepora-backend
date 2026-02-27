@@ -897,3 +897,35 @@ def _sync_user_subscription(
     user.subscription = plan.slug
     user.subscription_ends = period_end
     user.save(update_fields=['subscription', 'subscription_ends', 'updated_at'])
+
+    # Revoke features if downgrading
+    _revoke_downgraded_features(user, plan)
+
+
+def _revoke_downgraded_features(user, new_plan):
+    """Revoke features that the user no longer has access to after a plan change."""
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    # Unequip store items if no longer premium
+    if new_plan.slug not in ('premium', 'pro'):
+        try:
+            from apps.store.models import UserInventory
+            UserInventory.objects.filter(
+                user=user, is_equipped=True
+            ).update(is_equipped=False)
+        except Exception:
+            _logger.exception("Failed to unequip store items for user %s", user.email)
+
+    # End buddy pairings if buddy not included in plan
+    if not getattr(new_plan, 'has_buddy', False):
+        try:
+            from apps.buddies.models import BuddyPairing
+            from django.db.models import Q
+            from django.utils import timezone
+            BuddyPairing.objects.filter(
+                Q(user1=user) | Q(user2=user),
+                status__in=['pending', 'active']
+            ).update(status='cancelled', ended_at=timezone.now())
+        except Exception:
+            _logger.exception("Failed to end buddy pairings for user %s on downgrade", user.email)

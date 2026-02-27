@@ -22,6 +22,36 @@ class IsOwner(permissions.BasePermission):
         return False
 
 
+class IsOwnerOrSharedWith(permissions.BasePermission):
+    """Permission to allow owners and users the dream is shared with."""
+
+    message = 'You do not have permission to access this resource.'
+
+    def has_object_permission(self, request, view, obj):
+        """Check if user is owner, shared-with, or collaborator."""
+        if hasattr(obj, 'user') and obj.user == request.user:
+            return True
+        # Check SharedDream access
+        try:
+            from apps.dreams.models import SharedDream
+            if SharedDream.objects.filter(
+                dream=obj, shared_with=request.user
+            ).exists():
+                return True
+        except Exception:
+            pass
+        # Check collaborator access
+        try:
+            from apps.dreams.models import DreamCollaborator
+            if DreamCollaborator.objects.filter(
+                dream=obj, user=request.user
+            ).exists():
+                return True
+        except Exception:
+            pass
+        return False
+
+
 class IsPremiumUser(permissions.BasePermission):
     """Permission to only allow premium or pro users."""
 

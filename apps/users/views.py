@@ -10,10 +10,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
+import logging
 import secrets
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q, Count
+
+logger = logging.getLogger(__name__)
 
 from .models import User, GamificationProfile, EmailChangeRequest, DailyActivity, Achievement, UserAchievement
 from .serializers import (
@@ -258,6 +261,36 @@ class UserViewSet(viewsets.ModelViewSet):
             )
 
         log_account_change(user, 'account_deletion')
+
+        # Cancel Stripe subscription if active
+        try:
+            from apps.subscriptions.services import StripeService
+            StripeService.cancel_subscription(user)
+        except Exception:
+            logger.exception(
+                "Failed to cancel Stripe subscription for user %s during deletion", user.id
+            )
+
+        # End active buddy pairings
+        try:
+            from apps.buddies.models import BuddyPairing
+            BuddyPairing.objects.filter(
+                Q(user1=user) | Q(user2=user),
+                status__in=['pending', 'active']
+            ).update(status='cancelled', ended_at=timezone.now())
+        except Exception:
+            logger.exception(
+                "Failed to end buddy pairings for user %s during deletion", user.id
+            )
+
+        # Remove from circles
+        try:
+            from apps.circles.models import CircleMembership
+            CircleMembership.objects.filter(user=user).delete()
+        except Exception:
+            logger.exception(
+                "Failed to remove circle memberships for user %s during deletion", user.id
+            )
 
         # Anonymize personal data
         user.display_name = 'Deleted User'
@@ -556,4 +589,132 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(UserSerializer(user).data)
 
+    # ── Two-Factor Authentication ────────────────────────────────────
 
+    @extend_schema(
+        summary="Setup 2FA",
+        description="Generate TOTP secret and return provisioning URI for authenticator apps.",
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='2fa/setup')
+    def setup_2fa(self, request):
+        """Generate TOTP secret and return OTP auth URI."""
+        import pyotp
+        user = request.user
+        if user.totp_enabled:
+            return Response(
+                {'error': '2FA is already enabled.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        secret = pyotp.random_base32()
+        user.totp_secret = secret
+        user.save(update_fields=['totp_secret'])
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(name=user.email, issuer_name='DreamPlanner')
+        return Response({'secret': secret, 'otpauth_url': uri})
+
+    @extend_schema(
+        summary="Verify 2FA setup",
+        description="Verify TOTP code to complete 2FA activation.",
+        request={'application/json': {'type': 'object', 'properties': {'code': {'type': 'string'}}}},
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='2fa/verify-setup')
+    def verify_2fa_setup(self, request):
+        """Verify TOTP code to complete 2FA setup."""
+        import pyotp
+        code = request.data.get('code', '')
+        user = request.user
+        if not user.totp_secret:
+            return Response(
+                {'error': 'Run 2FA setup first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code):
+            user.totp_enabled = True
+            user.save(update_fields=['totp_enabled'])
+            return Response({'message': '2FA enabled successfully.'})
+        return Response(
+            {'error': 'Invalid code.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    @extend_schema(
+        summary="Disable 2FA",
+        description="Disable two-factor authentication. Requires password and current TOTP code.",
+        request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'code': {'type': 'string'}}}},
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='2fa/disable')
+    def disable_2fa(self, request):
+        """Disable 2FA — requires password + TOTP code."""
+        import pyotp
+        user = request.user
+        password = request.data.get('password', '')
+        code = request.data.get('code', '')
+        if not user.check_password(password):
+            return Response(
+                {'error': 'Invalid password.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not user.totp_enabled:
+            return Response(
+                {'error': '2FA is not enabled.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code):
+            return Response(
+                {'error': 'Invalid 2FA code.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        user.totp_enabled = False
+        user.totp_secret = ''
+        user.backup_codes = None
+        user.save(update_fields=['totp_enabled', 'totp_secret', 'backup_codes'])
+        return Response({'message': '2FA disabled.'})
+
+    @extend_schema(
+        summary="Generate backup codes",
+        description="Generate 10 one-time backup codes for 2FA recovery. Requires 2FA to be enabled.",
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='2fa/backup-codes')
+    def generate_backup_codes(self, request):
+        """Generate 10 one-time backup codes."""
+        import hashlib
+        user = request.user
+        if not user.totp_enabled:
+            return Response(
+                {'error': '2FA must be enabled first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        codes = [secrets.token_hex(4) for _ in range(10)]
+        hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
+        user.backup_codes = hashed
+        user.save(update_fields=['backup_codes'])
+        return Response({
+            'backup_codes': codes,
+            'message': 'Save these codes securely. They cannot be shown again.',
+        })
+
+    # ── Onboarding ───────────────────────────────────────────────────
+
+    @extend_schema(
+        summary="Complete onboarding",
+        description="Mark the onboarding flow as completed for the current user.",
+        responses={200: dict},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['post'], url_path='complete-onboarding')
+    def complete_onboarding(self, request):
+        """Mark onboarding as completed."""
+        user = request.user
+        user.onboarding_completed = True
+        user.save(update_fields=['onboarding_completed'])
+        return Response({'message': 'Onboarding completed.'})
