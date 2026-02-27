@@ -577,6 +577,56 @@ All 4 core models are registered with Django admin:
 
 AI usage is tracked via `AIUsageTracker` for subscription-based rate limiting.
 
+## Token & Cost Estimation (GPT-4o)
+
+**GPT-4o pricing:** Input $2.50/1M tokens | Output $10.00/1M tokens
+
+### Calibration Phase (constant, all durations)
+
+| Phase | API Calls | Input Tokens | Output Tokens | Cost |
+|-------|-----------|-------------|---------------|------|
+| Initial questions (7 Qs) | 1 | ~3,000 | ~2,000 | $0.028 |
+| Follow-up round 1 | 1 | ~4,000 | ~2,000 | $0.030 |
+| Follow-up round 2 | 1 | ~5,000 | ~1,500 | $0.028 |
+| Profile generation | 1 | ~5,500 | ~2,000 | $0.034 |
+| **Calibration Total** | **4** | **~17,500** | **~7,500** | **~$0.12** |
+
+### Planning Phase (varies by duration)
+
+Objects generated per duration (1 milestone/month, 4+ goals/milestone, 4+ tasks/goal):
+
+| Duration | Chunks | Milestones | Goals | Tasks | Obstacles | Total Objects |
+|----------|--------|------------|-------|-------|-----------|---------------|
+| 1 month | 1 | 1 | 4 | 16 | ~2 | ~23 |
+| 2 months | 1 | 2 | 8 | 32 | ~4 | ~46 |
+| 3 months | 1 | 3 | 12 | 48 | ~6 | ~69 |
+| 6 months | 1 | 6 | 24 | 96 | ~10 | ~136 |
+| 12 months | 2 | 12 | 48 | 192 | ~18 | ~270 |
+| 18 months | 3 | 18 | 72 | 288 | ~24 | ~402 |
+| 24 months | 4 | 24 | 96 | 384 | ~30 | ~534 |
+| 36 months | 6 | 36 | 144 | 576 | ~42 | ~798 |
+
+### Total Cost (Calibration + Planning)
+
+| Duration | Total API Calls | Total Input | Total Output | Total Tokens | **Total Cost** | Est. Time |
+|----------|----------------|-------------|-------------|-------------|---------------|-----------|
+| **1 month** | 5 | ~21,000 | ~10,000 | ~31,000 | **$0.15** | ~25s |
+| **2 months** | 5 | ~21,000 | ~12,500 | ~33,500 | **$0.18** | ~30s |
+| **3 months** | 5 | ~21,000 | ~15,000 | ~36,000 | **$0.20** | ~35s |
+| **6 months** | 5 | ~21,000 | ~21,500 | ~42,500 | **$0.27** | ~50s |
+| **12 months** | 6 | ~24,500 | ~35,500 | ~60,000 | **$0.42** | ~1m 40s |
+| **18 months** | 7 | ~28,500 | ~49,500 | ~78,000 | **$0.57** | ~2m 30s |
+| **24 months** | 8 | ~33,000 | ~63,500 | ~96,500 | **$0.72** | ~3m 20s |
+| **36 months** | 10 | ~43,000 | ~91,500 | ~134,500 | **$1.02** | ~5m 00s |
+
+**Key notes:**
+- Output tokens dominate cost (~85%) because GPT-4o output is 4x more expensive than input
+- Chunked generation (>6 months) adds ~$0.15 per additional 6-month chunk
+- Each chunk maxes out at 16,384 output tokens (GPT-4o limit)
+- Calibration is 3-4 rounds (~$0.12) — constant regardless of dream duration
+- **1,000 users x 12-month dream = ~$420 total**
+- **10,000 users x 6-month dream = ~$2,700 total**
+
 ## Testing
 
 ```bash
