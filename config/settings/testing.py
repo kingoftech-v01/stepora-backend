@@ -53,6 +53,10 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Disable Elasticsearch auto-sync in tests (no ES server available)
+ELASTICSEARCH_DSL_AUTOSYNC = False
+ELASTICSEARCH_DSL_SIGNAL_PROCESSOR = 'django_elasticsearch_dsl.signals.BaseSignalProcessor'
+
 # Set very high throttle rates in tests to prevent rate limit interference
 REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'anon': '10000/minute',

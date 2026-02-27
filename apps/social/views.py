@@ -147,7 +147,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         serializer = SendFriendRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        target_user_id = serializer.validated_data['targetUserId']
+        target_user_id = serializer.validated_data['target_user_id']
 
         # Cannot befriend yourself
         if target_user_id == request.user.id:
@@ -304,7 +304,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         serializer = FollowUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        target_user_id = serializer.validated_data['targetUserId']
+        target_user_id = serializer.validated_data['target_user_id']
 
         if target_user_id == request.user.id:
             return Response(
@@ -451,7 +451,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         serializer = BlockUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        target_user_id = serializer.validated_data['targetUserId']
+        target_user_id = serializer.validated_data['target_user_id']
         reason = serializer.validated_data.get('reason', '')
 
         if target_user_id == request.user.id:
@@ -555,7 +555,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         serializer = ReportUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        target_user_id = serializer.validated_data['targetUserId']
+        target_user_id = serializer.validated_data['target_user_id']
 
         if target_user_id == request.user.id:
             return Response(

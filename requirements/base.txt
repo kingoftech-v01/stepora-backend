@@ -80,6 +80,9 @@ pywebpush>=2.0.0
 # Firebase Cloud Messaging
 firebase-admin>=6.2.0
 
+# Agora token generation
+agora-token-builder>=1.0.0
+
 # Production server
 gunicorn==21.2.0
 uvicorn[standard]==0.25.0

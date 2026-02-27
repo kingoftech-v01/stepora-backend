@@ -24,6 +24,7 @@ class Notification(models.Model):
         ('check_in', 'Check In'),
         ('rescue', 'Rescue'),
         ('buddy', 'Buddy'),
+        ('missed_call', 'Missed Call'),
         ('system', 'System'),
         ('dream_completed', 'Dream Completed'),
         ('weekly_report', 'Weekly Report'),

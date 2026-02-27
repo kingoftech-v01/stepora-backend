@@ -45,6 +45,81 @@ class UserViewSet(viewsets.ModelViewSet):
             return User.objects.none()
         return User.objects.filter(id=self.request.user.id)
 
+    def retrieve(self, request, *args, **kwargs):
+        """Get a user's public profile by ID."""
+        user_id = kwargs.get('pk')
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        # Return public profile data (no email, no private settings)
+        from apps.dreams.models import Dream
+        from apps.social.models import Friendship
+        dreams = Dream.objects.filter(
+            user=target_user, status='active'
+        ).values_list('title', flat=True)[:10]
+        categories = list(
+            Dream.objects.filter(user=target_user, status='active')
+            .values_list('category', flat=True).distinct()
+        )
+        friend_count = Friendship.objects.filter(
+            Q(user1=target_user) | Q(user2=target_user),
+            status='accepted'
+        ).count()
+        mutual = 0
+        if request.user != target_user:
+            my_friend_ids = set(
+                Friendship.objects.filter(
+                    Q(user1=request.user) | Q(user2=request.user),
+                    status='accepted'
+                ).values_list('user1_id', 'user2_id')
+            )
+            my_friends = set()
+            for u1, u2 in my_friend_ids:
+                my_friends.add(u1)
+                my_friends.add(u2)
+            my_friends.discard(request.user.id)
+            their_friend_ids = set(
+                Friendship.objects.filter(
+                    Q(user1=target_user) | Q(user2=target_user),
+                    status='accepted'
+                ).values_list('user1_id', 'user2_id')
+            )
+            their_friends = set()
+            for u1, u2 in their_friend_ids:
+                their_friends.add(u1)
+                their_friends.add(u2)
+            their_friends.discard(target_user.id)
+            mutual = len(my_friends & their_friends)
+
+        is_friend = Friendship.objects.filter(
+            Q(user1=request.user, user2=target_user) | Q(user1=target_user, user2=request.user),
+            status='accepted'
+        ).exists()
+
+        return Response({
+            'id': str(target_user.id),
+            'displayName': target_user.display_name,
+            'name': target_user.display_name,
+            'initial': (target_user.display_name or 'U')[0].upper(),
+            'bio': target_user.bio or '',
+            'location': target_user.location or '',
+            'avatarUrl': target_user.avatar_url or '',
+            'level': target_user.level,
+            'xp': target_user.xp,
+            'streak': target_user.streak_days,
+            'isOnline': target_user.is_online,
+            'isFriend': is_friend,
+            'mutualFriends': mutual,
+            'friendCount': friend_count,
+            'dreams': list(dreams),
+            'categories': categories,
+            'dateJoined': target_user.created_at.strftime('%b %Y') if target_user.created_at else '',
+        })
+
     @extend_schema(summary="Get current user", description="Get the current authenticated user's profile", tags=["Users"], responses={200: UserProfileSerializer, 404: OpenApiResponse(description='Resource not found.')})
     @action(detail=False, methods=['get'])
     def me(self, request):
@@ -139,6 +214,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get user statistics."""
+        from apps.dreams.models import Task
         user = request.user
 
         stats = {
@@ -148,11 +224,9 @@ class UserViewSet(viewsets.ModelViewSet):
             'total_dreams': user.dreams.count(),
             'active_dreams': user.dreams.filter(status='active').count(),
             'completed_dreams': user.dreams.filter(status='completed').count(),
-            'total_tasks_completed': sum(
-                goal.tasks.filter(status='completed').count()
-                for dream in user.dreams.all()
-                for goal in dream.goals.all()
-            ),
+            'total_tasks_completed': Task.objects.filter(
+                goal__dream__user=user, status='completed'
+            ).count(),
         }
 
         return Response(stats)

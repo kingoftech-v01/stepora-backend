@@ -14,11 +14,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         """Handle WebSocket connection."""
         self.user = self.scope['user']
+        self._authenticated = False
 
-        if not self.user.is_authenticated:
+        if self.user.is_authenticated:
+            # Authenticated via query string (deprecated) or middleware
+            await self._setup_authenticated()
+        elif self.scope.get('_allow_post_auth'):
+            # Accept connection and wait for authenticate message
+            await self.accept()
+        else:
             await self.close(code=4003)
             return
 
+    async def _setup_authenticated(self):
+        """Set up authenticated connection: join group, send unread count."""
+        self._authenticated = True
         self.group_name = f'notifications_{self.user.id}'
 
         await self.channel_layer.group_add(
@@ -26,7 +36,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        await self.accept()
+        if self.scope.get('_allow_post_auth'):
+            # Already accepted during connect for post-auth flow
+            pass
+        else:
+            await self.accept()
 
         # Send connection confirmation with unread count
         unread = await self.get_unread_count()
@@ -60,10 +74,37 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             )
 
     async def receive(self, text_data):
-        """Handle incoming messages (mark_read, mark_all_read)."""
+        """Handle incoming messages (authenticate, mark_read, mark_all_read)."""
         try:
             data = json.loads(text_data)
             action = data.get('type')
+
+            # Post-connect authentication via message (preferred over query string)
+            if action == 'authenticate':
+                if self._authenticated:
+                    return  # Already authenticated, ignore
+                token_key = data.get('token', '')
+                from core.websocket_auth import get_user_from_token
+                user = await get_user_from_token(token_key)
+                if user.is_authenticated:
+                    self.user = user
+                    self.scope['user'] = user
+                    await self._setup_authenticated()
+                else:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'error': 'Invalid token',
+                    }))
+                    await self.close(code=4001)
+                return
+
+            # Reject non-auth messages if not yet authenticated
+            if not self._authenticated:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'error': 'Not authenticated. Send {"type": "authenticate", "token": "..."} first.',
+                }))
+                return
 
             if action == 'mark_read':
                 notification_id = data.get('notification_id')
@@ -92,6 +133,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'notification',
             'notification': event['notification'],
+        }))
+
+    async def notification_message(self, event):
+        """Handler for generic notification messages (e.g. call rejected)."""
+        await self.send(text_data=json.dumps({
+            'type': 'notification_message',
+            'data': event.get('data', {}),
         }))
 
     async def unread_count_update(self, event):

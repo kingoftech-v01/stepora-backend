@@ -174,7 +174,7 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
 class SendFriendRequestSerializer(serializers.Serializer):
     """Serializer for sending a friend request."""
 
-    targetUserId = serializers.UUIDField(
+    target_user_id = serializers.UUIDField(
         help_text='The UUID of the user to send a friend request to.'
     )
 
@@ -182,7 +182,7 @@ class SendFriendRequestSerializer(serializers.Serializer):
 class FollowUserSerializer(serializers.Serializer):
     """Serializer for following a user."""
 
-    targetUserId = serializers.UUIDField(
+    target_user_id = serializers.UUIDField(
         help_text='The UUID of the user to follow.'
     )
 
@@ -190,7 +190,7 @@ class FollowUserSerializer(serializers.Serializer):
 class BlockUserSerializer(serializers.Serializer):
     """Serializer for blocking a user."""
 
-    targetUserId = serializers.UUIDField(
+    target_user_id = serializers.UUIDField(
         help_text='The UUID of the user to block.'
     )
     reason = serializers.CharField(
@@ -206,7 +206,7 @@ class BlockUserSerializer(serializers.Serializer):
 class ReportUserSerializer(serializers.Serializer):
     """Serializer for reporting a user."""
 
-    targetUserId = serializers.UUIDField(
+    target_user_id = serializers.UUIDField(
         help_text='The UUID of the user to report.'
     )
     reason = serializers.CharField(

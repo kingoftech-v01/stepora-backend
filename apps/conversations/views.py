@@ -15,10 +15,11 @@ from core.openapi_examples import AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPO
 from django.conf import settings
 from django.http import JsonResponse
 
-from .models import Conversation, Message, ConversationTemplate, Call
+from .models import Conversation, Message, MessageReadStatus, ConversationTemplate, Call
 from .serializers import (
     ConversationSerializer, ConversationDetailSerializer, ConversationCreateSerializer,
-    MessageSerializer, MessageCreateSerializer, ConversationTemplateSerializer
+    MessageSerializer, MessageCreateSerializer, ConversationTemplateSerializer,
+    CallHistorySerializer
 )
 from .tasks import transcribe_voice_message, summarize_conversation
 from integrations.openai_service import OpenAIService
@@ -101,10 +102,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
     ordering = ['-updated_at']
 
     def get_queryset(self):
-        """Get conversations for current user."""
+        """Get conversations for current user, including buddy chats they participate in."""
         if getattr(self, 'swagger_fake_view', False):
             return Conversation.objects.none()
-        return Conversation.objects.filter(user=self.request.user).prefetch_related('messages')
+        from django.db.models import Q
+        user = self.request.user
+        return Conversation.objects.filter(
+            Q(user=user) |
+            Q(conversation_type='buddy_chat', buddy_pairing__user1=user) |
+            Q(conversation_type='buddy_chat', buddy_pairing__user2=user)
+        ).distinct().prefetch_related('messages', 'read_statuses')
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -114,9 +121,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
             return ConversationDetailSerializer
         return ConversationSerializer
 
-    def perform_create(self, serializer):
-        """Create conversation with current user."""
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        """Create conversation and return full serialized object."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        conversation = serializer.save(user=request.user)
+        # Return full representation with id
+        response_serializer = ConversationSerializer(conversation, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         summary="Send message",
@@ -204,6 +216,24 @@ class ConversationViewSet(viewsets.ModelViewSet):
             # Trigger summarization if threshold reached
             if conversation.total_messages % 20 == 0 and conversation.total_messages > 0:
                 summarize_conversation.delay(str(conversation.id))
+
+            # Broadcast to WebSocket clients so other connected tabs/users get real-time updates
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                channel_layer = get_channel_layer()
+                room = f'conversation_{conversation.id}'
+                async_to_sync(channel_layer.group_send)(room, {
+                    'type': 'chat_message',
+                    'message': {
+                        'id': str(assistant_message.id),
+                        'role': 'assistant',
+                        'content': validated.content,
+                        'created_at': assistant_message.created_at.isoformat(),
+                    }
+                })
+            except Exception:
+                pass  # Don't fail the REST response if WS broadcast fails
 
             return Response({
                 'user_message': {
@@ -599,6 +629,40 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         return Response(data)
 
+    @extend_schema(
+        summary="Archive conversation",
+        description="Archive (deactivate) a conversation.",
+        tags=["Conversations"],
+        responses={200: ConversationSerializer},
+    )
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        """Archive a conversation by setting is_active=False."""
+        conversation = self.get_object()
+        conversation.is_active = False
+        conversation.save(update_fields=['is_active', 'updated_at'])
+        return Response(ConversationSerializer(conversation).data)
+
+    @extend_schema(
+        summary="Mark conversation as read",
+        description="Mark all messages in this conversation as read for the current user.",
+        tags=["Conversations"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        """Mark conversation as read up to the latest message."""
+        conversation = self.get_object()
+        last_msg = conversation.messages.order_by('-created_at').first()
+
+        read_status, _ = MessageReadStatus.objects.update_or_create(
+            user=request.user,
+            conversation=conversation,
+            defaults={'last_read_message': last_msg},
+        )
+
+        return Response({'status': 'ok', 'last_read_message_id': str(last_msg.id) if last_msg else None})
+
 
 @extend_schema_view(
     list=extend_schema(summary="List messages", description="Get all messages for the current user", tags=["Messages"]),
@@ -670,6 +734,11 @@ class CallViewSet(viewsets.GenericViewSet):
         if callee == request.user:
             return Response({'detail': 'Cannot call yourself.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Block enforcement
+        from apps.social.models import BlockedUser
+        if BlockedUser.is_blocked(request.user, callee):
+            return Response({'detail': 'Cannot call this user'}, status=status.HTTP_403_FORBIDDEN)
+
         call = Call.objects.create(
             caller=request.user,
             callee=callee,
@@ -682,6 +751,7 @@ class CallViewSet(viewsets.GenericViewSet):
 
         return Response({
             'callId': str(call.id),
+            'channelName': str(call.id),
             'callType': call.call_type,
             'status': call.status,
             'calleeId': str(callee.id),
@@ -725,6 +795,41 @@ class CallViewSet(viewsets.GenericViewSet):
 
         call.status = 'rejected'
         call.save(update_fields=['status', 'updated_at'])
+
+        # Notify the caller that the call was declined
+        try:
+            from apps.notifications.models import Notification
+            from django.utils import timezone as tz
+            callee_name = call.callee.display_name or 'Your buddy'
+            Notification.objects.create(
+                user=call.caller,
+                notification_type='buddy',
+                title=f'{callee_name} declined your call',
+                body='',
+                scheduled_for=tz.now(),
+                data={'call_id': str(call.id), 'type': 'call_rejected'},
+            )
+        except Exception:
+            pass
+
+        # Send WebSocket event to caller
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{call.caller.id}',
+                {
+                    'type': 'notification.message',
+                    'data': {
+                        'type': 'call_rejected',
+                        'call_id': str(call.id),
+                        'callee_name': callee_name,
+                    },
+                },
+            )
+        except Exception:
+            pass
 
         return Response({'callId': str(call.id), 'status': call.status})
 
@@ -771,6 +876,71 @@ class CallViewSet(viewsets.GenericViewSet):
 
         return Response({'callId': str(call.id), 'status': call.status})
 
+    @extend_schema(
+        summary="Incoming calls",
+        description="Get ringing calls where the current user is the callee (for polling).",
+        tags=["Calls"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=['get'])
+    def incoming(self, request):
+        """Return any ringing calls for the current user (callee side)."""
+        calls = Call.objects.filter(
+            callee=request.user,
+            status='ringing',
+        ).select_related('caller').order_by('-created_at')[:5]
+
+        results = []
+        for c in calls:
+            caller_name = ''
+            try:
+                caller_name = c.caller.display_name or c.caller.username or ''
+            except Exception:
+                pass
+            results.append({
+                'callId': str(c.id),
+                'callerId': str(c.caller_id),
+                'callerName': caller_name,
+                'callType': c.call_type,
+                'createdAt': c.created_at.isoformat(),
+            })
+
+        return Response(results)
+
+    @extend_schema(
+        summary="Call history",
+        description="Get the user's call history (incoming, outgoing, missed).",
+        tags=["Calls"],
+        responses={200: CallHistorySerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """Get call history for the current user."""
+        from django.db.models import Q
+        calls = Call.objects.filter(
+            Q(caller=request.user) | Q(callee=request.user)
+        ).select_related('caller', 'callee').order_by('-created_at')[:100]
+        serializer = CallHistorySerializer(calls, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(summary="Get call status", tags=["Calls"])
+    @action(detail=True, methods=['get'])
+    def status(self, request, pk=None):
+        """Get the current status of a call (for polling)."""
+        call = self._get_call(pk)
+        if not call:
+            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user not in (call.caller, call.callee):
+            return Response({'detail': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({
+            'callId': str(call.id),
+            'status': call.status,
+            'callType': call.call_type,
+            'callerId': str(call.caller_id),
+            'calleeId': str(call.callee_id),
+            'startedAt': call.started_at.isoformat() if call.started_at else None,
+        })
+
     def _get_call(self, pk):
         try:
             from django.db.models import Q
@@ -794,6 +964,7 @@ class CallViewSet(viewsets.GenericViewSet):
             data = {
                 'type': 'incoming_call',
                 'call_id': str(call.id),
+                'channel_name': str(call.id),
                 'caller_id': str(caller.id),
                 'caller_name': caller_name,
                 'call_type': call.call_type,

@@ -6,6 +6,7 @@ and optimized database queries.
 """
 
 import json
+import logging
 import time
 import asyncio
 from collections import deque
@@ -16,11 +17,13 @@ from asgiref.sync import sync_to_async
 from django.db.models import F
 from django.utils import timezone
 
-from .models import Conversation, Message, Call
+from .models import Conversation, Message
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
 from core.ai_usage import AIUsageTracker
+
+logger = logging.getLogger(__name__)
 
 # ── Rate-limiting / size constants ────────────────────────────────
 MAX_MSG_SIZE = 8192           # Max WebSocket frame size in bytes
@@ -56,7 +59,20 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
         self.room_group_name = f'conversation_{self.conversation_id}'
         self.user = self.scope['user']
         self._conversation_cache = None
+        self._authenticated = False
         self._init_rate_limit()
+
+        if self.user.is_authenticated:
+            await self._setup_authenticated()
+        elif self.scope.get('_allow_post_auth'):
+            await self.accept()
+        else:
+            await self.close(code=4003)
+            return
+
+    async def _setup_authenticated(self):
+        """Verify access and join room after authentication."""
+        self._authenticated = True
 
         # Verify user has access — cache conversation for later use
         conversation = await self._load_and_verify_conversation()
@@ -70,7 +86,11 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
-        await self.accept()
+
+        if self.scope.get('_allow_post_auth'):
+            pass  # Already accepted
+        else:
+            await self.accept()
 
         await self.send(text_data=json.dumps({
             'type': 'connection',
@@ -108,17 +128,39 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
             await self.send_error('Message too large')
             return
 
-        # Rate limit
-        if self._is_rate_limited():
-            await self.send_error('Rate limit exceeded. Please slow down.')
-            return
-
         try:
             data = json.loads(text_data)
             message_type = data.get('type', 'message')
 
+            # Post-connect authentication via message (preferred over query string)
+            if message_type == 'authenticate':
+                if self._authenticated:
+                    return
+                from core.websocket_auth import get_user_from_token
+                user = await get_user_from_token(data.get('token', ''))
+                if user.is_authenticated:
+                    self.user = user
+                    self.scope['user'] = user
+                    await self._setup_authenticated()
+                else:
+                    await self.send_error('Invalid token')
+                    await self.close(code=4001)
+                return
+
+            # Reject non-auth messages if not yet authenticated
+            if not self._authenticated:
+                await self.send_error('Not authenticated. Send {"type": "authenticate", "token": "..."} first.')
+                return
+
+            # Rate limit
+            if self._is_rate_limited():
+                await self.send_error('Rate limit exceeded. Please slow down.')
+                return
+
             if message_type == 'message':
                 await self.handle_message(data)
+            elif message_type == 'function_call':
+                await self.handle_explicit_function_call(data)
             elif message_type == 'typing':
                 await self.handle_typing(data)
             elif message_type == 'ping':
@@ -261,6 +303,121 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
         except Exception as e:
             await self.send_error(f'Unexpected error: {str(e)}')
 
+    async def handle_function_call(self, function_call, conversation):
+        """Execute an AI function call and return the result."""
+        from apps.dreams.models import Dream, Goal, Task
+
+        name = function_call['name']
+        args = function_call['arguments']
+        user = self.scope['user']
+
+        if name == 'create_task':
+            # Find the active dream's first in-progress (or pending) goal
+            goal = await database_sync_to_async(
+                lambda: Goal.objects.filter(
+                    dream__user=user, dream__status='active'
+                ).exclude(status='completed').order_by('order').first()
+            )()
+            if not goal:
+                return {'success': False, 'error': 'No active goal found'}
+            next_order = await database_sync_to_async(goal.tasks.count)()
+            task = await database_sync_to_async(
+                lambda: Task.objects.create(
+                    goal=goal,
+                    title=args['title'],
+                    description=args.get('description', ''),
+                    duration_mins=args.get('duration_mins', 30),
+                    order=next_order,
+                )
+            )()
+            return {'success': True, 'task_id': str(task.id), 'title': task.title}
+
+        elif name == 'complete_task':
+            task = await database_sync_to_async(
+                lambda: Task.objects.select_related('goal__dream__user').filter(
+                    id=args['task_id'], goal__dream__user=user
+                ).first()
+            )()
+            if not task:
+                return {'success': False, 'error': 'Task not found'}
+            # Use the model's complete() method for proper XP, streak, and progress updates
+            await database_sync_to_async(task.complete)()
+            return {'success': True, 'task_id': str(task.id)}
+
+        elif name == 'create_goal':
+            dream = await database_sync_to_async(
+                lambda: Dream.objects.filter(id=args['dream_id'], user=user).first()
+            )()
+            if not dream:
+                return {'success': False, 'error': 'Dream not found'}
+            next_order = await database_sync_to_async(dream.goals.count)()
+            goal = await database_sync_to_async(
+                lambda: Goal.objects.create(
+                    dream=dream,
+                    title=args['title'],
+                    description=args.get('description', ''),
+                    order=args.get('order', next_order),
+                )
+            )()
+            return {'success': True, 'goal_id': str(goal.id), 'title': goal.title}
+
+        return {'success': False, 'error': f'Unknown function: {name}'}
+
+    async def handle_explicit_function_call(self, data):
+        """Handle explicit function call request from frontend."""
+        conversation = await self._get_conversation()
+        messages = await self.get_messages_for_api(conversation)
+
+        ai_service = OpenAIService()
+
+        # Add user instruction to trigger function calling
+        instruction = data.get(
+            'instruction',
+            'Based on our conversation, please take the appropriate action.',
+        )
+        messages.append({'role': 'user', 'content': instruction})
+
+        try:
+            result = await database_sync_to_async(ai_service.chat)(
+                messages=messages,
+                conversation_type=conversation.conversation_type,
+                functions=OpenAIService.FUNCTION_DEFINITIONS,
+            )
+
+            if result.get('function_call'):
+                fc_result = await self.handle_function_call(
+                    result['function_call'], conversation
+                )
+
+                await self.send(text_data=json.dumps({
+                    'type': 'function_result',
+                    'function_name': result['function_call']['name'],
+                    'result': fc_result,
+                    'ai_message': result.get('content', ''),
+                }))
+
+                # Save the AI message if there is one
+                if result.get('content'):
+                    await self.save_message('assistant', result['content'])
+            else:
+                # AI chose not to call a function, just send text
+                if result.get('content'):
+                    await self.save_message('assistant', result['content'])
+                    await self.send(text_data=json.dumps({
+                        'type': 'chat_message',
+                        'message': {
+                            'role': 'assistant',
+                            'content': result['content'],
+                        }
+                    }))
+
+        except Exception:
+            logger.exception("Function call failed")
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Failed to process action request',
+            }))
+
     async def chat_message(self, event):
         """Send message to WebSocket."""
         await self.send(text_data=json.dumps({
@@ -351,299 +508,3 @@ class ChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
         return tracker.increment(self.user, 'ai_chat')
 
 
-class BuddyChatConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
-    """WebSocket consumer for buddy-to-buddy real-time chat (no AI response)."""
-
-    async def connect(self):
-        """Handle WebSocket connection."""
-        self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
-        self.room_group_name = f'buddy_chat_{self.conversation_id}'
-        self.user = self.scope['user']
-        self._init_rate_limit()
-
-        # Verify user is part of this buddy conversation
-        has_access = await self.check_buddy_access()
-        if not has_access:
-            await self.close(code=4003)
-            return
-
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-        await self.accept()
-
-        await self.send(text_data=json.dumps({
-            'type': 'connection',
-            'status': 'connected',
-            'conversation_id': self.conversation_id,
-            'user_id': str(self.user.id),
-            'display_name': await self.get_display_name(),
-        }))
-
-        self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
-
-    async def _heartbeat_loop(self):
-        """Send periodic pings to keep the connection alive."""
-        try:
-            while True:
-                await asyncio.sleep(45)
-                await self.send(text_data=json.dumps({'type': 'ping'}))
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
-
-    async def disconnect(self, close_code):
-        """Handle WebSocket disconnection."""
-        if hasattr(self, '_heartbeat_task'):
-            self._heartbeat_task.cancel()
-        if hasattr(self, 'room_group_name'):
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
-
-    async def receive(self, text_data):
-        """Receive message from WebSocket."""
-        # Size guard
-        if len(text_data) > MAX_MSG_SIZE:
-            await self.send_error('Message too large')
-            return
-
-        # Rate limit
-        if self._is_rate_limited():
-            await self.send_error('Rate limit exceeded. Please slow down.')
-            return
-
-        try:
-            data = json.loads(text_data)
-            message_type = data.get('type', 'message')
-
-            if message_type == 'message':
-                await self.handle_buddy_message(data)
-            elif message_type == 'typing':
-                await self.handle_typing(data)
-            elif message_type == 'ping':
-                await self.send(text_data=json.dumps({'type': 'pong'}))
-
-        except json.JSONDecodeError:
-            await self.send_error('Invalid JSON')
-        except Exception as e:
-            await self.send_error(f'Error: {str(e)}')
-
-    async def handle_buddy_message(self, data):
-        """Handle incoming buddy chat message — no AI response."""
-        content = data.get('message', '').strip()
-        if not content:
-            await self.send_error('Message cannot be empty')
-            return
-
-        if len(content) > MAX_MSG_CONTENT_LEN:
-            await self.send_error(f'Message exceeds {MAX_MSG_CONTENT_LEN} character limit')
-            return
-
-        # Content moderation for buddy messages
-        mod_result = await self._moderate_buddy_message(content)
-        if mod_result.is_flagged:
-            await self.send(text_data=json.dumps({
-                'type': 'moderation',
-                'message': mod_result.user_message,
-            }))
-            return
-
-        message = await self.save_buddy_message(content)
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': {
-                    'id': str(message.id),
-                    'role': 'user',
-                    'content': content,
-                    'sender_id': str(self.user.id),
-                    'sender_name': await self.get_display_name(),
-                    'created_at': message.created_at.isoformat(),
-                }
-            }
-        )
-
-    async def handle_typing(self, data):
-        """Handle typing indicator."""
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'typing_status',
-                'user_id': str(self.user.id),
-                'is_typing': data.get('is_typing', False),
-            }
-        )
-
-    async def chat_message(self, event):
-        """Send message to WebSocket."""
-        await self.send(text_data=json.dumps({
-            'type': 'message',
-            'message': event['message'],
-        }))
-
-    async def typing_status(self, event):
-        """Send typing status to WebSocket (exclude self)."""
-        if str(event['user_id']) != str(self.user.id):
-            await self.send(text_data=json.dumps({
-                'type': 'typing',
-                'user_id': event['user_id'],
-                'is_typing': event['is_typing'],
-            }))
-
-    async def send_error(self, error_message):
-        """Send error message to client."""
-        await self.send(text_data=json.dumps({
-            'type': 'error',
-            'error': error_message,
-        }))
-
-    @database_sync_to_async
-    def check_buddy_access(self):
-        """Check that user is part of this buddy conversation."""
-        try:
-            conversation = Conversation.objects.select_related(
-                'buddy_pairing', 'buddy_pairing__user1', 'buddy_pairing__user2'
-            ).get(
-                id=self.conversation_id,
-                conversation_type='buddy_chat',
-            )
-            if not conversation.buddy_pairing:
-                return False
-            pairing = conversation.buddy_pairing
-            return self.user.id in (pairing.user1_id, pairing.user2_id)
-        except Conversation.DoesNotExist:
-            return False
-
-    @database_sync_to_async
-    def _moderate_buddy_message(self, content):
-        """Run content moderation on a buddy message."""
-        from core.moderation import ContentModerationService
-        return ContentModerationService().moderate_text(content, context='chat')
-
-    @database_sync_to_async
-    def save_buddy_message(self, content):
-        """Save a buddy chat message using F() expression to avoid reloading conversation."""
-        message = Message.objects.create(
-            conversation_id=self.conversation_id,
-            role='user',
-            content=content,
-            metadata={'sender_id': str(self.user.id)},
-        )
-        Conversation.objects.filter(id=self.conversation_id).update(
-            total_messages=F('total_messages') + 1,
-            updated_at=timezone.now(),
-        )
-        return message
-
-    @database_sync_to_async
-    def get_display_name(self):
-        """Return display name of the connected user."""
-        return self.user.display_name or self.user.email
-
-
-class CallSignalingConsumer(_RateLimitMixin, AsyncWebsocketConsumer):
-    """
-    WebSocket consumer for WebRTC call signaling.
-
-    Relays SDP offers/answers and ICE candidates between caller and callee.
-    Endpoint: ws/call/<call_id>/
-    """
-
-    async def connect(self):
-        self.call_id = self.scope['url_route']['kwargs']['call_id']
-        self.room_group_name = f'call_{self.call_id}'
-        self.user = self.scope['user']
-        self._init_rate_limit()
-
-        # Verify user is caller or callee
-        has_access = await self.check_call_access()
-        if not has_access:
-            await self.close(code=4003)
-            return
-
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-        await self.accept()
-
-        # Build ICE servers list (STUN + optional TURN)
-        ice_servers = [
-            {'urls': 'stun:stun.l.google.com:19302'},
-            {'urls': 'stun:stun1.l.google.com:19302'},
-        ]
-        from django.conf import settings
-        if getattr(settings, 'TURN_SERVER_URL', ''):
-            ice_servers.append({
-                'urls': settings.TURN_SERVER_URL,
-                'username': getattr(settings, 'TURN_SERVER_USERNAME', ''),
-                'credential': getattr(settings, 'TURN_SERVER_CREDENTIAL', ''),
-            })
-
-        await self.send(text_data=json.dumps({
-            'type': 'connection',
-            'status': 'connected',
-            'callId': self.call_id,
-            'userId': str(self.user.id),
-            'iceServers': ice_servers,
-        }))
-
-    async def disconnect(self, close_code):
-        if hasattr(self, 'room_group_name'):
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
-
-    async def receive(self, text_data):
-        # Size guard — signaling messages should be small (< 64KB)
-        if len(text_data) > 65536:
-            await self.send(text_data=json.dumps({
-                'type': 'error', 'error': 'Message too large',
-            }))
-            return
-
-        # Rate limit
-        if self._is_rate_limited():
-            return
-
-        try:
-            data = json.loads(text_data)
-            msg_type = data.get('type', '')
-
-            if msg_type in ('offer', 'answer', 'ice_candidate', 'call_end'):
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'relay_signal',
-                        'sender_channel': self.channel_name,
-                        'payload': data,
-                    }
-                )
-            elif msg_type == 'ping':
-                await self.send(text_data=json.dumps({'type': 'pong'}))
-
-        except json.JSONDecodeError:
-            await self.send(text_data=json.dumps({
-                'type': 'error', 'error': 'Invalid JSON',
-            }))
-
-    async def relay_signal(self, event):
-        """Forward signaling data to the other peer (skip sender)."""
-        if event['sender_channel'] != self.channel_name:
-            await self.send(text_data=json.dumps(event['payload']))
-
-    @database_sync_to_async
-    def check_call_access(self):
-        """Verify user is caller or callee of this call."""
-        try:
-            call = Call.objects.select_related('caller', 'callee').get(id=self.call_id)
-            return self.user.id in (call.caller_id, call.callee_id)
-        except Call.DoesNotExist:
-            return False

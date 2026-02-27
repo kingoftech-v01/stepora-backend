@@ -392,9 +392,16 @@ class StripeService:
             raise ValueError("Invalid webhook signature") from e
 
         event_type = event['type']
+        event_id = event.get('id', '')
         data_object = event['data']['object']
 
-        logger.info("Processing webhook event: %s (id: %s)", event_type, event.get('id'))
+        logger.info("Processing webhook event: %s (id: %s)", event_type, event_id)
+
+        # Idempotency: skip if already processed
+        from apps.subscriptions.models import StripeWebhookEvent
+        if event_id and StripeWebhookEvent.objects.filter(stripe_event_id=event_id).exists():
+            logger.info("Webhook event %s already processed, skipping", event_id)
+            return {'status': 'already_processed', 'event_type': event_type, 'event_id': event_id}
 
         handler_map = {
             'checkout.session.completed': StripeService._handle_checkout_completed,
@@ -407,10 +414,16 @@ class StripeService:
         handler = handler_map.get(event_type)
         if handler:
             handler(data_object)
+            # Record processed event for idempotency
+            if event_id:
+                StripeWebhookEvent.objects.get_or_create(
+                    stripe_event_id=event_id,
+                    defaults={'event_type': event_type},
+                )
         else:
             logger.info("Unhandled webhook event type: %s", event_type)
 
-        return {'status': 'ok', 'event_type': event_type}
+        return {'status': 'ok', 'event_type': event_type, 'event_id': event_id}
 
     # -----------------------------------------------------------------
     # Webhook event handlers (private)

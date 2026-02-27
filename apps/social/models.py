@@ -9,6 +9,7 @@ acceptance), while follows are unidirectional.
 import uuid
 
 from django.db import models
+from django.db.models import Q
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
 from apps.users.models import User
@@ -63,6 +64,13 @@ class BlockedUser(models.Model):
             f"{self.blocker.display_name or self.blocker.email} blocked "
             f"{self.blocked.display_name or self.blocked.email}"
         )
+
+    @staticmethod
+    def is_blocked(user_a, user_b):
+        """Check if either user has blocked the other."""
+        return BlockedUser.objects.filter(
+            Q(blocker=user_a, blocked=user_b) | Q(blocker=user_b, blocked=user_a)
+        ).exists()
 
 
 class ReportedUser(models.Model):

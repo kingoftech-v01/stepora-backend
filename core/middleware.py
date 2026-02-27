@@ -26,14 +26,18 @@ class SecurityHeadersMiddleware:
     """
 
     # Default CSP — can be overridden via settings.CSP_POLICY
+    # Tightened: explicit domains instead of blanket wss:/https: wildcards
     DEFAULT_CSP = (
         "default-src 'self'; "
         "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: https:; "
-        "font-src 'self'; "
-        "connect-src 'self' wss: https:; "
-        "frame-ancestors 'none'"
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none'"
     )
 
     def __init__(self, get_response):

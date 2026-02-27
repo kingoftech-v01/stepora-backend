@@ -242,7 +242,9 @@ class DreamViewSet(viewsets.ModelViewSet):
             raw_result = ai_service.generate_calibration_questions(
                 dream.title,
                 dream.description,
-                batch_size=7
+                batch_size=7,
+                target_date=str(dream.target_date) if dream.target_date else None,
+                category=dream.category,
             )
 
             # Validate AI output
@@ -310,6 +312,15 @@ class DreamViewSet(viewsets.ModelViewSet):
         dream = self.get_object()
         answers_data = request.data.get('answers', [])
 
+        # Support single-answer format from frontend:
+        # { question: "...", answer: "...", question_number: N }
+        if not answers_data:
+            single_answer = request.data.get('answer')
+            single_question = request.data.get('question')
+            question_number = request.data.get('question_number')
+            if single_answer and single_question:
+                answers_data = [{'question': single_question, 'answer': single_answer, 'question_number': question_number}]
+
         if not answers_data:
             return Response(
                 {'error': 'No answers provided'},
@@ -322,9 +333,8 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         for ans in answers_data:
             try:
-                question_id = ans.get('question_id')
                 answer_text = ans.get('answer', '')
-                if not question_id or not answer_text:
+                if not answer_text:
                     continue
 
                 # Moderate each answer
@@ -335,13 +345,30 @@ class DreamViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                cr = CalibrationResponse.objects.get(
-                    id=question_id,
-                    dream=dream
-                )
+                # Try by question_id first, then by question_number, then by question text
+                question_id = ans.get('question_id')
+                question_number = ans.get('question_number')
+                question_text = ans.get('question')
+
+                cr = None
+                if question_id:
+                    cr = CalibrationResponse.objects.filter(id=question_id, dream=dream).first()
+                if not cr and question_number:
+                    cr = CalibrationResponse.objects.filter(dream=dream, question_number=question_number).first()
+                if not cr and question_text:
+                    cr = CalibrationResponse.objects.filter(dream=dream, question=question_text).first()
+                if not cr:
+                    # Create a new calibration response
+                    next_num = CalibrationResponse.objects.filter(dream=dream).count() + 1
+                    cr = CalibrationResponse.objects.create(
+                        dream=dream,
+                        question=question_text or f'Question {next_num}',
+                        question_number=question_number or next_num,
+                    )
+
                 cr.answer = answer_text
                 cr.save(update_fields=['answer'])
-            except (CalibrationResponse.DoesNotExist, KeyError, ValueError):
+            except (KeyError, ValueError):
                 continue
 
         # Get all Q&A pairs so far
@@ -514,7 +541,8 @@ class DreamViewSet(viewsets.ModelViewSet):
             raw_plan = ai_service.generate_plan(
                 dream.title,
                 dream.description,
-                user_context
+                user_context,
+                target_date=str(dream.target_date) if dream.target_date else None,
             )
 
             # Validate the entire plan structure
@@ -550,9 +578,15 @@ class DreamViewSet(viewsets.ModelViewSet):
             ]
             db_goals = Goal.objects.bulk_create(goals_to_create)
 
+            from datetime import timedelta
+            plan_start = dream.created_at or timezone.now()
+
             tasks_to_create = []
             for i, goal_data in enumerate(plan.goals):
                 for task in goal_data.tasks:
+                    scheduled = None
+                    if hasattr(task, 'day_number') and task.day_number:
+                        scheduled = plan_start + timedelta(days=task.day_number - 1)
                     tasks_to_create.append(
                         Task(
                             goal=db_goals[i],
@@ -560,6 +594,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                             description=task.description,
                             order=task.order,
                             duration_mins=task.duration_mins,
+                            scheduled_date=scheduled,
                         )
                     )
             Task.objects.bulk_create(tasks_to_create)

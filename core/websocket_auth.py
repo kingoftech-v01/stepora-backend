@@ -1,13 +1,24 @@
 """
 Token-based WebSocket authentication middleware for Django Channels.
 Uses DRF Token authentication.
+
+Supports two authentication modes:
+1. Post-connect message: client sends {"type": "authenticate", "token": "..."} (preferred, secure)
+2. Query string: ws://host/ws/path/?token=<token> (deprecated — tokens leak into logs)
+
+Mode 1 is preferred because tokens in URLs can appear in server access logs,
+browser history, proxy logs, and Referrer headers.
 """
 
+import json
+import logging
 from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.authtoken.models import Token
+
+logger = logging.getLogger(__name__)
 
 
 @database_sync_to_async
@@ -21,11 +32,7 @@ def get_user_from_token(token_key):
 
     try:
         token = Token.objects.select_related('user').get(key=token_key)
-        user = token.user
-        # Removed user.update_activity() for scalability — updating on every
-        # WS connection causes unnecessary DB writes under high concurrency.
-        # Activity should be tracked at a lower frequency (e.g. periodic task).
-        return user
+        return token.user
     except Token.DoesNotExist:
         return AnonymousUser()
     except Exception:
@@ -36,7 +43,8 @@ class TokenWebSocketMiddleware(BaseMiddleware):
     """
     Custom middleware to authenticate WebSocket connections using DRF tokens.
 
-    Token can be provided via query string: ws://host/ws/path/?token=<auth_token>
+    Preferred: client sends {"type": "authenticate", "token": "..."} after connect.
+    Fallback: query string ?token=<auth_token> (deprecated).
 
     Usage in asgi.py:
         application = ProtocolTypeRouter({
@@ -47,11 +55,20 @@ class TokenWebSocketMiddleware(BaseMiddleware):
     """
 
     async def __call__(self, scope, receive, send):
+        # Fallback: try query string token (deprecated, for backward compatibility)
         query_string = scope.get('query_string', b'').decode()
         query_params = parse_qs(query_string)
         token = query_params.get('token', [None])[0]
 
+        if token:
+            logger.warning(
+                "WebSocket auth via query string is deprecated. "
+                "Use post-connect authenticate message instead."
+            )
+
         scope['user'] = await get_user_from_token(token)
+        # Store a flag so consumers know they can accept a post-connect authenticate message
+        scope['_allow_post_auth'] = not token
 
         return await super().__call__(scope, receive, send)
 
@@ -72,7 +89,14 @@ class TokenWebSocketAuthMiddleware:
         query_params = parse_qs(query_string)
         token = query_params.get('token', [None])[0]
 
+        if token:
+            logger.warning(
+                "WebSocket auth via query string is deprecated. "
+                "Use post-connect authenticate message instead."
+            )
+
         scope['user'] = await get_user_from_token(token)
+        scope['_allow_post_auth'] = not token
 
         return await self.app(scope, receive, send)
 

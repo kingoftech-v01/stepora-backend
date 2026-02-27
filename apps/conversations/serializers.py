@@ -6,7 +6,7 @@ from typing import Optional
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Conversation, Message, ConversationSummary, ConversationTemplate
+from .models import Conversation, Message, MessageReadStatus, ConversationSummary, ConversationTemplate, Call
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -54,6 +54,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True, help_text='Title of the linked dream.')
     last_message = serializers.SerializerMethodField(help_text='Preview of the most recent message.')
+    unread_count = serializers.SerializerMethodField(help_text='Number of unread messages for the current user.')
 
     class Meta:
         model = Conversation
@@ -61,7 +62,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             'id', 'user', 'dream', 'dream_title',
             'title', 'is_pinned',
             'conversation_type', 'total_messages', 'total_tokens_used',
-            'is_active', 'last_message',
+            'is_active', 'last_message', 'unread_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'total_messages', 'total_tokens_used', 'created_at', 'updated_at']
@@ -89,6 +90,36 @@ class ConversationSerializer(serializers.ModelSerializer):
                 'created_at': last_msg.created_at
             }
         return None
+
+    def get_unread_count(self, obj) -> int:
+        """Count messages after the user's last-read high-water mark."""
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return 0
+
+        user_id_str = str(request.user.id)
+
+        # Use prefetched read_statuses if available to avoid N+1
+        read_status = None
+        if hasattr(obj, '_prefetched_objects_cache') and 'read_statuses' in obj._prefetched_objects_cache:
+            for rs in obj.read_statuses.all():
+                if rs.user_id == request.user.id:
+                    read_status = rs
+                    break
+        else:
+            read_status = obj.read_statuses.filter(user=request.user).first()
+
+        if read_status and read_status.last_read_message:
+            return obj.messages.filter(
+                created_at__gt=read_status.last_read_message.created_at
+            ).exclude(
+                metadata__sender_id=user_id_str
+            ).exclude(role='system').count()
+
+        # No read status or no last_read_message: count all non-own user messages
+        return obj.messages.exclude(
+            metadata__sender_id=user_id_str
+        ).exclude(role='system').filter(role='user').count()
 
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
@@ -134,10 +165,11 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ['conversation_type', 'dream']
+        fields = ['conversation_type', 'dream', 'title']
         extra_kwargs = {
             'conversation_type': {'help_text': 'Type of conversation to create.'},
             'dream': {'help_text': 'Dream to link to this conversation.'},
+            'title': {'help_text': 'Optional title for the conversation.', 'required': False},
         }
 
     def validate_conversation_type(self, value):
@@ -204,3 +236,21 @@ class ConversationTemplateSerializer(serializers.ModelSerializer):
             'created_at': {'help_text': 'Timestamp when the template was created.'},
             'updated_at': {'help_text': 'Timestamp when the template was last updated.'},
         }
+
+
+class CallHistorySerializer(serializers.ModelSerializer):
+    """Serializer for call history entries."""
+
+    caller_name = serializers.CharField(source='caller.display_name', read_only=True)
+    callee_name = serializers.CharField(source='callee.display_name', read_only=True)
+    caller_id = serializers.UUIDField(source='caller.id', read_only=True)
+    callee_id = serializers.UUIDField(source='callee.id', read_only=True)
+
+    class Meta:
+        model = Call
+        fields = [
+            'id', 'caller_id', 'callee_id', 'caller_name', 'callee_name',
+            'call_type', 'status', 'started_at', 'ended_at',
+            'duration_seconds', 'created_at',
+        ]
+        read_only_fields = fields

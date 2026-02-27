@@ -33,7 +33,7 @@ from apps.circles.models import (
     CirclePost,
     PostReaction,
 )
-from apps.conversations.models import Conversation, Message
+from apps.conversations.models import Call, Conversation, Message, MessageReadStatus
 from apps.dreams.models import (
     CalibrationResponse,
     Dream,
@@ -453,6 +453,8 @@ class Command(BaseCommand):
             self._create_calendar_events(users, all_tasks, arch_map)
             self._create_daily_activities(users, arch_map)
             self._create_achievements_and_searches(users, arch_map)
+            self._create_calls(users, arch_map)
+            self._create_message_read_statuses(users)
 
         self.stdout.write(self.style.SUCCESS('Demo data seeded successfully! (~12,000 records)'))
 
@@ -529,6 +531,11 @@ class Command(BaseCommand):
             )
             # Backdate created_at
             User.objects.filter(pk=u.pk).update(created_at=NOW - timedelta(days=p['days_ago']))
+            # Force demo accounts online with recent last_seen
+            if p['slug'] in ('sophia.chen', 'emma.laurent'):
+                User.objects.filter(pk=u.pk).update(is_online=True, last_seen=NOW)
+                u.is_online = True
+                u.last_seen = NOW
             users.append(u)
 
         self.stdout.write(f'  Created {len(users)} users.')
@@ -583,8 +590,8 @@ class Command(BaseCommand):
                 current_period_start=NOW - timedelta(days=15),
                 current_period_end=NOW + timedelta(days=15),
             ))
-        StripeCustomer.objects.bulk_create(customers, batch_size=50)
-        Subscription.objects.bulk_create(subs, batch_size=50)
+        StripeCustomer.objects.bulk_create(customers, batch_size=50, ignore_conflicts=True)
+        Subscription.objects.bulk_create(subs, batch_size=50, ignore_conflicts=True)
         self.stdout.write(f'  Created {len(subs)} subscriptions.')
 
     # ------------------------------------------------------------------
@@ -963,9 +970,24 @@ class Command(BaseCommand):
         pairings = []
         encouragements = []
 
+        # Guarantee Sophia Chen <-> Emma Laurent pairing (demo accounts)
+        sophia = next((u for u in users if u.display_name == 'Sophia Chen'), None)
+        emma = next((u for u in users if u.display_name == 'Emma Laurent'), None)
+        paired = set()
+        if sophia and emma:
+            bp = BuddyPairing(
+                user1=sophia, user2=emma, status='active',
+                compatibility_score=0.92,
+                encouragement_streak=18,
+                best_encouragement_streak=22,
+                last_encouragement_at=self._rand_dt(1, 0),
+            )
+            pairings.append(bp)
+            paired.add(sophia.pk)
+            paired.add(emma.pk)
+
         # Active pairings between power/social/premium
         pair_pool = power + social + premium
-        paired = set()
         for _ in range(min(10, len(pair_pool) // 2)):
             available = [u for u in pair_pool if u.pk not in paired]
             if len(available) < 2:
@@ -1020,6 +1042,14 @@ class Command(BaseCommand):
         premium = arch_map.get('premium', [])
         casual = arch_map.get('casual', [])
         new_users = arch_map.get('new', [])
+
+        # Guarantee Sophia <-> Emma friendship (demo accounts)
+        sophia = next((u for u in users if u.display_name == 'Sophia Chen'), None)
+        emma = next((u for u in users if u.display_name == 'Emma Laurent'), None)
+        if sophia and emma:
+            pair = tuple(sorted([sophia.pk, emma.pk], key=str))
+            existing_pairs.add(pair)
+            friendships.append(Friendship(user1=sophia, user2=emma, status='accepted'))
 
         # Social butterflies: lots of friendships
         for u in social:
@@ -1393,3 +1423,108 @@ class Command(BaseCommand):
         UserAchievement.objects.bulk_create(user_achievements, batch_size=200, ignore_conflicts=True)
         RecentSearch.objects.bulk_create(searches, batch_size=200)
         self.stdout.write(f'  Created {len(user_achievements)} user achievements, {len(searches)} recent searches.')
+
+    # ------------------------------------------------------------------
+    # Phase 22: Calls (voice/video between buddy pairs)
+    # ------------------------------------------------------------------
+    def _create_calls(self, users, arch_map):
+        pairings = list(BuddyPairing.objects.filter(
+            user1__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ))
+        if not pairings:
+            self.stdout.write(self.style.WARNING('  No buddy pairings found. Skipping calls.'))
+            return
+
+        calls = []
+        missed_notifs = []
+
+        for bp in pairings:
+            if bp.status != 'active':
+                continue
+
+            # Each active pair has 3-8 call records
+            for _ in range(random.randint(3, 8)):
+                caller = random.choice([bp.user1, bp.user2])
+                callee = bp.user2 if caller == bp.user1 else bp.user1
+                call_type = random.choice(['voice', 'voice', 'voice', 'video'])
+                status = random.choices(
+                    ['completed', 'missed', 'rejected', 'cancelled'],
+                    weights=[5, 2, 1, 1],
+                    k=1,
+                )[0]
+
+                created = self._rand_dt(30, 1)
+                started = None
+                ended = None
+                duration = 0
+
+                if status == 'completed':
+                    started = created + timedelta(seconds=random.randint(5, 15))
+                    duration = random.randint(60, 1800)  # 1-30 min
+                    ended = started + timedelta(seconds=duration)
+
+                calls.append(Call(
+                    caller=caller,
+                    callee=callee,
+                    buddy_pairing=bp,
+                    call_type=call_type,
+                    status=status,
+                    started_at=started,
+                    ended_at=ended,
+                    duration_seconds=duration,
+                ))
+
+                # Missed call notifications
+                if status == 'missed':
+                    missed_notifs.append(Notification(
+                        user=callee,
+                        notification_type='buddy',
+                        title=f'Missed call from {caller.display_name}',
+                        body=f'You missed a {call_type} call.',
+                        status='sent',
+                        sent_at=created + timedelta(seconds=30),
+                        scheduled_for=created + timedelta(seconds=30),
+                    ))
+
+        Call.objects.bulk_create(calls, batch_size=200)
+        if missed_notifs:
+            Notification.objects.bulk_create(missed_notifs, batch_size=100)
+        self.stdout.write(f'  Created {len(calls)} calls, {len(missed_notifs)} missed call notifications.')
+
+    # ------------------------------------------------------------------
+    # Phase 23: Message Read Statuses
+    # ------------------------------------------------------------------
+    def _create_message_read_statuses(self, users):
+        conversations = list(Conversation.objects.filter(
+            user__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ))
+        if not conversations:
+            self.stdout.write(self.style.WARNING('  No conversations found. Skipping read statuses.'))
+            return
+
+        statuses = []
+        for conv in conversations:
+            last_msg = Message.objects.filter(conversation=conv).order_by('-created_at').first()
+            if not last_msg:
+                continue
+
+            # 70% chance user has read all messages, 30% some unread
+            if random.random() < 0.7:
+                read_msg = last_msg
+            else:
+                # Pick an earlier message
+                earlier = Message.objects.filter(conversation=conv).order_by('created_at')
+                count = earlier.count()
+                if count > 1:
+                    read_msg = earlier[random.randint(0, count - 2)]
+                else:
+                    read_msg = last_msg
+
+            statuses.append(MessageReadStatus(
+                user=conv.user,
+                conversation=conv,
+                last_read_message=read_msg,
+            ))
+
+        MessageReadStatus.objects.bulk_create(statuses, batch_size=200, ignore_conflicts=True)
+        self.stdout.write(f'  Created {len(statuses)} message read statuses.')

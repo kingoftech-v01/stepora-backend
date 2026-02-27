@@ -5,6 +5,7 @@ Conversation and Message models for AI chat.
 import uuid
 from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
+from django.conf import settings
 from apps.users.models import User
 from apps.dreams.models import Dream
 
@@ -326,6 +327,22 @@ class Call(models.Model):
 
     def __str__(self):
         return f"{self.call_type} call: {self.caller} -> {self.callee} ({self.status})"
+
+
+class MessageReadStatus(models.Model):
+    """High-water mark for tracking last-read message per user per conversation."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='read_statuses')
+    last_read_message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True)
+    last_read_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'message_read_statuses'
+        unique_together = ('user', 'conversation')
+
+    def __str__(self):
+        return f"{self.user} read {self.conversation} up to {self.last_read_message_id}"
 
 
 class ConversationTemplate(models.Model):

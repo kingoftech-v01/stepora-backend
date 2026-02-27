@@ -384,7 +384,7 @@ OPENAI_TIMEOUT = 30
 # Content Moderation Configuration
 CONTENT_MODERATION = {
     'ENABLED': True,
-    'OPENAI_MODERATION_ENABLED': True,
+    'OPENAI_MODERATION_ENABLED': bool(os.environ.get('OPENAI_API_KEY')),
     'CUSTOM_PATTERNS_ENABLED': True,
     'MODERATION_CACHE_TTL': 300,  # Cache moderation results for 5 minutes
 }
@@ -524,6 +524,10 @@ FIELD_ENCRYPTION_KEY = os.environ['FIELD_ENCRYPTION_KEY']
 TURN_SERVER_URL = os.getenv('TURN_SERVER_URL', '')          # e.g. turn:turn.example.com:3478
 TURN_SERVER_USERNAME = os.getenv('TURN_SERVER_USERNAME', '')
 TURN_SERVER_CREDENTIAL = os.getenv('TURN_SERVER_CREDENTIAL', '')
+
+# Agora.io (RTM messaging + RTC voice/video)
+AGORA_APP_ID = os.getenv('AGORA_APP_ID', '')
+AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '')
 
 # Logging
 LOGGING = {

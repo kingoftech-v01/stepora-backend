@@ -16,7 +16,7 @@ class Dream(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dreams')
 
     title = EncryptedCharField(max_length=255)
-    description = EncryptedTextField()
+    description = EncryptedTextField(blank=True, default='')
     category = models.CharField(max_length=50, blank=True, db_index=True)
     target_date = models.DateTimeField(null=True, blank=True)
     priority = models.IntegerField(default=1)

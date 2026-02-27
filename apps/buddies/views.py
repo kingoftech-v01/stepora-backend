@@ -133,6 +133,199 @@ class BuddyViewSet(viewsets.GenericViewSet):
         return Response({'buddy': serializer.data})
 
     @extend_schema(
+        summary="Find or create buddy chat",
+        description="Find or create a buddy_chat conversation with a specific user.",
+        responses={
+            200: OpenApiResponse(description="Conversation found or created."),
+            404: OpenApiResponse(description="User not found or no active buddy pairing."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=False, methods=['post'], url_path='chat')
+    def chat(self, request):
+        """Find or create a buddy_chat conversation for the given user."""
+        from apps.conversations.models import Conversation
+        target_user_id = (
+            request.data.get('userId')
+            or request.data.get('user_id')
+            or request.data.get('targetUserId')
+            or request.data.get('target_user_id')
+        )
+
+        if not target_user_id or target_user_id == 'undefined':
+            return Response({'error': 'userId is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_user = None
+        try:
+            target_user = User.objects.get(id=target_user_id)
+        except User.DoesNotExist:
+            pass
+
+        # If not a user ID, maybe it's a conversation ID (from ConversationList)
+        if not target_user:
+            try:
+                conv = Conversation.objects.get(
+                    id=target_user_id, conversation_type='buddy_chat'
+                )
+                # Find the buddy (the other user in the pairing)
+                buddy_user = None
+                if conv.buddy_pairing:
+                    bp = conv.buddy_pairing
+                    buddy_user = bp.user2 if bp.user1_id == request.user.id else bp.user1
+                if not buddy_user and conv.user_id != request.user.id:
+                    buddy_user = conv.user
+                return Response({
+                    'conversationId': str(conv.id),
+                    'buddy': {
+                        'id': str(buddy_user.id) if buddy_user else '',
+                        'displayName': (buddy_user.display_name if buddy_user else '') or 'Buddy',
+                        'isOnline': buddy_user.is_online if buddy_user else False,
+                        'level': buddy_user.level if buddy_user else 0,
+                        'streak': buddy_user.streak_days if buddy_user else 0,
+                    },
+                })
+            except Conversation.DoesNotExist:
+                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Find active buddy pairing between the two users
+        pairing = BuddyPairing.objects.filter(
+            Q(user1=request.user, user2=target_user) | Q(user1=target_user, user2=request.user),
+            status='active'
+        ).first()
+
+        # Look for existing buddy_chat conversation
+        existing = None
+        if pairing:
+            existing = Conversation.objects.filter(
+                conversation_type='buddy_chat',
+                buddy_pairing=pairing,
+            ).filter(Q(user=request.user) | Q(user=target_user)).first()
+
+        if not existing:
+            # Also try to find by user + type (no pairing link)
+            existing = Conversation.objects.filter(
+                user=request.user,
+                conversation_type='buddy_chat',
+            ).filter(
+                Q(buddy_pairing__user1=target_user) | Q(buddy_pairing__user2=target_user)
+            ).first()
+
+        if existing:
+            conv = existing
+        else:
+            # Create new buddy_chat conversation
+            conv = Conversation.objects.create(
+                user=request.user,
+                conversation_type='buddy_chat',
+                title=f'Chat with {target_user.display_name or "Buddy"}',
+                buddy_pairing=pairing,
+                total_messages=0,
+                total_tokens_used=0,
+            )
+
+        return Response({
+            'conversationId': str(conv.id),
+            'buddy': {
+                'id': str(target_user.id),
+                'displayName': target_user.display_name or 'Buddy',
+                'isOnline': target_user.is_online,
+                'level': target_user.level,
+                'streak': target_user.streak_days,
+            },
+        })
+
+    @extend_schema(
+        summary="Send buddy chat message",
+        description="Send a message in a buddy chat conversation (no AI).",
+        responses={
+            200: OpenApiResponse(description="Message sent."),
+            404: OpenApiResponse(description="Conversation not found."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=False, methods=['post'], url_path='send-message')
+    def send_message(self, request):
+        """Send a buddy chat message (REST fallback when WebSocket unavailable)."""
+        from apps.conversations.models import Conversation, Message
+        from django.db.models import F
+
+        conv_id = request.data.get('conversationId') or request.data.get('conversation_id')
+        content = (request.data.get('content') or '').strip()
+
+        if not conv_id or conv_id == 'undefined' or not content:
+            return Response({'error': 'conversationId and content are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        import uuid
+        try:
+            uuid.UUID(str(conv_id))
+        except (ValueError, AttributeError):
+            return Response({'error': 'Invalid conversationId.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            conv = Conversation.objects.get(id=conv_id, conversation_type='buddy_chat')
+        except Conversation.DoesNotExist:
+            return Response({'error': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Verify user has access (is part of the buddy pairing or owns the conversation)
+        has_access = conv.user_id == request.user.id
+        if not has_access and conv.buddy_pairing:
+            bp = conv.buddy_pairing
+            has_access = request.user.id in (bp.user1_id, bp.user2_id)
+        if not has_access:
+            return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Block enforcement: determine the other user and check
+        other_user = None
+        if conv.buddy_pairing:
+            bp = conv.buddy_pairing
+            other_user = bp.user2 if bp.user1_id == request.user.id else bp.user1
+        elif conv.user_id != request.user.id:
+            other_user = conv.user
+
+        if not other_user:
+            return Response({'error': 'Cannot determine recipient.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.social.models import BlockedUser
+        if BlockedUser.is_blocked(request.user, other_user):
+            return Response({'detail': 'Cannot send message'}, status=status.HTTP_403_FORBIDDEN)
+
+        msg = Message.objects.create(
+            conversation=conv,
+            role='user',
+            content=content,
+            metadata={'sender_id': str(request.user.id)},
+        )
+        Conversation.objects.filter(id=conv.id).update(
+            total_messages=F('total_messages') + 1,
+            updated_at=django_timezone.now(),
+        )
+
+        # Send push notification to the other user
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=other_user,
+                notification_type='buddy',
+                title=f'Message from {request.user.display_name or "Your buddy"}',
+                body=content[:100],
+                scheduled_for=django_timezone.now(),
+                data={
+                    'conversation_id': str(conv.id),
+                    'sender_id': str(request.user.id),
+                    'screen': 'BuddyChat',
+                },
+            )
+        except Exception:
+            pass
+
+        return Response({
+            'id': str(msg.id),
+            'content': msg.content,
+            'senderId': str(request.user.id),
+            'createdAt': msg.created_at.isoformat(),
+        })
+
+    @extend_schema(
         summary="Get buddy progress",
         description="Retrieve progress comparison between the current user and their buddy.",
         responses={
@@ -305,7 +498,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         serializer = BuddyPairRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        partner_id = serializer.validated_data['partnerId']
+        partner_id = serializer.validated_data['partner_id']
 
         if partner_id == request.user.id:
             return Response(
@@ -348,7 +541,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         pairing = BuddyPairing.objects.create(
             user1=request.user,
             user2=partner,
-            status='active',
+            status='pending',
             compatibility_score=compatibility
         )
 

@@ -480,6 +480,75 @@ def send_level_up_notification(self, user_id, new_level):
 
 
 @shared_task(bind=True, max_retries=3)
+def expire_ringing_calls(self):
+    """
+    Expire calls stuck in 'ringing' for more than 30 seconds.
+    Sets them to 'missed' and notifies both caller and callee.
+    Runs every 15 seconds via Celery beat.
+    """
+    try:
+        from apps.conversations.models import Call
+        threshold = timezone.now() - timedelta(seconds=30)
+
+        stale_calls = Call.objects.filter(
+            status='ringing',
+            created_at__lt=threshold,
+        ).select_related('caller', 'callee')
+
+        expired_count = 0
+
+        for call in stale_calls:
+            # Atomic update: only transition if still ringing (prevents race with accept/reject)
+            updated = Call.objects.filter(id=call.id, status='ringing').update(
+                status='missed', updated_at=timezone.now()
+            )
+            if not updated:
+                continue  # Already accepted/rejected/cancelled by another process
+
+            # Notify the callee about the missed call
+            caller_name = call.caller.display_name or 'Someone'
+            Notification.objects.create(
+                user=call.callee,
+                notification_type='missed_call',
+                title=f'Missed {call.call_type} call',
+                body=f'{caller_name} tried to call you',
+                scheduled_for=timezone.now(),
+                data={
+                    'call_id': str(call.id),
+                    'caller_id': str(call.caller.id),
+                    'type': 'missed_call',
+                    'screen': 'CallHistory',
+                },
+            )
+
+            # Notify the caller that callee didn't answer
+            callee_name = call.callee.display_name or 'Your buddy'
+            Notification.objects.create(
+                user=call.caller,
+                notification_type='missed_call',
+                title=f'{callee_name} didn\'t answer',
+                body=f'Your {call.call_type} call was not answered',
+                scheduled_for=timezone.now(),
+                data={
+                    'call_id': str(call.id),
+                    'callee_id': str(call.callee.id),
+                    'type': 'missed_call',
+                    'screen': 'CallHistory',
+                },
+            )
+
+            expired_count += 1
+
+        if expired_count:
+            logger.info(f"Expired {expired_count} ringing calls to missed")
+        return {'expired': expired_count}
+
+    except Exception as e:
+        logger.error(f"Error in expire_ringing_calls: {str(e)}")
+        raise self.retry(exc=e, countdown=15)
+
+
+@shared_task(bind=True, max_retries=3)
 def cleanup_stale_fcm_tokens(self):
     """
     Deactivate FCM device registrations not updated in 60+ days.

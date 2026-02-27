@@ -106,32 +106,24 @@ class NotificationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def grouped(self, request):
         """Get notifications grouped by type."""
+        from django.db.models import Q
+
         groups = Notification.objects.filter(
             user=request.user,
             status='sent',
         ).values('notification_type').annotate(
             total=Count('id'),
-            unread=Count('id', filter=Count('id', filter=None) if False else None),
+            unread=Count('id', filter=Q(read_at__isnull=True)),
         ).order_by('-total')
 
-        # Build proper grouped response
-        result = []
-        for g in Notification.objects.filter(
-            user=request.user, status='sent'
-        ).values('notification_type').annotate(
-            total=Count('id'),
-        ).order_by('-total'):
-            unread = Notification.objects.filter(
-                user=request.user,
-                status='sent',
-                notification_type=g['notification_type'],
-                read_at__isnull=True,
-            ).count()
-            result.append({
+        result = [
+            {
                 'type': g['notification_type'],
                 'total': g['total'],
-                'unread': unread,
-            })
+                'unread': g['unread'],
+            }
+            for g in groups
+        ]
 
         return Response({'groups': result})
 

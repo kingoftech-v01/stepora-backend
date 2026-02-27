@@ -195,6 +195,12 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     goals = GoalSerializer(many=True, read_only=True, help_text='List of goals for this dream.')
     obstacles = ObstacleSerializer(many=True, read_only=True, help_text='List of obstacles for this dream.')
     calibration_responses = CalibrationResponseSerializer(many=True, read_only=True, help_text='List of calibration responses for this dream.')
+    goals_count = serializers.SerializerMethodField()
+    completed_goal_count = serializers.SerializerMethodField()
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
 
     class Meta:
         model = Dream
@@ -206,6 +212,9 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'has_two_minute_start',
             'calibration_status', 'calibration_responses',
             'goals', 'obstacles',
+            'goals_count', 'completed_goal_count',
+            'total_tasks', 'completed_tasks',
+            'days_left', 'tags',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'progress_percentage', 'ai_analysis', 'created_at', 'updated_at']
@@ -228,6 +237,34 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'updated_at': {'help_text': 'Timestamp when the dream was last updated.'},
         }
 
+    def get_goals_count(self, obj) -> int:
+        return obj.goals.count()
+
+    def get_completed_goal_count(self, obj) -> int:
+        return obj.goals.filter(status='completed').count()
+
+    def get_total_tasks(self, obj) -> int:
+        total = 0
+        for goal in obj.goals.all():
+            total += goal.tasks.count()
+        return total
+
+    def get_completed_tasks(self, obj) -> int:
+        total = 0
+        for goal in obj.goals.all():
+            total += goal.tasks.filter(status='completed').count()
+        return total
+
+    def get_days_left(self, obj):
+        if not obj.target_date:
+            return None
+        from django.utils import timezone
+        delta = obj.target_date - timezone.now()
+        return max(0, delta.days)
+
+    def get_tags(self, obj) -> list:
+        return list(obj.taggings.values_list('tag__name', flat=True))
+
 
 class DreamCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating dreams."""
@@ -235,15 +272,16 @@ class DreamCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dream
         fields = [
-            'title', 'description', 'category',
+            'id', 'title', 'description', 'category',
             'target_date', 'priority'
         ]
+        read_only_fields = ['id']
         extra_kwargs = {
             'title': {'help_text': 'Short title for the new dream.'},
-            'description': {'help_text': 'Detailed description of the dream.'},
+            'description': {'help_text': 'Detailed description of the dream.', 'required': False, 'allow_blank': True, 'default': ''},
             'category': {'help_text': 'Category the dream belongs to.'},
-            'target_date': {'help_text': 'Target date for achieving the dream.'},
-            'priority': {'help_text': 'Priority level of the dream.'},
+            'target_date': {'help_text': 'Target date for achieving the dream.', 'required': False},
+            'priority': {'help_text': 'Priority level of the dream.', 'required': False},
         }
 
     def validate_title(self, value):

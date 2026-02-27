@@ -59,7 +59,7 @@ class BuddyMatchSerializer(serializers.Serializer):
 class BuddyPairRequestSerializer(serializers.Serializer):
     """Serializer for pairing with a specific user."""
 
-    partnerId = serializers.UUIDField(
+    partner_id = serializers.UUIDField(
         help_text='The UUID of the user to pair with.'
     )
 

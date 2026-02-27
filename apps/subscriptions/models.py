@@ -368,3 +368,19 @@ class Subscription(models.Model):
     def is_active(self):
         """Check if the subscription is currently active or trialing."""
         return self.status in ('active', 'trialing')
+
+
+class StripeWebhookEvent(models.Model):
+    """Tracks processed Stripe webhook events for idempotency."""
+    stripe_event_id = models.CharField(max_length=255, unique=True, db_index=True)
+    event_type = models.CharField(max_length=100)
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'stripe_webhook_events'
+        indexes = [
+            models.Index(fields=['stripe_event_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} ({self.stripe_event_id})"

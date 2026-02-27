@@ -57,6 +57,12 @@ app.conf.beat_schedule = {
         'schedule': crontab(day_of_week=1, hour=2, minute=0),
     },
 
+    # Expire ringing calls that were not answered within 30 seconds
+    'expire-ringing-calls': {
+        'task': 'apps.notifications.tasks.expire_ringing_calls',
+        'schedule': 15.0,  # Every 15 seconds
+    },
+
     # === Dream Tasks ===
 
     # Update dream progress daily at 3 AM
