@@ -20,6 +20,20 @@
 
 - [x] **User reporting** - ReportedUser model with reporting endpoints.
 
+- [x] **Dream posts CRUD** - DreamPost model with encrypted content, image support, GoFundMe URL, and visibility controls (public/followers/private). Full CRUD via DreamPostViewSet.
+
+- [x] **Social feed** - Feed endpoint at `GET /posts/feed/` showing posts from followed users and public posts, excluding blocked users, with `has_liked`/`has_encouraged` annotations.
+
+- [x] **Like/unlike** - DreamPostLike model with toggle behavior. Denormalized `likes_count` on DreamPost updated on each like/unlike.
+
+- [x] **Threaded comments** - DreamPostComment model with self-referential `parent` FK for threading. Denormalized `comments_count` on DreamPost.
+
+- [x] **Encouragements (5 types)** - DreamEncouragement model with 5 typed reactions: `you_got_this`, `keep_going`, `inspired`, `proud`, `fire`. One per user per post.
+
+- [x] **Share/repost** - Share endpoint incrementing denormalized `shares_count`.
+
+- [x] **User posts endpoint** - `GET /posts/user/{user_id}/` to list all posts by a specific user.
+
 ## Planned Improvements
 
 - [ ] **Friend request notifications** - Trigger push notifications when a user receives a friend request or when their request is accepted.

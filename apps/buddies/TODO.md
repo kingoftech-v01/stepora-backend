@@ -12,6 +12,16 @@
 
 - [x] **Encouragement streak tracking** - Tracks consecutive days where at least one encouragement was exchanged between buddies. Displays the current and best encouragement streak in the pairing detail response.
 
+- [x] **Own consumer and routing** - BuddyChatConsumer moved from conversations app to `apps/buddies/consumers.py` with dedicated routing in `apps/buddies/routing.py`. URL parameter changed from `conversation_id` to `pairing_id`.
+
+- [x] **FCM push notifications** - Firebase Cloud Messaging push to offline buddy partner when a message is sent via WebSocket.
+
+- [x] **Block enforcement** - Bidirectional block check on connect and re-check on every message send via `BlockingMixin`.
+
+- [x] **Mark read** - `mark_read` message type updates `MessageReadStatus` for read receipts.
+
+- [x] **Call broadcast** - `call_started` WebSocket event broadcast to `buddy_chat_{pairing_id}` group when a buddy call is initiated via REST.
+
 ## Planned Improvements
 
 - [ ] **Improved matching algorithm** - Enhance compatibility scoring with additional signals: shared dream categories, similar goal timelines, timezone compatibility, and preferred check-in frequency.

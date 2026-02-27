@@ -116,17 +116,18 @@ dreamplanner/
 ├── apps/
 │   ├── users/           User model, auth, gamification, 2FA, achievements, GDPR
 │   ├── dreams/          Dreams, Goals, Tasks, Obstacles, Templates, Tags, Vision Board, PDF
-│   ├── conversations/   AI chat, buddy chat (WebSocket), templates, voice transcription
+│   ├── conversations/   AI chat (AIChatConsumer WebSocket), templates, voice transcription
 │   ├── notifications/   Push notifications, templates, preferences, delivery service
 │   ├── calendar/        Events, recurring, time blocks, Google Calendar, iCal feed
 │   ├── subscriptions/   Stripe plans, checkout, webhooks, invoices, analytics
 │   ├── store/           Items, categories, purchases, wishlists, gifting, refunds
 │   ├── leagues/         Leagues, seasons, leaderboards, rank snapshots, rewards
-│   ├── circles/         Circles, posts, reactions, challenges, invitations
-│   ├── social/          Friends, follows, blocking, reporting, activity feed, search
-│   └── buddies/         Buddy pairing, encouragement, check-in reminders
+│   ├── circles/         Circles, posts, reactions, challenges, invitations, group chat (CircleChatConsumer), Agora voice/video calls
+│   ├── social/          Friends, follows, blocking, reporting, activity feed, search, dream posts, encouragements
+│   └── buddies/         Buddy pairing, encouragement, check-in reminders, real-time chat (BuddyChatConsumer), call broadcast
 ├── core/                Auth, permissions, throttling, sanitizers, middleware, moderation,
-│                        AI validators, audit logging, AI usage tracking, pagination
+│                        AI validators, audit logging, AI usage tracking, pagination,
+│                        WebSocket consumer mixins (RateLimitMixin, AuthenticatedConsumerMixin, BlockingMixin, ModerationMixin)
 ├── integrations/        OpenAI service (GPT-4, DALL-E 3, Whisper, GPT-4V)
 ├── config/              Django settings, Celery, ASGI/WSGI, URL routing
 ├── docs/                Documentation (this file, cross-app flows, specs)
@@ -144,9 +145,9 @@ dreamplanner/
 | `subscriptions` | `users` (User) |
 | `store` | `users` (User, GamificationProfile) |
 | `leagues` | `users` (User, GamificationProfile) |
-| `circles` | `users` (User) |
-| `social` | `users` (User) |
-| `buddies` | `users` (User), `conversations` (Conversation) |
+| `circles` | `users` (User), `social` (BlockedUser), `notifications` (push delivery) |
+| `social` | `users` (User), `dreams` (Dream) |
+| `buddies` | `users` (User), `conversations` (Conversation), `social` (BlockedUser) |
 | `core` | No app dependencies (standalone utilities) |
 | `integrations` | No app dependencies (standalone services) |
 
@@ -174,6 +175,9 @@ dreamplanner/
 | Add custom pagination | `core/pagination.py` | `StandardResultsSetPagination` (20/page), `LargeResultsSetPagination` (50/page) |
 | Add rate limiting | `core/throttles.py` | Create `UserRateThrottle` subclass with scope |
 | Handle errors consistently | `core/exceptions.py` | `custom_exception_handler` wraps all errors |
+| Use shared WebSocket mixins | `core/consumers.py` | `RateLimitMixin`, `AuthenticatedConsumerMixin`, `BlockingMixin`, `ModerationMixin` |
+| Start a circle voice/video call | `apps/circles/views.py` | `CircleViewSet.start_call()` — Agora RTC token generation |
+| Create a dream post | `apps/social/views.py` | `DreamPostViewSet` — feed, like, comment, encourage |
 
 ---
 
@@ -343,19 +347,40 @@ The AI chat supports function calls that create/complete tasks and goals:
 
 | Consumer | File | WebSocket URL | Channel Group | Purpose |
 | --- | --- | --- | --- | --- |
-| `ChatConsumer` | `apps/conversations/consumers.py` | `ws/conversations/{id}/` | `conversation_{id}` | AI chat with GPT-4 streaming, content moderation, quota tracking |
-| `BuddyChatConsumer` | `apps/conversations/consumers.py` | `ws/buddy-chat/{id}/` | `buddy_chat_{id}` | Buddy-to-buddy messaging with content moderation |
+| `AIChatConsumer` | `apps/conversations/consumers.py` | `ws/ai-chat/{id}/` | `ai_chat_{id}` | AI chat with GPT-4 streaming, content moderation, quota tracking |
+| `BuddyChatConsumer` | `apps/buddies/consumers.py` | `ws/buddy-chat/{pairing_id}/` | `buddy_chat_{pairing_id}` | Buddy-to-buddy messaging with FCM push, block enforcement |
+| `CircleChatConsumer` | `apps/circles/consumers.py` | `ws/circle-chat/{circle_id}/` | `circle_chat_{circle_id}` | Circle group chat with block filtering, call notifications |
 | `NotificationConsumer` | `apps/notifications/consumers.py` | `ws/notifications/` | `notifications_{user_id}` | Real-time notification push, unread count updates |
+
+> **Note:** The deprecated alias `ws/conversations/{id}/` still routes to `AIChatConsumer` (formerly `ChatConsumer`) for backward compatibility.
+
+All chat consumers use shared mixins from `core/consumers.py`: `RateLimitMixin`, `AuthenticatedConsumerMixin`, `BlockingMixin`, `ModerationMixin`.
 
 ### WebSocket Events
 
-**ChatConsumer** receives:
+**AIChatConsumer** receives:
 - `message` — User message → content moderation → AI response (streamed)
+- `function_call` — Explicit function call (create_task, complete_task, create_goal)
 - `typing` — Typing indicator broadcast
 
 **BuddyChatConsumer** receives:
-- `message` — Buddy message → content moderation → broadcast to pair
+- `message` — Buddy message → content moderation → broadcast to pair → FCM push
 - `typing` — Typing indicator broadcast
+- `mark_read` — Mark messages as read
+
+**BuddyChatConsumer** sends (via channel group):
+- `chat_message` — New message from partner
+- `typing_status` — Partner typing indicator
+- `call_started` — Buddy call initiated (broadcast from REST endpoint)
+
+**CircleChatConsumer** receives:
+- `message` — Circle message → content moderation → save → broadcast (with block filtering)
+- `typing` — Typing indicator broadcast
+
+**CircleChatConsumer** sends (via channel group):
+- `circle_message` — New message from member (filtered by blocks)
+- `typing_status` — Member typing indicator
+- `call_started` — Circle call initiated (broadcast from REST endpoint)
 
 **NotificationConsumer** receives:
 - `mark_read` — Mark single notification read
@@ -368,8 +393,10 @@ The AI chat supports function calls that create/complete tasks and goals:
 ### Routing Configuration
 
 - `config/asgi.py` — Combines all WebSocket routes under `ProtocolTypeRouter`
-- `apps/conversations/routing.py` — Chat and buddy chat routes
-- `apps/notifications/routing.py` — Notification route
+- `apps/conversations/routing.py` — AI chat routes (`ws/ai-chat/` + deprecated `ws/conversations/`)
+- `apps/buddies/routing.py` — Buddy chat route (`ws/buddy-chat/`)
+- `apps/circles/routing.py` — Circle chat route (`ws/circle-chat/`)
+- `apps/notifications/routing.py` — Notification route (`ws/notifications/`)
 
 ---
 
@@ -476,16 +503,16 @@ Each app has a detailed README documenting its models, endpoints, serializers, s
 | --- | --- | --- |
 | Users | [apps/users/README.md](../apps/users/README.md) | User model, GamificationProfile, DailyActivity, Achievements, 2FA, GDPR |
 | Dreams | [apps/dreams/README.md](../apps/dreams/README.md) | Dreams, Goals, Tasks, Obstacles, Templates, Tags, Calibration, Vision Board |
-| Conversations | [apps/conversations/README.md](../apps/conversations/README.md) | AI Chat, Buddy Chat, WebSocket, Templates, Voice, Export |
+| Conversations | [apps/conversations/README.md](../apps/conversations/README.md) | AI Chat (AIChatConsumer), WebSocket, Templates, Voice, Export |
 | Notifications | [apps/notifications/README.md](../apps/notifications/README.md) | Multi-channel delivery, Templates, WebSocket, Push, Preferences |
 | Calendar | [apps/calendar/README.md](../apps/calendar/README.md) | Events, Time Blocks, Google Calendar, iCal, Conflict Detection |
 | Subscriptions | [apps/subscriptions/README.md](../apps/subscriptions/README.md) | Stripe, Plans, Webhooks, Invoices, Coupons, Analytics |
 | Store | [apps/store/README.md](../apps/store/README.md) | Items, Categories, XP/Stripe Purchase, Wishlists, Gifts, Refunds |
 | Leagues | [apps/leagues/README.md](../apps/leagues/README.md) | Leagues, Seasons, Leaderboards, Rank Snapshots, Rewards |
-| Circles | [apps/circles/README.md](../apps/circles/README.md) | Circles, Posts, Reactions, Challenges, Invitations, Moderation |
-| Social | [apps/social/README.md](../apps/social/README.md) | Friends, Follows, Blocking, Reporting, Feed, Search |
-| Buddies | [apps/buddies/README.md](../apps/buddies/README.md) | Pairing, Encouragement, Streaks, Check-in Reminders |
-| Core | [core/README.md](../core/README.md) | Auth, Permissions, Throttling, Sanitizers, Moderation, AI Validators, Audit |
+| Circles | [apps/circles/README.md](../apps/circles/README.md) | Circles, Posts, Reactions, Challenges, Invitations, Group Chat (CircleChatConsumer), Agora Calls |
+| Social | [apps/social/README.md](../apps/social/README.md) | Friends, Follows, Blocking, Reporting, Feed, Search, Dream Posts, Encouragements |
+| Buddies | [apps/buddies/README.md](../apps/buddies/README.md) | Pairing, Encouragement, Streaks, Check-in Reminders, Real-Time Chat (BuddyChatConsumer), Calls |
+| Core | [core/README.md](../core/README.md) | Auth, Permissions, Throttling, Sanitizers, Moderation, AI Validators, Audit, Consumer Mixins |
 
 ### Other Documentation
 

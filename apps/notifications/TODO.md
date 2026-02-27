@@ -18,6 +18,9 @@
 - [x] **In-app notifications** - Notification center in the app (mark-read, unread-count, grouped)
 - [x] **Analytics** - Open rate tracking (opened_at tracking)
 - [x] **Notification grouping** - Group similar notifications
+- [x] **FCM for buddy chat** - Push notifications to offline buddy chat partners via Firebase Cloud Messaging
+- [x] **FCM for circle calls** - Push notifications to circle members when a call starts
+- [x] **Dream post notifications** - `dream_post_like`, `dream_post_comment`, `dream_post_encouragement` notification types
 
 ## Planned - High Priority
 

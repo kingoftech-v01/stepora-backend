@@ -45,6 +45,12 @@ A personal AI assistant that:
 - Statistics and metrics
 - Achievement celebrations
 
+### 5. Community & Social
+- **Dream Posts** - Share dream progress publicly with images, GoFundMe links, and typed encouragements
+- **Buddy Chat & Calls** - Real-time WebSocket messaging between accountability buddies with FCM push notifications
+- **Circle Chat & Calls** - Real-time group chat within circles plus Agora-powered voice/video group calls
+- **Social Feed** - Aggregated feed from followed users and public posts with block filtering
+
 ## Target Audience
 
 - Professionals looking to develop new skills

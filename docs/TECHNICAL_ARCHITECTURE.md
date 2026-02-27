@@ -90,6 +90,8 @@
 | Load Balancer | AWS ALB | Traffic distribution |
 | Authentication | dj-rest-auth + allauth | Authentication |
 | AI | OpenAI GPT-4 + DALL-E 3 | Conversational AI |
+| Real-Time Communication | Agora.io RTC | Circle voice/video calls |
+| Push Notifications | Firebase Cloud Messaging | Buddy chat + circle call push |
 | Monitoring | Sentry | Error tracking |
 | Logs | CloudWatch | Centralized logging |
 
@@ -274,6 +276,67 @@ class NotificationTemplate(models.Model):
     title_template = models.CharField(max_length=255)
     body_template = models.TextField()
     is_active = models.BooleanField(default=True)
+
+# Circle Chat & Calls (apps/circles/models.py)
+class CircleMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    circle = models.ForeignKey(Circle, on_delete=models.CASCADE, related_name='chat_messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='circle_messages')
+    content = EncryptedTextField()
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class CircleCall(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    circle = models.ForeignKey(Circle, on_delete=models.CASCADE, related_name='calls')
+    initiator = models.ForeignKey(User, on_delete=models.CASCADE)
+    call_type = models.CharField(max_length=10)  # voice, video
+    status = models.CharField(max_length=20)  # active, completed, cancelled
+    agora_channel = models.CharField(max_length=100)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True)
+    duration_seconds = models.IntegerField(null=True)
+    max_participants = models.IntegerField(default=0)
+
+class CircleCallParticipant(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    call = models.ForeignKey(CircleCall, on_delete=models.CASCADE, related_name='participants')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    joined_at = models.DateTimeField()
+    left_at = models.DateTimeField(null=True)
+
+# Social Dream Posts (apps/social/models.py)
+class DreamPost(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dream_posts')
+    dream = models.ForeignKey('dreams.Dream', null=True, on_delete=models.SET_NULL)
+    content = EncryptedTextField()
+    image_url = models.URLField(null=True)
+    gofundme_url = models.URLField(null=True)
+    visibility = models.CharField(max_length=20, default='public')  # public, followers, private
+    likes_count = models.IntegerField(default=0)
+    comments_count = models.IntegerField(default=0)
+    shares_count = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class DreamPostLike(models.Model):
+    post = models.ForeignKey(DreamPost, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+class DreamPostComment(models.Model):
+    post = models.ForeignKey(DreamPost, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = EncryptedTextField()
+    parent = models.ForeignKey('self', null=True, on_delete=models.CASCADE, related_name='replies')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class DreamEncouragement(models.Model):
+    post = models.ForeignKey(DreamPost, on_delete=models.CASCADE, related_name='encouragements')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    encouragement_type = models.CharField(max_length=20)  # you_got_this, keep_going, inspired, proud, fire
+    message = EncryptedTextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 ```
 
 ## 4. Django REST Framework API Endpoints
@@ -341,19 +404,13 @@ POST   /api/conversations/{id}/messages/   # Send a message (GPT-4)
 DELETE /api/conversations/{id}/            # Delete conversation
 ```
 
-### 4.6 WebSocket (Real-time Chat)
+### 4.6 WebSocket Routes
 ```
-ws://localhost:9000/ws/conversations/{conversation_id}/
-wss://api.dreamplanner.app/ws/conversations/{conversation_id}/
-
-Messages:
-- Send: {"type": "message", "message": "Hello AI"}
-- Receive streaming:
-  {"type": "stream_start"}
-  {"type": "stream_chunk", "chunk": "Hello"}
-  {"type": "stream_end"}
-  {"type": "message", "message": {...}}
-- Typing: {"type": "typing", "is_typing": true}
+ws/ai-chat/{conversation_id}/           # AIChatConsumer — AI chat with streaming
+ws/conversations/{conversation_id}/     # (deprecated alias for ai-chat)
+ws/buddy-chat/{pairing_id}/             # BuddyChatConsumer — buddy messaging + FCM
+ws/circle-chat/{circle_id}/             # CircleChatConsumer — circle group chat
+ws/notifications/                       # NotificationConsumer — real-time notifications
 ```
 
 ### 4.7 Calendar
@@ -715,127 +772,44 @@ app.conf.beat_schedule = {
 ### 7.1 ASGI Configuration
 
 ```python
-# asgi.py (config/asgi.py)
+# config/asgi.py
 
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-from conversations.routing import websocket_urlpatterns
+from channels.security.websocket import AllowedHostsOriginValidator
+from core.websocket_auth import TokenAuthMiddlewareStack
+
+from apps.conversations.routing import websocket_urlpatterns as ai_chat_ws
+from apps.buddies.routing import websocket_urlpatterns as buddy_chat_ws
+from apps.circles.routing import websocket_urlpatterns as circle_chat_ws
+from apps.notifications.routing import websocket_urlpatterns as notification_ws
 
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
-    "websocket": AuthMiddlewareStack(
-        URLRouter(websocket_urlpatterns)
+    "http": django_asgi_app,
+    "websocket": AllowedHostsOriginValidator(
+        TokenAuthMiddlewareStack(
+            URLRouter(
+                ai_chat_ws +        # AIChatConsumer
+                buddy_chat_ws +     # BuddyChatConsumer
+                circle_chat_ws +    # CircleChatConsumer
+                notification_ws     # NotificationConsumer
+            )
+        )
     ),
 })
 ```
 
-### 7.2 WebSocket Consumer
+### 7.2 WebSocket Consumers Summary
 
-```python
-# conversations/consumers.py
+The system has 4 WebSocket consumers, all chat consumers using shared mixins from `core/consumers.py`:
 
-from channels.generic.websocket import AsyncWebsocketConsumer
+| Consumer | File | URL | Group | Mixins |
+| --- | --- | --- | --- | --- |
+| `AIChatConsumer` | `apps/conversations/consumers.py` | `ws/ai-chat/{id}/` | `ai_chat_{id}` | RateLimit, Auth, Moderation |
+| `BuddyChatConsumer` | `apps/buddies/consumers.py` | `ws/buddy-chat/{pairing_id}/` | `buddy_chat_{pairing_id}` | RateLimit, Auth, Blocking, Moderation |
+| `CircleChatConsumer` | `apps/circles/consumers.py` | `ws/circle-chat/{circle_id}/` | `circle_chat_{circle_id}` | RateLimit, Auth, Blocking, Moderation |
+| `NotificationConsumer` | `apps/notifications/consumers.py` | `ws/notifications/` | `notifications_{user_id}` | — |
 
-class ChatConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
-        self.room_group_name = f'conversation_{self.conversation_id}'
-        self.user = self.scope['user']
-
-        # Check access
-        has_access = await self.check_conversation_access()
-        if not has_access:
-            await self.close(code=4003)
-            return
-
-        # Join group
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
-        await self.accept()
-
-        # Connection confirmation
-        await self.send(text_data=json.dumps({
-            'type': 'connection',
-            'status': 'connected',
-            'conversation_id': self.conversation_id
-        }))
-
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type', 'message')
-
-        if message_type == 'message':
-            await self.handle_message(data)
-        elif message_type == 'typing':
-            await self.handle_typing(data)
-
-    async def handle_message(self, data):
-        message_content = data.get('message', '').strip()
-
-        # Save user message
-        user_message = await self.save_message('user', message_content)
-
-        # Broadcast user message
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': {
-                    'id': str(user_message.id),
-                    'role': 'user',
-                    'content': message_content,
-                    'created_at': user_message.created_at.isoformat()
-                }
-            }
-        )
-
-        # Get AI response via streaming
-        await self.get_ai_response_stream(message_content)
-
-    async def get_ai_response_stream(self, user_message):
-        conversation = await self.get_conversation()
-        messages = await self.get_messages_for_api(conversation)
-
-        ai_service = OpenAIService()
-
-        # Indicate streaming start
-        await self.send(text_data=json.dumps({'type': 'stream_start'}))
-
-        # Stream AI response
-        full_response = ""
-        async for chunk in ai_service.chat_stream_async(
-            messages=messages,
-            conversation_type=conversation.conversation_type
-        ):
-            full_response += chunk
-            await self.send(text_data=json.dumps({
-                'type': 'stream_chunk',
-                'chunk': chunk
-            }))
-
-        # End of streaming
-        await self.send(text_data=json.dumps({'type': 'stream_end'}))
-
-        # Save complete response
-        assistant_message = await self.save_message('assistant', full_response)
-
-        # Broadcast complete message
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': {
-                    'id': str(assistant_message.id),
-                    'role': 'assistant',
-                    'content': full_response,
-                    'created_at': assistant_message.created_at.isoformat()
-                }
-            }
-        )
-```
+> **Deprecated alias:** `ws/conversations/{id}/` still routes to `AIChatConsumer` for backward compatibility.
 
 ## 8. AWS Deployment
 

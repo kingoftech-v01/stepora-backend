@@ -11,7 +11,10 @@ from drf_spectacular.utils import extend_schema_serializer
 
 from core.sanitizers import sanitize_text
 from apps.users.models import User
-from .models import Friendship, UserFollow, ActivityFeedItem
+from .models import (
+    Friendship, UserFollow, ActivityFeedItem,
+    DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+)
 
 
 class UserPublicSerializer(serializers.ModelSerializer):
@@ -236,4 +239,149 @@ class BlockedUserSerializer(serializers.Serializer):
             'id': str(blocked.id),
             'username': blocked.display_name or 'Anonymous',
             'avatar': blocked.avatar_url or '',
+        }
+
+
+# ── Dream Post serializers ────────────────────────────────────────────
+
+
+class DreamPostSerializer(serializers.ModelSerializer):
+    """Full dream post representation for the feed."""
+
+    user = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    likesCount = serializers.IntegerField(source='likes_count', read_only=True)
+    commentsCount = serializers.IntegerField(source='comments_count', read_only=True)
+    sharesCount = serializers.IntegerField(source='shares_count', read_only=True)
+    hasLiked = serializers.SerializerMethodField()
+    hasEncouraged = serializers.SerializerMethodField()
+    encouragementSummary = serializers.SerializerMethodField()
+    gofundmeUrl = serializers.URLField(source='gofundme_url', read_only=True)
+    imageUrl = serializers.SerializerMethodField()
+    dreamTitle = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DreamPost
+        fields = [
+            'id', 'user', 'dream', 'dreamTitle',
+            'content', 'imageUrl', 'gofundmeUrl',
+            'visibility', 'likesCount', 'commentsCount', 'sharesCount',
+            'is_pinned', 'hasLiked', 'hasEncouraged', 'encouragementSummary',
+            'createdAt', 'updatedAt',
+        ]
+        read_only_fields = fields
+
+    def get_user(self, obj) -> dict:
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.display_name or 'Anonymous',
+            'avatar': obj.user.avatar_url or '',
+            'level': obj.user.level,
+        }
+
+    def get_hasLiked(self, obj) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if hasattr(obj, '_user_has_liked'):
+            return obj._user_has_liked
+        return obj.likes.filter(user=request.user).exists()
+
+    def get_hasEncouraged(self, obj) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if hasattr(obj, '_user_has_encouraged'):
+            return obj._user_has_encouraged
+        return obj.encouragements.filter(user=request.user).exists()
+
+    def get_encouragementSummary(self, obj) -> dict:
+        from django.db.models import Count
+        counts = obj.encouragements.values('encouragement_type').annotate(
+            count=Count('id')
+        )
+        return {item['encouragement_type']: item['count'] for item in counts}
+
+    def get_imageUrl(self, obj) -> str:
+        if obj.image_url:
+            return obj.image_url
+        if obj.image_file:
+            return obj.image_file.url
+        return ''
+
+    def get_dreamTitle(self, obj) -> str:
+        if obj.dream:
+            return obj.dream.title
+        return ''
+
+
+class DreamPostCreateSerializer(serializers.Serializer):
+    """Serializer for creating a dream post."""
+
+    content = serializers.CharField(max_length=5000)
+    dream_id = serializers.UUIDField(required=False, allow_null=True)
+    gofundme_url = serializers.URLField(required=False, default='')
+    visibility = serializers.ChoiceField(
+        choices=['public', 'followers', 'private'],
+        default='public',
+    )
+    image_url = serializers.URLField(required=False, default='')
+
+    def validate_content(self, value):
+        return sanitize_text(value)
+
+    def validate_gofundme_url(self, value):
+        if value:
+            from core.sanitizers import sanitize_url
+            return sanitize_url(value)
+        return value
+
+
+class DreamPostCommentSerializer(serializers.ModelSerializer):
+    """Comment on a dream post."""
+
+    user = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DreamPostComment
+        fields = ['id', 'user', 'content', 'parent', 'replies', 'createdAt']
+        read_only_fields = ['id', 'user', 'replies', 'createdAt']
+
+    def get_user(self, obj) -> dict:
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.display_name or 'Anonymous',
+            'avatar': obj.user.avatar_url or '',
+        }
+
+    def get_replies(self, obj) -> list:
+        if obj.replies.exists():
+            return DreamPostCommentSerializer(
+                obj.replies.select_related('user').order_by('created_at')[:10],
+                many=True,
+                context=self.context,
+            ).data
+        return []
+
+
+class DreamEncouragementSerializer(serializers.ModelSerializer):
+    """Encouragement on a dream post."""
+
+    user = serializers.SerializerMethodField()
+    encouragementType = serializers.CharField(source='encouragement_type', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = DreamEncouragement
+        fields = ['id', 'user', 'encouragementType', 'message', 'createdAt']
+        read_only_fields = fields
+
+    def get_user(self, obj) -> dict:
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.display_name or 'Anonymous',
+            'avatar': obj.user.avatar_url or '',
         }

@@ -19,6 +19,14 @@ Routes:
     /report                                 - Report a user
     /counts/<user_id>                      - Follower/following/friend counts
     /users/search?q=<query>                - Search users
+    /posts/                                 - Dream posts CRUD
+    /posts/feed/                            - Social feed
+    /posts/<id>/like/                       - Like/unlike a post
+    /posts/<id>/comment/                    - Comment on a post
+    /posts/<id>/comments/                   - List comments
+    /posts/<id>/encourage/                  - Send encouragement
+    /posts/<id>/share/                      - Share/repost
+    /posts/user/<user_id>/                  - User's posts
 """
 
 from django.urls import path, include
@@ -26,12 +34,13 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView,
-    FeedLikeView, FeedCommentView, RecentSearchViewSet,
+    FeedLikeView, FeedCommentView, RecentSearchViewSet, DreamPostViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'', FriendshipViewSet, basename='social')
 router.register(r'recent-searches', RecentSearchViewSet, basename='recent-searches')
+router.register(r'posts', DreamPostViewSet, basename='dream-post')
 
 urlpatterns = [
     path('feed/friends', ActivityFeedView.as_view(), name='friends-feed'),

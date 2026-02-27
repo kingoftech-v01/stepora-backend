@@ -22,11 +22,16 @@ import secrets
 from django.utils import timezone as django_timezone
 from datetime import timedelta
 
+import logging
+import time
+
 from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
+    CircleMessage, CircleCall, CircleCallParticipant,
 )
 from core.permissions import CanUseCircles
+from core.pagination import StandardResultsSetPagination
 from .serializers import (
     CircleListSerializer,
     CircleDetailSerializer,
@@ -42,7 +47,11 @@ from .serializers import (
     DirectInviteSerializer,
     ChallengeProgressSerializer,
     ChallengeProgressCreateSerializer,
+    CircleMessageSerializer,
+    CircleCallSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -927,6 +936,407 @@ class CircleViewSet(viewsets.ModelViewSet):
             'challenge_title': challenge.title,
             'leaderboard': leaderboard,
         })
+
+    # ── Circle Chat endpoints ─────────────────────────────────────────
+
+    @extend_schema(
+        summary="Get circle chat history",
+        description="Paginated chat messages for a circle (REST fallback for WebSocket).",
+        responses={200: CircleMessageSerializer(many=True)},
+        tags=["Circle Chat"],
+    )
+    @action(detail=True, methods=['get'], url_path='chat')
+    def chat_history(self, request, pk=None):
+        """Get paginated chat history for the circle."""
+        circle = self.get_object()
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': 'You must be a member to view chat.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from apps.social.models import BlockedUser
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=request.user) | Q(blocked=request.user)
+        ).values_list('blocker_id', 'blocked_id')
+        for blocker_id, blocked_id in blocked_qs:
+            if blocker_id != request.user.id:
+                blocked_ids.add(blocker_id)
+            if blocked_id != request.user.id:
+                blocked_ids.add(blocked_id)
+
+        messages = CircleMessage.objects.filter(
+            circle=circle,
+        ).exclude(
+            sender_id__in=blocked_ids,
+        ).select_related('sender').order_by('-created_at')
+
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = CircleMessageSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = CircleMessageSerializer(messages, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Send circle chat message (REST)",
+        description="Send a message to the circle chat via REST. Also broadcasts to WebSocket group.",
+        tags=["Circle Chat"],
+        responses={201: CircleMessageSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='chat/send')
+    def chat_send(self, request, pk=None):
+        """Send a message to the circle chat via REST."""
+        circle = self.get_object()
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': 'You must be a member to send messages.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response(
+                {'error': 'content is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from core.sanitizers import sanitize_text
+        content = sanitize_text(content)
+
+        message = CircleMessage.objects.create(
+            circle=circle,
+            sender=request.user,
+            content=content,
+        )
+
+        # Broadcast via channel layer
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            sender_name = request.user.display_name or 'Anonymous'
+            async_to_sync(channel_layer.group_send)(
+                f'circle_chat_{circle.id}',
+                {
+                    'type': 'circle_message',
+                    'message': {
+                        'id': str(message.id),
+                        'sender_id': str(request.user.id),
+                        'sender_name': sender_name,
+                        'sender_avatar': request.user.avatar_url or '',
+                        'content': content,
+                        'created_at': message.created_at.isoformat(),
+                    },
+                },
+            )
+        except Exception:
+            logger.debug("WebSocket broadcast failed", exc_info=True)
+
+        return Response(
+            CircleMessageSerializer(message).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    # ── Circle Call endpoints ─────────────────────────────────────────
+
+    @extend_schema(
+        summary="Start a circle group call",
+        description="Start a voice/video call in the circle. Any member can initiate.",
+        tags=["Circle Calls"],
+        responses={201: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='call/start')
+    def call_start(self, request, pk=None):
+        """Start a group call in the circle."""
+        circle = self.get_object()
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': 'You must be a member to start a call.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Check for existing active call
+        active_call = CircleCall.objects.filter(circle=circle, status='active').first()
+        if active_call:
+            return Response(
+                {'error': 'A call is already active in this circle.', 'call_id': str(active_call.id)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        call_type = request.data.get('call_type', 'voice')
+        if call_type not in ('voice', 'video'):
+            return Response(
+                {'error': 'call_type must be voice or video.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        import uuid as _uuid
+        call_id = _uuid.uuid4()
+        call = CircleCall.objects.create(
+            id=call_id,
+            circle=circle,
+            initiator=request.user,
+            call_type=call_type,
+            status='active',
+            agora_channel=str(call_id),
+        )
+
+        # Add initiator as participant
+        CircleCallParticipant.objects.create(call=call, user=request.user)
+
+        # Generate Agora RTC token
+        token_data = self._generate_agora_token(str(call.id), request.user)
+
+        # Broadcast call_started to circle chat WebSocket group
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'circle_chat_{circle.id}',
+                {
+                    'type': 'call_started',
+                    'call': {
+                        'id': str(call.id),
+                        'type': call_type,
+                        'initiator_id': str(request.user.id),
+                        'initiator_name': request.user.display_name or 'Someone',
+                    },
+                },
+            )
+        except Exception:
+            logger.debug("WebSocket call broadcast failed", exc_info=True)
+
+        # Send push notification to all other circle members
+        self._notify_circle_members_call(circle, call, request.user)
+
+        return Response({
+            'call_id': str(call.id),
+            'agora_channel': str(call.id),
+            'call_type': call_type,
+            'status': 'active',
+            **token_data,
+        }, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Join a circle group call",
+        description="Join an active call in the circle.",
+        tags=["Circle Calls"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='call/join')
+    def call_join(self, request, pk=None):
+        """Join the active call in the circle."""
+        circle = self.get_object()
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': 'You must be a member.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        call = CircleCall.objects.filter(circle=circle, status='active').first()
+        if not call:
+            return Response(
+                {'error': 'No active call in this circle.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Add as participant (or get existing)
+        participant, created = CircleCallParticipant.objects.get_or_create(
+            call=call, user=request.user,
+            defaults={'left_at': None},
+        )
+        if not created and participant.left_at is not None:
+            # Rejoining
+            participant.left_at = None
+            participant.save(update_fields=['left_at'])
+
+        token_data = self._generate_agora_token(str(call.id), request.user)
+
+        return Response({
+            'call_id': str(call.id),
+            'agora_channel': call.agora_channel,
+            'call_type': call.call_type,
+            **token_data,
+        })
+
+    @extend_schema(
+        summary="Leave a circle group call",
+        description="Leave the active call. If last participant, the call is ended.",
+        tags=["Circle Calls"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='call/leave')
+    def call_leave(self, request, pk=None):
+        """Leave the active call."""
+        circle = self.get_object()
+        call = CircleCall.objects.filter(circle=circle, status='active').first()
+        if not call:
+            return Response(
+                {'error': 'No active call.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            participant = CircleCallParticipant.objects.get(
+                call=call, user=request.user, left_at__isnull=True,
+            )
+        except CircleCallParticipant.DoesNotExist:
+            return Response(
+                {'error': 'You are not in this call.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        participant.left_at = django_timezone.now()
+        participant.save(update_fields=['left_at'])
+
+        # Check if last participant — auto-end
+        active_count = call.participants.filter(left_at__isnull=True).count()
+        if active_count == 0:
+            call.status = 'completed'
+            call.ended_at = django_timezone.now()
+            if call.started_at:
+                call.duration_seconds = int(
+                    (call.ended_at - call.started_at).total_seconds()
+                )
+            call.save(update_fields=['status', 'ended_at', 'duration_seconds'])
+
+        return Response({
+            'call_id': str(call.id),
+            'status': call.status,
+            'active_participants': active_count,
+        })
+
+    @extend_schema(
+        summary="End a circle group call",
+        description="End the call (initiator or admin only).",
+        tags=["Circle Calls"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='call/end')
+    def call_end(self, request, pk=None):
+        """End the active call (initiator or admin only)."""
+        circle = self.get_object()
+        call = CircleCall.objects.filter(circle=circle, status='active').first()
+        if not call:
+            return Response(
+                {'error': 'No active call.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_initiator = call.initiator == request.user
+        is_admin = self._is_admin_or_moderator(circle, request.user)
+        if not is_initiator and not is_admin:
+            return Response(
+                {'error': 'Only the initiator or an admin can end the call.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        call.status = 'completed'
+        call.ended_at = django_timezone.now()
+        if call.started_at:
+            call.duration_seconds = int(
+                (call.ended_at - call.started_at).total_seconds()
+            )
+        call.save(update_fields=['status', 'ended_at', 'duration_seconds'])
+
+        # Mark all participants as left
+        call.participants.filter(left_at__isnull=True).update(
+            left_at=django_timezone.now()
+        )
+
+        return Response({
+            'call_id': str(call.id),
+            'status': 'completed',
+            'duration_seconds': call.duration_seconds,
+        })
+
+    @extend_schema(
+        summary="Get active circle call",
+        description="Get the active call in the circle (for showing 'join' button).",
+        tags=["Circle Calls"],
+        responses={200: CircleCallSerializer},
+    )
+    @action(detail=True, methods=['get'], url_path='call/active')
+    def call_active(self, request, pk=None):
+        """Get active call if any."""
+        circle = self.get_object()
+        call = CircleCall.objects.filter(circle=circle, status='active').first()
+        if not call:
+            return Response({'active_call': None})
+        return Response({
+            'active_call': CircleCallSerializer(call).data,
+        })
+
+    def _generate_agora_token(self, channel_name, user):
+        """Generate Agora RTC token for a channel."""
+        from django.conf import settings
+        app_id = getattr(settings, 'AGORA_APP_ID', '')
+        app_cert = getattr(settings, 'AGORA_APP_CERTIFICATE', '')
+        if not app_id or not app_cert:
+            return {'token': None, 'uid': str(user.id)}
+
+        try:
+            from agora_token_builder.RtcTokenBuilder import RtcTokenBuilder, Role_Publisher
+            uid = str(user.id)
+            expiration_seconds = 3600
+            current_timestamp = int(time.time())
+            privilege_expired_ts = current_timestamp + expiration_seconds
+
+            token = RtcTokenBuilder.buildTokenWithAccount(
+                app_id, app_cert, channel_name, uid,
+                Role_Publisher, privilege_expired_ts,
+            )
+            return {
+                'token': token,
+                'uid': uid,
+                'expires_in': expiration_seconds,
+            }
+        except Exception:
+            logger.warning("Agora token generation failed", exc_info=True)
+            return {'token': None, 'uid': str(user.id)}
+
+    def _notify_circle_members_call(self, circle, call, initiator):
+        """Send push notification to circle members about a new call."""
+        try:
+            from apps.notifications.fcm_service import FCMService
+            from apps.notifications.models import UserDevice
+
+            member_ids = CircleMembership.objects.filter(
+                circle=circle,
+            ).exclude(
+                user=initiator,
+            ).values_list('user_id', flat=True)
+
+            devices = UserDevice.objects.filter(
+                user_id__in=member_ids, is_active=True,
+            )
+            tokens = [d.fcm_token for d in devices if d.fcm_token]
+            if not tokens:
+                return
+
+            caller_name = initiator.display_name or 'Someone'
+            fcm = FCMService()
+            for token in tokens:
+                try:
+                    fcm.send_to_token(
+                        token=token,
+                        title=f'{caller_name} started a {call.call_type} call',
+                        body=f'Join the call in {circle.name}',
+                        data={
+                            'type': 'circle_call',
+                            'circle_id': str(circle.id),
+                            'call_id': str(call.id),
+                            'call_type': call.call_type,
+                        },
+                    )
+                except Exception:
+                    logger.debug("FCM send failed", exc_info=True)
+        except Exception:
+            logger.debug("Circle call notification failed", exc_info=True)
 
 
 class ChallengeViewSet(viewsets.GenericViewSet):

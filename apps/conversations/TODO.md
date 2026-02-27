@@ -21,6 +21,9 @@
 - [x] **Conversation templates** - Pre-defined coaching templates (model + viewset)
 - [x] **Voice messages** - Audio support with Whisper (send-voice endpoint)
 - [x] **Image analysis** - Analyze images with GPT-4V (send-image endpoint)
+- [x] **Consumer refactor to AIChatConsumer** - Renamed ChatConsumer to AIChatConsumer for clarity; AI chat URL changed to `ws/ai-chat/` (old URL preserved as deprecated alias)
+- [x] **Shared mixins extraction** - Extracted `RateLimitMixin`, `AuthenticatedConsumerMixin`, `BlockingMixin`, `ModerationMixin` into `core/consumers.py` for reuse across all chat consumers
+- [x] **Buddy chat moved out** - BuddyChatConsumer moved to `apps/buddies/consumers.py` with its own routing module
 
 ## Planned - High Priority
 

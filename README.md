@@ -2,7 +2,7 @@
 
 DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
-**Backend**: Django 5.0.1 with 12 apps, 150+ API endpoints, 28 Celery tasks, 3 WebSocket consumers
+**Backend**: Django 5.0.1 with 12 apps, 170+ API endpoints, 28 Celery tasks, 4 WebSocket consumers
 
 ---
 
@@ -40,12 +40,14 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Overdue Detection**: Daily checks with gentle nudge notifications
 
 ### Real-Time Communication
-- **AI Chat (WebSocket)**: Real-time streaming chat with GPT-4 via WebSocket
-- **Buddy Chat (WebSocket)**: Real-time peer-to-peer chat between accountability buddies
+- **AI Chat (WebSocket)**: Real-time streaming chat with GPT-4 via `AIChatConsumer`
+- **Buddy Chat (WebSocket)**: Real-time peer-to-peer chat between accountability buddies via `BuddyChatConsumer` with FCM push
+- **Circle Chat (WebSocket)**: Real-time group chat within circles via `CircleChatConsumer` with block filtering
+- **Voice/Video Calls (Agora)**: Circle group calls powered by Agora.io RTC with token generation and participant tracking
 - **Conversation Types**: Dream creation, planning, motivation, coaching, rescue, buddy chat
 - **Conversation Templates**: Pre-built conversation starters for common scenarios
 - **Conversation Export**: Export conversations as PDF or JSON
-- **Typing Indicators**: Real-time typing status for both AI and buddy chats
+- **Typing Indicators**: Real-time typing status across all chat consumers
 
 ### Gamification System
 - **XP and Leveling**: Earn XP for completing tasks and achieving milestones
@@ -86,6 +88,8 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 
 ### Dream Circles
 - **Circle Management**: Create, join, and manage circles with privacy settings (public/private)
+- **Circle Chat**: Real-time group messaging via WebSocket with content moderation and block filtering
+- **Circle Calls**: Voice/video group calls powered by Agora.io with RTC token generation
 - **Invite Codes**: Join circles via shareable invite codes
 - **Invitations**: View and manage pending circle invitations
 - **Circle Posts**: Create, edit, delete posts within circles
@@ -104,12 +108,17 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **User Search**: Search users by name or email
 - **Activity Feed**: Friends activity feed with filtering
 - **Social Counts**: Follower, following, and friend counts per user
+- **Dream Posts**: Share dream progress publicly with optional images, GoFundMe links, and visibility controls
+- **Post Feed**: Aggregated feed from followed users and public posts with block filtering
+- **Post Interactions**: Like, threaded comments, and share/repost
+- **Encouragements**: 5 typed encouragement reactions (you_got_this, keep_going, inspired, proud, fire)
 
 ### Dream Buddies
 - **Buddy Matching**: AI-powered compatibility matching for accountability partners
 - **Acceptance Flow**: Send, accept, and reject buddy pairing requests
 - **Auto-Expiration**: Pending buddy requests automatically expire after 7 days
-- **Real-Time Chat**: WebSocket-based buddy-to-buddy messaging
+- **Real-Time Chat**: WebSocket-based buddy-to-buddy messaging via `BuddyChatConsumer` with FCM push notifications
+- **Buddy Calls**: Initiate calls with broadcast to WebSocket group
 - **Encouragement**: Send encouragement messages to your buddy
 - **Check-In Reminders**: Automatic daily reminders when no encouragement sent in 3+ days
 - **Streak Tracking**: Track buddy engagement streaks
@@ -148,16 +157,16 @@ dreamplanner/
 +-- apps/                        # 12 Django applications
 |   +-- users/                   # User management, gamification, 2FA, GDPR
 |   +-- dreams/                  # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
-|   +-- conversations/           # AI chat, buddy chat (WebSocket), templates, voice transcription
+|   +-- conversations/           # AI chat (AIChatConsumer WebSocket), templates, voice transcription
 |   +-- notifications/           # Push notifications, templates, preferences, Celery tasks
 |   +-- calendar/                # Events, recurring, Google Calendar sync, iCal feed
 |   +-- subscriptions/           # Stripe plans, checkout, webhooks, invoices
 |   +-- store/                   # Items, categories, purchases, wishlists, gifting, refunds
 |   +-- leagues/                 # Leagues, seasons, leaderboards, rank snapshots
-|   +-- circles/                 # Circles, posts, reactions, challenges, invitations
-|   +-- social/                  # Friends, follows, blocking, reporting, activity feed
-|   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders
-+-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware
+|   +-- circles/                 # Circles, posts, reactions, challenges, invitations, group chat, Agora calls
+|   +-- social/                  # Friends, follows, blocking, reporting, activity feed, dream posts
+|   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders, chat, calls
++-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware, consumer mixins
 +-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
 +-- config/                      # Django settings, Celery, ASGI/WSGI
 +-- docker/                      # Docker + Nginx configs
@@ -181,6 +190,8 @@ dreamplanner/
 | **Authentication** | django-allauth + dj-rest-auth (Token auth) |
 | **Social Auth** | Google Sign-In, Apple Sign-In |
 | **AI** | OpenAI GPT-4, DALL-E 3, Whisper, GPT-4V |
+| **Real-Time Calls** | Agora.io RTC (voice/video) |
+| **Push Notifications** | Firebase Cloud Messaging (FCM) |
 | **Payments** | Stripe (subscriptions + one-time) |
 | **PDF Generation** | ReportLab |
 | **Server** | Gunicorn + Daphne |
@@ -270,6 +281,10 @@ REDIS_PORT=6379
 # OpenAI
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_ORGANIZATION_ID=your-org-id    # optional
+
+# Agora (circle voice/video calls)
+AGORA_APP_ID=your-agora-app-id
+AGORA_APP_CERTIFICATE=your-agora-app-certificate
 
 # Social Auth
 GOOGLE_CLIENT_ID=your-google-client-id
@@ -599,11 +614,40 @@ GET    /api/buddies/history/                   # Pairing history
 DELETE /api/buddies/{id}/                      # End pairing
 ```
 
+### Circle Chat & Calls
+```
+POST   /api/circles/{id}/chat/send/                # Send circle chat message
+GET    /api/circles/{id}/chat/history/             # Circle chat history
+POST   /api/circles/{id}/call/start/               # Start voice/video call (Agora)
+POST   /api/circles/{id}/call/join/                # Join active call
+POST   /api/circles/{id}/call/leave/               # Leave call
+POST   /api/circles/{id}/call/end/                 # End call
+GET    /api/circles/{id}/call/active/              # Get active call
+```
+
+### Dream Posts
+```
+GET    /api/social/posts/                          # List posts
+POST   /api/social/posts/                          # Create dream post
+GET    /api/social/posts/{id}/                     # Post detail
+PUT    /api/social/posts/{id}/                     # Update post
+DELETE /api/social/posts/{id}/                     # Delete post
+GET    /api/social/posts/feed/                     # Social feed
+POST   /api/social/posts/{id}/like/                # Toggle like
+POST   /api/social/posts/{id}/comment/             # Add comment
+GET    /api/social/posts/{id}/comments/            # List comments
+POST   /api/social/posts/{id}/encourage/           # Send encouragement
+POST   /api/social/posts/{id}/share/               # Share/repost
+GET    /api/social/posts/user/{user_id}/           # User's posts
+```
+
 ### WebSocket Routes
 ```
-ws://localhost:9000/ws/conversations/{conversation_id}/    # AI chat (GPT-4 streaming)
-ws://localhost:9000/ws/buddy-chat/{conversation_id}/       # Buddy real-time chat
-ws://localhost:9000/ws/notifications/                       # Real-time notification delivery
+ws/ai-chat/{conversation_id}/                      # AIChatConsumer — AI chat (GPT-4 streaming)
+ws/conversations/{conversation_id}/                # (deprecated alias for ai-chat)
+ws/buddy-chat/{pairing_id}/                        # BuddyChatConsumer — buddy real-time chat + FCM
+ws/circle-chat/{circle_id}/                        # CircleChatConsumer — circle group chat
+ws/notifications/                                  # NotificationConsumer — real-time notifications
 ```
 
 ### Health Checks
@@ -715,12 +759,13 @@ aws ecs update-service \
 ## Project Stats
 
 - **Django Apps**: 12 (users, dreams, conversations, notifications, calendar, subscriptions, store, leagues, circles, social, buddies, core)
-- **API Endpoints**: 150+
-- **WebSocket Consumers**: 3 (AI Chat, Buddy Chat, Notifications)
+- **API Endpoints**: 170+
+- **WebSocket Consumers**: 4 (AIChatConsumer, BuddyChatConsumer, CircleChatConsumer, NotificationConsumer)
+- **WebSocket Routes**: 5 (ai-chat, conversations (deprecated alias), buddy-chat, circle-chat, notifications)
 - **Celery Beat Tasks**: 15 periodic tasks
 - **On-Demand Celery Tasks**: 13 async tasks
 - **Management Commands**: 7 (seed_subscription_plans, seed_achievements, seed_dream_templates, seed_conversation_templates, seed_notification_templates, seed_leagues, seed_store)
-- **Models**: 40+
+- **Models**: 50+
 - **Test Coverage**: 99%+ target
 
 ---

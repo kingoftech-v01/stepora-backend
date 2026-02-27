@@ -9,9 +9,9 @@
          │                  │                  │
          │  QUICK WINS      │   BIG BETS       │
          │                  │                  │
-         │  • 2-Min Start   │  • Dream Buddy   │
+         │  • 2-Min Start   │  • Dream Buddy ✅ │
          │  • Micro-Wins    │  • AI Coach Pro  │
-         │  • Streak Ins.   │  • Dream Circles │
+         │  • Streak Ins.   │  • Dream Circles✅│
          │                  │  • Vision Board  │
 LOW      │                  │                  │
 EFFORT ──┼──────────────────┼──────────────────┼── HIGH EFFORT
@@ -333,6 +333,7 @@ Important: Make it feel achievable, not fantasy
 | **Social** | 5-8 | Dream Buddy, Commitment, Gamification | Create social engagement |
 | **AI+** | 9-12 | Proactive Coach, Vision Board | Prevent dropout |
 | **Viral** | 13-16 | Dream Circles, Social Sharing | Organic growth |
+| **Community** | Delivered | Buddy chat/calls, Circle chat/calls, Dream posts, Social feed | **DELIVERED** |
 
 ---
 

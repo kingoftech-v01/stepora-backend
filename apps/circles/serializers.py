@@ -12,6 +12,7 @@ from core.sanitizers import sanitize_text
 from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
+    CircleMessage, CircleCall, CircleCallParticipant,
 )
 
 
@@ -467,3 +468,43 @@ class ChallengeProgressCreateSerializer(serializers.Serializer):
 
     def validate_notes(self, value):
         return sanitize_text(value)
+
+
+class CircleMessageSerializer(serializers.ModelSerializer):
+    """Serializer for circle chat messages."""
+
+    senderName = serializers.CharField(source='sender.display_name', read_only=True)
+    senderAvatar = serializers.URLField(source='sender.avatar_url', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = CircleMessage
+        fields = [
+            'id', 'circle', 'sender', 'senderName', 'senderAvatar',
+            'content', 'metadata', 'createdAt',
+        ]
+        read_only_fields = ['id', 'circle', 'sender', 'senderName', 'senderAvatar', 'createdAt']
+
+
+class CircleCallSerializer(serializers.ModelSerializer):
+    """Serializer for circle group calls."""
+
+    initiatorName = serializers.CharField(source='initiator.display_name', read_only=True)
+    participantCount = serializers.SerializerMethodField()
+    startedAt = serializers.DateTimeField(source='started_at', read_only=True)
+    endedAt = serializers.DateTimeField(source='ended_at', read_only=True)
+    callType = serializers.CharField(source='call_type', read_only=True)
+    agoraChannel = serializers.CharField(source='agora_channel', read_only=True)
+
+    class Meta:
+        model = CircleCall
+        fields = [
+            'id', 'circle', 'initiator', 'initiatorName',
+            'callType', 'status', 'agoraChannel',
+            'startedAt', 'endedAt', 'duration_seconds',
+            'max_participants', 'participantCount',
+        ]
+        read_only_fields = fields
+
+    def get_participantCount(self, obj) -> int:
+        return obj.participants.filter(left_at__isnull=True).count()

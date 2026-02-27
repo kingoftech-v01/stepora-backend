@@ -209,6 +209,16 @@
 - Public API for third-party integrations
 - Webhooks for events
 
+## Completed — Phase 5: Community & Real-Time Communication
+
+This phase has been fully implemented and delivered:
+
+- [x] **3 WebSocket systems** — AIChatConsumer (AI chat), BuddyChatConsumer (buddy messaging), CircleChatConsumer (circle group chat) with shared mixin architecture from `core/consumers.py`
+- [x] **Agora voice/video calls** — Circle group calls powered by Agora.io RTC with server-side token generation, call lifecycle management (start/join/leave/end), and participant tracking
+- [x] **Social dream sharing platform** — DreamPost model with images, GoFundMe links, visibility controls, social feed, likes, threaded comments, 5 typed encouragements, and share/repost
+- [x] **FCM push notifications** — Firebase Cloud Messaging for buddy chat (offline partner) and circle call start (all members)
+- [x] **Block enforcement** — Bidirectional block checking in WebSocket consumers with message filtering
+
 ---
 
 ## Required Resources

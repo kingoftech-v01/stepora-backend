@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-02-27
+
+### Added
+- **3 WebSocket consumers**: `AIChatConsumer` (conversations), `BuddyChatConsumer` (buddies), `CircleChatConsumer` (circles) — each with dedicated routing module
+- **Shared consumer mixins** in `core/consumers.py`: `RateLimitMixin` (sliding window), `AuthenticatedConsumerMixin` (post-connect token auth + heartbeat), `BlockingMixin` (bidirectional block check), `ModerationMixin` (content moderation)
+- **CircleMessage** model for persistent circle group chat with encrypted content
+- **Agora.io circle calls**: `CircleCall` and `CircleCallParticipant` models, RTC token generation, voice/video call lifecycle endpoints (`start`, `join`, `leave`, `end`, `active`)
+- **FCM push notifications** for buddy chat messages (offline partner) and circle call start (all members)
+- **Buddy call broadcast**: `call_started` WebSocket event broadcast to `buddy_chat` group
+- **DreamPost** model: public dream sharing with images, GoFundMe links, visibility controls (public/followers/private), denormalized counters
+- **DreamPostLike**: toggle like with denormalized count
+- **DreamPostComment**: threaded comments via self-referential parent FK
+- **DreamEncouragement**: 5 typed encouragement reactions (you_got_this, keep_going, inspired, proud, fire)
+- **Dream post feed algorithm**: followed users + public posts, exclude blocked, annotate has_liked/has_encouraged
+- **Dream post endpoints**: CRUD, feed, like, comment, comments, encourage, share, user_posts
+- **Social notification types**: `dream_post_like`, `dream_post_comment`, `dream_post_encouragement`, `circle_call`, `buddy_message`
+- **Circle chat REST endpoints**: `POST /chat/send/`, `GET /chat/history/`
+- `CircleMessageSerializer`, `CircleCallSerializer`, `DreamPostSerializer`, `DreamPostCreateSerializer`, `DreamPostCommentSerializer`, `DreamEncouragementSerializer`
+
+### Changed
+- **ChatConsumer → AIChatConsumer**: renamed for clarity; AI chat URL changed from `ws/conversations/` to `ws/ai-chat/` (old URL preserved as deprecated alias)
+- **BuddyChatConsumer moved** from `apps/conversations/consumers.py` to `apps/buddies/consumers.py` with its own routing module
+- **ASGI routing** now combines 4 separate routing modules (`ai_chat_ws`, `buddy_chat_ws`, `circle_chat_ws`, `notification_ws`) in `config/asgi.py`
+- Buddy chat URL parameter changed from `conversation_id` to `pairing_id`
+- Updated project stats: 4 WebSocket consumers, 5 WebSocket routes, 170+ API endpoints, 50+ models
+
 ## [1.2.0] - 2026-02-27
 
 ### Added

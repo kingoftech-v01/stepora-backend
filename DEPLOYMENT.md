@@ -48,6 +48,8 @@ This guide covers deploying DreamPlanner to production environments.
 | PostgreSQL 15+ | Database | AWS RDS, Supabase, Railway |
 | Redis 7+ | Cache & Celery broker | AWS ElastiCache, Upstash, Railway |
 | OpenAI | AI features (GPT-4) | OpenAI |
+| Agora.io | Circle voice/video calls (RTC) | Agora.io |
+| Firebase | Push notifications (FCM) | Google Firebase |
 | Sentry | Error tracking | Sentry.io |
 
 ### Required Tools
@@ -99,6 +101,13 @@ REDIS_URL=redis://your-redis-host.com:6379/0
 
 # OpenAI
 OPENAI_API_KEY=sk-...
+
+# Agora (circle voice/video calls)
+AGORA_APP_ID=<your-agora-app-id>
+AGORA_APP_CERTIFICATE=<your-agora-app-certificate>
+
+# Firebase (push notifications)
+FIREBASE_CREDENTIALS_PATH=/path/to/firebase-service-account.json
 
 # Security
 CORS_ORIGIN=https://app.dreamplanner.app
@@ -288,7 +297,11 @@ aws ecs run-task \
 ### Verify Services
 
 1. **API**: `curl https://api.dreamplanner.app/api/auth/`
-2. **WebSocket**: Test with wscat: `wscat -c wss://api.dreamplanner.app/ws/conversations/test/`
+2. **WebSocket**: Test with wscat:
+   - AI Chat: `wscat -c wss://api.dreamplanner.app/ws/ai-chat/test/`
+   - Circle Chat: `wscat -c wss://api.dreamplanner.app/ws/circle-chat/test/`
+   - Buddy Chat: `wscat -c wss://api.dreamplanner.app/ws/buddy-chat/test/`
+   - Notifications: `wscat -c wss://api.dreamplanner.app/ws/notifications/`
 3. **Admin**: Visit `https://api.dreamplanner.app/admin/`
 4. **Celery**: Check Flower at `https://api.dreamplanner.app:5555/`
 

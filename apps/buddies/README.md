@@ -142,11 +142,54 @@ The `find_match` endpoint scores candidates based on three factors:
 
 ### BuddyChatConsumer
 
-Real-time messaging between paired buddies is handled via the `BuddyChatConsumer` WebSocket consumer (defined in the conversations app).
+Real-time messaging between paired buddies. Defined in `apps/buddies/consumers.py` with routing in `apps/buddies/routing.py`.
 
-**Connection:** `ws://host/ws/buddy-chat/{pairing_id}/?token=<auth_token>`
+**URL:** `ws://host/ws/buddy-chat/{pairing_id}/?token=<auth_token>`
 
-Both users in an active pairing can exchange real-time messages, with typing indicators and read receipts.
+**URL parameter:** `pairing_id` — the UUID of the `BuddyPairing`
+
+**Channel group:** `buddy_chat_{pairing_id}`
+
+**Rate limit:** 30 messages per 60 seconds
+
+**Mixins:** `RateLimitMixin`, `AuthenticatedConsumerMixin`, `BlockingMixin`, `ModerationMixin` (from `core.consumers`)
+
+**Access control:** Only the two users in an active `BuddyPairing` can connect. Block status is re-checked on every message send.
+
+**Flow:**
+1. Connection: accept → authenticate → verify pairing → check blocks → get/create buddy_chat conversation → join group
+2. Message: validate → rate limit → block re-check → moderate → sanitize → save → broadcast to group → FCM push to offline partner
+
+**Message types (client → server):**
+- `authenticate` — Post-connect token auth
+- `message` — Send a chat message
+- `typing` — Typing indicator
+- `mark_read` — Mark messages as read (updates `MessageReadStatus`)
+- `ping` — Keepalive
+
+**Message format:**
+```json
+// Send a message
+{"type": "message", "message": "Hey buddy!"}
+
+// Typing indicator
+{"type": "typing", "is_typing": true}
+
+// Mark messages as read
+{"type": "mark_read"}
+
+// Receive message (includes sender info)
+{"type": "message", "message": {"id": "uuid", "content": "Hey!", "sender_id": "uuid", "sender_name": "John", "created_at": "..."}}
+
+// Call started notification (received from server)
+{"type": "call_started", "call": {"id": "uuid", "initiator": "uuid", "call_type": "video"}}
+```
+
+**FCM Push:** When the partner is not connected to the WebSocket, a push notification is sent via Firebase Cloud Messaging.
+
+## Buddy Calls
+
+The `BuddyViewSet` supports initiating calls between paired buddies. When a call is initiated via REST, a `call_started` event is broadcast to the `buddy_chat_{pairing_id}` WebSocket group, notifying the partner in real time.
 
 ## Celery Tasks
 

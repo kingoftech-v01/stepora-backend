@@ -53,6 +53,11 @@ Push notification with multi-channel delivery support.
 | `system` | System |
 | `dream_completed` | Dream Completed |
 | `weekly_report` | Weekly Report |
+| `dream_post_like` | Dream Post Like |
+| `dream_post_comment` | Dream Post Comment |
+| `dream_post_encouragement` | Dream Post Encouragement |
+| `circle_call` | Circle Call |
+| `buddy_message` | Buddy Message |
 
 **Methods:**
 

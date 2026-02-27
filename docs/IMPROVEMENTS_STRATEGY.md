@@ -521,3 +521,28 @@
 3. **Podcast sponsoring**
 4. **SEO** - "How to reach your goals"
 5. **Viral referral** - Buddy system
+
+---
+
+## Social Dream Sharing
+
+### Overview
+
+The **dream post** social platform enables users to share their dream progress publicly, creating a community of mutual support and accountability. This feature is a key differentiator that combines goal tracking with social engagement.
+
+### Key Components
+
+1. **Dream Posts** — Users share progress updates with optional images, GoFundMe fundraising links, and visibility controls (public, followers-only, or private)
+2. **5 Encouragement Types** — Distinct from simple likes, encouragements convey specific support: "You Got This", "Keep Going", "Inspired", "Proud", and "Fire"
+3. **Feed Algorithm** — Aggregated feed from followed users and public posts, with block filtering and `has_liked`/`has_encouraged` annotations per user
+4. **GoFundMe Integration** — Dream posts can include fundraising links, enabling community financial support for ambitious dreams
+5. **Threaded Comments** — Comments support threading via self-referential parent FK, enabling conversation depth on posts
+
+### Impact
+
+| Metric | Expected Impact |
+|--------|----------------|
+| User engagement | +40% DAU via social feed browsing |
+| Retention | +25% D30 retention through social connections |
+| Viral growth | GoFundMe sharing drives external traffic |
+| Monetization | Social feed access gated to premium+ users |

@@ -462,3 +462,115 @@ class ChallengeProgress(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email}: {self.progress_value} on {self.challenge.title}"
+
+
+class CircleMessage(models.Model):
+    """
+    Chat message within a circle's group chat.
+
+    Separate from Conversation/Message because those use single-owner FK
+    and AI roles (user/assistant/system). Circle chat is group messaging.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    circle = models.ForeignKey(
+        Circle,
+        on_delete=models.CASCADE,
+        related_name='chat_messages',
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='circle_chat_messages',
+    )
+    content = EncryptedTextField(
+        help_text='Message content (encrypted at rest).',
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'circle_messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['circle', 'created_at'], name='idx_circlemsg_circle_date'),
+            models.Index(fields=['sender'], name='idx_circlemsg_sender'),
+        ]
+
+    def __str__(self):
+        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        return f"{self.sender.display_name or self.sender.email}: {preview}"
+
+
+class CircleCall(models.Model):
+    """Voice/video group call within a circle."""
+
+    CALL_TYPE_CHOICES = [
+        ('voice', 'Voice'),
+        ('video', 'Video'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    circle = models.ForeignKey(
+        Circle,
+        on_delete=models.CASCADE,
+        related_name='calls',
+    )
+    initiator = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='circle_calls_initiated',
+    )
+    call_type = models.CharField(max_length=5, choices=CALL_TYPE_CHOICES, default='voice')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='active', db_index=True)
+    agora_channel = models.CharField(
+        max_length=100,
+        help_text='Agora channel name (= str(call.id)).',
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.IntegerField(default=0)
+    max_participants = models.IntegerField(default=20)
+
+    class Meta:
+        db_table = 'circle_calls'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['circle', 'status'], name='idx_circlecall_circle_status'),
+            models.Index(fields=['status'], name='idx_circlecall_status'),
+        ]
+
+    def __str__(self):
+        return f"{self.call_type} call in {self.circle.name} ({self.status})"
+
+
+class CircleCallParticipant(models.Model):
+    """Tracks who joined a circle group call."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    call = models.ForeignKey(
+        CircleCall,
+        on_delete=models.CASCADE,
+        related_name='participants',
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='circle_call_participations',
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'circle_call_participants'
+        unique_together = [['call', 'user']]
+        ordering = ['joined_at']
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} in call {self.call_id}"

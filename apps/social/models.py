@@ -441,3 +441,158 @@ class RecentSearch(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.query}"
+
+
+class DreamPost(models.Model):
+    """
+    A dream shared publicly on the social feed.
+
+    Users can post their dreams with captions, images, and GoFundMe links
+    for community support and encouragement.
+    """
+
+    VISIBILITY_CHOICES = [
+        ('public', 'Public'),
+        ('followers', 'Followers Only'),
+        ('private', 'Private'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='dream_posts',
+    )
+    dream = models.ForeignKey(
+        'dreams.Dream',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='social_posts',
+        help_text='Optionally linked dream.',
+    )
+    content = EncryptedTextField(
+        help_text='Caption/description (encrypted at rest).',
+    )
+    image_url = models.URLField(blank=True, help_text='Optional image URL.')
+    image_file = models.ImageField(
+        upload_to='dream_posts/', blank=True,
+        help_text='Optional uploaded image.',
+    )
+    gofundme_url = models.URLField(
+        blank=True, help_text='External fundraising link.',
+    )
+    visibility = models.CharField(
+        max_length=15, choices=VISIBILITY_CHOICES, default='public', db_index=True,
+    )
+    likes_count = models.IntegerField(default=0, help_text='Denormalized like count.')
+    comments_count = models.IntegerField(default=0, help_text='Denormalized comment count.')
+    shares_count = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'dream_posts'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='idx_dreampost_user_date'),
+            models.Index(fields=['-created_at'], name='idx_dreampost_created'),
+            models.Index(fields=['visibility'], name='idx_dreampost_visibility'),
+        ]
+
+    def __str__(self):
+        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        return f"{self.user.display_name or self.user.email}: {preview}"
+
+
+class DreamPostLike(models.Model):
+    """Like on a dream post. One per user per post."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(
+        DreamPost, on_delete=models.CASCADE, related_name='likes',
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='dream_post_likes',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'dream_post_likes'
+        unique_together = [['post', 'user']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} liked post {self.post_id}"
+
+
+class DreamPostComment(models.Model):
+    """Comment on a dream post, with optional threaded replies."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(
+        DreamPost, on_delete=models.CASCADE, related_name='comments',
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='dream_post_comments',
+    )
+    content = EncryptedTextField(
+        help_text='Comment content (encrypted at rest).',
+    )
+    parent = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.CASCADE,
+        related_name='replies',
+        help_text='Parent comment for threaded replies.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'dream_post_comments'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['post', '-created_at'], name='idx_dreamcomment_post_date'),
+        ]
+
+    def __str__(self):
+        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        return f"{self.user.display_name or self.user.email}: {preview}"
+
+
+class DreamEncouragement(models.Model):
+    """
+    Encouragement on a dream post — distinct from likes (more intentional).
+    """
+
+    ENCOURAGEMENT_TYPES = [
+        ('you_got_this', 'You Got This!'),
+        ('keep_going', 'Keep Going!'),
+        ('inspired', 'You Inspire Me!'),
+        ('proud', 'So Proud!'),
+        ('fire', 'On Fire!'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(
+        DreamPost, on_delete=models.CASCADE, related_name='encouragements',
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='given_encouragements',
+    )
+    encouragement_type = models.CharField(
+        max_length=20, choices=ENCOURAGEMENT_TYPES,
+    )
+    message = EncryptedTextField(
+        blank=True, help_text='Optional personal message (encrypted at rest).',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'dream_encouragements'
+        unique_together = [['post', 'user']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} encouraged: {self.encouragement_type}"

@@ -23,7 +23,14 @@ from rest_framework.views import APIView
 from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import inline_serializer
 
-from .models import Friendship, UserFollow, ActivityFeedItem, ActivityLike, ActivityComment, BlockedUser, ReportedUser, RecentSearch
+import logging
+from django.db.models import F, Exists, OuterRef
+
+from .models import (
+    Friendship, UserFollow, ActivityFeedItem, ActivityLike,
+    ActivityComment, BlockedUser, ReportedUser, RecentSearch,
+    DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+)
 from .serializers import (
     FriendSerializer,
     FriendRequestSerializer,
@@ -35,7 +42,13 @@ from .serializers import (
     BlockUserSerializer,
     ReportUserSerializer,
     BlockedUserSerializer,
+    DreamPostSerializer,
+    DreamPostCreateSerializer,
+    DreamPostCommentSerializer,
+    DreamEncouragementSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class FriendshipViewSet(viewsets.GenericViewSet):
@@ -1273,3 +1286,416 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
 
         search.delete()
         return Response({'message': 'Search removed.'})
+
+
+class DreamPostViewSet(viewsets.ModelViewSet):
+    """
+    Social dream posts: feed, CRUD, like, comment, encourage, share.
+
+    All endpoints live under /api/social/posts/.
+    The main social feed is at /api/social/posts/feed/.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DreamPostSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return DreamPost.objects.none()
+        return DreamPost.objects.select_related('user', 'dream').order_by('-created_at')
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DreamPostCreateSerializer
+        return DreamPostSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Create a new dream post."""
+        serializer = DreamPostCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Validate dream ownership if provided
+        dream = None
+        dream_id = data.get('dream_id')
+        if dream_id:
+            from apps.dreams.models import Dream
+            try:
+                dream = Dream.objects.get(id=dream_id, user=request.user)
+            except Dream.DoesNotExist:
+                return Response(
+                    {'error': 'Dream not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        post = DreamPost.objects.create(
+            user=request.user,
+            dream=dream,
+            content=data['content'],
+            image_url=data.get('image_url', ''),
+            gofundme_url=data.get('gofundme_url', ''),
+            visibility=data.get('visibility', 'public'),
+        )
+
+        return Response(
+            DreamPostSerializer(post, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        """Edit own post."""
+        post = self.get_object()
+        if post.user != request.user:
+            return Response(
+                {'error': 'You can only edit your own posts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        content = request.data.get('content')
+        if content:
+            from core.sanitizers import sanitize_text
+            post.content = sanitize_text(content)
+
+        gofundme_url = request.data.get('gofundme_url')
+        if gofundme_url is not None:
+            from core.sanitizers import sanitize_url
+            post.gofundme_url = sanitize_url(gofundme_url)
+
+        visibility = request.data.get('visibility')
+        if visibility in ('public', 'followers', 'private'):
+            post.visibility = visibility
+
+        post.save()
+        return Response(
+            DreamPostSerializer(post, context={'request': request}).data,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete own post."""
+        post = self.get_object()
+        if post.user != request.user:
+            return Response(
+                {'error': 'You can only delete your own posts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        post.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="Social feed",
+        description="Main social feed: posts from followed users + public, excluding blocked users.",
+        responses={200: DreamPostSerializer(many=True)},
+        tags=["Social Feed"],
+    )
+    @action(detail=False, methods=['get'])
+    def feed(self, request):
+        """Main social feed."""
+        user = request.user
+
+        # Get followed user IDs
+        followed_ids = set(
+            UserFollow.objects.filter(follower=user).values_list('following_id', flat=True)
+        )
+
+        # Get blocked user IDs (both directions)
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=user) | Q(blocked=user)
+        ).values_list('blocker_id', 'blocked_id')
+        for blocker_id, blocked_id in blocked_qs:
+            if blocker_id != user.id:
+                blocked_ids.add(blocker_id)
+            if blocked_id != user.id:
+                blocked_ids.add(blocked_id)
+
+        # Posts from followed users OR public posts, excluding blocked
+        posts = DreamPost.objects.filter(
+            Q(user_id__in=followed_ids) | Q(visibility='public')
+        ).exclude(
+            user_id__in=blocked_ids,
+        ).select_related('user', 'dream').order_by('-created_at')
+
+        # Annotate with user_has_liked and user_has_encouraged
+        posts = posts.annotate(
+            _user_has_liked=Exists(
+                DreamPostLike.objects.filter(post=OuterRef('pk'), user=user)
+            ),
+            _user_has_encouraged=Exists(
+                DreamEncouragement.objects.filter(post=OuterRef('pk'), user=user)
+            ),
+        )
+
+        page = self.paginate_queryset(posts)
+        if page is not None:
+            serializer = DreamPostSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = DreamPostSerializer(posts[:50], many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Like/unlike a post",
+        description="Toggle like on a dream post.",
+        tags=["Social Feed"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def like(self, request, pk=None):
+        """Toggle like on a post."""
+        post = self.get_object()
+        like, created = DreamPostLike.objects.get_or_create(
+            post=post, user=request.user,
+        )
+
+        if created:
+            DreamPost.objects.filter(id=post.id).update(
+                likes_count=F('likes_count') + 1
+            )
+            # Create notification
+            self._notify_post_owner(
+                post, request.user,
+                title=f"{request.user.display_name or 'Someone'} liked your dream post",
+            )
+            return Response({'liked': True, 'likes_count': post.likes_count + 1})
+        else:
+            like.delete()
+            DreamPost.objects.filter(id=post.id).update(
+                likes_count=F('likes_count') - 1
+            )
+            return Response({'liked': False, 'likes_count': max(0, post.likes_count - 1)})
+
+    @extend_schema(
+        summary="Comment on a post",
+        description="Add a comment to a dream post.",
+        tags=["Social Feed"],
+        responses={201: DreamPostCommentSerializer},
+    )
+    @action(detail=True, methods=['post'])
+    def comment(self, request, pk=None):
+        """Add a comment to a post."""
+        post = self.get_object()
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response(
+                {'error': 'content is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from core.sanitizers import sanitize_text
+        content = sanitize_text(content)
+
+        parent_id = request.data.get('parent_id')
+        parent = None
+        if parent_id:
+            try:
+                parent = DreamPostComment.objects.get(id=parent_id, post=post)
+            except DreamPostComment.DoesNotExist:
+                return Response(
+                    {'error': 'Parent comment not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        comment = DreamPostComment.objects.create(
+            post=post,
+            user=request.user,
+            content=content,
+            parent=parent,
+        )
+
+        DreamPost.objects.filter(id=post.id).update(
+            comments_count=F('comments_count') + 1
+        )
+
+        self._notify_post_owner(
+            post, request.user,
+            title=f"{request.user.display_name or 'Someone'} commented on your post",
+        )
+
+        return Response(
+            DreamPostCommentSerializer(comment, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="List comments on a post",
+        description="Get paginated comments for a dream post.",
+        tags=["Social Feed"],
+        responses={200: DreamPostCommentSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'])
+    def comments(self, request, pk=None):
+        """List comments on a post."""
+        post = self.get_object()
+        # Get top-level comments (replies are nested in serializer)
+        qs = DreamPostComment.objects.filter(
+            post=post, parent__isnull=True,
+        ).select_related('user').order_by('-created_at')
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = DreamPostCommentSerializer(
+                page, many=True, context={'request': request}
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = DreamPostCommentSerializer(
+            qs, many=True, context={'request': request}
+        )
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Encourage a post",
+        description="Send encouragement with a type (you_got_this, keep_going, etc).",
+        tags=["Social Feed"],
+        responses={201: DreamEncouragementSerializer},
+    )
+    @action(detail=True, methods=['post'])
+    def encourage(self, request, pk=None):
+        """Send encouragement to a post."""
+        post = self.get_object()
+        encouragement_type = request.data.get('encouragement_type', 'you_got_this')
+        message = request.data.get('message', '')
+
+        valid_types = [t[0] for t in DreamEncouragement.ENCOURAGEMENT_TYPES]
+        if encouragement_type not in valid_types:
+            return Response(
+                {'error': f'encouragement_type must be one of: {", ".join(valid_types)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if message:
+            from core.sanitizers import sanitize_text
+            message = sanitize_text(message)
+
+        encouragement, created = DreamEncouragement.objects.update_or_create(
+            post=post,
+            user=request.user,
+            defaults={
+                'encouragement_type': encouragement_type,
+                'message': message,
+            },
+        )
+
+        if created:
+            type_display = dict(DreamEncouragement.ENCOURAGEMENT_TYPES).get(
+                encouragement_type, encouragement_type
+            )
+            self._notify_post_owner(
+                post, request.user,
+                title=f"{request.user.display_name or 'Someone'} encouraged you: {type_display}",
+            )
+
+        return Response(
+            DreamEncouragementSerializer(encouragement).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        summary="Share/repost a dream post",
+        description="Share a post to your own followers by creating a new post referencing the original.",
+        tags=["Social Feed"],
+        responses={201: DreamPostSerializer},
+    )
+    @action(detail=True, methods=['post'])
+    def share(self, request, pk=None):
+        """Share/repost to own followers."""
+        original_post = self.get_object()
+        content = request.data.get('content', '')
+        if content:
+            from core.sanitizers import sanitize_text
+            content = sanitize_text(content)
+
+        share_content = content or f'Shared: {original_post.content[:200]}'
+
+        new_post = DreamPost.objects.create(
+            user=request.user,
+            dream=original_post.dream,
+            content=share_content,
+            image_url=original_post.image_url,
+            gofundme_url=original_post.gofundme_url,
+            visibility='public',
+        )
+
+        DreamPost.objects.filter(id=original_post.id).update(
+            shares_count=F('shares_count') + 1
+        )
+
+        return Response(
+            DreamPostSerializer(new_post, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="User's posts",
+        description="Get posts by a specific user.",
+        tags=["Social Feed"],
+        responses={200: DreamPostSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'], url_path=r'user/(?P<user_id>[0-9a-f-]+)')
+    def user_posts(self, request, user_id=None):
+        """Get posts by a specific user."""
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check if blocked
+        if BlockedUser.is_blocked(request.user, target_user):
+            return Response(
+                {'error': 'Cannot view this user.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Determine visibility
+        is_following = UserFollow.objects.filter(
+            follower=request.user, following=target_user
+        ).exists()
+
+        posts = DreamPost.objects.filter(user=target_user)
+        if target_user != request.user:
+            if is_following:
+                posts = posts.filter(visibility__in=['public', 'followers'])
+            else:
+                posts = posts.filter(visibility='public')
+
+        posts = posts.select_related('user', 'dream').order_by('-created_at')
+
+        page = self.paginate_queryset(posts)
+        if page is not None:
+            serializer = DreamPostSerializer(
+                page, many=True, context={'request': request}
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = DreamPostSerializer(
+            posts, many=True, context={'request': request}
+        )
+        return Response(serializer.data)
+
+    def _notify_post_owner(self, post, actor, title):
+        """Create a notification for the post owner."""
+        if post.user == actor:
+            return  # Don't notify yourself
+        try:
+            from apps.notifications.models import Notification
+            from django.utils import timezone
+            Notification.objects.create(
+                user=post.user,
+                notification_type='social',
+                title=title,
+                body='',
+                scheduled_for=timezone.now(),
+                data={
+                    'post_id': str(post.id),
+                    'actor_id': str(actor.id),
+                    'type': 'social',
+                },
+            )
+        except Exception:
+            logger.debug("Failed to create social notification", exc_info=True)

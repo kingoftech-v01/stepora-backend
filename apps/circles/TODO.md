@@ -14,6 +14,18 @@
 
 - [x] **Challenge progress tracking** - Individual participant progress within challenges (ChallengeProgress model). Progress update endpoint where participants can log their daily/weekly progress. Progress leaderboards within challenges.
 
+- [x] **Group chat** - CircleMessage model with encrypted content. CircleChatConsumer WebSocket consumer at `ws/circle-chat/{circle_id}/` with rate limiting (20/60s), content moderation, and block filtering. REST endpoints: `POST /chat/send/`, `GET /chat/history/`.
+
+- [x] **Agora voice/video calls** - CircleCall and CircleCallParticipant models. REST endpoints for call lifecycle: `start`, `join`, `leave`, `end`, `active`. Agora RTC token generation per user/channel.
+
+- [x] **RTC token generation** - Short-lived Agora tokens scoped to call channel and user UID via `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` environment variables.
+
+- [x] **Block filtering** - CircleChatConsumer loads blocked user IDs at connection time and silently drops incoming messages from blocked senders.
+
+- [x] **FCM call notifications** - Firebase Cloud Messaging push sent to all circle members when a call starts, enabling join even when not connected to WebSocket.
+
+- [x] **REST chat endpoints** - `POST /circles/{id}/chat/send/` (broadcasts to WebSocket group) and `GET /circles/{id}/chat/history/` (paginated message history).
+
 ## Planned Improvements
 
 - [ ] **Circle search** - Add a search endpoint for discovering circles by name or description text, with category and membership size filters.

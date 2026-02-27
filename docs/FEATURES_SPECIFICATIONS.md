@@ -532,3 +532,116 @@ The notification system takes into account:
 │                                        │
 └────────────────────────────────────────┘
 ```
+
+---
+
+## 8. Circle Group Chat
+
+### 8.1 WebSocket Protocol
+
+**Connection:** `ws://host/ws/circle-chat/{circle_id}/?token=<auth_token>`
+
+**Authentication:** Post-connect token message (`{"type": "authenticate", "token": "..."}`)
+
+**Access control:** User must be a circle member (`CircleMembership` required).
+
+### 8.2 Message Format
+
+| Direction | Type | Format |
+|-----------|------|--------|
+| Client → Server | `message` | `{"type": "message", "message": "text"}` |
+| Client → Server | `typing` | `{"type": "typing", "is_typing": true}` |
+| Server → Client | `message` | `{"type": "message", "message": {"id": "uuid", "content": "...", "sender_id": "uuid", "sender_name": "...", "created_at": "..."}}` |
+| Server → Client | `typing_status` | `{"type": "typing_status", "user_id": "uuid", "user_name": "...", "is_typing": true}` |
+| Server → Client | `call_started` | `{"type": "call_started", "call": {"id": "uuid", "initiator": "uuid", "call_type": "voice", "agora_channel": "..."}}` |
+
+### 8.3 Block Filtering
+
+Messages from users the recipient has blocked are silently dropped on the receiving end. Each consumer loads the user's blocked user IDs at connection time and filters incoming group broadcasts.
+
+### 8.4 Rate Limiting
+
+20 messages per 60-second sliding window (lower than buddy chat's 30/60s to limit group broadcast volume).
+
+---
+
+## 9. Circle Voice/Video Calls
+
+### 9.1 Agora Lifecycle
+
+```
+1. Start Call (initiator)
+   POST /api/circles/{id}/call/start/
+   → Creates CircleCall (status: active)
+   → Generates Agora RTC token
+   → Broadcasts call_started to WebSocket group
+   → Sends FCM push to offline members
+   → Returns: { call, agora_token, agora_channel }
+
+2. Join Call (participant)
+   POST /api/circles/{id}/call/join/
+   → Creates CircleCallParticipant
+   → Generates Agora RTC token
+   → Returns: { call, agora_token, agora_channel }
+
+3. Leave Call (participant)
+   POST /api/circles/{id}/call/leave/
+   → Sets participant.left_at
+
+4. End Call (any participant)
+   POST /api/circles/{id}/call/end/
+   → Sets call.status = completed
+   → Calculates duration_seconds
+   → Updates max_participants
+```
+
+### 9.2 Agora Token Generation
+
+Tokens are short-lived and scoped to the specific call channel and user UID. Environment variables required:
+
+| Variable | Description |
+|----------|-------------|
+| `AGORA_APP_ID` | Agora project App ID |
+| `AGORA_APP_CERTIFICATE` | Agora project App Certificate |
+
+### 9.3 Participant Tracking
+
+The `CircleCallParticipant` model tracks when each user joins and leaves. The `CircleCall.max_participants` field records the peak participant count during the call.
+
+---
+
+## 10. Dream Posts (Social Platform)
+
+### 10.1 Post Creation
+
+Users can share dream progress publicly with:
+- **Content**: Text content about their dream progress (encrypted at rest)
+- **Image**: Optional image URL or uploaded image file
+- **GoFundMe link**: Optional fundraising link for dream support
+- **Visibility**: `public` (anyone), `followers` (followers only), `private` (only self)
+- **Dream link**: Optional association with a specific dream (shows dream title)
+
+### 10.2 Social Feed
+
+The feed at `GET /api/social/posts/feed/` shows:
+1. Posts from users the requester follows
+2. Public posts from all users
+3. Excludes posts from blocked users (bidirectional)
+4. Annotates `has_liked` and `has_encouraged` for the requesting user
+5. Ordered by newest first, paginated (20 per page)
+
+### 10.3 Interactions
+
+| Interaction | Endpoint | Behavior |
+|-------------|----------|----------|
+| **Like** | `POST /posts/{id}/like/` | Toggle on/off, updates denormalized `likes_count` |
+| **Comment** | `POST /posts/{id}/comment/` | Threaded via optional `parent` field, updates `comments_count` |
+| **Encourage** | `POST /posts/{id}/encourage/` | One per user, 5 types: `you_got_this`, `keep_going`, `inspired`, `proud`, `fire` |
+| **Share** | `POST /posts/{id}/share/` | Increments `shares_count` |
+
+### 10.4 Notifications
+
+All interactions trigger notifications to the post author:
+- `dream_post_like` — when someone likes their post
+- `dream_post_comment` — when someone comments on their post
+- `dream_post_encouragement` — when someone sends an encouragement

@@ -51,9 +51,27 @@ apps/
 │   └── tests/
 │       ├── test_models.py
 │       └── test_views.py
+├── buddies/
+│   └── tests/
+│       ├── test_models.py
+│       ├── test_views.py
+│       └── test_consumers.py       ✅ High priority (BuddyChatConsumer, FCM push, block enforcement)
+├── circles/
+│   └── tests/
+│       ├── test_models.py
+│       ├── test_views.py
+│       ├── test_consumers.py       ✅ High priority (CircleChatConsumer, block filtering)
+│       └── test_calls.py           ✅ High priority (Agora call lifecycle, token generation)
+├── social/
+│   └── tests/
+│       ├── test_models.py
+│       ├── test_views.py
+│       └── test_dream_posts.py     ✅ High priority (CRUD, feed algorithm, interactions)
 └── calendar/
     └── tests/
         └── test_views.py
+core/
+├── test_consumers.py               ✅ High priority (RateLimitMixin, AuthenticatedConsumerMixin, BlockingMixin, ModerationMixin)
 integrations/
 ├── test_openai_service.py          ✅ High priority
 ```
@@ -254,6 +272,7 @@ class TestDreamsAPIIntegration:
 
 ```python
 # apps/conversations/tests/test_consumers.py
+# Note: Uses deprecated ws/conversations/ URL alias — new code should use ws/ai-chat/
 
 import pytest
 from channels.testing import WebsocketCommunicator
@@ -264,7 +283,7 @@ from apps.conversations.models import Conversation
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-class TestChatConsumer:
+class TestAIChatConsumer:
     async def test_connect_with_valid_token(self):
         user = await database_sync_to_async(User.objects.create_user)(
             email='ws@test.com', password='Test123!'
@@ -443,6 +462,38 @@ export default function () {
   sleep(1);
 }
 ```
+
+---
+
+## 4.1 Test Categories for Real-Time Features
+
+### WebSocket Consumer Tests
+- Connection/disconnection lifecycle for all 4 consumers
+- Post-connect token authentication flow
+- Rate limiting (sliding window enforcement)
+- Content moderation rejection
+- Block enforcement (bidirectional) on BuddyChatConsumer and CircleChatConsumer
+- Channel group messaging and broadcasting
+- Heartbeat/ping lifecycle
+
+### Call Lifecycle Tests
+- Start call (CircleCall creation, Agora token generation)
+- Join/leave/end call state transitions
+- Participant tracking (CircleCallParticipant create/update)
+- FCM push notification trigger on call start
+- WebSocket `call_started` broadcast
+
+### Feed Algorithm Tests
+- Feed includes followed users' posts
+- Feed includes public posts
+- Feed excludes blocked users (bidirectional)
+- `has_liked` and `has_encouraged` annotations
+- Visibility filtering (public vs followers vs private)
+
+### Cross-WebSocket Event Tests
+- Buddy call broadcast from REST to WebSocket group
+- Circle call broadcast from REST to WebSocket group
+- FCM push fallback when partner not connected
 
 ---
 

@@ -63,10 +63,10 @@
 ┌────────────────────────────┼───────────────────────────────────┐
 │              EXTERNAL SERVICES                                  │
 ├────────────────────────────┼───────────────────────────────────┤
-│   ┌─────────────┐                        ┌─────────────┐         │
-│   │   OpenAI    │                        │   Sentry    │         │
-│   │  (GPT-4)    │                        │  (Errors)   │         │
-│   └─────────────┘                        └─────────────┘         │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
+│   │   OpenAI    │  │  Agora.io   │  │  Firebase   │  │   Sentry    │ │
+│   │  (GPT-4)    │  │  (RTC Calls)│  │  (FCM Push) │  │  (Errors)   │ │
+│   └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -416,6 +416,8 @@ services:
 | `SENTRY_DSN` | Error tracking |
 | `VAPID_PUBLIC_KEY` | Web Push public key |
 | `VAPID_PRIVATE_KEY` | Web Push private key |
+| `AGORA_APP_ID` | Agora project App ID (circle voice/video calls) |
+| `AGORA_APP_CERTIFICATE` | Agora project App Certificate (RTC token generation) |
 
 ### Notification Delivery Flow
 
@@ -440,8 +442,10 @@ Notification Created (API / Celery task)
 
 | Route | Consumer | Purpose |
 |-------|----------|---------|
-| `ws/conversations/{id}/` | ChatConsumer | AI chat streaming |
-| `ws/buddy-chat/{id}/` | BuddyChatConsumer | Peer-to-peer buddy chat |
+| `ws/ai-chat/{id}/` | AIChatConsumer | AI chat with GPT-4 streaming |
+| `ws/conversations/{id}/` | AIChatConsumer | (deprecated alias for ai-chat) |
+| `ws/buddy-chat/{pairing_id}/` | BuddyChatConsumer | Buddy-to-buddy chat with FCM push |
+| `ws/circle-chat/{circle_id}/` | CircleChatConsumer | Circle group chat with block filtering |
 | `ws/notifications/` | NotificationConsumer | Real-time notification delivery |
 
 ---

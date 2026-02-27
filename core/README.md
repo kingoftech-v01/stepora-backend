@@ -23,6 +23,7 @@ The `core` module provides cross-cutting infrastructure including authentication
 | `validators.py` | Input validators (display names, UUIDs, pagination, search queries) |
 | `middleware.py` | Security headers and last-activity tracking middleware |
 | `audit.py` | Structured security audit logging |
+| `consumers.py` | Shared WebSocket consumer mixins (rate limiting, auth, blocking, moderation) |
 | `urls.py` | Health check endpoint routing |
 | `views.py` | Health check view functions and social auth views |
 
@@ -195,6 +196,63 @@ application = ProtocolTypeRouter({
     ),
 })
 ```
+
+## WebSocket Consumer Mixins
+
+`consumers.py`
+
+Shared mixins used by all WebSocket consumers (`AIChatConsumer`, `BuddyChatConsumer`, `CircleChatConsumer`). These provide reusable functionality for rate limiting, authentication, blocking, and content moderation.
+
+### Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MAX_MSG_SIZE` | 8192 | Maximum raw WebSocket message size in bytes |
+| `MAX_MSG_CONTENT_LEN` | 5000 | Maximum message content length |
+| `DEFAULT_RATE_LIMIT_MSGS` | 30 | Default messages allowed per window |
+| `DEFAULT_RATE_LIMIT_WINDOW` | 60 | Default rate limit window in seconds |
+| `HEARTBEAT_INTERVAL` | 45 | Heartbeat ping interval in seconds |
+
+### RateLimitMixin
+
+Sliding-window rate limiter per WebSocket connection.
+
+| Method | Description |
+|--------|-------------|
+| `_init_rate_limit()` | Initialize rate limit tracking state |
+| `_is_rate_limited()` | Check if connection has exceeded the message rate limit |
+
+Default: 30 messages per 60-second window. Override `rate_limit_msgs` and `rate_limit_window` on the consumer class to customize.
+
+### AuthenticatedConsumerMixin
+
+Post-connect token authentication with heartbeat keep-alive.
+
+| Method | Description |
+|--------|-------------|
+| `_init_auth()` | Initialize authentication state |
+| `_handle_auth_connect()` | Handle initial connection (accept and wait for auth message) |
+| `_setup_authenticated()` | Set up the consumer after successful authentication |
+| `_handle_authenticate_message(data)` | Process an incoming authentication message with token |
+| `send_error(message, code)` | Send an error message to the client |
+
+Supports deferred post-connect token authentication. After successful auth, starts a heartbeat loop every 45 seconds.
+
+### BlockingMixin
+
+Check `BlockedUser` relationships before allowing interactions.
+
+| Method | Description |
+|--------|-------------|
+| `_is_blocked(user_a, user_b)` | Check bidirectional block status between two users |
+
+### ModerationMixin
+
+Content moderation via `ContentModerationService`.
+
+| Method | Description |
+|--------|-------------|
+| `_moderate_content(content, context='chat')` | Run content through the moderation pipeline |
 
 ## Exception Handling
 

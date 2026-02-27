@@ -1,6 +1,6 @@
 # Social App
 
-Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, and follow suggestions for the DreamPlanner community.
+Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, follow suggestions, and the dream post social platform for the DreamPlanner community.
 
 ## Overview
 
@@ -14,6 +14,8 @@ The Social app provides:
 6. **User Search** - Discovery by display name with friendship/follow status
 7. **Follow Suggestions** - Algorithm-based user recommendations (premium+)
 8. **Recent Searches** - Saved search history per user
+9. **Dream Posts** - Public dream sharing with images, GoFundMe links, and visibility controls
+10. **Dream Post Interactions** - Likes, threaded comments, and typed encouragements
 
 ## Models
 
@@ -133,6 +135,84 @@ Stores recent search queries for a user (max 20 per user).
 **DB table:** `recent_searches`
 **Indexes:** `(user, -created_at)`
 
+### DreamPost
+
+Public dream sharing post with optional image, GoFundMe link, and visibility controls.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | Post author (related_name: `dream_posts`) |
+| dream | FK(Dream) | Associated dream (nullable, related_name: `posts`) |
+| content | EncryptedTextField | Post text content (encrypted at rest) |
+| image_url | URLField | External image URL (nullable) |
+| image_file | ImageField | Uploaded image file (nullable) |
+| gofundme_url | URLField | GoFundMe fundraising link (nullable) |
+| visibility | CharField(20) | `public`, `followers`, `private` (default: `public`) |
+| likes_count | IntegerField | Denormalized like count (default: 0) |
+| comments_count | IntegerField | Denormalized comment count (default: 0) |
+| shares_count | IntegerField | Denormalized share/repost count (default: 0) |
+| is_pinned | BooleanField | Whether post is pinned to user profile (default: False) |
+| created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
+
+**DB table:** `dream_posts`
+
+### DreamPostLike
+
+Like on a dream post (one per user per post).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| post | FK(DreamPost) | Liked post (related_name: `likes`) |
+| user | FK(User) | Liking user (related_name: `dream_post_likes`) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `dream_post_likes`
+**Constraint:** `unique_together = [['post', 'user']]`
+
+### DreamPostComment
+
+Comment on a dream post with threading support via self-referential parent FK.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| post | FK(DreamPost) | Parent post (related_name: `comments`) |
+| user | FK(User) | Comment author (related_name: `dream_post_comments`) |
+| content | EncryptedTextField | Comment text (encrypted at rest) |
+| parent | FK(self) | Parent comment for threading (nullable, related_name: `replies`) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `dream_post_comments`
+
+### DreamEncouragement
+
+Typed encouragement on a dream post (distinct from likes, one per user per post).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| post | FK(DreamPost) | Encouraged post (related_name: `encouragements`) |
+| user | FK(User) | Encouraging user (related_name: `dream_encouragements`) |
+| encouragement_type | CharField(20) | Type of encouragement (see choices below) |
+| message | EncryptedTextField | Optional personal message (encrypted at rest) |
+| created_at | DateTimeField | Auto-set on creation |
+
+**DB table:** `dream_encouragements`
+**Constraint:** `unique_together = [['post', 'user']]`
+
+**Encouragement types:**
+
+| Type | Display Name |
+|------|-------------|
+| `you_got_this` | You Got This |
+| `keep_going` | Keep Going |
+| `inspired` | Inspired |
+| `proud` | Proud |
+| `fire` | Fire |
+
 ## API Endpoints
 
 ### Friendships
@@ -209,6 +289,37 @@ Stores recent search queries for a user (max 20 per user).
 - Deduplicates queries (re-recording same query moves it to top)
 - Auto-prunes to keep only 20 most recent
 
+### Dream Posts
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/posts/` | List all posts (paginated) |
+| POST | `/posts/` | Create a new dream post |
+| GET | `/posts/{id}/` | Get post detail |
+| PUT | `/posts/{id}/` | Update own post |
+| PATCH | `/posts/{id}/` | Partial update own post |
+| DELETE | `/posts/{id}/` | Delete own post |
+| GET | `/posts/feed/` | Social feed (followed users + public posts) |
+| POST | `/posts/{id}/like/` | Toggle like on a post (increments/decrements `likes_count`) |
+| POST | `/posts/{id}/comment/` | Add a comment to a post (supports threading via `parent` field) |
+| GET | `/posts/{id}/comments/` | List comments on a post (with nested replies) |
+| POST | `/posts/{id}/encourage/` | Send a typed encouragement (body: `{"encouragement_type": "fire", "message": "..."}`) |
+| POST | `/posts/{id}/share/` | Share/repost a dream post (increments `shares_count`) |
+| GET | `/posts/user/{user_id}/` | Get all posts by a specific user |
+
+**ViewSet:** `DreamPostViewSet` (ModelViewSet)
+- Permission: `IsAuthenticated`
+
+### Feed Algorithm
+
+The `feed` endpoint returns posts from followed users and public posts, with the following behavior:
+
+1. **Sources:** Posts from users the requester follows, plus public posts
+2. **Exclusions:** Posts by blocked users are excluded (bidirectional)
+3. **Annotations:** Each post is annotated with `has_liked` and `has_encouraged` flags for the requesting user
+4. **Ordering:** Newest first (`-created_at`)
+5. **Pagination:** Standard pagination (20 per page)
+
 ## ViewSets and Views
 
 | View | Type | Permission |
@@ -218,6 +329,7 @@ Stores recent search queries for a user (max 20 per user).
 | `UserSearchView` | ListAPIView | `IsAuthenticated` |
 | `FollowSuggestionsView` | ListAPIView | `IsAuthenticated`, `CanUseSocialFeed` |
 | `RecentSearchViewSet` | GenericViewSet | `IsAuthenticated` |
+| `DreamPostViewSet` | ModelViewSet | `IsAuthenticated` |
 
 ## Serializers
 
@@ -233,6 +345,10 @@ Stores recent search queries for a user (max 20 per user).
 | `BlockUserSerializer` | Input: `targetUserId` (UUID), optional `reason` (sanitized) |
 | `ReportUserSerializer` | Input: `targetUserId` (UUID), `reason` (sanitized), `category` (choice) |
 | `BlockedUserSerializer` | Blocked user list item: `id`, nested `user` (id, username, avatar), `reason`, `created_at` |
+| `DreamPostSerializer` | Full post with `user` info, `likesCount`, `commentsCount`, `sharesCount`, `hasLiked`, `hasEncouraged`, `encouragementSummary`, `imageUrl`, `dreamTitle` |
+| `DreamPostCreateSerializer` | Input: `content`, optional `dream_id`, `gofundme_url`, `visibility`, `image_url` |
+| `DreamPostCommentSerializer` | Comment with nested `user`, `content`, `parent`, `replies` (nested), `createdAt` |
+| `DreamEncouragementSerializer` | Encouragement with `user`, `encouragementType`, `message`, `createdAt` |
 
 ## Follow Suggestions Algorithm
 

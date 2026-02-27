@@ -743,15 +743,45 @@ class CallViewSet(viewsets.GenericViewSet):
         if BlockedUser.is_blocked(request.user, callee):
             return Response({'detail': 'Cannot call this user'}, status=status.HTTP_403_FORBIDDEN)
 
+        # Find buddy pairing if one exists
+        from apps.buddies.models import BuddyPairing
+        from django.db.models import Q as BQ
+        pairing = BuddyPairing.objects.filter(
+            BQ(user1=request.user, user2=callee) |
+            BQ(user1=callee, user2=request.user),
+            status='active',
+        ).first()
+
         call = Call.objects.create(
             caller=request.user,
             callee=callee,
             call_type=call_type,
             status='ringing',
+            buddy_pairing=pairing,
         )
 
         # Send FCM push to callee
         self._notify_callee(call, request.user)
+
+        # Broadcast to buddy_chat WebSocket group so partner sees it in real-time
+        if pairing:
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f'buddy_chat_{pairing.id}',
+                    {
+                        'type': 'call_started',
+                        'call': {
+                            'id': str(call.id),
+                            'type': call_type,
+                            'caller': str(request.user.id),
+                        },
+                    },
+                )
+            except Exception:
+                logger.debug("WebSocket call broadcast failed", exc_info=True)
 
         return Response({
             'callId': str(call.id),

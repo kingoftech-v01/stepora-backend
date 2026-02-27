@@ -21,6 +21,9 @@
 13. [Calendar & Scheduling](#flow-13-calendar--scheduling)
 14. [Two-Factor Authentication](#flow-14-two-factor-authentication)
 15. [Password Reset & Email Change](#flow-15-password-reset--email-change)
+16. [Real-Time Messaging Pipeline](#flow-16-real-time-messaging-pipeline)
+17. [Circle Voice/Video Call](#flow-17-circle-voicevideo-call)
+18. [Dream Post Social Interaction](#flow-18-dream-post-social-interaction)
 
 ---
 
@@ -1385,3 +1388,212 @@ GET /verify-email/{token}
 | `token` | CharField(unique) | 64-byte URL-safe verification token |
 | `is_verified` | BooleanField | Whether the change has been confirmed |
 | `expires_at` | DateTimeField | Token expiry (24 hours from creation) |
+
+---
+
+## Flow 16: Real-Time Messaging Pipeline
+
+**Entry**: WebSocket connection to `ws/ai-chat/`, `ws/buddy-chat/`, or `ws/circle-chat/`
+**Apps touched**: conversations, buddies, circles, core, notifications
+
+### Step-by-step (all 3 consumers)
+
+```
+Client connects to ws/{consumer-path}/{id}/?token=<auth_token>
+  │
+  ▼
+1. Connection accepted (WebSocket handshake)              apps/{app}/consumers.py
+  │  Consumer.__init__() → _init_rate_limit() → _init_auth()
+  │                                                       core/consumers.py
+  ▼
+2. Client sends authenticate message                      core/consumers.py
+  │  {"type": "authenticate", "token": "<auth_token>"}
+  │  → _handle_authenticate_message()
+  │  → get_user_from_token()                              core/websocket_auth.py
+  │  → _setup_authenticated() → _setup_authenticated_inner()
+  ▼
+3. Consumer-specific setup:                               apps/{app}/consumers.py
+  │
+  │  AIChatConsumer:
+  │    → _load_and_verify_conversation() — verify ownership
+  │    → reject buddy_chat type (close code 4004)
+  │    → join group: ai_chat_{conversation_id}
+  │
+  │  BuddyChatConsumer:
+  │    → _load_and_verify_pairing() — verify active BuddyPairing
+  │    → _is_blocked() — bidirectional block check          core/consumers.py
+  │    → _get_or_create_conversation() — find/create buddy_chat Conversation
+  │    → join group: buddy_chat_{pairing_id}
+  │
+  │  CircleChatConsumer:
+  │    → _verify_membership() — check CircleMembership exists
+  │    → _get_blocked_user_ids() — load blocked IDs for filtering
+  │    → join group: circle_chat_{circle_id}
+  ▼
+4. Client sends message                                   apps/{app}/consumers.py
+  │  {"type": "message", "message": "Hello!"}
+  │  → receive() → type routing
+  ▼
+5. Rate limit check                                       core/consumers.py
+  │  _is_rate_limited() — sliding window (30/60s buddy, 20/60s circle)
+  │  If limited: send error, return
+  ▼
+6. Content moderation                                     core/consumers.py
+  │  _moderate_content(content) → ContentModerationService  core/moderation.py
+  │  If flagged: send moderation rejection, return
+  ▼
+7. Save message                                           apps/{app}/consumers.py
+  │  AIChatConsumer: Conversation.add_message() → AI response stream
+  │  BuddyChatConsumer: _save_message() → Conversation/Message
+  │  CircleChatConsumer: _save_message() → CircleMessage
+  ▼
+8. Broadcast to group                                     apps/{app}/consumers.py
+  │  channel_layer.group_send(group_name, {type, message, sender_id, ...})
+  │  → All connected consumers in group receive via handler
+  │  CircleChatConsumer: filters messages from blocked senders
+  ▼
+9. FCM push (BuddyChatConsumer only)                      apps/buddies/consumers.py
+  │  _send_push_notification() — if partner not connected,
+  │  send Firebase Cloud Messaging push notification
+```
+
+### Key Detail
+
+All 3 chat consumers share the same mixin-based architecture from `core/consumers.py`. The pipeline is: connect → authenticate → setup → receive → rate limit → moderate → save → broadcast → (optional) push. Block enforcement differs: buddy chat re-checks blocks on every message; circle chat filters on receive.
+
+---
+
+## Flow 17: Circle Voice/Video Call
+
+**Entry**: `POST /api/circles/{id}/call/start/`
+**Apps touched**: circles, core, notifications
+
+### Step-by-step
+
+```
+POST /api/circles/{id}/call/start/
+  │  body: { call_type: "voice"|"video" }
+  ▼
+CircleViewSet.start_call(request, pk)                    apps/circles/views.py
+  ├─ Permission: IsAuthenticated, member of circle
+  ├─ Check: no active call already exists for this circle
+  ├─ CircleCall.objects.create(                           apps/circles/models.py
+  │    circle, initiator=request.user, call_type,
+  │    status='active', agora_channel='circle_{uuid}',
+  │    started_at=now()
+  │  )
+  ├─ CircleCallParticipant.objects.create(
+  │    call, user=request.user, joined_at=now()
+  │  )
+  ├─ Generate Agora RTC token:
+  │    token = generate_rtc_token(
+  │      app_id=AGORA_APP_ID,
+  │      app_certificate=AGORA_APP_CERTIFICATE,
+  │      channel=call.agora_channel,
+  │      uid=user.id
+  │    )
+  ├─ Broadcast to WebSocket group:
+  │    channel_layer.group_send(
+  │      'circle_chat_{circle_id}',
+  │      {type: 'call_started', call: serialized_call}
+  │    )
+  ├─ FCM push to circle members:
+  │    Send push notification to all members not connected
+  └─ Returns: { call, agora_token, agora_channel }
+
+POST /api/circles/{id}/call/join/
+  ▼
+CircleViewSet.join_call(request, pk)                     apps/circles/views.py
+  ├─ Find active CircleCall for circle
+  ├─ CircleCallParticipant.objects.create(
+  │    call, user=request.user, joined_at=now()
+  │  )
+  ├─ Update call.max_participants if new peak
+  ├─ Generate Agora RTC token for joiner
+  └─ Returns: { call, agora_token, agora_channel }
+
+POST /api/circles/{id}/call/leave/
+  ▼
+CircleViewSet.leave_call(request, pk)                    apps/circles/views.py
+  ├─ Find participant record
+  └─ participant.left_at = now()
+
+POST /api/circles/{id}/call/end/
+  ▼
+CircleViewSet.end_call(request, pk)                      apps/circles/views.py
+  ├─ call.status = 'completed'
+  ├─ call.ended_at = now()
+  ├─ call.duration_seconds = (ended_at - started_at).seconds
+  └─ Update max_participants from count of participants
+```
+
+### Key Detail
+
+Circle calls use **Agora.io** for real-time communication. The server generates short-lived RTC tokens scoped to the call's channel name and user UID. Call state is tracked server-side via `CircleCall` and `CircleCallParticipant` models. When a call starts, both WebSocket broadcast and FCM push ensure all circle members are notified.
+
+---
+
+## Flow 18: Dream Post Social Interaction
+
+**Entry**: `POST /api/social/posts/`
+**Apps touched**: social, users, notifications
+
+### Step-by-step
+
+```
+POST /api/social/posts/
+  │  body: { content, dream_id?, gofundme_url?, visibility?, image_url? }
+  ▼
+DreamPostViewSet.create(request)                         apps/social/views.py
+  ├─ Permission: IsAuthenticated
+  ├─ Validate via DreamPostCreateSerializer               apps/social/serializers.py
+  └─ DreamPost.objects.create(                            apps/social/models.py
+       user=request.user, content, dream, gofundme_url,
+       visibility='public', likes_count=0, comments_count=0
+     )
+
+GET /api/social/posts/feed/
+  ▼
+DreamPostViewSet.feed(request)                           apps/social/views.py
+  ├─ Query: posts from followed users + public posts
+  ├─ Exclude: blocked users (bidirectional check)
+  ├─ Annotate: has_liked, has_encouraged for request.user
+  ├─ Order: -created_at
+  └─ Paginate: StandardResultsSetPagination (20/page)
+
+POST /api/social/posts/{id}/like/
+  ▼
+DreamPostViewSet.like(request, pk)                       apps/social/views.py
+  ├─ Toggle: DreamPostLike.objects.get_or_create / delete
+  ├─ Update: post.likes_count (increment or decrement)
+  └─ Create Notification (type: 'dream_post_like')       apps/notifications/
+
+POST /api/social/posts/{id}/comment/
+  │  body: { content, parent? }
+  ▼
+DreamPostViewSet.comment(request, pk)                    apps/social/views.py
+  ├─ DreamPostComment.objects.create(                     apps/social/models.py
+  │    post, user=request.user, content, parent (for threading)
+  │  )
+  ├─ post.comments_count += 1
+  └─ Create Notification (type: 'dream_post_comment')    apps/notifications/
+
+POST /api/social/posts/{id}/encourage/
+  │  body: { encouragement_type, message? }
+  ▼
+DreamPostViewSet.encourage(request, pk)                  apps/social/views.py
+  ├─ DreamEncouragement.objects.create(                   apps/social/models.py
+  │    post, user=request.user, encouragement_type, message
+  │  )
+  │  Types: you_got_this, keep_going, inspired, proud, fire
+  └─ Create Notification (type: 'dream_post_encouragement')
+
+POST /api/social/posts/{id}/share/
+  ▼
+DreamPostViewSet.share(request, pk)                      apps/social/views.py
+  └─ post.shares_count += 1
+```
+
+### Key Detail
+
+Dream posts support three distinct interaction types: **likes** (simple toggle), **comments** (threaded via parent FK), and **encouragements** (5 typed reactions distinct from likes). All interactions trigger notifications. The feed algorithm shows posts from followed users plus public posts, excluding blocked users, with `has_liked`/`has_encouraged` annotations for the requesting user.

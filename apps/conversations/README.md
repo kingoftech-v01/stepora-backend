@@ -1,10 +1,10 @@
 # Conversations App
 
-Django application for AI-powered chat conversations with WebSocket streaming, voice transcription, image analysis, and buddy-to-buddy real-time messaging.
+Django application for AI-powered chat conversations with WebSocket streaming, voice transcription, and image analysis.
 
 ## Overview
 
-The Conversations app manages interactions between the user and the AI coach, as well as real-time buddy-to-buddy chat:
+The Conversations app manages interactions between the user and the AI coach:
 - **Conversation** - Chat session linked to a dream or buddy pairing, with type-based AI behavior
 - **Message** - Individual message (user/assistant/system) with voice, image, pin, like, and reaction support
 - **ConversationSummary** - Automatic summaries for long-term context preservation
@@ -185,21 +185,37 @@ Upload an image with an optional text prompt. The image is analyzed via GPT-4 Vi
 | `ConversationSummarySerializer` | Summary with `key_points`, `start_message`, `end_message` |
 | `ConversationTemplateSerializer` | Template with `icon`, `starter_messages`, `description` |
 
-## WebSocket Consumers
+## WebSocket Consumer
 
-### ChatConsumer
+### AIChatConsumer (formerly ChatConsumer)
 
-Real-time AI-powered chat via WebSocket with streaming responses.
+Real-time AI-powered chat via WebSocket with streaming responses. Defined in `apps/conversations/consumers.py`.
 
-**URL:** `ws://host/ws/conversations/{conversation_id}/`
+**URL:** `ws://host/ws/ai-chat/{conversation_id}/`
+**Deprecated alias:** `ws://host/ws/conversations/{conversation_id}/` (still functional, will be removed in a future version)
 
-**Authentication:** DRF Token via query param or scope
+**Routing:** `apps/conversations/routing.py`
+
+**Channel group:** `ai_chat_{conversation_id}`
+
+**Authentication:** Post-connect token authentication via `AuthenticatedConsumerMixin`
+
+**Mixins:** `RateLimitMixin`, `AuthenticatedConsumerMixin`, `ModerationMixin` (from `core.consumers`)
+
+**Access control:** User must own the conversation. Conversations of type `buddy_chat` are rejected with close code **4004** (buddy chat conversations should use `BuddyChatConsumer` in the buddies app).
 
 **Flow:**
-1. Connection: verify user owns the conversation
-2. User sends message: content moderation → save → stream AI response
+1. Connection: accept → authenticate → verify conversation ownership → reject buddy_chat type → join group
+2. User sends message: content moderation → save → check AI quota → stream AI response
 3. AI response chunks sent in real-time with length limit (10,000 chars max)
 4. AI output is sanitized and validated for safety before saving
+
+**Message types (client → server):**
+- `authenticate` — Post-connect token auth
+- `message` — Send a chat message
+- `function_call` — Execute an explicit function call (create_task, complete_task, create_goal)
+- `typing` — Typing indicator
+- `ping` — Keepalive
 
 **Message format:**
 ```json
@@ -225,29 +241,7 @@ Real-time AI-powered chat via WebSocket with streaming responses.
 {"type": "error", "error": "Error message"}
 ```
 
-### BuddyChatConsumer
-
-Real-time buddy-to-buddy messaging (no AI response).
-
-**URL:** `ws://host/ws/buddy-chat/{conversation_id}/`
-
-**Authentication:** DRF Token via query param or scope
-
-**Access control:** Only the two users in the active `BuddyPairing` can connect. The conversation must be of type `buddy_chat` with a linked `buddy_pairing`.
-
-**Message format:**
-```json
-// Send a message
-{"type": "message", "message": "Hey buddy!"}
-
-// Typing indicator
-{"type": "typing", "is_typing": true}
-
-// Receive message (includes sender info)
-{"type": "message", "message": {"id": "uuid", "role": "user", "content": "Hey!", "sender_id": "uuid", "sender_name": "John", "created_at": "..."}}
-```
-
-Both consumers run content moderation on all incoming messages.
+> **Note:** Buddy-to-buddy messaging has been moved to `BuddyChatConsumer` in the `apps/buddies` app. See the [Buddies README](../buddies/README.md).
 
 ## Content Moderation & AI Safety
 
