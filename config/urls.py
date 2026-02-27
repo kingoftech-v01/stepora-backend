@@ -1,6 +1,9 @@
 """
 URL configuration for DreamPlanner backend.
 Routes all API endpoints to their respective app URL configurations.
+
+API versioning: All endpoints are served under /api/v1/.
+The unversioned /api/ path is kept as a backward-compatible alias.
 """
 
 from django.contrib import admin
@@ -15,6 +18,33 @@ from drf_spectacular.views import (
 )
 from core.social_auth import GoogleLoginView, AppleLoginView
 
+# Versioned API endpoints (v1)
+api_v1_patterns = [
+    # Authentication (dj-rest-auth)
+    path('auth/', include('dj_rest_auth.urls')),
+    path('auth/registration/', include('dj_rest_auth.registration.urls')),
+
+    # Social authentication (Google, Apple)
+    path('auth/google/', GoogleLoginView.as_view(), name='google_login'),
+    path('auth/apple/', AppleLoginView.as_view(), name='apple_login'),
+
+    # API endpoints
+    path('users/', include('apps.users.urls')),
+    path('dreams/', include('apps.dreams.urls')),
+    path('conversations/', include('apps.conversations.urls')),
+    path('calendar/', include('apps.calendar.urls')),
+    path('notifications/', include('apps.notifications.urls')),
+    path('subscriptions/', include('apps.subscriptions.urls')),
+    path('store/', include('apps.store.urls')),
+    path('leagues/', include('apps.leagues.urls')),
+    path('circles/', include('apps.circles.urls')),
+    path('social/', include('apps.social.urls')),
+    path('buddies/', include('apps.buddies.urls')),
+
+    # Search (Elasticsearch)
+    path('search/', include('apps.search.urls')),
+]
+
 urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
@@ -25,29 +55,11 @@ urlpatterns = [
     # API Documentation (restricted to DEBUG or staff in production)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
 
-    # Authentication (dj-rest-auth)
-    path('api/auth/', include('dj_rest_auth.urls')),
-    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    # Versioned API (canonical)
+    path('api/v1/', include((api_v1_patterns, 'api-v1'))),
 
-    # Social authentication (Google, Apple)
-    path('api/auth/google/', GoogleLoginView.as_view(), name='google_login'),
-    path('api/auth/apple/', AppleLoginView.as_view(), name='apple_login'),
-
-    # API endpoints
-    path('api/users/', include('apps.users.urls')),
-    path('api/dreams/', include('apps.dreams.urls')),
-    path('api/conversations/', include('apps.conversations.urls')),
-    path('api/calendar/', include('apps.calendar.urls')),
-    path('api/notifications/', include('apps.notifications.urls')),
-    path('api/subscriptions/', include('apps.subscriptions.urls')),
-    path('api/store/', include('apps.store.urls')),
-    path('api/leagues/', include('apps.leagues.urls')),
-    path('api/circles/', include('apps.circles.urls')),
-    path('api/social/', include('apps.social.urls')),
-    path('api/buddies/', include('apps.buddies.urls')),
-
-    # Search (Elasticsearch)
-    path('api/search/', include('apps.search.urls')),
+    # Backward-compatible unversioned API (same endpoints)
+    path('api/', include(api_v1_patterns)),
 ]
 
 # Serve media files and API docs in development only

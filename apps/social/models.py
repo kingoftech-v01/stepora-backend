@@ -53,7 +53,9 @@ class BlockedUser(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Blocked User'
         verbose_name_plural = 'Blocked Users'
-        unique_together = [['blocker', 'blocked']]
+        constraints = [
+            models.UniqueConstraint(fields=['blocker', 'blocked'], name='unique_blocker_blocked'),
+        ]
         indexes = [
             models.Index(fields=['blocker'], name='idx_blocked_blocker'),
             models.Index(fields=['blocked'], name='idx_blocked_blocked'),
@@ -198,7 +200,9 @@ class Friendship(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Friendship'
         verbose_name_plural = 'Friendships'
-        unique_together = [['user1', 'user2']]
+        constraints = [
+            models.UniqueConstraint(fields=['user1', 'user2'], name='unique_friendship_pair'),
+        ]
         indexes = [
             models.Index(fields=['user1', 'status'], name='idx_friendship_user1_status'),
             models.Index(fields=['user2', 'status'], name='idx_friendship_user2_status'),
@@ -247,7 +251,9 @@ class UserFollow(models.Model):
         ordering = ['-created_at']
         verbose_name = 'User Follow'
         verbose_name_plural = 'User Follows'
-        unique_together = [['follower', 'following']]
+        constraints = [
+            models.UniqueConstraint(fields=['follower', 'following'], name='unique_follower_following'),
+        ]
         indexes = [
             models.Index(fields=['follower'], name='idx_follow_follower'),
             models.Index(fields=['following'], name='idx_follow_following'),
@@ -363,7 +369,9 @@ class ActivityLike(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Activity Like'
         verbose_name_plural = 'Activity Likes'
-        unique_together = [['user', 'activity']]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'activity'], name='unique_user_activity_like'),
+        ]
         indexes = [
             models.Index(fields=['activity'], name='idx_activity_like_activity'),
             models.Index(fields=['user'], name='idx_activity_like_user'),
@@ -520,7 +528,9 @@ class DreamPostLike(models.Model):
 
     class Meta:
         db_table = 'dream_post_likes'
-        unique_together = [['post', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'user'], name='unique_dreampost_like'),
+        ]
         ordering = ['-created_at']
 
     def __str__(self):
@@ -591,7 +601,9 @@ class DreamEncouragement(models.Model):
 
     class Meta:
         db_table = 'dream_encouragements'
-        unique_together = [['post', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'user'], name='unique_dreampost_encouragement'),
+        ]
         ordering = ['-created_at']
 
     def __str__(self):

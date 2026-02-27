@@ -253,7 +253,9 @@ class UserInventory(models.Model):
         ordering = ['-purchased_at']
         verbose_name = 'User Inventory'
         verbose_name_plural = 'User Inventories'
-        unique_together = [['user', 'item']]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'item'], name='unique_user_inventory'),
+        ]
         indexes = [
             models.Index(fields=['user', 'is_equipped']),
             models.Index(fields=['user', 'item']),
@@ -289,7 +291,9 @@ class Wishlist(models.Model):
 
     class Meta:
         db_table = 'store_wishlist'
-        unique_together = [['user', 'item']]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'item'], name='unique_wishlist_item'),
+        ]
         ordering = ['-created_at']
 
     def __str__(self):

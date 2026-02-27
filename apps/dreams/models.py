@@ -396,7 +396,9 @@ class DreamTagging(models.Model):
 
     class Meta:
         db_table = 'dream_taggings'
-        unique_together = [['dream', 'tag']]
+        constraints = [
+            models.UniqueConstraint(fields=['dream', 'tag'], name='unique_dream_tag'),
+        ]
 
     def __str__(self):
         return f"{self.dream.title} - {self.tag.name}"
@@ -491,7 +493,9 @@ class DreamCollaborator(models.Model):
 
     class Meta:
         db_table = 'dream_collaborators'
-        unique_together = [['dream', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['dream', 'user'], name='unique_dream_collaborator'),
+        ]
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'role'], name='idx_collab_user_role'),
@@ -531,7 +535,9 @@ class SharedDream(models.Model):
     class Meta:
         db_table = 'shared_dreams'
         ordering = ['-created_at']
-        unique_together = [['dream', 'shared_with']]
+        constraints = [
+            models.UniqueConstraint(fields=['dream', 'shared_with'], name='unique_shared_dream'),
+        ]
         indexes = [
             models.Index(fields=['shared_with'], name='idx_shared_dream_recipient'),
         ]
@@ -552,7 +558,9 @@ class DreamProgressSnapshot(models.Model):
 
     class Meta:
         db_table = 'dream_progress_snapshots'
-        unique_together = ('dream', 'date')
+        constraints = [
+            models.UniqueConstraint(fields=['dream', 'date'], name='unique_dream_progress_date'),
+        ]
         ordering = ['-date']
         indexes = [
             models.Index(fields=['dream', '-date']),

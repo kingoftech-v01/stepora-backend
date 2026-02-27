@@ -381,6 +381,10 @@ class StripeService:
         Raises:
             ValueError: If the signature verification fails.
         """
+        if not STRIPE_WEBHOOK_SECRET:
+            logger.error("STRIPE_WEBHOOK_SECRET is not configured — cannot verify webhook signatures")
+            raise ValueError("Webhook signature verification is not configured")
+
         try:
             event = stripe.Webhook.construct_event(
                 payload,

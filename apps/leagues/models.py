@@ -281,7 +281,9 @@ class LeagueStanding(models.Model):
         ordering = ['rank']
         verbose_name = 'League Standing'
         verbose_name_plural = 'League Standings'
-        unique_together = [['user', 'season']]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'season'], name='unique_league_standing'),
+        ]
         indexes = [
             # Primary leaderboard query: rank within a season
             models.Index(
@@ -368,7 +370,9 @@ class SeasonReward(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Season Reward'
         verbose_name_plural = 'Season Rewards'
-        unique_together = [['season', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['season', 'user'], name='unique_season_reward'),
+        ]
         indexes = [
             models.Index(
                 fields=['user', 'rewards_claimed'],
@@ -440,7 +444,9 @@ class RankSnapshot(models.Model):
     class Meta:
         db_table = 'rank_snapshots'
         ordering = ['-snapshot_date']
-        unique_together = [['user', 'season', 'snapshot_date']]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'season', 'snapshot_date'], name='unique_rank_snapshot'),
+        ]
         indexes = [
             models.Index(
                 fields=['user', 'season', '-snapshot_date'],

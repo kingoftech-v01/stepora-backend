@@ -339,7 +339,9 @@ class MessageReadStatus(models.Model):
 
     class Meta:
         db_table = 'message_read_statuses'
-        unique_together = ('user', 'conversation')
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'conversation'], name='unique_read_status'),
+        ]
 
     def __str__(self):
         return f"{self.user} read {self.conversation} up to {self.last_read_message_id}"

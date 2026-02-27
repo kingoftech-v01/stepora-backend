@@ -15,7 +15,12 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-in-production')
+# The insecure default is only for local development. Production settings
+# validate that DJANGO_SECRET_KEY is set and will fail hard if missing.
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-DO-NOT-USE-IN-PRODUCTION')
+
+# DEBUG defaults to True in base (overridden to False in production.py)
+DEBUG = True
 
 # Application definition
 INSTALLED_APPS = [

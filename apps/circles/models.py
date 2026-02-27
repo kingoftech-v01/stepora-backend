@@ -153,7 +153,9 @@ class CircleMembership(models.Model):
         ordering = ['-joined_at']
         verbose_name = 'Circle Membership'
         verbose_name_plural = 'Circle Memberships'
-        unique_together = [['circle', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['circle', 'user'], name='unique_circle_membership'),
+        ]
         indexes = [
             models.Index(fields=['circle', 'user'], name='idx_membership_circle_user'),
             models.Index(fields=['user'], name='idx_membership_user'),
@@ -341,7 +343,9 @@ class PostReaction(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Post Reaction'
         verbose_name_plural = 'Post Reactions'
-        unique_together = [['post', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'user'], name='unique_post_reaction'),
+        ]
         indexes = [
             models.Index(fields=['post', 'reaction_type'], name='idx_reaction_post_type'),
         ]
@@ -569,7 +573,9 @@ class CircleCallParticipant(models.Model):
 
     class Meta:
         db_table = 'circle_call_participants'
-        unique_together = [['call', 'user']]
+        constraints = [
+            models.UniqueConstraint(fields=['call', 'user'], name='unique_call_participant'),
+        ]
         ordering = ['joined_at']
 
     def __str__(self):

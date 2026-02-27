@@ -2,13 +2,34 @@
 Production settings
 """
 
+import sys
 from .base import *
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
 DEBUG = False
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+# ── Required environment variable validation ─────────────────────────
+# These MUST be set in production. Fail hard at startup if missing.
+_REQUIRED_ENV_VARS = [
+    'DJANGO_SECRET_KEY',
+    'ALLOWED_HOSTS',
+    'DB_PASSWORD',
+    'STRIPE_WEBHOOK_SECRET',
+]
+
+_missing = [var for var in _REQUIRED_ENV_VARS if not os.getenv(var)]
+if _missing and 'collectstatic' not in sys.argv:
+    raise RuntimeError(
+        f"Missing required environment variables for production: {', '.join(_missing)}. "
+        f"Set them in your .env file or deployment environment."
+    )
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
+if not ALLOWED_HOSTS and 'collectstatic' not in sys.argv:
+    raise RuntimeError(
+        "ALLOWED_HOSTS is empty. Set ALLOWED_HOSTS env var to a comma-separated list of valid hostnames."
+    )
 
 # Security settings
 SECURE_SSL_REDIRECT = True
