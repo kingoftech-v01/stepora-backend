@@ -77,26 +77,25 @@ class LastActivityMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self._cache = {}  # user_id -> last_update_timestamp
 
     def __call__(self, request):
         response = self.get_response(request)
 
         if hasattr(request, 'user') and request.user.is_authenticated:
-            user_id = request.user.id
-            now = time.time()
+            user_id = str(request.user.id)
 
-            # Throttle: update at most once per 60 seconds
-            last_update = self._cache.get(user_id, 0)
-            if now - last_update >= 60:
-                self._cache[user_id] = now
-                try:
+            # Throttle using Django cache (shared across workers) — once per 60s
+            try:
+                from django.core.cache import cache
+                cache_key = f'last_activity_{user_id}'
+                if not cache.get(cache_key):
+                    cache.set(cache_key, True, timeout=60)
                     from apps.users.models import User
-                    User.objects.filter(id=user_id).update(
+                    User.objects.filter(id=request.user.id).update(
                         is_online=True,
                         last_seen=timezone.now(),
                     )
-                except Exception:
-                    logger.debug("Failed to update last activity", exc_info=True)
+            except Exception:
+                logger.debug("Failed to update last activity", exc_info=True)
 
         return response

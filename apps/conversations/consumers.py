@@ -126,8 +126,9 @@ class AIChatConsumer(
 
         except json.JSONDecodeError:
             await self.send_error('Invalid JSON')
-        except Exception as e:
-            await self.send_error(f'Error: {str(e)}')
+        except Exception:
+            logger.exception("AIChatConsumer.receive error")
+            await self.send_error('An unexpected error occurred')
 
     async def handle_message(self, data):
         message_content = data.get('message', '').strip()
@@ -240,10 +241,12 @@ class AIChatConsumer(
                 },
             )
 
-        except OpenAIError as e:
-            await self.send_error(f'AI Error: {str(e)}')
-        except Exception as e:
-            await self.send_error(f'Unexpected error: {str(e)}')
+        except OpenAIError:
+            logger.exception("AI service error in stream")
+            await self.send_error('AI service is temporarily unavailable')
+        except Exception:
+            logger.exception("Unexpected error in AI stream")
+            await self.send_error('An unexpected error occurred')
 
     async def handle_function_call(self, function_call, conversation):
         from apps.dreams.models import Dream, Goal, Task

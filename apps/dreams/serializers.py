@@ -146,17 +146,24 @@ class DreamSerializer(serializers.ModelSerializer):
         }
 
     def get_goals_count(self, obj) -> int:
+        if hasattr(obj, '_goals_count'):
+            return obj._goals_count
         return obj.goals.count()
 
     def get_tasks_count(self, obj) -> int:
-        # Use len() on prefetched data to avoid N+1 queries
+        if hasattr(obj, '_tasks_count'):
+            return obj._tasks_count
         return sum(len(goal.tasks.all()) for goal in obj.goals.all())
 
     def get_tags(self, obj) -> list:
+        if hasattr(obj, '_prefetched_tags'):
+            return obj._prefetched_tags
         return list(obj.taggings.values_list('tag__name', flat=True))
 
     def get_sparkline_data(self, obj) -> list:
         """Return last 7 progress snapshots for sparkline chart."""
+        if hasattr(obj, '_prefetched_sparkline'):
+            return obj._prefetched_sparkline
         from .models import DreamProgressSnapshot
         snapshots = DreamProgressSnapshot.objects.filter(
             dream=obj
@@ -237,22 +244,27 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_goals_count(self, obj) -> int:
+        if hasattr(obj, '_goals_count'):
+            return obj._goals_count
         return obj.goals.count()
 
     def get_completed_goal_count(self, obj) -> int:
+        if hasattr(obj, '_completed_goals_count'):
+            return obj._completed_goals_count
         return obj.goals.filter(status='completed').count()
 
     def get_total_tasks(self, obj) -> int:
-        total = 0
-        for goal in obj.goals.all():
-            total += goal.tasks.count()
-        return total
+        if hasattr(obj, '_total_tasks'):
+            return obj._total_tasks
+        return sum(len(goal.tasks.all()) for goal in obj.goals.all())
 
     def get_completed_tasks(self, obj) -> int:
-        total = 0
-        for goal in obj.goals.all():
-            total += goal.tasks.filter(status='completed').count()
-        return total
+        if hasattr(obj, '_completed_tasks'):
+            return obj._completed_tasks
+        return sum(
+            len([t for t in goal.tasks.all() if t.status == 'completed'])
+            for goal in obj.goals.all()
+        )
 
     def get_days_left(self, obj):
         if not obj.target_date:
@@ -262,6 +274,8 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         return max(0, delta.days)
 
     def get_tags(self, obj) -> list:
+        if hasattr(obj, '_prefetched_tags'):
+            return obj._prefetched_tags
         return list(obj.taggings.values_list('tag__name', flat=True))
 
 

@@ -3,6 +3,7 @@ WebSocket consumer for real-time notification delivery.
 """
 
 import json
+import time
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -11,10 +12,15 @@ from channels.db import database_sync_to_async
 class NotificationConsumer(AsyncWebsocketConsumer):
     """WebSocket consumer for real-time notifications."""
 
+    # Rate limit: 20 messages per 60 seconds
+    RATE_LIMIT_MSGS = 20
+    RATE_LIMIT_WINDOW = 60
+
     async def connect(self):
         """Handle WebSocket connection."""
         self.user = self.scope['user']
         self._authenticated = False
+        self._message_timestamps = []
 
         if self.user.is_authenticated:
             # Authenticated via query string (deprecated) or middleware
@@ -106,6 +112,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 }))
                 return
 
+            # Rate limit check
+            if self._is_rate_limited():
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'error': 'Rate limit exceeded. Please slow down.',
+                }))
+                return
+
             if action == 'mark_read':
                 notification_id = data.get('notification_id')
                 if notification_id:
@@ -127,6 +141,18 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 'type': 'error',
                 'error': 'Invalid JSON',
             }))
+
+    def _is_rate_limited(self):
+        """Sliding window rate limit check."""
+        now = time.time()
+        self._message_timestamps = [
+            t for t in self._message_timestamps
+            if now - t < self.RATE_LIMIT_WINDOW
+        ]
+        if len(self._message_timestamps) >= self.RATE_LIMIT_MSGS:
+            return True
+        self._message_timestamps.append(now)
+        return False
 
     async def send_notification(self, event):
         """Handler for channel layer group_send — pushes notification to client."""

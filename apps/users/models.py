@@ -178,16 +178,19 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.save(update_fields=['last_activity'])
 
     def add_xp(self, amount):
-        """Add XP and check for level up."""
-        self.xp += amount
+        """Add XP and check for level up. Uses atomic F() to prevent race conditions."""
+        from django.db.models import F
+        old_level = self.level
+        User.objects.filter(id=self.id).update(xp=F('xp') + amount)
+        self.refresh_from_db(fields=['xp'])
 
         # Level up calculation (100 XP per level)
         new_level = (self.xp // 100) + 1
-        if new_level > self.level:
+        if new_level > old_level:
             self.level = new_level
+            self.save(update_fields=['level'])
 
-        self.save(update_fields=['xp', 'level'])
-        return new_level > self.level  # Return True if leveled up
+        return new_level > old_level
 
 
 class EmailChangeRequest(models.Model):
@@ -250,9 +253,12 @@ class GamificationProfile(models.Model):
 
     def add_attribute_xp(self, attribute, amount):
         """Add XP to a specific attribute."""
-        current_xp = getattr(self, f'{attribute}_xp', 0)
-        setattr(self, f'{attribute}_xp', current_xp + amount)
-        self.save()
+        field_name = f'{attribute}_xp'
+        from django.db.models import F
+        GamificationProfile.objects.filter(id=self.id).update(
+            **{field_name: F(field_name) + amount}
+        )
+        self.refresh_from_db(fields=[field_name])
 
 
 class DailyActivity(models.Model):
@@ -269,8 +275,10 @@ class DailyActivity(models.Model):
 
     class Meta:
         db_table = 'daily_activities'
-        unique_together = ('user', 'date')
         ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date'], name='unique_daily_activity'),
+        ]
         indexes = [
             models.Index(fields=['user', '-date']),
         ]
@@ -347,8 +355,10 @@ class UserAchievement(models.Model):
 
     class Meta:
         db_table = 'user_achievements'
-        unique_together = ('user', 'achievement')
         ordering = ['-unlocked_at']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'achievement'], name='unique_user_achievement'),
+        ]
 
     def __str__(self):
         return f"{self.user.email} - {self.achievement.name}"

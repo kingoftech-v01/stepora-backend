@@ -121,9 +121,17 @@ class DreamViewSet(viewsets.ModelViewSet):
         shared_dream_ids = SharedDream.objects.filter(
             shared_with=self.request.user
         ).values_list('dream_id', flat=True)
+        from django.db.models import Count, Q as DQ
         qs = Dream.objects.filter(
             Q(user=self.request.user) | Q(id__in=collab_dream_ids) | Q(id__in=shared_dream_ids)
-        ).prefetch_related('goals__tasks').distinct()
+        ).prefetch_related(
+            'goals__tasks', 'taggings__tag'
+        ).annotate(
+            _goals_count=Count('goals', distinct=True),
+            _completed_goals_count=Count('goals', filter=DQ(goals__status='completed'), distinct=True),
+            _total_tasks=Count('goals__tasks', distinct=True),
+            _completed_tasks=Count('goals__tasks', filter=DQ(goals__tasks__status='completed'), distinct=True),
+        ).distinct()
 
         # Elasticsearch-backed search (encrypted fields can't use DB icontains)
         search_query = self.request.query_params.get('search', '').strip()

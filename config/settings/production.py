@@ -14,7 +14,8 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-SECURE_BROWSER_XSS_FILTER = True
+# SECURE_BROWSER_XSS_FILTER removed — X-XSS-Protection is deprecated in modern browsers
+# and can introduce vulnerabilities. CSP is the correct modern approach.
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = 31536000
@@ -37,10 +38,16 @@ AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_S3_BUCKET')
 AWS_S3_REGION_NAME = os.getenv('AWS_REGION', 'eu-west-1')
 AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_CLOUDFRONT_DOMAIN')
 
-# Use S3 for static and media files
+# Use S3 for static and media files (Django 4.2+ STORAGES dict)
 if AWS_STORAGE_BUCKET_NAME:
-    STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        },
+        'staticfiles': {
+            'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        },
+    }
 
 # Sentry error tracking
 if os.getenv('SENTRY_DSN'):

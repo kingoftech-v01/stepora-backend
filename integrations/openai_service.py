@@ -33,13 +33,16 @@ openai_retry = retry(
 )
 
 # Initialize OpenAI client (v1+ style)
+if not settings.OPENAI_API_KEY:
+    logger.warning("OPENAI_API_KEY is not set — AI features will fail at runtime")
+
 _client = OpenAI(
-    api_key=settings.OPENAI_API_KEY or 'sk-placeholder',
+    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
     organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
 )
 
 _async_client = AsyncOpenAI(
-    api_key=settings.OPENAI_API_KEY or 'sk-placeholder',
+    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
     organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
 )
 

@@ -82,7 +82,11 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_last_message(self, obj) -> Optional[dict]:
         """Get the last message in the conversation."""
-        last_msg = obj.messages.order_by('-created_at').first()
+        # Use prefetched _last_message_list if available to avoid N+1
+        if hasattr(obj, '_last_message_list'):
+            last_msg = obj._last_message_list[0] if obj._last_message_list else None
+        else:
+            last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
             return {
                 'role': last_msg.role,

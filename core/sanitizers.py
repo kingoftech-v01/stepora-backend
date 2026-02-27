@@ -1,23 +1,25 @@
 """
 XSS sanitization utilities for user-generated content.
+
+Uses nh3 (Rust-based HTML sanitizer) — replacement for deprecated bleach library.
 """
 
-import bleach
+import nh3
 from typing import Optional
 
 
 # Allowed HTML tags for rich text fields (if needed)
-ALLOWED_TAGS = [
+ALLOWED_TAGS = {
     'p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'a'
-]
+}
 
 # Allowed attributes for tags
 ALLOWED_ATTRIBUTES = {
-    'a': ['href', 'title'],
+    'a': {'href', 'title'},
 }
 
 # Allowed URL schemes
-ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
+ALLOWED_URL_SCHEMES = {'http', 'https', 'mailto'}
 
 
 def sanitize_text(text: Optional[str], strip: bool = True) -> str:
@@ -27,7 +29,7 @@ def sanitize_text(text: Optional[str], strip: bool = True) -> str:
 
     Args:
         text: Input text to sanitize
-        strip: If True, remove tags entirely. If False, escape them.
+        strip: If True, remove tags entirely (nh3.clean with no tags).
 
     Returns:
         Sanitized text with all HTML removed
@@ -38,10 +40,10 @@ def sanitize_text(text: Optional[str], strip: bool = True) -> str:
     if not isinstance(text, str):
         text = str(text)
 
-    return bleach.clean(text, tags=[], strip=strip)
+    return nh3.clean(text, tags=set())
 
 
-def sanitize_html(text: Optional[str], extra_tags: list = None) -> str:
+def sanitize_html(text: Optional[str], extra_tags: set = None) -> str:
     """
     Sanitize HTML content, keeping only safe tags.
     Use this for rich text fields that need basic formatting.
@@ -61,14 +63,13 @@ def sanitize_html(text: Optional[str], extra_tags: list = None) -> str:
 
     tags = ALLOWED_TAGS.copy()
     if extra_tags:
-        tags.extend(extra_tags)
+        tags.update(extra_tags)
 
-    return bleach.clean(
+    return nh3.clean(
         text,
         tags=tags,
         attributes=ALLOWED_ATTRIBUTES,
-        protocols=ALLOWED_PROTOCOLS,
-        strip=True
+        url_schemes=ALLOWED_URL_SCHEMES,
     )
 
 

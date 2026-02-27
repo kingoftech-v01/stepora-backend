@@ -348,8 +348,8 @@ class UserViewSet(viewsets.ModelViewSet):
             'notifications': [],
         }
 
-        # Export dreams with goals and tasks
-        for dream in user.dreams.all():
+        # Export dreams with goals and tasks (optimized with prefetch)
+        for dream in user.dreams.prefetch_related('goals__tasks').all():
             dream_data = {
                 'title': dream.title,
                 'description': dream.description,
@@ -364,7 +364,10 @@ class UserViewSet(viewsets.ModelViewSet):
                     'title': goal.title,
                     'description': goal.description,
                     'status': goal.status,
-                    'tasks': list(goal.tasks.values('title', 'description', 'status', 'completed_at')),
+                    'tasks': [
+                        {'title': t.title, 'description': t.description, 'status': t.status, 'completed_at': t.completed_at}
+                        for t in goal.tasks.all()
+                    ],
                 }
                 dream_data['goals'].append(goal_data)
             data['dreams'].append(dream_data)

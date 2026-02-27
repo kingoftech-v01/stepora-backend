@@ -17,6 +17,7 @@ from core.openapi_examples import AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPO
 from django.conf import settings
 from django.http import JsonResponse
 
+from django.db.models import Prefetch
 from .models import Conversation, Message, MessageReadStatus, ConversationTemplate, Call
 from .serializers import (
     ConversationSerializer, ConversationDetailSerializer, ConversationCreateSerializer,
@@ -115,7 +116,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
             Q(user=user) |
             Q(conversation_type='buddy_chat', buddy_pairing__user1=user) |
             Q(conversation_type='buddy_chat', buddy_pairing__user2=user)
-        ).distinct().prefetch_related('messages', 'read_statuses')
+        ).distinct().prefetch_related(
+            Prefetch(
+                'messages',
+                queryset=Message.objects.order_by('-created_at')[:1],
+                to_attr='_last_message_list',
+            ),
+            'read_statuses',
+        )
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -368,8 +376,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Save image
-        file_path = f'chat_images/{conversation.id}/{image_file.name}'
+        # Save image (sanitize filename to prevent path traversal)
+        import re
+        safe_name = re.sub(r'[^\w\-.]', '_', image_file.name)[:100]
+        file_path = f'chat_images/{conversation.id}/{safe_name}'
         saved_path = default_storage.save(file_path, image_file)
         image_url = default_storage.url(saved_path)
 
@@ -704,6 +714,7 @@ class CallViewSet(viewsets.GenericViewSet):
     """Manage voice/video calls between buddies."""
 
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -953,7 +964,11 @@ class CallViewSet(viewsets.GenericViewSet):
         from django.db.models import Q
         calls = Call.objects.filter(
             Q(caller=request.user) | Q(callee=request.user)
-        ).select_related('caller', 'callee').order_by('-created_at')[:100]
+        ).select_related('caller', 'callee').order_by('-created_at')
+        page = self.paginate_queryset(calls)
+        if page is not None:
+            serializer = CallHistorySerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         serializer = CallHistorySerializer(calls, many=True)
         return Response(serializer.data)
 

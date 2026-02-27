@@ -24,14 +24,27 @@ logger = logging.getLogger(__name__)
 @database_sync_to_async
 def get_user_from_token(token_key):
     """
-    Verify DRF token and return corresponding user.
-    Returns AnonymousUser if token is invalid.
+    Verify DRF token, check expiration, and return corresponding user.
+    Returns AnonymousUser if token is invalid or expired.
     """
     if not token_key:
         return AnonymousUser()
 
     try:
         token = Token.objects.select_related('user').get(key=token_key)
+
+        # Check token expiration (same logic as ExpiringTokenAuthentication)
+        from django.conf import settings
+        from django.utils import timezone
+        from datetime import timedelta
+        token_age = timezone.now() - token.created
+        expiry_hours = getattr(settings, 'TOKEN_EXPIRY_HOURS', 24)
+        if token_age > timedelta(hours=expiry_hours):
+            return AnonymousUser()
+
+        if not token.user.is_active:
+            return AnonymousUser()
+
         return token.user
     except Token.DoesNotExist:
         return AnonymousUser()

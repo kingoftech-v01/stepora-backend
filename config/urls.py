@@ -22,10 +22,8 @@ urlpatterns = [
     # Health check
     path('health/', include('core.urls')),
 
-    # API Documentation
+    # API Documentation (restricted to DEBUG or staff in production)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # Authentication (dj-rest-auth)
     path('api/auth/', include('dj_rest_auth.urls')),
@@ -44,7 +42,7 @@ urlpatterns = [
     path('api/subscriptions/', include('apps.subscriptions.urls')),
     path('api/store/', include('apps.store.urls')),
     path('api/leagues/', include('apps.leagues.urls')),
-    path('api/', include('apps.circles.urls')),
+    path('api/circles/', include('apps.circles.urls')),
     path('api/social/', include('apps.social.urls')),
     path('api/buddies/', include('apps.buddies.urls')),
 
@@ -52,8 +50,12 @@ urlpatterns = [
     path('api/search/', include('apps.search.urls')),
 ]
 
-# Serve media files in development
+# Serve media files and API docs in development only
 if settings.DEBUG:
+    urlpatterns += [
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 

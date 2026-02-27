@@ -132,9 +132,9 @@ class BuddyChatConsumer(
 
         except json.JSONDecodeError:
             await self.send_error('Invalid JSON')
-        except Exception as e:
+        except Exception:
             logger.exception("BuddyChatConsumer error")
-            await self.send_error(f'Error: {str(e)}')
+            await self.send_error('An unexpected error occurred')
 
     async def _handle_chat_message(self, data):
         """Validate, moderate, save, broadcast, and push-notify."""
