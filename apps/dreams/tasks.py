@@ -34,7 +34,7 @@ def generate_two_minute_start(self, dream_id):
         ai_service = OpenAIService()
 
         # Generate micro-action with AI
-        micro_action = ai_service.generate_two_minute_start(dream)
+        micro_action = ai_service.generate_two_minute_start(dream.title, dream.description)
 
         # Get or create first goal
         first_goal = dream.goals.order_by('order').first()
@@ -193,7 +193,7 @@ def detect_obstacles(self, dream_id):
         ai_service = OpenAIService()
 
         # Generate obstacle predictions with AI
-        obstacles_data = ai_service.predict_obstacles(dream)
+        obstacles_data = ai_service.predict_obstacles(dream.title, dream.description)
 
         created_count = 0
 
@@ -377,7 +377,21 @@ def suggest_task_adjustments(self, user_id):
 
         # If completion rate is low, generate suggestions
         if completion_rate < 50:
-            suggestions = ai_service.generate_task_adjustments(user, tasks, completion_rate)
+            # Build task summary for AI analysis
+            task_summary = [
+                {
+                    'title': t.title,
+                    'status': t.status,
+                    'duration_mins': t.duration_mins,
+                    'dream': t.goal.dream.title,
+                }
+                for t in tasks[:50]  # Limit to avoid token overflow
+            ]
+            suggestions = ai_service.generate_task_adjustments(
+                user.display_name or user.email,
+                task_summary,
+                completion_rate,
+            )
 
             # Send notification with suggestions
             Notification.objects.create(
@@ -430,7 +444,7 @@ def generate_vision_board(self, dream_id):
         ai_service = OpenAIService()
 
         # Generate vision board image with DALL-E
-        image_url = ai_service.generate_vision_board_image(dream)
+        image_url = ai_service.generate_vision_image(dream.title, dream.description)
 
         # Update dream with image URL
         dream.vision_image_url = image_url

@@ -176,7 +176,8 @@ CRITICAL RULES:
 - Task durations MUST respect the user's available time
 - Build PROGRESSIVE difficulty (week 1 easier than week 12)
 - Every task MUST have a unique, descriptive title starting with "Day N:"
-- Do NOT generate generic plans — personalize EVERYTHING based on calibration data""",
+- Do NOT generate generic plans — personalize EVERYTHING based on calibration data
+IMPORTANT: Always respond in the user's language. Detect the language they write in and match it. Task titles, descriptions, and all text must be in the user's language.""",
 
         'motivation': ETHICAL_PREAMBLE + """You generate short, personalized motivational messages (1-2 sentences max).
 
@@ -468,30 +469,27 @@ IMPORTANT: Create a COMPLETE plan with daily tasks for the ENTIRE duration.
 
 Respond ONLY with the plan JSON."""
 
+        # Let openai exceptions propagate so @openai_retry can catch them.
+        # Only wrap non-retryable errors (like JSON parsing) in OpenAIError.
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.5,
+            max_tokens=16000,
+            response_format={"type": "json_object"},
+            timeout=120,
+        )
+
+        content = response.choices[0].message.content
         try:
-            response = _client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
-                    {'role': 'user', 'content': prompt}
-                ],
-                temperature=0.5,
-                max_tokens=16000,
-                response_format={"type": "json_object"},
-                timeout=120,
-            )
-
-            content = response.choices[0].message.content
             plan = json.loads(content)
-
-            return plan
-
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Failed to parse JSON response: {str(e)}")
-        except openai.APIError as e:
-            raise OpenAIError(f"OpenAI API error: {str(e)}")
-        except Exception as e:
-            raise OpenAIError(f"Unexpected error: {str(e)}")
+
+        return plan
 
     def generate_calibration_questions(self, dream_title, dream_description, existing_qa=None, batch_size=7, target_date=None, category=None):
         """
@@ -705,22 +703,22 @@ Required JSON format:
   "recommended_approach": "Recommended approach in 1-2 sentences"
 }}"""
 
+        # Let openai exceptions propagate for retry; only wrap JSON errors.
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': 'You analyze goals and respond only in JSON.'},
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+        )
+
         try:
-            response = _client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {'role': 'system', 'content': 'You analyze goals and respond only in JSON.'},
-                    {'role': 'user', 'content': prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500,
-                response_format={"type": "json_object"},
-                timeout=self.timeout,
-            )
-
             return json.loads(response.choices[0].message.content)
-
-        except (json.JSONDecodeError, openai.APIError) as e:
+        except json.JSONDecodeError as e:
             raise OpenAIError(f"Analysis failed: {str(e)}")
 
     def generate_motivational_message(self, user_name, goal_title, progress_percentage, streak_days):
@@ -878,6 +876,99 @@ Generate an empathetic message (2-3 sentences) that:
 
         except openai.APIError as e:
             raise OpenAIError(f"Image analysis failed: {str(e)}")
+
+    @openai_retry
+    def predict_obstacles(self, dream_title, dream_description):
+        """
+        Predict potential obstacles for a dream and suggest solutions.
+
+        Args:
+            dream_title: Title of the dream/goal
+            dream_description: Description of the dream
+
+        Returns:
+            List of dicts with 'title', 'description', and 'solution' keys
+        """
+        prompt = f"""For the goal "{dream_title}" ({dream_description}), predict 3-5 realistic obstacles the user might face.
+
+Respond ONLY with a JSON array:
+[
+  {{
+    "title": "Short obstacle name",
+    "description": "What this obstacle looks like in practice",
+    "solution": "Concrete strategy to overcome it"
+  }}
+]"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You predict realistic obstacles for personal goals and suggest solutions. Respond only in JSON.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                temperature=0.5,
+                max_tokens=1500,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            # Handle both {"obstacles": [...]} and bare [...] formats
+            if isinstance(result, dict):
+                return result.get('obstacles', result.get('potential_obstacles', []))
+            return result if isinstance(result, list) else []
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            raise OpenAIError(f"Obstacle prediction failed: {str(e)}")
+
+    @openai_retry
+    def generate_task_adjustments(self, user_name, task_summary, completion_rate):
+        """
+        Analyze task completion patterns and suggest adjustments.
+
+        Args:
+            user_name: User's display name or email
+            task_summary: List of task dicts with title, status, duration_mins, dream
+            completion_rate: Current completion rate as a percentage
+
+        Returns:
+            Dict with 'summary' (short text) and 'detailed' (list of suggestions)
+        """
+        prompt = f"""User "{user_name}" has a {completion_rate:.0f}% task completion rate over the last 30 days.
+
+Here are their recent tasks:
+{json.dumps(task_summary, ensure_ascii=False, indent=2)}
+
+Analyze the patterns and suggest 3-5 concrete adjustments to help them improve.
+Consider: Are tasks too long? Too many per day? Wrong time of day? Lack of variety?
+
+Respond ONLY with JSON:
+{{
+  "summary": "1-2 sentence summary of the main issue and top suggestion",
+  "detailed": [
+    "Specific actionable suggestion 1",
+    "Specific actionable suggestion 2"
+  ]
+}}"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You are a productivity coach analyzing task completion patterns. Be empathetic and constructive. Respond only in JSON.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                temperature=0.6,
+                max_tokens=1000,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            return json.loads(response.choices[0].message.content)
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            raise OpenAIError(f"Task adjustment generation failed: {str(e)}")
 
     def generate_vision_image(self, dream_title, dream_description):
         """
