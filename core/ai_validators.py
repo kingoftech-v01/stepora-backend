@@ -82,7 +82,7 @@ class PlanTaskSchema(BaseModel):
 
 
 class PlanGoalSchema(BaseModel):
-    """Single goal inside a plan."""
+    """Single goal inside a milestone."""
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=100)
@@ -119,7 +119,7 @@ class PlanGoalSchema(BaseModel):
 
 
 class PlanObstacleSchema(BaseModel):
-    """Predicted obstacle with a solution."""
+    """Predicted obstacle with a solution, optionally linked to milestone/goal."""
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     solution: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
@@ -128,6 +128,14 @@ class PlanObstacleSchema(BaseModel):
         max_length=MAX_SHORT_TEXT_LEN,
         description="Why this obstacle is likely given the user's specific context",
     )
+    milestone_order: Optional[int] = Field(
+        default=None,
+        description="Order of the milestone this obstacle belongs to (null = dream-level)",
+    )
+    goal_order: Optional[int] = Field(
+        default=None,
+        description="Order of the goal this obstacle belongs to within its milestone (null = milestone-level)",
+    )
 
     @field_validator("title", "description", "solution", "evidence", mode="before")
     @classmethod
@@ -135,12 +143,59 @@ class PlanObstacleSchema(BaseModel):
         return _sanitize_str(v, MAX_DESCRIPTION_LEN)
 
 
+class PlanMilestoneSchema(BaseModel):
+    """
+    A time-based milestone within the plan.
+
+    Milestones divide the dream timeline into periods (e.g., monthly for a 1-year dream).
+    Each milestone contains multiple goals (min 4), and each goal contains tasks (min 4).
+    """
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    order: int = Field(..., ge=1, le=60, description="Milestone order (1-based)")
+    target_day: Optional[int] = Field(
+        default=None, ge=1, le=3650,
+        description="Day number by which this milestone should be reached",
+    )
+    goals: list[PlanGoalSchema] = Field(default_factory=list, min_length=1)
+    obstacles: list[PlanObstacleSchema] = Field(
+        default_factory=list,
+        description="Obstacles specific to this milestone (can be fewer than goals)",
+    )
+    reasoning: str = Field(
+        default="",
+        max_length=MAX_SHORT_TEXT_LEN,
+        description="Why this milestone at this point in the timeline",
+    )
+
+    @field_validator("title", "description", "reasoning", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("order", mode="before")
+    @classmethod
+    def coerce_order(cls, v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 1
+
+
 class PlanResponseSchema(BaseModel):
     """Full plan response from AI. The top-level schema for generate_plan."""
     analysis: str = Field(default="", max_length=MAX_TEXT_LEN)
     estimated_duration_weeks: int = Field(default=12, ge=1, le=520)
     weekly_time_hours: int = Field(default=5, ge=1, le=168)
-    goals: list[PlanGoalSchema] = Field(..., min_length=1)
+    milestones: list[PlanMilestoneSchema] = Field(
+        default_factory=list,
+        description="Milestones that divide the dream timeline. Each contains goals with tasks.",
+    )
+    # Keep goals for backward compatibility with legacy plans
+    goals: list[PlanGoalSchema] = Field(
+        default_factory=list,
+        description="Legacy: direct goals without milestones. Used when milestones are empty.",
+    )
     tips: list[str] = Field(default_factory=list)
     potential_obstacles: list[PlanObstacleSchema] = Field(default_factory=list)
     calibration_references: list[str] = Field(
@@ -150,6 +205,13 @@ class PlanResponseSchema(BaseModel):
             "This proves the plan is personalized and not generic."
         ),
     )
+
+    @model_validator(mode="after")
+    def ensure_milestones_or_goals(self):
+        """Ensure at least milestones or goals are provided."""
+        if not self.milestones and not self.goals:
+            raise ValueError("Plan must have at least one milestone or one goal")
+        return self
 
     @field_validator("analysis", mode="before")
     @classmethod
@@ -569,12 +631,20 @@ def check_plan_calibration_coherence(
             f"have ~{available_hours}h/week available. You may want to adjust."
         )
 
+    # Gather all goals from milestones or direct goals
+    all_goals = []
+    if plan.milestones:
+        for milestone in plan.milestones:
+            all_goals.extend(milestone.goals)
+    else:
+        all_goals = plan.goals
+
     # Check that goals exist
-    if len(plan.goals) == 0:
+    if len(all_goals) == 0:
         warnings.append("The plan has no goals — this shouldn't happen.")
 
     # Check that tasks have reasonable durations
-    for goal in plan.goals:
+    for goal in all_goals:
         for task in goal.tasks:
             if task.duration_mins > 240:
                 warnings.append(

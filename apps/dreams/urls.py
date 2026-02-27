@@ -4,7 +4,7 @@ URLs for Dreams app.
 Routes:
     /dreams/                        - Dream CRUD
     /dreams/<id>/analyze/           - AI analysis
-    /dreams/<id>/generate-plan/     - Generate AI plan
+    /dreams/<id>/generate-plan/     - Generate AI plan (milestone-based)
     /dreams/<id>/duplicate/         - Deep-copy dream
     /dreams/<id>/share/             - Share with user
     /dreams/<id>/tags/              - Add/remove tags
@@ -13,7 +13,8 @@ Routes:
     /dreams/tags/                   - List all tags
     /dreams/templates/              - Browse templates
     /dreams/templates/<id>/use/     - Create dream from template
-    /goals/                         - Goal CRUD
+    /milestones/                    - Milestone CRUD (filter by ?dream=uuid)
+    /goals/                         - Goal CRUD (filter by ?dream=uuid or ?milestone=uuid)
     /tasks/                         - Task CRUD
     /obstacles/                     - Obstacle CRUD
 """
@@ -21,13 +22,14 @@ Routes:
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    DreamViewSet, GoalViewSet, TaskViewSet, ObstacleViewSet,
+    DreamViewSet, MilestoneViewSet, GoalViewSet, TaskViewSet, ObstacleViewSet,
     SharedWithMeView, DreamTagListView, DreamTemplateViewSet,
     DreamPDFExportView,
 )
 
 router = DefaultRouter()
 router.register(r'dreams', DreamViewSet, basename='dream')
+router.register(r'milestones', MilestoneViewSet, basename='milestone')
 router.register(r'goals', GoalViewSet, basename='goal')
 router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'obstacles', ObstacleViewSet, basename='obstacle')

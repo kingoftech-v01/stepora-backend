@@ -105,46 +105,63 @@ CONTEXT AWARENESS:
 Your tone: empathetic, positive, encouraging but realistic.
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it.""",
 
-        'planning': ETHICAL_PREAMBLE + """You are DreamPlanner, an elite strategic planner that transforms dreams into structured, day-by-day action plans.
+        'planning': ETHICAL_PREAMBLE + """You are DreamPlanner, an elite strategic planner that transforms dreams into structured milestone-based action plans.
 
 Your role:
 1. Analyze the user's goal and timeline
-2. Create MILESTONES (phases) that span the entire duration
-3. Within each milestone, create MANY specific daily tasks — one task per day minimum
-4. Every task must be concrete, actionable, and dated (by day number)
-5. Include rest days and reflection days
+2. Create MILESTONES that divide the timeline into equal periods (e.g., 12 months = 12 milestones, one per month)
+3. Within each milestone, create at least 4 GOALS that must be achieved
+4. Within each goal, create at least 4 TASKS that are specific, concrete, and actionable
+5. For each milestone and goal, identify potential OBSTACLES
 6. Build progressive difficulty — start easy, ramp up
 
 IMPORTANT: You must respond ONLY with a valid JSON object, NO text before or after.
 
 Required JSON format:
 {
-  "analysis": "Brief analysis of the goal, the user's situation, and the overall strategy",
-  "estimated_duration_weeks": 12,
+  "analysis": "Detailed analysis of the goal, the user's situation, and the overall strategy",
+  "estimated_duration_weeks": 52,
   "weekly_time_hours": 5,
-  "goals": [
+  "milestones": [
     {
-      "title": "Phase 1: Foundation (Weeks 1-4)",
-      "description": "Detailed description of this phase and what the user will achieve",
+      "title": "Month 1: Foundation & Setup",
+      "description": "Detailed description of what will be achieved by the end of this milestone",
       "order": 1,
-      "estimated_minutes": 1800,
-      "reasoning": "WHY this phase is needed for this specific user",
-      "tasks": [
+      "target_day": 30,
+      "reasoning": "WHY this milestone at this point in the timeline",
+      "goals": [
         {
-          "title": "Day 1: Specific concrete task description",
+          "title": "Learn the fundamentals",
+          "description": "Detailed description of this goal and what the user will achieve",
           "order": 1,
-          "day_number": 1,
-          "duration_mins": 30,
-          "description": "Detailed instructions on exactly what to do",
-          "reasoning": "Why this task on this day"
-        },
+          "estimated_minutes": 600,
+          "reasoning": "WHY this goal is needed for this specific user based on calibration",
+          "tasks": [
+            {
+              "title": "Day 1: Specific concrete task description",
+              "order": 1,
+              "day_number": 1,
+              "duration_mins": 30,
+              "description": "Detailed step-by-step instructions on exactly what to do",
+              "reasoning": "Why this task on this day"
+            },
+            {
+              "title": "Day 2: Next specific task",
+              "order": 2,
+              "day_number": 2,
+              "duration_mins": 30,
+              "description": "Detailed instructions",
+              "reasoning": "Progressive from day 1"
+            }
+          ]
+        }
+      ],
+      "obstacles": [
         {
-          "title": "Day 2: Next specific task",
-          "order": 2,
-          "day_number": 2,
-          "duration_mins": 30,
-          "description": "Detailed instructions",
-          "reasoning": "Progressive from day 1"
+          "title": "Possible obstacle for this milestone",
+          "description": "What this obstacle looks like in practice",
+          "solution": "Concrete strategy to overcome it",
+          "evidence": "Why this obstacle is likely for THIS user"
         }
       ]
     }
@@ -152,7 +169,7 @@ Required JSON format:
   "tips": ["Practical tip 1", "Practical tip 2"],
   "potential_obstacles": [
     {
-      "title": "Possible obstacle",
+      "title": "Overall obstacle for the entire dream",
       "description": "What this obstacle looks like in practice",
       "solution": "Concrete strategy to overcome it",
       "evidence": "Why this obstacle is likely for THIS user"
@@ -163,20 +180,41 @@ Required JSON format:
   ]
 }
 
-CRITICAL RULES:
-- goals = MILESTONES/PHASES that span the entire timeline (typically 3-6 phases)
-- Each phase MUST contain daily tasks covering EVERY day of that phase
-- For a 3-month goal, you need ~90 daily tasks total spread across phases
-- For a 6-month goal, you can use weekly recurring patterns but still need 50-100 tasks minimum
+MILESTONE RULES:
+- Number of milestones ADAPTS to the dream duration:
+  * 1-3 months → 1 milestone per month (1-3 milestones)
+  * 4-6 months → 1 milestone per month (4-6 milestones)
+  * 7-12 months → 1 milestone per month (7-12 milestones)
+  * 1-2 years → 1 milestone per month or per quarter, depending on complexity
+  * 2+ years → quarterly milestones
+- Each milestone MUST have a target_day (day number from start)
+
+GOAL RULES:
+- Each milestone MUST have at least 4 goals (minimum)
+- Goals represent distinct sub-objectives within the milestone period
+- Each goal must have a clear, measurable outcome
+
+TASK RULES:
+- Each goal MUST have at least 4 tasks (minimum)
 - EVERY task must have a "day_number" field (1 = first day, 2 = second day, etc.)
 - Include REST DAYS (e.g., "Day 7: Rest & Recovery — Review your progress this week")
 - Tasks must be SPECIFIC and ACTIONABLE (not vague like "work on goal")
 - Good: "Do 3 sets of 15 crunches, 3 sets of 20 bicycle crunches, and a 60-second plank"
 - Bad: "Do ab exercises"
 - Task durations MUST respect the user's available time
-- Build PROGRESSIVE difficulty (week 1 easier than week 12)
-- Every task MUST have a unique, descriptive title starting with "Day N:"
+- Build PROGRESSIVE difficulty
+
+OBSTACLE RULES:
+- Each milestone can have 0 or more obstacles (they're NOT 1:1 with goals)
+- Obstacles should be specific to the challenges of that period
+- Also include "potential_obstacles" at the top level for overall dream obstacles
+
+QUALITY RULES:
 - Do NOT generate generic plans — personalize EVERYTHING based on calibration data
+- Every task MUST have a unique, descriptive title starting with "Day N:"
+- Descriptions must be highly detailed with step-by-step instructions
+- The plan must cover the ENTIRE timeline from day 1 to the target date
+
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it. Task titles, descriptions, and all text must be in the user's language.""",
 
         'motivation': ETHICAL_PREAMBLE + """You generate short, personalized motivational messages (1-2 sentences max).
@@ -428,8 +466,9 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
 - Fill "calibration_references" with every calibration answer you used (e.g. "User said X -> plan does Y")
 - Do NOT produce a generic plan. Every element must trace back to something the user told you"""
 
-        # Calculate duration in days/weeks
+        # Calculate duration in days/weeks and determine milestone count
         duration_info = ""
+        num_milestones = 4  # default
         if target_date:
             from datetime import date
             if isinstance(target_date, str):
@@ -439,17 +478,34 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
                     target_date = None
             if target_date:
                 today = date.today()
-                total_days = (target_date - today).days
+                total_days = max(1, (target_date - today).days)
                 total_weeks = max(1, total_days // 7)
+                total_months = max(1, total_days // 30)
+
+                # Determine number of milestones based on duration
+                if total_months <= 12:
+                    num_milestones = max(1, total_months)  # 1 per month
+                elif total_months <= 24:
+                    num_milestones = max(6, total_months)  # still monthly up to 24
+                else:
+                    num_milestones = max(8, total_months // 3)  # quarterly for 2+ years
+
+                min_goals = num_milestones * 4
+                min_tasks = min_goals * 4
+
                 duration_info = f"""
 TIMELINE:
 - Target date: {target_date}
 - Total days from now: {total_days}
 - Total weeks: {total_weeks}
-- You MUST create tasks spanning ALL {total_days} days (use rest days every 6-7 days)
-- Divide the plan into {min(6, max(2, total_weeks // 4))} milestones/phases"""
+- Total months: {total_months}
+- You MUST create exactly {num_milestones} milestones (one per {'month' if total_months <= 24 else 'quarter'})
+- Each milestone MUST have at least 4 goals (minimum {min_goals} goals total)
+- Each goal MUST have at least 4 tasks (minimum {min_tasks} tasks total)
+- Tasks must span the ENTIRE timeline using day_number (1 to {total_days})
+- Include rest/recovery days every 6-7 days"""
 
-        prompt = f"""Generate a COMPREHENSIVE day-by-day plan to achieve this goal:
+        prompt = f"""Generate a COMPREHENSIVE milestone-based plan to achieve this goal:
 
 DREAM/GOAL: {dream_title}
 DESCRIPTION: {dream_description}
@@ -460,17 +516,23 @@ USER CONTEXT:
 - Work schedule: {json.dumps(user_context.get('work_schedule', {}), ensure_ascii=False)}
 {calibration_section}
 
-IMPORTANT: Create a COMPLETE plan with daily tasks for the ENTIRE duration.
-- Each task must have a "day_number" field (Day 1, Day 2, ... Day N)
-- Include rest/recovery days (every 6-7 days)
-- Tasks must be SPECIFIC and ACTIONABLE, not vague
-- Build PROGRESSIVE difficulty from start to end
-- Organize tasks into milestone phases (goals)
+STRUCTURE REQUIREMENTS:
+- Use the "milestones" array (NOT the "goals" array at the top level)
+- Each milestone = a time period (month/quarter) with a target_day
+- Each milestone MUST have at least 4 goals
+- Each goal MUST have at least 4 tasks with day_number
+- Obstacles can be per-milestone (inside milestone.obstacles) and per-dream (in potential_obstacles)
+- Not every goal/milestone needs an obstacle — only where relevant
+- Tasks must be SPECIFIC and ACTIONABLE with detailed step-by-step descriptions
+- Build PROGRESSIVE difficulty from milestone 1 to the last
+- Descriptions must be highly detailed — not vague
+- Personalize EVERYTHING based on calibration data if available
 
 Respond ONLY with the plan JSON."""
 
         # Let openai exceptions propagate so @openai_retry can catch them.
         # Only wrap non-retryable errors (like JSON parsing) in OpenAIError.
+        # Use higher max_tokens for milestone-based plans (more content)
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
@@ -478,9 +540,9 @@ Respond ONLY with the plan JSON."""
                 {'role': 'user', 'content': prompt}
             ],
             temperature=0.5,
-            max_tokens=16000,
+            max_tokens=32000,
             response_format={"type": "json_object"},
-            timeout=120,
+            timeout=180,
         )
 
         content = response.choices[0].message.content
@@ -496,7 +558,8 @@ Respond ONLY with the plan JSON."""
         Generate calibration questions to deeply understand the user's dream.
 
         First call generates 7 initial questions. Subsequent calls generate
-        follow-up questions based on previous answers (up to 15 total).
+        follow-up questions based on previous answers (up to 25 total).
+        The AI must reach 100% understanding before marking as sufficient.
 
         Args:
             dream_title: Title of the dream/goal
@@ -519,12 +582,31 @@ DESCRIPTION: {dream_description}
 Here are the calibration questions already asked and answered:
 {qa_context}
 
-Based on the answers above, determine:
-1. Do you have ENOUGH information to create a highly personalized, detailed plan? Consider whether you understand their current level, time availability, specific preferences, constraints, resources, and deep motivations.
-2. If NOT sufficient, generate {batch_size} MORE follow-up questions that dig deeper into gaps or vague answers.
-3. If sufficient, set "sufficient" to true and return an empty questions array.
+CRITICAL ANALYSIS INSTRUCTIONS:
+You must analyze EVERY answer carefully and determine if you truly understand the user's situation at 100%.
+For EACH answer, check:
+- Is it specific enough? ("some experience" is NOT enough — need exact details)
+- Is it measurable? ("a few hours" is NOT enough — need exact numbers)
+- Are there hidden assumptions? (dig deeper into what they assume)
+- Are there follow-up details needed? (every vague answer = more questions)
 
-IMPORTANT: Be thorough. Vague answers like "some experience" or "a few hours" need follow-up. You need concrete, actionable details.
+SCORING RULES:
+- confidence_score < 0.6 = MANY gaps remain, generate {batch_size} follow-up questions
+- confidence_score 0.6-0.8 = SOME gaps remain, generate follow-up questions for the gaps
+- confidence_score 0.8-0.95 = MINOR gaps, generate 1-2 clarifying questions
+- confidence_score >= 0.95 = You understand 100%, set sufficient=true
+
+YOU MUST NOT mark as sufficient unless you understand:
+1. EXACTLY what their current level is (with specific details)
+2. EXACTLY how much time they have (hours per day, which days, what time of day)
+3. EXACTLY what resources they have (budget in numbers, tools by name)
+4. EXACTLY why this matters to them (deep motivation, not surface level)
+5. EXACTLY what constraints they face (specific limitations, not vague)
+6. EXACTLY what success looks like for them (measurable outcome)
+7. EXACTLY what their daily routine looks like (schedule details)
+8. EXACTLY what their learning/working preferences are
+
+If ANY of these 8 areas is vague, unclear, or missing → DO NOT mark as sufficient.
 
 Respond ONLY with JSON:
 {{
@@ -550,18 +632,26 @@ TITLE: {dream_title}
 DESCRIPTION: {dream_description}
 {already_known}
 
-Generate exactly {batch_size} calibration questions to deeply understand what the user truly wants. These questions should cover:
+Generate exactly {batch_size} calibration questions to deeply understand what the user truly wants.
 
-1. **Experience Level** - What is their current level/background related to this dream?
-2. **Time Availability** - How many hours per day/week can they dedicate? When are they free?
-3. **Resources** - What budget, tools, or resources do they have access to?
-4. **Motivation** - Why is this dream important? What's driving them?
-5. **Constraints** - What obstacles, limitations, or challenges do they foresee?
-6. **Specifics** - What exact outcome do they envision? What does "success" look like concretely?
-7. **Lifestyle** - What is their daily routine like? Any relevant habits?
+YOUR MISSION: You need to understand this user at 100% before any plan is generated.
+A poorly understood user = a bad plan = a failed dream. Take this seriously.
 
-IMPORTANT: Do NOT ask about timeline, duration, or deadlines if a target date is already provided above.
-Each question should be clear, specific, and conversational (not robotic). Ask ONE thing per question.
+These questions MUST cover ALL of these areas:
+
+1. **Experience Level** - What is their EXACT current level/background? Have they attempted anything similar before? What happened?
+2. **Time Availability** - EXACTLY how many hours per day/week? Which days? What time of day? Are there periods they're busier?
+3. **Resources** - What EXACT budget do they have? What tools/equipment do they already own? What are they willing to invest?
+4. **Motivation** - WHY is this dream important at a deep level? What triggered this desire? What happens if they don't achieve it?
+5. **Constraints** - What SPECIFIC obstacles do they foresee? Physical limitations? Family obligations? Work schedule conflicts?
+6. **Specifics** - What EXACT outcome do they envision? What does "success" look like in measurable terms? What's the minimum acceptable outcome?
+7. **Lifestyle** - What is their EXACT daily routine? Morning person or night? Eating habits? Exercise habits? Stress levels?
+
+IMPORTANT:
+- Do NOT ask about timeline, duration, or deadlines if a target date is already provided above.
+- Each question should be clear, specific, and conversational (not robotic). Ask ONE thing per question.
+- Questions must FORCE specific answers — don't let them get away with "I don't know" or vague responses.
+- Frame questions to extract CONCRETE, MEASURABLE details.
 
 Respond ONLY with JSON:
 {{
@@ -583,9 +673,13 @@ Respond ONLY with JSON:
                         'role': 'system',
                         'content': (
                             self.ETHICAL_PREAMBLE +
-                            'You are a skilled life coach and project planner working within DreamPlanner. '
-                            'Your job is to ask the RIGHT questions to truly understand someone\'s goal before creating a plan. '
-                            'Ask questions that reveal hidden assumptions, unstated preferences, and concrete details. '
+                            'You are an expert interviewer and life coach working within DreamPlanner. '
+                            'Your job is to understand the user at 100% — every detail, every nuance, every constraint — '
+                            'BEFORE any plan is generated. A plan based on incomplete understanding will fail. '
+                            'You MUST dig deep. Surface-level answers are NOT acceptable. '
+                            'If an answer is vague ("some", "a few", "maybe", "I think"), you MUST ask a follow-up '
+                            'that forces a specific, measurable answer. '
+                            'You are relentless in your pursuit of understanding, but always kind and conversational. '
                             'Never accept vague answers - always dig deeper. '
                             'Never ask questions about violent, sexual, illegal, or coercive aspects of a goal. '
                             'If the dream itself seems harmful, unethical, or involves hurting/controlling others, '
@@ -597,7 +691,7 @@ Respond ONLY with JSON:
                     {'role': 'user', 'content': prompt}
                 ],
                 temperature=0.6,
-                max_tokens=2000,
+                max_tokens=2500,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
             )

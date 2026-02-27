@@ -18,12 +18,13 @@ from core.openapi_examples import (
     DREAM_CREATE_REQUEST, DREAM_LIST_RESPONSE, DREAM_ANALYZE_RESPONSE,
     GOAL_CREATE_REQUEST,
 )
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
+from .models import Dream, Goal, Task, Obstacle, Milestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
     TaskSerializer, TaskCreateSerializer,
     ObstacleSerializer, CalibrationResponseSerializer,
+    MilestoneSerializer,
     DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
     VisionBoardImageSerializer,
@@ -125,8 +126,11 @@ class DreamViewSet(viewsets.ModelViewSet):
         qs = Dream.objects.filter(
             Q(user=self.request.user) | Q(id__in=collab_dream_ids) | Q(id__in=shared_dream_ids)
         ).prefetch_related(
+            'milestones__goals__tasks', 'milestones__obstacles',
             'goals__tasks', 'taggings__tag'
         ).annotate(
+            _milestones_count=Count('milestones', distinct=True),
+            _completed_milestones_count=Count('milestones', filter=DQ(milestones__status='completed'), distinct=True),
             _goals_count=Count('goals', distinct=True),
             _completed_goals_count=Count('goals', filter=DQ(goals__status='completed'), distinct=True),
             _total_tasks=Count('goals__tasks', distinct=True),
@@ -396,8 +400,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         total_questions = CalibrationResponse.objects.filter(dream=dream).count()
         answered_count = len(all_qa)
 
-        # If we've reached 15 questions, force complete
-        if total_questions >= 15:
+        # If we've reached 25 questions, force complete (increased from 15 for deeper understanding)
+        if total_questions >= 25:
             dream.calibration_status = 'completed'
             dream.save(update_fields=['calibration_status'])
 
@@ -412,8 +416,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         ai_service = OpenAIService()
 
         try:
-            remaining_capacity = 15 - total_questions
-            batch_size = min(remaining_capacity, 4)  # Follow-up batches of up to 4
+            remaining_capacity = 25 - total_questions
+            batch_size = min(remaining_capacity, 5)  # Follow-up batches of up to 5
 
             raw_result = ai_service.generate_calibration_questions(
                 dream.title,
@@ -579,52 +583,155 @@ class DreamViewSet(viewsets.ModelViewSet):
             dream.ai_analysis = analysis_data
             dream.save(update_fields=['ai_analysis'])
 
-            # Create Goals and Tasks from validated plan using bulk_create
-            goals_to_create = [
-                Goal(
-                    dream=dream,
-                    title=goal.title,
-                    description=goal.description,
-                    order=goal.order,
-                    estimated_minutes=goal.estimated_minutes,
-                )
-                for goal in plan.goals
-            ]
-            db_goals = Goal.objects.bulk_create(goals_to_create)
-
             from datetime import timedelta
             plan_start = dream.created_at or timezone.now()
 
-            tasks_to_create = []
-            for i, goal_data in enumerate(plan.goals):
-                for task in goal_data.tasks:
-                    scheduled = None
-                    if hasattr(task, 'day_number') and task.day_number:
-                        scheduled = plan_start + timedelta(days=task.day_number - 1)
-                    tasks_to_create.append(
-                        Task(
-                            goal=db_goals[i],
-                            title=task.title,
-                            description=task.description,
-                            order=task.order,
-                            duration_mins=task.duration_mins,
-                            scheduled_date=scheduled,
+            if plan.milestones:
+                # NEW: Milestone-based plan creation
+                # Dream -> Milestones -> Goals -> Tasks, with Obstacles on milestones/goals
+                milestones_to_create = [
+                    Milestone(
+                        dream=dream,
+                        title=ms.title,
+                        description=ms.description,
+                        order=ms.order,
+                        target_date=(plan_start + timedelta(days=ms.target_day)) if ms.target_day else None,
+                    )
+                    for ms in plan.milestones
+                ]
+                db_milestones = Milestone.objects.bulk_create(milestones_to_create)
+
+                # Build milestone lookup by order for obstacle linking
+                milestone_by_order = {ms.order: db_ms for ms, db_ms in zip(plan.milestones, db_milestones)}
+
+                # Create all goals across all milestones
+                goals_to_create = []
+                goal_data_pairs = []  # (plan_goal_data, milestone_index)
+                for ms_idx, ms_data in enumerate(plan.milestones):
+                    for goal_data in ms_data.goals:
+                        goals_to_create.append(
+                            Goal(
+                                dream=dream,
+                                milestone=db_milestones[ms_idx],
+                                title=goal_data.title,
+                                description=goal_data.description,
+                                order=goal_data.order,
+                                estimated_minutes=goal_data.estimated_minutes,
+                            )
+                        )
+                        goal_data_pairs.append((goal_data, ms_idx))
+                db_goals = Goal.objects.bulk_create(goals_to_create)
+
+                # Build goal lookup by (milestone_order, goal_order) for obstacle linking
+                goal_by_key = {}
+                for i, (goal_data, ms_idx) in enumerate(goal_data_pairs):
+                    ms_order = plan.milestones[ms_idx].order
+                    goal_by_key[(ms_order, goal_data.order)] = db_goals[i]
+
+                # Create all tasks across all goals
+                tasks_to_create = []
+                for i, (goal_data, _) in enumerate(goal_data_pairs):
+                    for task in goal_data.tasks:
+                        scheduled = None
+                        if hasattr(task, 'day_number') and task.day_number:
+                            scheduled = plan_start + timedelta(days=task.day_number - 1)
+                        tasks_to_create.append(
+                            Task(
+                                goal=db_goals[i],
+                                title=task.title,
+                                description=task.description,
+                                order=task.order,
+                                duration_mins=task.duration_mins,
+                                scheduled_date=scheduled,
+                            )
+                        )
+                Task.objects.bulk_create(tasks_to_create)
+
+                # Create milestone-level obstacles
+                obstacles_to_create = []
+                for ms_idx, ms_data in enumerate(plan.milestones):
+                    for obs in ms_data.obstacles:
+                        # Link obstacle to milestone, and optionally to a goal
+                        linked_goal = None
+                        if obs.goal_order is not None:
+                            linked_goal = goal_by_key.get((ms_data.order, obs.goal_order))
+                        obstacles_to_create.append(
+                            Obstacle(
+                                dream=dream,
+                                milestone=db_milestones[ms_idx],
+                                goal=linked_goal,
+                                title=obs.title,
+                                description=obs.description,
+                                solution=obs.solution,
+                                obstacle_type='predicted',
+                            )
+                        )
+
+                # Create dream-level obstacles (potential_obstacles)
+                for obstacle in plan.potential_obstacles:
+                    linked_milestone = None
+                    linked_goal = None
+                    if obstacle.milestone_order is not None:
+                        linked_milestone = milestone_by_order.get(obstacle.milestone_order)
+                    if obstacle.milestone_order is not None and obstacle.goal_order is not None:
+                        linked_goal = goal_by_key.get((obstacle.milestone_order, obstacle.goal_order))
+                    obstacles_to_create.append(
+                        Obstacle(
+                            dream=dream,
+                            milestone=linked_milestone,
+                            goal=linked_goal,
+                            title=obstacle.title,
+                            description=obstacle.description,
+                            solution=obstacle.solution,
+                            obstacle_type='predicted',
                         )
                     )
-            Task.objects.bulk_create(tasks_to_create)
+                Obstacle.objects.bulk_create(obstacles_to_create)
 
-            # Create obstacles using bulk_create
-            obstacles_to_create = [
-                Obstacle(
-                    dream=dream,
-                    title=obstacle.title,
-                    description=obstacle.description,
-                    solution=obstacle.solution,
-                    obstacle_type='predicted',
-                )
-                for obstacle in plan.potential_obstacles
-            ]
-            Obstacle.objects.bulk_create(obstacles_to_create)
+            else:
+                # LEGACY: Direct goals without milestones (backward compatible)
+                goals_to_create = [
+                    Goal(
+                        dream=dream,
+                        title=goal.title,
+                        description=goal.description,
+                        order=goal.order,
+                        estimated_minutes=goal.estimated_minutes,
+                    )
+                    for goal in plan.goals
+                ]
+                db_goals = Goal.objects.bulk_create(goals_to_create)
+
+                tasks_to_create = []
+                for i, goal_data in enumerate(plan.goals):
+                    for task in goal_data.tasks:
+                        scheduled = None
+                        if hasattr(task, 'day_number') and task.day_number:
+                            scheduled = plan_start + timedelta(days=task.day_number - 1)
+                        tasks_to_create.append(
+                            Task(
+                                goal=db_goals[i],
+                                title=task.title,
+                                description=task.description,
+                                order=task.order,
+                                duration_mins=task.duration_mins,
+                                scheduled_date=scheduled,
+                            )
+                        )
+                Task.objects.bulk_create(tasks_to_create)
+
+                # Create obstacles using bulk_create
+                obstacles_to_create = [
+                    Obstacle(
+                        dream=dream,
+                        title=obstacle.title,
+                        description=obstacle.description,
+                        solution=obstacle.solution,
+                        obstacle_type='predicted',
+                    )
+                    for obstacle in plan.potential_obstacles
+                ]
+                Obstacle.objects.bulk_create(obstacles_to_create)
 
             response_data = DreamDetailSerializer(dream).data
             # Include evidence so frontend can show the user WHY each step exists
@@ -1511,6 +1618,78 @@ class DreamPDFExportView(views.APIView):
         },
     ),
 )
+@extend_schema_view(
+    list=extend_schema(
+        summary="List milestones",
+        description="Get all milestones for the current user's dreams",
+        tags=["Milestones"],
+        responses={200: MilestoneSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Get milestone",
+        description="Get a specific milestone with its goals and tasks",
+        tags=["Milestones"],
+        responses={
+            200: MilestoneSerializer,
+            404: OpenApiResponse(description='Milestone not found.'),
+        },
+    ),
+    destroy=extend_schema(
+        summary="Delete milestone",
+        description="Delete a milestone",
+        tags=["Milestones"],
+        responses={
+            204: OpenApiResponse(description='Milestone deleted.'),
+            404: OpenApiResponse(description='Milestone not found.'),
+        },
+    ),
+)
+class MilestoneViewSet(viewsets.ModelViewSet):
+    """CRUD operations for milestones."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = MilestoneSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['status']
+    ordering_fields = ['order', 'created_at']
+    ordering = ['order']
+
+    def get_queryset(self):
+        """Get milestones for current user's dreams."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Milestone.objects.none()
+        dream_id = self.request.query_params.get('dream')
+        queryset = Milestone.objects.filter(
+            dream__user=self.request.user
+        ).prefetch_related('goals__tasks', 'obstacles')
+
+        if dream_id:
+            queryset = queryset.filter(dream_id=dream_id)
+
+        return queryset
+
+    @extend_schema(
+        summary="Complete milestone",
+        description="Mark a milestone as completed",
+        tags=["Milestones"],
+        responses={
+            200: MilestoneSerializer,
+            404: OpenApiResponse(description='Milestone not found.'),
+        },
+    )
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark milestone as completed."""
+        milestone = self.get_object()
+        if milestone.status == 'completed':
+            return Response(
+                {'error': 'Milestone is already completed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        milestone.complete()
+        return Response(MilestoneSerializer(milestone).data)
+
+
 class GoalViewSet(viewsets.ModelViewSet):
     """CRUD operations for goals."""
 
@@ -1525,10 +1704,13 @@ class GoalViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Goal.objects.none()
         dream_id = self.request.query_params.get('dream')
+        milestone_id = self.request.query_params.get('milestone')
         queryset = Goal.objects.filter(dream__user=self.request.user).prefetch_related('tasks')
 
         if dream_id:
             queryset = queryset.filter(dream_id=dream_id)
+        if milestone_id:
+            queryset = queryset.filter(milestone_id=milestone_id)
 
         return queryset
 

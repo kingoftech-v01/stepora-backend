@@ -80,13 +80,20 @@ class Dream(models.Model):
         return f"{self.title} - {self.user.email}"
 
     def update_progress(self):
-        """Calculate and update progress percentage based on completed goals."""
-        total_goals = self.goals.count()
-        if total_goals == 0:
-            self.progress_percentage = 0.0
+        """Calculate and update progress percentage based on milestones or goals."""
+        total_milestones = self.milestones.count()
+        if total_milestones > 0:
+            # New hierarchy: progress based on milestones
+            completed_milestones = self.milestones.filter(status='completed').count()
+            self.progress_percentage = (completed_milestones / total_milestones) * 100
         else:
-            completed_goals = self.goals.filter(status='completed').count()
-            self.progress_percentage = (completed_goals / total_goals) * 100
+            # Legacy path: progress based on goals directly
+            total_goals = self.goals.count()
+            if total_goals == 0:
+                self.progress_percentage = 0.0
+            else:
+                completed_goals = self.goals.filter(status='completed').count()
+                self.progress_percentage = (completed_goals / total_goals) * 100
 
         self.save(update_fields=['progress_percentage'])
 
@@ -111,11 +118,106 @@ class Dream(models.Model):
         AchievementService.check_achievements(self.user)
 
 
+class Milestone(models.Model):
+    """
+    Time-based milestone within a dream.
+
+    Milestones divide the dream's timeline into equal periods (e.g., 12 months = 12 milestones).
+    Each milestone contains multiple goals, and goals contain tasks.
+
+    Hierarchy: Dream -> Milestone -> Goal -> Task
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='milestones')
+
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField(blank=True, default='')
+    order = models.IntegerField(help_text='Order within the dream (1 = first milestone)')
+
+    # Timeline for this milestone
+    target_date = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Date by which this milestone should be achieved'
+    )
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('skipped', 'Skipped'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Progress
+    progress_percentage = models.FloatField(default=0.0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'milestones'
+        ordering = ['dream', 'order']
+        indexes = [
+            models.Index(fields=['dream', 'order']),
+            models.Index(fields=['status']),
+            models.Index(fields=['target_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} (Milestone #{self.order})"
+
+    def update_progress(self):
+        """Calculate and update progress based on completed goals."""
+        total_goals = self.goals.count()
+        if total_goals == 0:
+            self.progress_percentage = 0.0
+        else:
+            completed_goals = self.goals.filter(status='completed').count()
+            self.progress_percentage = (completed_goals / total_goals) * 100
+
+        self.save(update_fields=['progress_percentage'])
+
+        # Update parent dream progress
+        self.dream.update_progress()
+
+    def complete(self):
+        """Mark milestone as completed."""
+        if self.status == 'completed':
+            return
+
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        self.progress_percentage = 100.0
+        self.save()
+
+        # Update dream progress
+        self.dream.update_progress()
+
+        # Award XP
+        self.dream.user.add_xp(200)  # Completing a milestone gives 200 XP
+
+        # Check achievements
+        from apps.users.services import AchievementService
+        AchievementService.check_achievements(self.dream.user)
+
+
 class Goal(models.Model):
-    """Goal/milestone within a dream."""
+    """Goal within a milestone."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='goals')
+    milestone = models.ForeignKey(
+        Milestone, on_delete=models.CASCADE, related_name='goals',
+        null=True, blank=True,
+        help_text='The milestone this goal belongs to (null for legacy goals without milestones)'
+    )
 
     title = EncryptedCharField(max_length=255)
     description = EncryptedTextField(blank=True, default='')
@@ -156,6 +258,7 @@ class Goal(models.Model):
             models.Index(fields=['dream', 'order']),
             models.Index(fields=['status']),
             models.Index(fields=['scheduled_start']),
+            models.Index(fields=['milestone', 'order']),
         ]
 
     def __str__(self):
@@ -172,8 +275,12 @@ class Goal(models.Model):
 
         self.save(update_fields=['progress_percentage'])
 
-        # Update parent dream progress
-        self.dream.update_progress()
+        # Update parent milestone progress if linked
+        if self.milestone:
+            self.milestone.update_progress()
+        else:
+            # Legacy path: update dream directly
+            self.dream.update_progress()
 
     def complete(self):
         """Mark goal as completed."""
@@ -185,8 +292,11 @@ class Goal(models.Model):
         self.progress_percentage = 100.0
         self.save()
 
-        # Update dream progress
-        self.dream.update_progress()
+        # Update parent milestone or dream progress
+        if self.milestone:
+            self.milestone.update_progress()
+        else:
+            self.dream.update_progress()
 
         # Award XP
         self.dream.user.add_xp(100)  # Completing a goal gives 100 XP
@@ -303,10 +413,20 @@ class Task(models.Model):
 
 
 class Obstacle(models.Model):
-    """Predicted or actual obstacles for dreams."""
+    """Predicted or actual obstacles for dreams, milestones, or goals."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='obstacles')
+    milestone = models.ForeignKey(
+        Milestone, on_delete=models.CASCADE, related_name='obstacles',
+        null=True, blank=True,
+        help_text='The milestone this obstacle is linked to (optional)'
+    )
+    goal = models.ForeignKey(
+        Goal, on_delete=models.CASCADE, related_name='obstacles',
+        null=True, blank=True,
+        help_text='The goal this obstacle is linked to (optional)'
+    )
 
     title = EncryptedCharField(max_length=255)
     description = EncryptedTextField()
@@ -334,6 +454,10 @@ class Obstacle(models.Model):
     class Meta:
         db_table = 'obstacles'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['milestone']),
+            models.Index(fields=['goal']),
+        ]
 
     def __str__(self):
         return f"Obstacle: {self.title}"

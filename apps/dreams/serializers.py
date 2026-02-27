@@ -4,7 +4,7 @@ Serializers for Dreams app.
 
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
+from .models import Dream, Goal, Task, Obstacle, Milestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -48,7 +48,7 @@ class GoalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Goal
         fields = [
-            'id', 'dream', 'title', 'description', 'order',
+            'id', 'dream', 'milestone', 'title', 'description', 'order',
             'estimated_minutes', 'scheduled_start', 'scheduled_end',
             'status', 'completed_at', 'progress_percentage',
             'reminder_enabled', 'reminder_time',
@@ -59,9 +59,10 @@ class GoalSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'id': {'help_text': 'Unique identifier for the goal.'},
             'dream': {'help_text': 'The dream this goal belongs to.'},
+            'milestone': {'help_text': 'The milestone this goal belongs to.'},
             'title': {'help_text': 'Short title of the goal.'},
             'description': {'help_text': 'Detailed description of the goal.'},
-            'order': {'help_text': 'Display order of the goal within its dream.'},
+            'order': {'help_text': 'Display order of the goal within its milestone.'},
             'estimated_minutes': {'help_text': 'Estimated time to complete in minutes.'},
             'scheduled_start': {'help_text': 'Scheduled start date for the goal.'},
             'scheduled_end': {'help_text': 'Scheduled end date for the goal.'},
@@ -82,13 +83,53 @@ class GoalSerializer(serializers.ModelSerializer):
         return len([t for t in obj.tasks.all() if t.status == 'completed'])
 
 
+class MilestoneSerializer(serializers.ModelSerializer):
+    """Serializer for Milestone model with nested goals."""
+
+    goals = GoalSerializer(many=True, read_only=True, help_text='List of goals under this milestone.')
+    obstacles = ObstacleSerializer(many=True, read_only=True, help_text='List of obstacles for this milestone.')
+    goals_count = serializers.SerializerMethodField(help_text='Total number of goals in this milestone.')
+    completed_goals_count = serializers.SerializerMethodField(help_text='Number of completed goals.')
+
+    class Meta:
+        model = Milestone
+        fields = [
+            'id', 'dream', 'title', 'description', 'order',
+            'target_date', 'status', 'completed_at',
+            'progress_percentage',
+            'goals', 'obstacles',
+            'goals_count', 'completed_goals_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'progress_percentage', 'created_at', 'updated_at', 'completed_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the milestone.'},
+            'dream': {'help_text': 'The dream this milestone belongs to.'},
+            'title': {'help_text': 'Short title of the milestone.'},
+            'description': {'help_text': 'Detailed description of what this milestone achieves.'},
+            'order': {'help_text': 'Order within the dream timeline.'},
+            'target_date': {'help_text': 'Target date for this milestone.'},
+            'status': {'help_text': 'Current status of the milestone.'},
+            'completed_at': {'help_text': 'Timestamp when the milestone was completed.'},
+            'progress_percentage': {'help_text': 'Percentage of milestone completion.'},
+            'created_at': {'help_text': 'Timestamp when the milestone was created.'},
+            'updated_at': {'help_text': 'Timestamp when the milestone was last updated.'},
+        }
+
+    def get_goals_count(self, obj) -> int:
+        return len(obj.goals.all())
+
+    def get_completed_goals_count(self, obj) -> int:
+        return len([g for g in obj.goals.all() if g.status == 'completed'])
+
+
 class ObstacleSerializer(serializers.ModelSerializer):
     """Serializer for Obstacle model."""
 
     class Meta:
         model = Obstacle
         fields = [
-            'id', 'dream', 'title', 'description',
+            'id', 'dream', 'milestone', 'goal', 'title', 'description',
             'obstacle_type', 'solution', 'status',
             'created_at', 'updated_at'
         ]
@@ -96,6 +137,8 @@ class ObstacleSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'id': {'help_text': 'Unique identifier for the obstacle.'},
             'dream': {'help_text': 'The dream this obstacle is associated with.'},
+            'milestone': {'help_text': 'The milestone this obstacle is linked to (optional).'},
+            'goal': {'help_text': 'The goal this obstacle is linked to (optional).'},
             'title': {'help_text': 'Short title of the obstacle.'},
             'description': {'help_text': 'Detailed description of the obstacle.'},
             'obstacle_type': {'help_text': 'Category or type of the obstacle.'},
@@ -196,11 +239,14 @@ class CalibrationResponseSerializer(serializers.ModelSerializer):
 
 
 class DreamDetailSerializer(serializers.ModelSerializer):
-    """Detailed serializer for Dream with nested goals and tasks."""
+    """Detailed serializer for Dream with nested milestones, goals and tasks."""
 
+    milestones = MilestoneSerializer(many=True, read_only=True, help_text='List of milestones for this dream.')
     goals = GoalSerializer(many=True, read_only=True, help_text='List of goals for this dream.')
     obstacles = ObstacleSerializer(many=True, read_only=True, help_text='List of obstacles for this dream.')
     calibration_responses = CalibrationResponseSerializer(many=True, read_only=True, help_text='List of calibration responses for this dream.')
+    milestones_count = serializers.SerializerMethodField(help_text='Total number of milestones.')
+    completed_milestones_count = serializers.SerializerMethodField(help_text='Number of completed milestones.')
     goals_count = serializers.SerializerMethodField()
     completed_goal_count = serializers.SerializerMethodField()
     total_tasks = serializers.SerializerMethodField()
@@ -217,7 +263,8 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'progress_percentage', 'completed_at',
             'has_two_minute_start',
             'calibration_status', 'calibration_responses',
-            'goals', 'obstacles',
+            'milestones', 'goals', 'obstacles',
+            'milestones_count', 'completed_milestones_count',
             'goals_count', 'completed_goal_count',
             'total_tasks', 'completed_tasks',
             'days_left', 'tags',
@@ -242,6 +289,16 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'created_at': {'help_text': 'Timestamp when the dream was created.'},
             'updated_at': {'help_text': 'Timestamp when the dream was last updated.'},
         }
+
+    def get_milestones_count(self, obj) -> int:
+        if hasattr(obj, '_milestones_count'):
+            return obj._milestones_count
+        return obj.milestones.count()
+
+    def get_completed_milestones_count(self, obj) -> int:
+        if hasattr(obj, '_completed_milestones_count'):
+            return obj._completed_milestones_count
+        return obj.milestones.filter(status='completed').count()
 
     def get_goals_count(self, obj) -> int:
         if hasattr(obj, '_goals_count'):
@@ -569,15 +626,16 @@ class GoalCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Goal
         fields = [
-            'dream', 'title', 'description', 'order',
+            'dream', 'milestone', 'title', 'description', 'order',
             'estimated_minutes', 'scheduled_start', 'scheduled_end',
             'reminder_enabled', 'reminder_time'
         ]
         extra_kwargs = {
             'dream': {'help_text': 'The dream this goal belongs to.'},
+            'milestone': {'help_text': 'The milestone this goal belongs to.', 'required': False},
             'title': {'help_text': 'Short title for the new goal.'},
             'description': {'help_text': 'Detailed description of the goal.'},
-            'order': {'help_text': 'Display order of the goal within its dream.'},
+            'order': {'help_text': 'Display order of the goal within its milestone.'},
             'estimated_minutes': {'help_text': 'Estimated time to complete in minutes.'},
             'scheduled_start': {'help_text': 'Scheduled start date for the goal.'},
             'scheduled_end': {'help_text': 'Scheduled end date for the goal.'},
