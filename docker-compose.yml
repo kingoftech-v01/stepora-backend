@@ -57,7 +57,7 @@ services:
     container_name: dreamplanner_web
     command: >
       sh -c "python manage.py migrate --noinput &&
-             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --access-logfile - config.wsgi:application"
+             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 300 --access-logfile - config.wsgi:application"
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -75,7 +75,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,dp.jhpetitfrere.com,localhost,127.0.0.1
-      - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000
+      - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000,http://localhost,capacitor://localhost
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
       - AGORA_APP_ID=${AGORA_APP_ID:-}
@@ -117,6 +117,7 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
@@ -124,6 +125,7 @@ services:
       - db
       - redis
       - web
+      - elasticsearch
     restart: unless-stopped
 
   # Celery beat for scheduled tasks
