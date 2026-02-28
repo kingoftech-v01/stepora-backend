@@ -163,6 +163,13 @@ class SubscriptionPlan(models.Model):
     def __str__(self):
         return f"{self.name} (${self.price_monthly}/mo)"
 
+    TIER_ORDER = {'free': 0, 'premium': 1, 'pro': 2}
+
+    @property
+    def tier_order(self):
+        """Return numeric tier order for upgrade/downgrade comparison."""
+        return self.TIER_ORDER.get(self.slug, 0)
+
     @property
     def is_free(self):
         """Check if this is the free tier."""
@@ -345,6 +352,25 @@ class Subscription(models.Model):
         null=True,
         blank=True,
         help_text='When the user requested cancellation',
+    )
+    pending_plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_subscriptions',
+        help_text='Plan the user is downgrading to (takes effect at period end)',
+    )
+    pending_plan_effective_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the pending plan change takes effect',
+    )
+    stripe_schedule_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Stripe SubscriptionSchedule ID for pending downgrades',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

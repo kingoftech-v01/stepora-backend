@@ -403,7 +403,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             status__in=['upcoming', 'active']
         ).order_by('-start_date')
 
-        serializer = CircleChallengeSerializer(challenges, many=True)
+        serializer = CircleChallengeSerializer(challenges, many=True, context={'request': request})
         return Response(serializer.data)
 
     @extend_schema(

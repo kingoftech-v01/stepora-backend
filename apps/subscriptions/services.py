@@ -306,6 +306,185 @@ class StripeService:
             raise
 
     @staticmethod
+    def change_plan(user: User, new_plan: SubscriptionPlan) -> dict:
+        """
+        Change the user's subscription to a different plan.
+
+        Upgrades are applied immediately with proration.
+        Downgrades are scheduled for the end of the current billing period.
+
+        Args:
+            user: The user requesting the plan change.
+            new_plan: The target SubscriptionPlan.
+
+        Returns:
+            Dict with 'action' ('upgraded' or 'downgrade_scheduled') and 'subscription'.
+
+        Raises:
+            ValueError: If no active subscription or same plan.
+            stripe.error.StripeError: If a Stripe API call fails.
+        """
+        subscription = Subscription.objects.filter(
+            user=user,
+            status__in=('active', 'trialing'),
+        ).select_related('plan').first()
+
+        if not subscription:
+            raise ValueError("No active subscription to change.")
+
+        if subscription.plan_id == new_plan.id:
+            raise ValueError("You are already on this plan.")
+
+        # Downgrade to free → delegate to cancel
+        if new_plan.is_free:
+            cancelled = StripeService.cancel_subscription(user)
+            return {'action': 'downgrade_scheduled', 'subscription': cancelled}
+
+        # Retrieve Stripe subscription to get item ID
+        try:
+            stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+        except stripe.error.StripeError:
+            logger.exception("Failed to retrieve Stripe subscription %s", subscription.stripe_subscription_id)
+            raise
+
+        item_id = stripe_sub['items']['data'][0]['id']
+        current_tier = subscription.plan.tier_order
+        new_tier = new_plan.tier_order
+
+        if new_tier > current_tier:
+            # --- UPGRADE: apply immediately with proration ---
+            try:
+                stripe.Subscription.modify(
+                    subscription.stripe_subscription_id,
+                    items=[{'id': item_id, 'price': new_plan.stripe_price_id}],
+                    proration_behavior='create_prorations',
+                )
+            except stripe.error.StripeError:
+                logger.exception("Failed to upgrade subscription %s", subscription.stripe_subscription_id)
+                raise
+
+            # Update local records
+            subscription.plan = new_plan
+            subscription.pending_plan = None
+            subscription.pending_plan_effective_date = None
+            subscription.stripe_schedule_id = ''
+            subscription.save(update_fields=[
+                'plan', 'pending_plan', 'pending_plan_effective_date',
+                'stripe_schedule_id', 'updated_at',
+            ])
+
+            _sync_user_subscription(user, new_plan, subscription.current_period_end)
+
+            logger.info(
+                "Upgraded subscription %s to %s for user %s",
+                subscription.stripe_subscription_id, new_plan.name, user.email,
+            )
+            return {'action': 'upgraded', 'subscription': subscription}
+
+        else:
+            # --- DOWNGRADE: schedule for end of billing period ---
+            # Release existing schedule if present
+            if subscription.stripe_schedule_id:
+                try:
+                    stripe.SubscriptionSchedule.release(subscription.stripe_schedule_id)
+                except stripe.error.StripeError:
+                    logger.warning(
+                        "Failed to release existing schedule %s, continuing",
+                        subscription.stripe_schedule_id,
+                    )
+
+            try:
+                # Create a schedule from the existing subscription
+                schedule = stripe.SubscriptionSchedule.create(
+                    from_subscription=subscription.stripe_subscription_id,
+                )
+
+                # Set two phases: current plan until period end, then new plan
+                stripe.SubscriptionSchedule.modify(
+                    schedule.id,
+                    end_behavior='release',
+                    phases=[
+                        {
+                            'items': [{'price': subscription.plan.stripe_price_id, 'quantity': 1}],
+                            'start_date': schedule['phases'][0]['start_date'],
+                            'end_date': schedule['phases'][0]['end_date'],
+                        },
+                        {
+                            'items': [{'price': new_plan.stripe_price_id, 'quantity': 1}],
+                            'iterations': 1,
+                        },
+                    ],
+                )
+            except stripe.error.StripeError:
+                logger.exception("Failed to create downgrade schedule for subscription %s", subscription.stripe_subscription_id)
+                raise
+
+            # Save pending state locally — do NOT change plan or user.subscription
+            subscription.pending_plan = new_plan
+            subscription.pending_plan_effective_date = subscription.current_period_end
+            subscription.stripe_schedule_id = schedule.id
+            subscription.save(update_fields=[
+                'pending_plan', 'pending_plan_effective_date',
+                'stripe_schedule_id', 'updated_at',
+            ])
+
+            logger.info(
+                "Scheduled downgrade of subscription %s to %s at %s for user %s",
+                subscription.stripe_subscription_id, new_plan.name,
+                subscription.current_period_end, user.email,
+            )
+            return {'action': 'downgrade_scheduled', 'subscription': subscription}
+
+    @staticmethod
+    def cancel_pending_change(user: User) -> Optional[Subscription]:
+        """
+        Cancel a pending downgrade by releasing the Stripe schedule.
+
+        Args:
+            user: The user requesting cancellation of the pending change.
+
+        Returns:
+            The updated Subscription, or None if no pending change.
+
+        Raises:
+            stripe.error.StripeError: If the Stripe API call fails.
+        """
+        subscription = Subscription.objects.filter(
+            user=user,
+            status__in=('active', 'trialing'),
+        ).first()
+
+        if not subscription or not subscription.stripe_schedule_id:
+            logger.warning(
+                "Cancel pending change requested but no pending change for user %s",
+                user.email,
+            )
+            return None
+
+        try:
+            stripe.SubscriptionSchedule.release(subscription.stripe_schedule_id)
+        except stripe.error.StripeError:
+            logger.exception(
+                "Failed to release schedule %s for user %s",
+                subscription.stripe_schedule_id, user.email,
+            )
+            raise
+
+        subscription.pending_plan = None
+        subscription.pending_plan_effective_date = None
+        subscription.stripe_schedule_id = ''
+        subscription.save(update_fields=[
+            'pending_plan', 'pending_plan_effective_date',
+            'stripe_schedule_id', 'updated_at',
+        ])
+
+        logger.info(
+            "Cancelled pending plan change for subscription %s (user %s)",
+            subscription.stripe_subscription_id, user.email,
+        )
+        return subscription
+
+    @staticmethod
     def reactivate_subscription(user: User) -> Optional[Subscription]:
         """
         Reactivate a subscription that was set to cancel at period end.
@@ -475,6 +654,19 @@ class StripeService:
         period_start = _timestamp_to_datetime(stripe_sub.get('current_period_start'))
         period_end = _timestamp_to_datetime(stripe_sub.get('current_period_end'))
 
+        # Safety check: warn if user already has an active subscription with a different ID
+        existing_sub = Subscription.objects.filter(
+            user=user, status__in=('active', 'trialing'),
+        ).first()
+        if existing_sub and existing_sub.stripe_subscription_id != stripe_subscription_id:
+            logger.warning(
+                "User %s already has active Stripe subscription %s but checkout created %s. "
+                "The old subscription may still be billing in Stripe.",
+                user.email,
+                existing_sub.stripe_subscription_id,
+                stripe_subscription_id,
+            )
+
         # Create or update local subscription record
         Subscription.objects.update_or_create(
             user=user,
@@ -627,6 +819,10 @@ class StripeService:
                 ).first()
                 if new_plan and new_plan.id != subscription.plan_id:
                     subscription.plan = new_plan
+                    # Clear pending downgrade state — the schedule has transitioned
+                    subscription.pending_plan = None
+                    subscription.pending_plan_effective_date = None
+                    subscription.stripe_schedule_id = ''
                     logger.info(
                         "Subscription %s plan changed to %s",
                         stripe_subscription_id,

@@ -59,6 +59,7 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
     )
     startDate = serializers.DateTimeField(source='start_date', read_only=True, help_text='Challenge start date and time.')
     endDate = serializers.DateTimeField(source='end_date', read_only=True, help_text='Challenge end date and time.')
+    hasJoined = serializers.SerializerMethodField(help_text='Whether the current user has joined this challenge.')
 
     class Meta:
         model = CircleChallenge
@@ -70,6 +71,7 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             'endDate',
             'status',
             'participantCount',
+            'hasJoined',
             'created_at',
         ]
         read_only_fields = fields
@@ -80,6 +82,12 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             'status': {'help_text': 'Current status of the challenge.'},
             'created_at': {'help_text': 'Date and time the challenge was created.'},
         }
+
+    def get_hasJoined(self, obj):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            return obj.participants.filter(id=request.user.id).exists()
+        return False
 
 
 class CircleListSerializer(serializers.ModelSerializer):

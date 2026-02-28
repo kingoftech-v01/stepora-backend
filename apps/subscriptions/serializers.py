@@ -83,6 +83,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     """Serializer for the active Subscription record."""
 
     plan = SubscriptionPlanSerializer(read_only=True, help_text='Details of the subscription plan.')
+    pending_plan = SubscriptionPlanSerializer(read_only=True, help_text='Plan the user is downgrading to at period end.')
     is_active = serializers.BooleanField(read_only=True, help_text='Whether the subscription is currently active.')
 
     class Meta:
@@ -96,6 +97,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'current_period_end',
             'cancel_at_period_end',
             'canceled_at',
+            'pending_plan',
+            'pending_plan_effective_date',
+            'stripe_schedule_id',
             'is_active',
             'created_at',
             'updated_at',
@@ -109,6 +113,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'current_period_end': {'help_text': 'End of the current billing period.'},
             'cancel_at_period_end': {'help_text': 'Whether the subscription cancels at period end.'},
             'canceled_at': {'help_text': 'Timestamp when the subscription was canceled.'},
+            'pending_plan_effective_date': {'help_text': 'When the pending plan change takes effect.'},
+            'stripe_schedule_id': {'help_text': 'Stripe SubscriptionSchedule ID for pending downgrades.'},
             'created_at': {'help_text': 'Timestamp when the subscription was created.'},
             'updated_at': {'help_text': 'Timestamp when the subscription was last updated.'},
         }

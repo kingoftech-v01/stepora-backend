@@ -231,6 +231,90 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     @extend_schema(
+        summary="Change subscription plan",
+        description=(
+            "Upgrade or downgrade the current subscription. "
+            "Upgrades apply immediately with proration. "
+            "Downgrades are scheduled for the end of the billing period."
+        ),
+        tags=["Subscriptions"],
+        request={"application/json": {"type": "object", "properties": {"plan_slug": {"type": "string"}}}},
+        responses={
+            200: OpenApiResponse(description="Plan change result"),
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="Plan not found"),
+            502: OpenApiResponse(description="Payment service error"),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='change-plan')
+    def change_plan(self, request):
+        """Change the user's subscription plan (upgrade or downgrade)."""
+        plan_slug = request.data.get('plan_slug', '')
+        if not plan_slug:
+            return Response(
+                {'detail': 'plan_slug is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        plan = SubscriptionPlan.objects.filter(slug=plan_slug, is_active=True).first()
+        if not plan:
+            return Response(
+                {'detail': f"No active plan found with slug '{plan_slug}'."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = StripeService.change_plan(request.user, plan)
+        except ValueError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except stripe.error.StripeError:
+            logger.exception("Stripe error during plan change")
+            return Response(
+                {'detail': 'Payment service error. Please try again later.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        serializer = SubscriptionSerializer(result['subscription'])
+        return Response({
+            'action': result['action'],
+            'subscription': serializer.data,
+        })
+
+    @extend_schema(
+        summary="Cancel pending plan change",
+        description="Cancel a scheduled downgrade so the current plan continues.",
+        tags=["Subscriptions"],
+        responses={
+            200: SubscriptionSerializer,
+            404: OpenApiResponse(description="No pending change to cancel"),
+            502: OpenApiResponse(description="Payment service error"),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='cancel-pending-change')
+    def cancel_pending_change(self, request):
+        """Cancel a pending downgrade."""
+        try:
+            subscription = StripeService.cancel_pending_change(request.user)
+        except stripe.error.StripeError:
+            logger.exception("Stripe error cancelling pending change")
+            return Response(
+                {'detail': 'Payment service error. Please try again later.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not subscription:
+            return Response(
+                {'detail': 'No pending plan change to cancel.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = SubscriptionSerializer(subscription)
+        return Response(serializer.data)
+
+    @extend_schema(
         summary="Sync subscription from Stripe",
         description="Forces a refresh of the subscription state from Stripe.",
         tags=["Subscriptions"],

@@ -16,7 +16,7 @@ class BuddyPartnerSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text='Partner user ID.')
     username = serializers.CharField(help_text='Partner display name.')
-    avatar = serializers.URLField(allow_blank=True, help_text='Partner avatar URL.')
+    avatar = serializers.CharField(allow_blank=True, default='', help_text='Partner avatar URL.')
     title = serializers.CharField(help_text='Partner title based on level.')
     currentLevel = serializers.IntegerField(help_text='Partner current level.')
     influenceScore = serializers.IntegerField(help_text='Partner influence (XP).')
@@ -48,7 +48,7 @@ class BuddyMatchSerializer(serializers.Serializer):
 
     userId = serializers.UUIDField(help_text='Matched user ID.')
     username = serializers.CharField(help_text='Matched user display name.')
-    avatar = serializers.URLField(allow_blank=True, help_text='Matched user avatar.')
+    avatar = serializers.CharField(allow_blank=True, default='', help_text='Matched user avatar.')
     compatibilityScore = serializers.FloatField(help_text='Compatibility score 0-1.')
     sharedInterests = serializers.ListField(
         child=serializers.CharField(),
