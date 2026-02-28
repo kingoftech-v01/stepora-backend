@@ -75,7 +75,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,dp.jhpetitfrere.com,localhost,127.0.0.1
-      - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000,http://localhost,capacitor://localhost
+      - CORS_ORIGIN=https://dp.jhpetitfrere.com,http://localhost:3000,http://localhost,https://localhost,capacitor://localhost
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
       - AGORA_APP_ID=${AGORA_APP_ID:-}
