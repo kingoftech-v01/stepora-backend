@@ -101,10 +101,17 @@ logger = logging.getLogger(__name__)
 class ConversationViewSet(viewsets.ModelViewSet):
     """CRUD operations for conversations. All AI conversation features require premium+."""
 
-    permission_classes = [IsAuthenticated, CanUseAI]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['conversation_type', 'is_active']
     ordering = ['-updated_at']
+
+    def get_permissions(self):
+        """Only require CanUseAI for AI-specific write actions, not list/retrieve."""
+        if self.action in ('create', 'send_message', 'send_voice', 'send_image',
+                           'summarize', 'generate_plan'):
+            return [IsAuthenticated(), CanUseAI()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         """Get conversations for current user, including buddy chats they participate in."""
