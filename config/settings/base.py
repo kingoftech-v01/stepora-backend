@@ -234,6 +234,7 @@ REST_FRAMEWORK = {
         'user': '100/minute',
         'ai_chat': '10/minute',
         'ai_plan': '5/minute',
+        'ai_calibration': '15/minute',
         'subscription': '5/minute',
         'store_purchase': '5/minute',
         'auth': '5/minute',
@@ -400,16 +401,16 @@ AI_QUOTAS = {
     'REDIS_KEY_PREFIX': 'ai_usage',
     'KEY_TTL_HOURS': 25,
     'DEFAULT_LIMITS': {
-        'free': {'ai_chat': 0, 'ai_plan': 0, 'ai_image': 0, 'ai_voice': 0, 'ai_background': 0},
-        'premium': {'ai_chat': 50, 'ai_plan': 10, 'ai_image': 0, 'ai_voice': 10, 'ai_background': 3},
-        'pro': {'ai_chat': 150, 'ai_plan': 25, 'ai_image': 3, 'ai_voice': 20, 'ai_background': 3},
+        'free': {'ai_chat': 0, 'ai_plan': 0, 'ai_calibration': 0, 'ai_image': 0, 'ai_voice': 0, 'ai_background': 0},
+        'premium': {'ai_chat': 50, 'ai_plan': 10, 'ai_calibration': 50, 'ai_image': 0, 'ai_voice': 10, 'ai_background': 3},
+        'pro': {'ai_chat': 150, 'ai_plan': 25, 'ai_calibration': 100, 'ai_image': 3, 'ai_voice': 20, 'ai_background': 3},
     },
 }
 
 # django-allauth Configuration
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'optional')
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_USERNAME_REQUIRED = False
