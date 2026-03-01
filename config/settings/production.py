@@ -15,7 +15,6 @@ _REQUIRED_ENV_VARS = [
     'DJANGO_SECRET_KEY',
     'ALLOWED_HOSTS',
     'DB_PASSWORD',
-    'STRIPE_WEBHOOK_SECRET',
 ]
 
 _missing = [var for var in _REQUIRED_ENV_VARS if not os.getenv(var)]
@@ -32,11 +31,11 @@ if not ALLOWED_HOSTS and 'collectstatic' not in sys.argv:
     )
 
 # Security settings
-SECURE_SSL_REDIRECT = True
+# SSL redirect disabled — external nginx handles TLS termination
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-# SECURE_BROWSER_XSS_FILTER removed — X-XSS-Protection is deprecated in modern browsers
-# and can introduce vulnerabilities. CSP is the correct modern approach.
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = 31536000
@@ -44,13 +43,18 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
 # Strict cookie security in production
-SESSION_COOKIE_SAMESITE = 'Strict'
-CSRF_COOKIE_SAMESITE = 'Strict'
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
-# CORS - Strict in production
+# CORS - Strict in production (frontend and backend on separate servers)
 CORS_ALLOW_ALL_ORIGINS = False
 _cors_raw = os.getenv('CORS_ORIGIN', '')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
+CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins (required for cross-origin POST from frontend)
+_csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS', os.getenv('CORS_ORIGIN', ''))
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_raw.split(',') if o.strip()]
 
 # Static files (served via S3/CloudFront in production)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
@@ -93,12 +97,12 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
 
-# Database connection pooling + SSL
+# Database connection pooling
 DATABASES['default']['CONN_MAX_AGE'] = 600
 DATABASES['default']['OPTIONS'] = {
     'connect_timeout': 10,
     'options': '-c statement_timeout=30000',  # 30 seconds
-    'sslmode': os.getenv('DB_SSLMODE', 'require'),
+    'sslmode': os.getenv('DB_SSLMODE', 'prefer'),
 }
 
 # Redis SSL for production (use rediss:// scheme)

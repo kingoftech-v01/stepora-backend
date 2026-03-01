@@ -169,7 +169,10 @@ dreamplanner/
 +-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware, consumer mixins
 +-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
 +-- config/                      # Django settings, Celery, ASGI/WSGI
-+-- docker/                      # Docker + Nginx configs
++-- docker/                      # Docker configs
+|   +-- nginx.conf               # Internal nginx (security headers, rate limiting, proxy)
++-- scripts/                     # Utility scripts
+|   +-- backup.sh                # Automated PostgreSQL backup (cron daily)
 +-- docs/                        # Documentation
 +-- .github/workflows/           # CI/CD Pipelines
 ```
@@ -207,41 +210,42 @@ dreamplanner/
 ### With Docker (Recommended)
 
 ```bash
-# Build images
-make build
+# 1. Copy and fill .env
+cp .env.example .env   # Then edit with real values
+chmod 600 .env
 
-# Start all services
-make up
+# 2. Build and start all services (production settings)
+docker compose up -d --build
 
-# Run migrations
-make migrate
+# 3. Create admin user
+docker compose exec web python manage.py createsuperuser
 
-# Create admin user
-make createsuperuser
+# 4. Seed data
+docker compose exec web python manage.py seed_subscription_plans
+docker compose exec web python manage.py seed_achievements
+docker compose exec web python manage.py seed_dream_templates
+docker compose exec web python manage.py seed_conversation_templates
+docker compose exec web python manage.py seed_notification_templates
+docker compose exec web python manage.py seed_leagues
+docker compose exec web python manage.py seed_store
 
-# Seed data
-python manage.py seed_subscription_plans    # Create Free, Premium, Pro plans
-python manage.py seed_achievements          # Create 17 achievement definitions
-python manage.py seed_dream_templates       # Create 8 dream templates
-python manage.py seed_conversation_templates # Create 6 AI conversation types
-python manage.py seed_notification_templates # Create 6 notification templates
-python manage.py seed_leagues               # Create league tiers and initial season
-python manage.py seed_store                 # Create store categories and items
-
-# Services available:
-# API:       http://localhost:8000
-# Admin:     http://localhost:8000/admin
-# Swagger:   http://localhost:8000/api/docs/
-# ReDoc:     http://localhost:8000/api/redoc/
-# WebSocket: ws://localhost:9000
-# Flower:    http://localhost:5555
+# Services available (behind nginx on 127.0.0.1:8085):
+# API:       http://127.0.0.1:8085/api/
+# Admin:     http://127.0.0.1:8085/admin/
+# Swagger:   http://127.0.0.1:8085/api/docs/
+# WebSocket: ws://127.0.0.1:8085/ws/
+# Health:    http://127.0.0.1:8085/health/
 ```
 
-### Without Docker (Local development - uses SQLite)
+### Without Docker (Local development — uses SQLite + in-memory cache)
 
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Use development settings (DEBUG=True, SQLite, in-memory cache)
+export DJANGO_SETTINGS_MODULE=config.settings.development
+export FIELD_ENCRYPTION_KEY=$(python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
 
 pip install -r requirements/development.txt
 python manage.py migrate
@@ -256,65 +260,74 @@ daphne -b 0.0.0.0 -p 9000 config.asgi:application
 
 ### Environment Variables
 
-Create `.env` in the project root:
+Create `.env` in the project root (must be `chmod 600`):
 
 ```env
-# Django
-DJANGO_SECRET_KEY=your-secret-key
-DJANGO_SETTINGS_MODULE=config.settings.development
-ALLOWED_HOSTS=localhost,127.0.0.1
-DEBUG=True
-FRONTEND_URL=http://localhost:8100
+# ── Django Core ─────────────────────────────────────────
+DJANGO_SECRET_KEY=your-secret-key          # REQUIRED in production
+DJANGO_SETTINGS_MODULE=config.settings.production
+ALLOWED_HOSTS=dpapi.yourdomain.com,localhost,127.0.0.1
+FRONTEND_URL=https://dp.yourdomain.com
+CORS_ORIGIN=https://dp.yourdomain.com,https://localhost,capacitor://localhost
+CSRF_TRUSTED_ORIGINS=https://dp.yourdomain.com,https://localhost,capacitor://localhost
 
-# Database (production only - dev uses SQLite)
+# ── Database (PostgreSQL) ───────────────────────────────
 DB_NAME=dreamplanner
 DB_USER=dreamplanner
-DB_PASSWORD=password
+DB_PASSWORD=your-db-password               # REQUIRED in production
 DB_HOST=localhost
 DB_PORT=5432
 
-# Redis
+# ── Redis ───────────────────────────────────────────────
 REDIS_URL=redis://localhost:6379/0
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
 
-# OpenAI
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_ORGANIZATION_ID=your-org-id    # optional
+# ── Elasticsearch ───────────────────────────────────────
+ELASTICSEARCH_URL=http://localhost:9200
+ELASTIC_PASSWORD=your-elastic-password
 
-# Agora (circle voice/video calls)
+# ── Field Encryption ────────────────────────────────────
+FIELD_ENCRYPTION_KEY=...                   # Generate: python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
+# ── OpenAI ──────────────────────────────────────────────
+OPENAI_API_KEY=sk-...
+OPENAI_ORGANIZATION_ID=                    # optional
+
+# ── Agora.io ────────────────────────────────────────────
 AGORA_APP_ID=your-agora-app-id
 AGORA_APP_CERTIFICATE=your-agora-app-certificate
 
-# Social Auth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-APPLE_CLIENT_ID=your-apple-client-id
-APPLE_CLIENT_SECRET=your-apple-client-secret
-APPLE_KEY_ID=your-apple-key-id
+# ── Web Push (VAPID) ───────────────────────────────────
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_ADMIN_EMAIL=admin@yourdomain.com
 
-# Stripe
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
+# ── Firebase (FCM push) ────────────────────────────────
+FIREBASE_CREDENTIALS_PATH=/app/firebase-service-account.json
+
+# ── Stripe ──────────────────────────────────────────────
+STRIPE_SECRET_KEY=sk_...
+STRIPE_PUBLISHABLE_KEY=pk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_...
-STRIPE_PREMIUM_YEARLY_PRICE_ID=price_...
-STRIPE_PRO_MONTHLY_PRICE_ID=price_...
-STRIPE_PRO_YEARLY_PRICE_ID=price_...
 
-# CORS
-CORS_ORIGIN=http://localhost:3000,http://localhost:8081
+# ── Social Auth ─────────────────────────────────────────
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+APPLE_CLIENT_ID=...
+APPLE_CLIENT_SECRET=...
+APPLE_KEY_ID=...
 
-# Email
-DEFAULT_FROM_EMAIL=noreply@dreamplanner.app
+# ── Email (SMTP) ───────────────────────────────────────
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
-# AWS (production)
-AWS_ACCESS_KEY_ID=your-aws-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret
-AWS_STORAGE_BUCKET_NAME=dreamplanner-media
-
-# Monitoring (production)
-SENTRY_DSN=your-sentry-dsn
+# ── Monitoring (optional) ──────────────────────────────
+# SENTRY_DSN=...
 ```
 
 ---
@@ -727,24 +740,53 @@ pytest -m asyncio       # Async tests (WebSocket)
 
 ## Deployment
 
-### Docker Deployment
+### Docker Deployment (Current — VPS)
+
+Architecture: **External nginx (SSL) → Docker nginx (security) → Django/Daphne**
 
 ```bash
-# Build production image
-make build-prod
+cd /root/dreamplanner
 
-# Tag and push to ECR
-docker tag dreamplanner:latest ${ECR_REGISTRY}/dreamplanner:latest
-docker push ${ECR_REGISTRY}/dreamplanner:latest
+# 1. Create/update .env with production secrets (chmod 600)
+# 2. Build and start all services
+docker compose up -d --build
 
-# Deploy to ECS
-aws ecs update-service \
-  --cluster dreamplanner-prod \
-  --service dreamplanner-api \
-  --force-new-deployment
+# 3. Run migrations (happens automatically via web entrypoint)
+# 4. Collect static files
+docker compose exec web python manage.py collectstatic --noinput
+
+# 5. Seed data (first deploy only)
+docker compose exec web python manage.py seed_subscription_plans
+docker compose exec web python manage.py seed_achievements
+docker compose exec web python manage.py seed_dream_templates
+docker compose exec web python manage.py seed_leagues
+docker compose exec web python manage.py seed_store
 ```
 
-### Infrastructure (AWS)
+**Services in docker-compose.yml:**
+
+| Service | Image | Port | Purpose |
+| --- | --- | --- | --- |
+| `db` | postgres:15-alpine | internal | PostgreSQL (512M limit) |
+| `redis` | redis:7-alpine | internal | Cache + Celery broker (256M, auth required) |
+| `elasticsearch` | ES 8.12.0 | internal | Full-text search (512M, auth required) |
+| `web` | Dockerfile | 8000 (expose) | Django + Gunicorn |
+| `celery` | Dockerfile | — | Background tasks |
+| `celery-beat` | Dockerfile | — | Scheduled tasks |
+| `daphne` | Dockerfile | 9000 (expose) | WebSocket (Channels) |
+| `nginx` | nginx:1.27-alpine | 127.0.0.1:8085 | Internal reverse proxy (128M, read-only) |
+
+### Backup & Recovery
+
+```bash
+# Manual backup
+/root/dreamplanner/scripts/backup.sh
+
+# Automated: cron runs daily at 3 AM, 7-day retention
+# Backups stored in /root/dreamplanner/backups/
+```
+
+### Infrastructure (AWS — future)
 - **ECS Fargate**: Django containers (HTTP + WebSocket + Celery worker + Celery beat)
 - **RDS PostgreSQL**: Multi-AZ for high availability
 - **ElastiCache Redis**: Cluster mode for cache + message broker
@@ -772,19 +814,53 @@ aws ecs update-service \
 
 ## Security
 
-- Token Authentication with django-allauth + DRF
-- Social Auth (Google, Apple) via allauth providers
-- Two-Factor Authentication (TOTP) with backup codes
-- HTTPS enforcement in production (TLS 1.2+)
-- CORS configuration with whitelist
-- SQL injection protection via Django ORM
-- XSS protection via Django middleware
-- CSRF protection via DRF
-- Rate limiting: Nginx (10 req/s API, 5 req/s WebSocket) + DRF throttles (30/min anon, 120/min user, 20/min AI chat, 10/min AI plan)
-- Input validation via DRF Serializers
-- Secrets management via AWS Secrets Manager
-- Container security with non-root user
-- Security headers: HSTS, X-Frame-Options, CSP
+### Authentication & Authorization
+- **Token auth** — django-allauth + dj-rest-auth with Token/Bearer variants
+- **Social auth** — Google Sign-In and Apple Sign-In via allauth providers
+- **Two-Factor (TOTP)** — Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with SHA-256.
+- **9 permission classes** — Enforce subscription tier limits across all endpoints
+
+### Infrastructure Security
+- **UFW firewall** — Only ports 22 (SSH), 80 (HTTP/certbot), 443 (HTTPS) open
+- **Docker port binding** — All services bind to `127.0.0.1` (not internet-accessible)
+- **Separate-server ready** — CORS, CSRF, and cookies configured for frontend/backend on different servers
+- **Fail2ban** — SSH (3 retries/2h ban), nginx-http-auth (5 retries), nginx-botsearch (3 retries/24h ban)
+- **Daily backups** — Automated PostgreSQL backups with 7-day retention (`scripts/backup.sh`, cron at 3 AM)
+
+### Nginx Security (Docker internal)
+All security headers are set by the Docker-internal nginx (`docker/nginx.conf`). External nginx only handles SSL termination.
+
+| Feature | Configuration |
+| --- | --- |
+| `server_tokens` | off (version hidden) |
+| Rate limiting | API: 10r/s, WebSocket: 5r/s, Auth: 3r/s, Admin: 2r/s |
+| Security headers | HSTS, X-XSS-Protection (transport-level; Django handles the rest) |
+| Static/media | Own security headers (bypass Django middleware) |
+| Exploit paths | `.env`, `.git`, `.htaccess`, `wp-admin`, `xmlrpc` blocked |
+| Dotfiles | Denied with no logging |
+
+### Application Security
+- **Production mode** — `DEBUG=False`, `SECURE_PROXY_SSL_HEADER` set, `SECURE_SSL_REDIRECT=False` (external nginx handles TLS)
+- **CORS** — Whitelist only (`CORS_ALLOW_ALL_ORIGINS=False`), credentials allowed
+- **CSRF** — `CSRF_TRUSTED_ORIGINS` configured for cross-origin frontend
+- **Cookies** — `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True`, `SameSite=Lax`
+- **SQL injection** — Protected via Django ORM
+- **XSS** — SecurityHeadersMiddleware sets CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP
+- **DRF throttling** — Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min
+- **Input validation** — DRF Serializers + custom validation (avatar magic bytes, notification schema whitelist, channel name regex, message length limits)
+
+### Secrets Management
+- **`.env` file** — `chmod 600`, not committed to git. Contains all secrets (Django key, DB password, API keys)
+- **Docker Compose** — References `${VAR}` from `.env`, no hardcoded secrets
+- **Field encryption** — `django-encrypted-model-fields` for PII (TOTP secrets, sensitive user data)
+- **Redis auth** — `requirepass` with dedicated password
+- **Elasticsearch auth** — `xpack.security.enabled=true` with dedicated password
+
+### Docker Hardening
+- **Read-only filesystem** — Nginx container runs with `read_only: true`
+- **Resource limits** — PostgreSQL: 512M/1CPU, Redis: 256M/0.5CPU, ES: 512M/1CPU, Nginx: 128M/0.5CPU
+- **Health checks** — All services have health checks (pg_isready, redis-cli ping, curl, wget)
+- **Port isolation** — Internal services use `expose` (not `ports`); only nginx is port-mapped to localhost
 
 ---
 

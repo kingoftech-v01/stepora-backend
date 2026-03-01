@@ -70,10 +70,17 @@ def agora_rtc_token(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
+    import re
     channel_name = (request.data.get('channelName') or request.data.get('channel_name') or '').strip()
     if not channel_name:
         return Response(
             {'detail': 'channelName is required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    # Validate channel name: alphanumeric, hyphens, underscores only, max 64 chars
+    if len(channel_name) > 64 or not re.match(r'^[a-zA-Z0-9_-]+$', channel_name):
+        return Response(
+            {'detail': 'Invalid channelName. Use alphanumeric, hyphens, underscores only (max 64 chars).'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

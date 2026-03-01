@@ -260,6 +260,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if not conv_id or conv_id == 'undefined' or not content:
             return Response({'error': 'conversationId and content are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Limit message length to prevent storage abuse
+        if len(content) > 5000:
+            return Response({'error': 'Message too long. Maximum 5000 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
         import uuid
         try:
             uuid.UUID(str(conv_id))

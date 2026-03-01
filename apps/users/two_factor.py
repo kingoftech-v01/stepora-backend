@@ -3,8 +3,10 @@ Two-Factor Authentication (TOTP) views for DreamPlanner.
 
 Provides TOTP setup, verification, disable, and backup code management.
 Uses pyotp for TOTP generation and verification.
+Secrets are stored in the User model's EncryptedCharField (not app_prefs).
 """
 
+import hashlib
 import pyotp
 import secrets
 import logging
@@ -29,6 +31,11 @@ def _generate_backup_codes(count=BACKUP_CODE_COUNT):
         secrets.token_hex(BACKUP_CODE_LENGTH // 2).upper()
         for _ in range(count)
     ]
+
+
+def _hash_code(code):
+    """Hash a backup code for secure storage."""
+    return hashlib.sha256(code.encode()).hexdigest()
 
 
 class TwoFactorSetupView(APIView):
@@ -56,7 +63,8 @@ class TwoFactorSetupView(APIView):
             issuer_name='DreamPlanner',
         )
 
-        # Store secret temporarily in app_prefs (not yet verified)
+        # Store pending secret in app_prefs (temporary, cleared on verify)
+        # Only the pending secret lives here briefly; active secret uses EncryptedCharField
         prefs = user.app_prefs or {}
         prefs['totp_pending_secret'] = secret
         user.app_prefs = prefs
@@ -101,7 +109,7 @@ class TwoFactorVerifyView(APIView):
 
         # Check if we're completing setup (pending secret) or verifying login
         pending_secret = prefs.get('totp_pending_secret')
-        active_secret = prefs.get('totp_secret')
+        active_secret = user.totp_secret  # EncryptedCharField
 
         secret = pending_secret or active_secret
 
@@ -113,17 +121,17 @@ class TwoFactorVerifyView(APIView):
 
         totp = pyotp.TOTP(secret)
         if not totp.verify(code, valid_window=1):
-            # Check backup codes
-            backup_codes = prefs.get('totp_backup_codes', [])
-            if code in backup_codes:
-                backup_codes.remove(code)
-                prefs['totp_backup_codes'] = backup_codes
-                user.app_prefs = prefs
-                user.save(update_fields=['app_prefs'])
+            # Check backup codes (stored as hashes)
+            stored_hashes = user.backup_codes or []
+            code_hash = _hash_code(code)
+            if code_hash in stored_hashes:
+                stored_hashes.remove(code_hash)
+                user.backup_codes = stored_hashes
+                user.save(update_fields=['backup_codes'])
                 return Response({
                     'verified': True,
                     'method': 'backup_code',
-                    'remaining_backup_codes': len(backup_codes),
+                    'remaining_backup_codes': len(stored_hashes),
                 })
 
             return Response(
@@ -134,12 +142,24 @@ class TwoFactorVerifyView(APIView):
         # If completing setup, activate the secret and generate backup codes
         if pending_secret:
             backup_codes = _generate_backup_codes()
-            prefs['totp_secret'] = pending_secret
-            prefs['totp_enabled'] = True
-            prefs['totp_backup_codes'] = backup_codes
+            hashed_codes = [_hash_code(c) for c in backup_codes]
+
+            # Store in encrypted model fields
+            user.totp_secret = pending_secret
+            user.totp_enabled = True
+            user.backup_codes = hashed_codes
+
+            # Clear pending secret from app_prefs
             prefs.pop('totp_pending_secret', None)
+            # Clean up any legacy app_prefs TOTP data
+            prefs.pop('totp_secret', None)
+            prefs.pop('totp_enabled', None)
+            prefs.pop('totp_backup_codes', None)
             user.app_prefs = prefs
-            user.save(update_fields=['app_prefs'])
+
+            user.save(update_fields=[
+                'totp_secret', 'totp_enabled', 'backup_codes', 'app_prefs'
+            ])
 
             return Response({
                 'verified': True,
@@ -180,13 +200,22 @@ class TwoFactorDisableView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Clear encrypted model fields
+        user.totp_enabled = False
+        user.totp_secret = ''
+        user.backup_codes = None
+
+        # Clean up any legacy app_prefs TOTP data
         prefs = user.app_prefs or {}
         prefs.pop('totp_secret', None)
         prefs.pop('totp_pending_secret', None)
         prefs.pop('totp_enabled', None)
         prefs.pop('totp_backup_codes', None)
         user.app_prefs = prefs
-        user.save(update_fields=['app_prefs'])
+
+        user.save(update_fields=[
+            'totp_enabled', 'totp_secret', 'backup_codes', 'app_prefs'
+        ])
 
         return Response({
             'two_factor_enabled': False,
@@ -209,10 +238,10 @@ class TwoFactorStatusView(APIView):
         })},
     )
     def get(self, request):
-        prefs = request.user.app_prefs or {}
+        user = request.user
         return Response({
-            'two_factor_enabled': prefs.get('totp_enabled', False),
-            'backup_codes_remaining': len(prefs.get('totp_backup_codes', [])),
+            'two_factor_enabled': user.totp_enabled,
+            'backup_codes_remaining': len(user.backup_codes or []),
         })
 
 
@@ -245,17 +274,15 @@ class TwoFactorRegenerateBackupCodesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        prefs = user.app_prefs or {}
-        if not prefs.get('totp_enabled'):
+        if not user.totp_enabled:
             return Response(
                 {'error': '2FA is not enabled.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         backup_codes = _generate_backup_codes()
-        prefs['totp_backup_codes'] = backup_codes
-        user.app_prefs = prefs
-        user.save(update_fields=['app_prefs'])
+        user.backup_codes = [_hash_code(c) for c in backup_codes]
+        user.save(update_fields=['backup_codes'])
 
         return Response({
             'backup_codes': backup_codes,

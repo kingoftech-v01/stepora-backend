@@ -188,7 +188,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate file type
+        # Validate file type by content-type header
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
         if avatar_file.content_type not in allowed_types:
             return Response(
@@ -200,6 +200,23 @@ class UserViewSet(viewsets.ModelViewSet):
         if avatar_file.size > 5 * 1024 * 1024:
             return Response(
                 {'error': 'File too large. Maximum size is 5MB.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file magic bytes (prevent content-type spoofing)
+        magic_signatures = {
+            b'\xff\xd8\xff': 'image/jpeg',
+            b'\x89PNG': 'image/png',
+            b'GIF87a': 'image/gif',
+            b'GIF89a': 'image/gif',
+            b'RIFF': 'image/webp',  # WebP starts with RIFF
+        }
+        header = avatar_file.read(12)
+        avatar_file.seek(0)
+        valid_magic = any(header.startswith(sig) for sig in magic_signatures)
+        if not valid_magic:
+            return Response(
+                {'error': 'File content does not match an allowed image format.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -586,8 +603,29 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Whitelist allowed keys and enforce boolean values
+        allowed_keys = {
+            'push_enabled', 'email_enabled', 'sound_enabled',
+            'dream_reminders', 'goal_deadlines', 'buddy_messages',
+            'circle_updates', 'league_updates', 'social_activity',
+            'ai_suggestions', 'streak_reminders', 'weekly_summary',
+        }
+        validated = {}
+        for key, value in prefs.items():
+            if key not in allowed_keys:
+                continue
+            if not isinstance(value, bool):
+                return Response(
+                    {'error': f'Invalid value for "{key}": expected true/false.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            validated[key] = value
+
         user = request.user
-        user.notification_prefs = prefs
+        # Merge validated prefs with existing (preserve unset keys)
+        existing = user.notification_prefs or {}
+        existing.update(validated)
+        user.notification_prefs = existing
         user.save(update_fields=['notification_prefs'])
 
         return Response(UserSerializer(user).data)
