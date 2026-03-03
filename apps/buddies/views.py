@@ -228,6 +228,13 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 buddy_pairing=pairing,
                 total_messages=0,
                 total_tokens_used=0,
+            )
+            # Store target user as a system message so send_message can resolve recipient
+            from apps.conversations.models import Message
+            Message.objects.create(
+                conversation=conv,
+                role='system',
+                content='',
                 metadata={'target_user_id': str(target_user.id)},
             )
 
@@ -294,12 +301,17 @@ class BuddyViewSet(viewsets.GenericViewSet):
         elif conv.user_id != request.user.id:
             other_user = conv.user
 
-        # Fallback: check conversation metadata for target_user_id
-        if not other_user and conv.metadata and conv.metadata.get('target_user_id'):
-            try:
-                other_user = User.objects.get(id=conv.metadata['target_user_id'])
-            except User.DoesNotExist:
-                pass
+        # Fallback: check the system message metadata for target_user_id
+        if not other_user:
+            from apps.conversations.models import Message as ConvMessage
+            sys_msg = ConvMessage.objects.filter(
+                conversation=conv, role='system',
+            ).exclude(metadata={}).first()
+            if sys_msg and sys_msg.metadata and sys_msg.metadata.get('target_user_id'):
+                try:
+                    other_user = User.objects.get(id=sys_msg.metadata['target_user_id'])
+                except User.DoesNotExist:
+                    pass
 
         if not other_user:
             return Response({'error': _('Cannot determine recipient. The other user may no longer exist.')}, status=status.HTTP_400_BAD_REQUEST)
