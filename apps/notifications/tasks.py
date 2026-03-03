@@ -2,6 +2,7 @@
 Celery tasks for notifications app.
 """
 
+from django.utils.translation import gettext as _
 from celery import shared_task
 from django.utils import timezone
 from django.db.models import Q, Count, Prefetch
@@ -113,7 +114,7 @@ def generate_daily_motivation(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='motivation',
-                    title='💪 Daily motivation',
+                    title=_('Daily motivation'),
                     body=message,
                     scheduled_for=timezone.now(),
                     data={
@@ -204,7 +205,7 @@ def send_weekly_report(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='weekly_report',
-                    title='📊 Your weekly report',
+                    title=_('Your weekly report'),
                     body=report,
                     scheduled_for=timezone.now(),
                     data={
@@ -287,7 +288,7 @@ def check_inactive_users(self):
                 Notification.objects.create(
                     user=user,
                     notification_type='rescue',
-                    title='🌟 We are still here for you',
+                    title=_('We are still here for you'),
                     body=rescue_message,
                     scheduled_for=timezone.now(),
                     data={
@@ -355,8 +356,8 @@ def send_reminder_notifications(self):
                 Notification.objects.create(
                     user=goal.dream.user,
                     notification_type='reminder',
-                    title=f'⏰ Reminder: {goal.title}',
-                    body="It's time to work on your goal!",
+                    title=_('Reminder: %(title)s') % {'title': goal.title},
+                    body=_("It's time to work on your goal!"),
                     scheduled_for=goal.reminder_time,
                     data={
                         'action': 'open_goal',
@@ -419,8 +420,8 @@ def send_streak_milestone_notification(self, user_id, streak_days):
             Notification.objects.create(
                 user=user,
                 notification_type='achievement',
-                title=f'🔥 {streak_days}-day streak!',
-                body=f'Incredible! You maintained your streak for {streak_days} consecutive days. Keep it up!',
+                title=_('%(days)s-day streak!') % {'days': streak_days},
+                body=_('Incredible! You maintained your streak for %(days)s consecutive days. Keep it up!') % {'days': streak_days},
                 scheduled_for=timezone.now(),
                 data={
                     'action': 'open_profile',
@@ -456,8 +457,8 @@ def send_level_up_notification(self, user_id, new_level):
         Notification.objects.create(
             user=user,
             notification_type='achievement',
-            title=f'🎉 Level {new_level} reached!',
-            body=f'Congratulations! You reached level {new_level}. Keep achieving your dreams!',
+            title=_('Level %(level)s reached!') % {'level': new_level},
+            body=_('Congratulations! You reached level %(level)s. Keep achieving your dreams!') % {'level': new_level},
             scheduled_for=timezone.now(),
             data={
                 'action': 'open_profile',
@@ -506,12 +507,12 @@ def expire_ringing_calls(self):
                 continue  # Already accepted/rejected/cancelled by another process
 
             # Notify the callee about the missed call
-            caller_name = call.caller.display_name or 'Someone'
+            caller_name = call.caller.display_name or _('Someone')
             Notification.objects.create(
                 user=call.callee,
                 notification_type='missed_call',
-                title=f'Missed {call.call_type} call',
-                body=f'{caller_name} tried to call you',
+                title=_('Missed %(call_type)s call') % {'call_type': call.call_type},
+                body=_('%(name)s tried to call you') % {'name': caller_name},
                 scheduled_for=timezone.now(),
                 data={
                     'call_id': str(call.id),
@@ -522,12 +523,12 @@ def expire_ringing_calls(self):
             )
 
             # Notify the caller that callee didn't answer
-            callee_name = call.callee.display_name or 'Your buddy'
+            callee_name = call.callee.display_name or _('Your buddy')
             Notification.objects.create(
                 user=call.caller,
                 notification_type='missed_call',
-                title=f'{callee_name} didn\'t answer',
-                body=f'Your {call.call_type} call was not answered',
+                title=_("%(name)s didn't answer") % {'name': callee_name},
+                body=_('Your %(call_type)s call was not answered') % {'call_type': call.call_type},
                 scheduled_for=timezone.now(),
                 data={
                     'call_id': str(call.id),
@@ -536,6 +537,38 @@ def expire_ringing_calls(self):
                     'screen': 'CallHistory',
                 },
             )
+
+            # Send real-time WebSocket events so caller/callee UIs update immediately
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f"notifications_{call.caller.id}",
+                        {
+                            'type': 'send_notification',
+                            'data': {
+                                'type': 'missed_call',
+                                'call_id': str(call.id),
+                                'message': _("%(name)s didn't answer") % {'name': callee_name},
+                            },
+                        },
+                    )
+                    async_to_sync(channel_layer.group_send)(
+                        f"notifications_{call.callee.id}",
+                        {
+                            'type': 'send_notification',
+                            'data': {
+                                'type': 'missed_call',
+                                'call_id': str(call.id),
+                                'message': _('Missed %(call_type)s call from %(name)s') % {'call_type': call.call_type, 'name': caller_name},
+                            },
+                        },
+                    )
+            except Exception as ws_err:
+                logger.warning(f"Failed to send WebSocket missed-call event: {ws_err}")
 
             expired_count += 1
 
@@ -546,6 +579,99 @@ def expire_ringing_calls(self):
     except Exception as e:
         logger.error(f"Error in expire_ringing_calls: {str(e)}")
         raise self.retry(exc=e, countdown=15)
+
+
+@shared_task(bind=True, max_retries=3)
+def check_due_tasks(self):
+    """
+    Find tasks due in the next 3 minutes and send FCM push notifications
+    with task_due data so the frontend triggers the task call overlay.
+    Runs every 3 minutes via Celery beat.
+    """
+    try:
+        from apps.notifications.fcm_service import FCMService
+        from apps.notifications.models import UserDevice
+
+        now = timezone.now()
+        window_end = now + timedelta(minutes=3)
+        today = now.date()
+
+        # Find pending tasks scheduled for today with a time in the next 3 minutes
+        tasks = Task.objects.filter(
+            status='pending',
+            scheduled_date__date=today,
+            scheduled_date__gte=now,
+            scheduled_date__lte=window_end,
+        ).select_related('goal__dream', 'goal__dream__user')
+
+        fcm = FCMService()
+        sent_count = 0
+
+        for task in tasks:
+            user = task.goal.dream.user
+            if not user.is_active:
+                continue
+
+            # Skip if we already sent a task_due notification for this task recently
+            already_sent = Notification.objects.filter(
+                user=user,
+                notification_type='task_due',
+                data__task_id=str(task.id),
+                created_at__gte=now - timedelta(minutes=10),
+            ).exists()
+            if already_sent:
+                continue
+
+            dream_title = ''
+            try:
+                dream_title = task.goal.dream.title or ''
+            except Exception as e:
+                logger.warning('Could not fetch dream title for task %s: %s', task.id, e)
+
+            data = {
+                'type': 'task_due',
+                'notification_type': 'task_due',
+                'task_id': str(task.id),
+                'title': task.title or _('Task Due'),
+                'dream': dream_title,
+                'dream_title': dream_title,
+                'priority': str(task.goal.dream.priority) if task.goal.dream.priority else 'medium',
+                'category': task.goal.dream.category or 'personal',
+            }
+
+            # Create notification record
+            Notification.objects.create(
+                user=user,
+                notification_type='task_due',
+                title=_('%(title)s') % {'title': task.title},
+                body=_('Time to work on your task!'),
+                scheduled_for=now,
+                data=data,
+            )
+
+            # Send FCM push to all user devices
+            devices = UserDevice.objects.filter(user=user, is_active=True)
+            tokens = [d.fcm_token for d in devices if d.fcm_token]
+
+            for token in tokens:
+                try:
+                    fcm.send_to_token(
+                        token=token,
+                        title=_('%(title)s') % {'title': task.title},
+                        body=_('Time to work on your task!'),
+                        data=data,
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.warning(f"FCM send failed for task {task.id}: {e}")
+
+        if sent_count:
+            logger.info(f"Sent {sent_count} task-due FCM notifications")
+        return {'sent': sent_count}
+
+    except Exception as e:
+        logger.error(f"Error in check_due_tasks: {e}")
+        raise self.retry(exc=e, countdown=60)
 
 
 @shared_task(bind=True, max_retries=3)

@@ -150,6 +150,12 @@ services:
       - web
       - elasticsearch
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 10 2>/dev/null | grep -q OK || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
 
   # Celery beat for scheduled tasks
   celery-beat:
@@ -184,6 +190,12 @@ services:
       - redis
       - celery
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # Daphne for WebSocket support (Channels)
   daphne:
@@ -216,6 +228,12 @@ services:
       - db
       - redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/ || exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # Internal nginx — security headers, gzip, rate limiting, static/media
   nginx:

@@ -41,6 +41,13 @@ _client = OpenAI(
     organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
 )
 
+# Separate client for long-running plan generation — no SDK retries
+_plan_client = OpenAI(
+    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
+    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+    max_retries=0,
+)
+
 _async_client = AsyncOpenAI(
     api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
     organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
@@ -200,6 +207,12 @@ GOAL RULES:
 - Goals represent distinct sub-objectives within the milestone period
 - Each goal must have a clear, measurable outcome
 - Each goal MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
+- CRITICAL ORDERING: Goals within each milestone MUST follow a logical learning progression:
+  1. LEARN/STUDY phase first (theory, research, understanding concepts)
+  2. PRACTICE/APPLY phase second (hands-on practice, exercises, application)
+  3. TEST/ASSESS phase last (quizzes, mock tests, evaluations, reviews)
+  For example, for a driving dream: "Learn traffic rules" → "Practice driving basics" → "Take mock driving test" — NEVER put testing before learning
+  The "order" field MUST reflect this logical sequence (order=1 for learning, order=2 for practice, etc.)
 
 TASK RULES:
 - Each goal MUST have at least 4 tasks (minimum)
@@ -211,6 +224,8 @@ TASK RULES:
 - Bad: "Do ab exercises"
 - Task durations MUST respect the user's available time
 - Build PROGRESSIVE difficulty
+- Tasks MUST be ordered chronologically by day_number AND logically within each goal
+- Foundation/prerequisite tasks come before advanced tasks — never schedule an assessment before the learning it covers
 
 DATE RULES (CRITICAL):
 - "expected_date": The IDEAL date to complete this item — a soft target. If missed, no penalty.
@@ -239,6 +254,12 @@ QUALITY RULES:
 - Every task MUST have a unique, descriptive title starting with "Day N:"
 - Descriptions must be highly detailed with step-by-step execution instructions
 - The plan must cover the ENTIRE timeline from day 1 to the target date
+- LOGICAL PROGRESSION IS CRITICAL: The overall plan must follow a natural learning path:
+  * Early milestones: Foundations, research, understanding basics
+  * Middle milestones: Practice, application, building skills
+  * Later milestones: Advanced techniques, refinement, testing, certification
+  * Within EACH milestone, goals must also follow learn→practice→test order
+  * NEVER put assessment/testing goals before the learning goals they depend on
 
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it. Task titles, descriptions, and all text must be in the user's language.""",
 
@@ -433,14 +454,13 @@ IMPORTANT: Respond in the user's language.""",
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
-    @openai_retry
-    def generate_plan(self, dream_title, dream_description, user_context, target_date=None):
+    def generate_plan(self, dream_title, dream_description, user_context, target_date=None, progress_callback=None):
         """
         Generate a complete structured plan for a dream.
 
         For dreams <= 6 months: generates in a single API call.
-        For dreams > 6 months: splits into 6-month chunks, each call generating
-        ~6 milestones with full detail. Previous chunk summaries are passed as
+        For dreams > 6 months: splits into 3-month chunks, each call generating
+        ~3 milestones with full detail. Previous chunk summaries are passed as
         context to maintain continuity and progressive difficulty.
 
         Args:
@@ -448,6 +468,7 @@ IMPORTANT: Respond in the user's language.""",
             dream_description: Detailed description
             user_context: Dict with timezone, work_schedule, etc.
             target_date: The target date for achieving this dream
+            progress_callback: Optional callable(message) for progress updates
 
         Returns:
             Dict with structured plan including milestones, goals, tasks, tips, obstacles
@@ -457,6 +478,7 @@ IMPORTANT: Respond in the user's language.""",
 
         # Parse target_date and calculate duration
         total_days, total_months = self._parse_duration(target_date)
+        logger.info(f"generate_plan: target_date={target_date} total_days={total_days} total_months={total_months}")
 
         if total_months is None or total_months <= 6:
             # Short dream: single call
@@ -468,7 +490,8 @@ IMPORTANT: Respond in the user's language.""",
             # Long dream: chunked generation
             return self._generate_plan_chunked(
                 dream_title, dream_description, user_context,
-                calibration_section, target_date, total_days, total_months
+                calibration_section, target_date, total_days, total_months,
+                progress_callback=progress_callback,
             )
 
     def _build_calibration_section(self, user_context, dream_description):
@@ -521,7 +544,8 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
         from datetime import date
         if isinstance(target_date, str):
             try:
-                target_date = date.fromisoformat(target_date)
+                # Handle both "YYYY-MM-DD" and "YYYY-MM-DD HH:MM:SS+TZ" formats
+                target_date = date.fromisoformat(target_date.strip()[:10])
             except ValueError:
                 return None, None
         today = date.today()
@@ -585,7 +609,8 @@ STRUCTURE REQUIREMENTS:
 
 Respond ONLY with the plan JSON."""
 
-        response = _client.chat.completions.create(
+        logger.info("generate_plan: sending single plan request to OpenAI")
+        response = _plan_client.chat.completions.create(
             model=self.model,
             messages=[
                 {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
@@ -594,8 +619,14 @@ Respond ONLY with the plan JSON."""
             temperature=0.5,
             max_tokens=16384,
             response_format={"type": "json_object"},
-            timeout=180,
+            timeout=300,
         )
+        logger.info("generate_plan: single plan response received")
+
+        finish_reason = response.choices[0].finish_reason
+        if finish_reason == 'length':
+            logger.warning("generate_plan: single response truncated (hit max_tokens)")
+            raise OpenAIError("Plan generation output was truncated — response too large")
 
         content = response.choices[0].message.content
         try:
@@ -604,17 +635,18 @@ Respond ONLY with the plan JSON."""
             raise OpenAIError(f"Failed to parse JSON response: {str(e)}")
 
     def _generate_plan_chunked(self, dream_title, dream_description, user_context,
-                                calibration_section, target_date, total_days, total_months):
+                                calibration_section, target_date, total_days, total_months,
+                                progress_callback=None):
         """
-        Generate plan in chunks of 6 months for long dreams.
+        Generate plan in chunks of 3 months for long dreams.
 
-        Each chunk generates ~6 milestones with full detail. Previous chunk
+        Each chunk generates ~3 milestones with full detail. Previous chunk
         summaries are passed as context to maintain continuity.
 
         Returns a merged plan dict with all milestones combined.
         """
-        # Split into 6-month chunks
-        chunk_size_months = 6
+        # Split into 3-month chunks to stay within max_tokens output limit
+        chunk_size_months = 3
         chunks = []
         month_start = 1
         while month_start <= total_months:
@@ -657,13 +689,13 @@ THIS CHUNK COVERS: Months {month_start} to {month_end} (days {day_start} to {day
 DATE RANGE FOR THIS CHUNK: {chunk_date_start} to {chunk_date_end}
 - Generate exactly {chunk_milestones_count} milestones (1 per month)
 - Milestone order numbers start at {milestone_order_start}
-- Each milestone MUST have at least 4 goals
-- Each goal MUST have at least 4 tasks with day_number (range: {day_start} to {day_end})
+- Each milestone MUST have 3-4 goals
+- Each goal MUST have 3-4 tasks with day_number (range: {day_start} to {day_end})
 - EVERY milestone, goal, and task MUST have "expected_date" and "deadline_date" (YYYY-MM-DD)
 - expected_date = ideal date to finish (soft), deadline_date = hard deadline (must finish by)
 - Leave buffer: tasks 2-5 days, goals 3-7 days, milestones 5-10 days between expected and deadline
 - Account for weekends and rest days — do NOT schedule tasks every single day
-- Task descriptions must be HIGHLY detailed step-by-step execution instructions
+- Task descriptions should be clear and actionable (2-3 sentences each)
 - Include rest/recovery days every 6-7 days
 
 USER CONTEXT:
@@ -706,8 +738,13 @@ STRUCTURE: Respond ONLY with JSON:
   "chunk_summary": "Brief 2-3 sentence summary of what this chunk covers for continuity"
 }"""
 
-            # Generate this chunk
-            response = _client.chat.completions.create(
+            # Notify progress
+            if progress_callback:
+                progress_callback(f"AI is building your plan... (part {chunk_idx + 1} of {len(chunks)})")
+
+            # Generate this chunk — use _plan_client (no SDK retries) with long timeout
+            logger.info(f"generate_plan: sending chunk {chunk_idx + 1}/{len(chunks)} to OpenAI")
+            response = _plan_client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
@@ -716,8 +753,14 @@ STRUCTURE: Respond ONLY with JSON:
                 temperature=0.5,
                 max_tokens=16384,
                 response_format={"type": "json_object"},
-                timeout=180,
+                timeout=300,
             )
+            logger.info(f"generate_plan: chunk {chunk_idx + 1}/{len(chunks)} received")
+
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == 'length':
+                logger.warning(f"generate_plan: chunk {chunk_idx + 1} truncated (hit max_tokens)")
+                raise OpenAIError(f"Chunk {chunk_idx + 1} output was truncated — response too large")
 
             content = response.choices[0].message.content
             try:
@@ -1280,23 +1323,67 @@ Respond ONLY with JSON:
         except (json.JSONDecodeError, openai.APIError) as e:
             raise OpenAIError(f"Task adjustment generation failed: {str(e)}")
 
-    def generate_vision_image(self, dream_title, dream_description):
+    def generate_vision_image(self, dream_title, dream_description, category=None, milestones=None, calibration_profile=None):
         """
         Generate a vision board image using DALL-E 3.
+
+        Args:
+            dream_title: Title of the dream
+            dream_description: Full description
+            category: Dream category (career, health, finance, etc.)
+            milestones: List of milestone titles for context
+            calibration_profile: Dict with user context (experience, motivation, etc.)
 
         Returns:
             URL of the generated image
         """
-        prompt = f"""Create an inspiring, photorealistic image representing someone who has successfully achieved: {dream_title}. {dream_description}.
+        # Build a rich, contextual scene description
+        scene_parts = []
+        scene_parts.append(f"A person who has successfully achieved their dream: {dream_title}")
 
-The image should be positive, motivating, and show the end result/success state. Photorealistic style, bright and inspiring."""
+        if dream_description:
+            # Keep description concise for the prompt (DALL-E has a 4000 char limit)
+            desc = dream_description[:300]
+            scene_parts.append(f"Context: {desc}")
+
+        if category:
+            category_scenes = {
+                'career': 'professional setting, office or workplace achievement',
+                'health': 'healthy lifestyle, fitness achievement, radiant wellbeing',
+                'finance': 'financial success, prosperity, wealth achievement',
+                'hobbies': 'creative pursuit, passionate hobby mastered',
+                'personal': 'personal growth, self-improvement, confident individual',
+                'relationships': 'meaningful connections, social harmony, loved ones',
+                'education': 'academic achievement, graduation, knowledge mastery',
+                'travel': 'travel destination, adventure, exploration achievement',
+            }
+            if category.lower() in category_scenes:
+                scene_parts.append(f"Setting: {category_scenes[category.lower()]}")
+
+        if milestones and len(milestones) > 0:
+            final_milestone = milestones[-1] if isinstance(milestones[-1], str) else str(milestones[-1])
+            scene_parts.append(f"The final achievement looks like: {final_milestone}")
+
+        if calibration_profile:
+            motivation = calibration_profile.get('primary_motivation', '')
+            success_def = calibration_profile.get('success_definition', '')
+            if motivation:
+                scene_parts.append(f"Their motivation: {motivation[:150]}")
+            if success_def:
+                scene_parts.append(f"What success looks like to them: {success_def[:150]}")
+
+        scene = ". ".join(scene_parts)
+
+        prompt = f"""{scene}.
+
+Cinematic photorealistic photograph, shot on a high-end DSLR camera with natural lighting. The image captures a genuine, emotional moment of achievement and fulfillment. Rich colors, sharp focus, realistic skin textures and environment. No text, no watermarks, no logos. The scene should feel authentic and aspirational — like a real photograph from the person's future success story."""
 
         try:
             response = _client.images.generate(
                 model="dall-e-3",
                 prompt=prompt,
                 size="1024x1024",
-                quality="standard",
+                quality="hd",
                 n=1,
             )
 

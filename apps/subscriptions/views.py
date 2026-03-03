@@ -7,6 +7,7 @@ initiating Stripe Checkout, and receiving Stripe webhooks.
 
 import logging
 
+from django.utils.translation import gettext as _
 import stripe
 from django.http import HttpResponse
 from rest_framework import viewsets, status, views
@@ -24,6 +25,7 @@ from .serializers import (
 )
 from .services import StripeService
 from core.audit import log_webhook_event
+from core.throttles import SearchRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     """Public read-only viewset for subscription plans."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [SearchRateThrottle]
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.filter(is_active=True)
     lookup_field = 'slug'
@@ -77,7 +80,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         if not subscription:
             return Response(
                 {
-                    'detail': 'No active subscription. You are on the free plan.',
+                    'detail': _('No active subscription. You are on the free plan.'),
                     'plan': 'free',
                 },
                 status=status.HTTP_404_NOT_FOUND,
@@ -121,7 +124,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError as e:
             logger.exception("Stripe error during checkout creation")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -158,7 +161,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during portal session creation")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -185,13 +188,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during cancellation")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': 'No active subscription to cancel.'},
+                {'detail': _('No active subscription to cancel.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -217,13 +220,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during reactivation")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': 'No subscription pending cancellation to reactivate.'},
+                {'detail': _('No subscription pending cancellation to reactivate.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -252,14 +255,14 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         plan_slug = request.data.get('plan_slug', '')
         if not plan_slug:
             return Response(
-                {'detail': 'plan_slug is required.'},
+                {'detail': _('plan_slug is required.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         plan = SubscriptionPlan.objects.filter(slug=plan_slug, is_active=True).first()
         if not plan:
             return Response(
-                {'detail': f"No active plan found with slug '{plan_slug}'."},
+                {'detail': _("No active plan found with slug '%(slug)s'.") % {'slug': plan_slug}},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -273,7 +276,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during plan change")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -301,13 +304,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error cancelling pending change")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': 'No pending plan change to cancel.'},
+                {'detail': _('No pending plan change to cancel.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -332,13 +335,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during subscription sync")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': 'No subscription found to sync.'},
+                {'detail': _('No subscription found to sync.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -362,7 +365,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error fetching invoices")
             return Response(
-                {'detail': 'Payment service error. Please try again later.'},
+                {'detail': _('Payment service error. Please try again later.')},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

@@ -1,11 +1,11 @@
-{{ title }}
+{% load i18n %}{{ title }}
 
-Hi {{ user_name }},
+{% trans "Hi" %} {{ user_name }},
 
 {{ body }}
 
-Open DreamPlanner: {{ action_url }}
+{% trans "Open DreamPlanner" %}: {{ action_url }}
 
 ---
-DreamPlanner - Turn your dreams into reality
-Manage notification preferences in your profile settings.
+{% trans "DreamPlanner - Turn your dreams into reality" %}
+{% trans "Manage notification preferences in your profile settings." %}

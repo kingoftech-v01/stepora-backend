@@ -5,17 +5,17 @@ Views for Notifications app.
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import Notification, NotificationTemplate, WebPushSubscription, UserDevice
+from .models import Notification, NotificationTemplate, WebPushSubscription, UserDevice, NotificationBatch
 from .serializers import (
     NotificationSerializer, NotificationCreateSerializer,
     NotificationTemplateSerializer, WebPushSubscriptionSerializer,
-    UserDeviceSerializer,
+    UserDeviceSerializer, NotificationBatchSerializer,
 )
 
 import logging
@@ -71,16 +71,15 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
         return Response(NotificationSerializer(notification).data)
 
-    @extend_schema(summary="Mark all as read", description="Mark all notifications as read", tags=["Notifications"], responses={200: dict})
+    @extend_schema(summary="Mark all as read", description="Delete all notifications for the current user (clears the inbox)", tags=["Notifications"], responses={200: dict})
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
-        """Mark all notifications as read."""
-        updated = Notification.objects.filter(
+        """Delete all notifications to free up space."""
+        deleted, _ = Notification.objects.filter(
             user=request.user,
-            read_at__isnull=True
-        ).update(read_at=timezone.now())
+        ).delete()
 
-        return Response({'marked_read': updated})
+        return Response({'marked_read': deleted})
 
     @extend_schema(summary="Get unread count", description="Get count of unread notifications", tags=["Notifications"], responses={200: dict})
     @action(detail=False, methods=['get'])
@@ -274,3 +273,40 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
                 fcm.unsubscribe_from_topic([device.fcm_token], topic)
         except Exception as e:
             logger.warning(f"Failed to unsubscribe device {device.id} from topics: {e}")
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary='List notification batches',
+        description='Retrieve all notification batches. Admin access only.',
+        tags=['Notification Batches'],
+        responses={200: NotificationBatchSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary='Get notification batch',
+        description='Retrieve details of a specific notification batch. Admin access only.',
+        tags=['Notification Batches'],
+        responses={
+            200: NotificationBatchSerializer,
+            404: OpenApiResponse(description='Batch not found.'),
+        },
+    ),
+)
+class NotificationBatchViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for NotificationBatch.
+
+    Provides list and detail endpoints for notification batches.
+    Restricted to admin (staff) users only.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = NotificationBatchSerializer
+    lookup_value_regex = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['status', 'notification_type']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return NotificationBatch.objects.none()
+        return NotificationBatch.objects.all().order_by('-created_at')

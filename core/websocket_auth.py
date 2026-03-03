@@ -1,6 +1,6 @@
 """
 Token-based WebSocket authentication middleware for Django Channels.
-Uses DRF Token authentication.
+Supports JWT (primary) and legacy DRF Token (fallback during migration).
 
 Supports two authentication modes:
 1. Post-connect message: client sends {"type": "authenticate", "token": "..."} (preferred, secure)
@@ -16,7 +16,6 @@ from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
-from rest_framework.authtoken.models import Token
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +23,36 @@ logger = logging.getLogger(__name__)
 @database_sync_to_async
 def get_user_from_token(token_key):
     """
-    Verify DRF token, check expiration, and return corresponding user.
+    Verify token and return corresponding user.
+    Tries JWT first, falls back to legacy DRF Token.
     Returns AnonymousUser if token is invalid or expired.
     """
     if not token_key:
         return AnonymousUser()
 
+    # Try JWT access token first
     try:
-        token = Token.objects.select_related('user').get(key=token_key)
+        from rest_framework_simplejwt.tokens import AccessToken
+        from rest_framework_simplejwt.exceptions import TokenError
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
 
-        # Check token expiration (same logic as ExpiringTokenAuthentication)
+        validated = AccessToken(token_key)
+        user_id = validated['user_id']
+        user = User.objects.get(id=user_id, is_active=True)
+        return user
+    except Exception:
+        pass
+
+    # Fallback: legacy DRF Token (transition period)
+    try:
+        from rest_framework.authtoken.models import Token
         from django.conf import settings
         from django.utils import timezone
         from datetime import timedelta
+
+        token = Token.objects.select_related('user').get(key=token_key)
+
         token_age = timezone.now() - token.created
         expiry_hours = getattr(settings, 'TOKEN_EXPIRY_HOURS', 24)
         if token_age > timedelta(hours=expiry_hours):
@@ -46,8 +62,6 @@ def get_user_from_token(token_key):
             return AnonymousUser()
 
         return token.user
-    except Token.DoesNotExist:
-        return AnonymousUser()
     except Exception:
         return AnonymousUser()
 

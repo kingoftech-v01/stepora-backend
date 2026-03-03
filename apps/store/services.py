@@ -12,6 +12,7 @@ import os
 
 import stripe
 from django.db import transaction
+from django.db.models import F
 
 from .models import StoreItem, UserInventory, Gift, RefundRequest
 
@@ -164,8 +165,8 @@ class StoreService:
             ItemAlreadyOwnedError: If the user already owns this item.
             PaymentVerificationError: If payment verification fails.
         """
-        # Check if user already owns this item (race condition guard)
-        if UserInventory.objects.filter(user=user, item=item).exists():
+        # Lock-based check to prevent duplicate inventory from concurrent requests
+        if UserInventory.objects.select_for_update().filter(user=user, item=item).exists():
             raise ItemAlreadyOwnedError(
                 f'You already own "{item.name}".'
             )
@@ -382,19 +383,24 @@ class StoreService:
                 f'Item "{item.name}" cannot be purchased with XP.'
             )
 
+        # Lock the user row to prevent race conditions on XP
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        locked_user = User.objects.select_for_update().get(id=user.id)
+
         if UserInventory.objects.filter(user=user, item=item).exists():
             raise ItemAlreadyOwnedError(
                 f'You already own "{item.name}".'
             )
 
-        if user.xp < item.xp_price:
+        if locked_user.xp < item.xp_price:
             raise InsufficientXPError(
-                f'Insufficient XP. You have {user.xp} XP but need {item.xp_price} XP.'
+                f'Insufficient XP. You have {locked_user.xp} XP but need {item.xp_price} XP.'
             )
 
-        # Deduct XP
-        user.xp -= item.xp_price
-        user.save(update_fields=['xp'])
+        # Deduct XP atomically
+        User.objects.filter(id=user.id).update(xp=F('xp') - item.xp_price)
+        user.refresh_from_db(fields=['xp'])
 
         # Create inventory entry
         inventory_entry = UserInventory.objects.create(

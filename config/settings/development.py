@@ -17,7 +17,7 @@ if os.getenv('DB_HOST'):
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.getenv('DB_NAME', 'dreamplanner'),
             'USER': os.getenv('DB_USER', 'dreamplanner'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT', '5432'),
         }
@@ -32,11 +32,12 @@ else:
 
 # --- Channels / Cache / Celery: use Redis if REDIS_HOST is set (Docker) ---
 if os.getenv('REDIS_HOST'):
+    _dev_redis_url = os.getenv('REDIS_URL', '')
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
-                "hosts": [(os.getenv('REDIS_HOST'), int(os.getenv('REDIS_PORT', 6379)))],
+                "hosts": [_dev_redis_url] if _dev_redis_url else [(os.getenv('REDIS_HOST'), int(os.getenv('REDIS_PORT', 6379)))],
             },
         },
     }
@@ -71,15 +72,15 @@ else:
     CELERY_RESULT_BACKEND = 'cache+memory://'
 
 # --- CORS ---
-_cors_raw = os.getenv('CORS_ORIGIN', '')
-if _cors_raw:
-    CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
-else:
-    CORS_ALLOW_ALL_ORIGINS = True
+# Never combine CORS_ALLOW_ALL_ORIGINS=True with CORS_ALLOW_CREDENTIALS=True.
+# Default to common local dev origins when CORS_ORIGIN is not set.
+_cors_raw = os.getenv('CORS_ORIGIN', 'http://localhost:3000,http://localhost:8100,capacitor://localhost')
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
 
 # --- Email: print to console ---
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
 # --- Security: disabled for local dev ---
 SECURE_SSL_REDIRECT = False

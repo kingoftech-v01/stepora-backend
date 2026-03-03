@@ -37,6 +37,14 @@ def transcribe_voice_message(self, message_id):
             logger.info(f"Message {message_id} already transcribed, skipping.")
             return
 
+        # Validate audio URL to prevent SSRF
+        from core.validators import validate_url_no_ssrf
+        try:
+            validate_url_no_ssrf(message.audio_url)
+        except Exception as e:
+            logger.error(f"Invalid audio URL for message {message_id}: {e}")
+            return
+
         # Download the audio file to a temp location
         response = requests.get(message.audio_url, timeout=60)
         response.raise_for_status()

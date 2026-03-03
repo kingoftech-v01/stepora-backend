@@ -1531,6 +1531,8 @@ CircleViewSet.end_call(request, pk)                      apps/circles/views.py
 
 Circle calls use **Agora.io** for real-time communication. The server generates short-lived RTC tokens scoped to the call's channel name and user UID. Call state is tracked server-side via `CircleCall` and `CircleCallParticipant` models. When a call starts, both WebSocket broadcast and FCM push ensure all circle members are notified.
 
+> **Setup requirement:** The Agora **Signaling** service must be enabled in the [Agora Console](https://console.agora.io) (select a data center + subscribe to a plan). If not enabled, RTM login fails with error `2010026`. See `DEPLOYMENT.md` for steps.
+
 ---
 
 ## Flow 18: Dream Post Social Interaction

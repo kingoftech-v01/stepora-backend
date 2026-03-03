@@ -184,15 +184,23 @@ def sync_google_calendar(self, integration_id):
         except (ValueError, TypeError):
             continue
 
-        # Upsert by google event ID
+        # Upsert by google_event_id field
         google_id = ge['id']
         existing = CalendarEvent.objects.filter(
             user=user,
-            title=ge.get('summary', 'Untitled'),
-            start_time=start_dt,
+            google_event_id=google_id,
         ).first()
 
-        if not existing:
+        if existing:
+            existing.title = ge.get('summary', 'Untitled')
+            existing.description = ge.get('description', '')
+            existing.start_time = start_dt
+            existing.end_time = end_dt
+            existing.location = ge.get('location', '')
+            existing.save(update_fields=[
+                'title', 'description', 'start_time', 'end_time', 'location', 'updated_at'
+            ])
+        else:
             CalendarEvent.objects.create(
                 user=user,
                 title=ge.get('summary', 'Untitled'),
@@ -201,6 +209,7 @@ def sync_google_calendar(self, integration_id):
                 end_time=end_dt,
                 location=ge.get('location', ''),
                 status='scheduled',
+                google_event_id=google_id,
             )
             pulled += 1
 

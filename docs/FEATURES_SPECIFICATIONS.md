@@ -604,6 +604,8 @@ Tokens are short-lived and scoped to the specific call channel and user UID. Env
 | `AGORA_APP_ID` | Agora project App ID |
 | `AGORA_APP_CERTIFICATE` | Agora project App Certificate |
 
+> **Important:** The Agora **Signaling** service must be enabled in the [Agora Console](https://console.agora.io) (Projects → All features → Signaling → select data center + subscribe to a plan). Without this, RTM login fails with error `2010026` and buddy/circle chat will not work in real-time. See `DEPLOYMENT.md` for full setup steps.
+
 ### 9.3 Participant Tracking
 
 The `CircleCallParticipant` model tracks when each user joins and leaves. The `CircleCall.max_participants` field records the peak participant count during the call.

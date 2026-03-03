@@ -3,6 +3,7 @@ Views for Users app.
 Authentication is handled by dj-rest-auth at /api/auth/ endpoints.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,7 +12,9 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
 import logging
+import os
 import secrets
+import uuid as uuid_mod
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q, Count
@@ -24,7 +27,7 @@ from .serializers import (
     GamificationProfileSerializer,
 )
 from core.audit import log_data_export, log_account_change
-from core.throttles import ExportRateThrottle
+from core.throttles import ExportRateThrottle, TwoFactorRateThrottle
 from core.ai_usage import AIUsageTracker
 
 
@@ -49,23 +52,53 @@ class UserViewSet(viewsets.ModelViewSet):
         return User.objects.filter(id=self.request.user.id)
 
     def retrieve(self, request, *args, **kwargs):
-        """Get a user's public profile by ID."""
+        """Get a user's public profile by ID, respecting profile_visibility."""
         user_id = kwargs.get('pk')
         try:
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        # Enforce profile_visibility setting
+        from apps.social.models import Friendship
+        if target_user != request.user:
+            visibility = target_user.profile_visibility or 'public'
+            if visibility == 'private':
+                return Response(
+                    {'error': _('This profile is private.')},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if visibility == 'friends':
+                is_friend_check = Friendship.objects.filter(
+                    Q(user1=request.user, user2=target_user) | Q(user1=target_user, user2=request.user),
+                    status='accepted'
+                ).exists()
+                if not is_friend_check:
+                    return Response(
+                        {'error': _('This profile is visible to friends only.')},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
         # Return public profile data (no email, no private settings)
         from apps.dreams.models import Dream
-        from apps.social.models import Friendship
-        dreams = Dream.objects.filter(
-            user=target_user, status='active'
-        ).values_list('title', flat=True)[:10]
+        # Only return public dreams (with id + title + progress for clickable cards)
+        public_dreams_qs = Dream.objects.filter(
+            user=target_user, status='active', is_public=True
+        ).values('id', 'title', 'category', 'progress_percentage')[:10]
+        dreams = [
+            {
+                'id': str(d['id']),
+                'title': d['title'],
+                'category': d['category'],
+                'progress': d['progress_percentage'],
+            }
+            for d in public_dreams_qs
+        ]
         categories = list(
-            Dream.objects.filter(user=target_user, status='active')
+            Dream.objects.filter(user=target_user, status='active', is_public=True)
             .values_list('category', flat=True).distinct()
         )
         friend_count = Friendship.objects.filter(
@@ -118,7 +151,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'isFriend': is_friend,
             'mutualFriends': mutual,
             'friendCount': friend_count,
-            'dreams': list(dreams),
+            'dreams': dreams,
             'categories': categories,
             'dateJoined': target_user.created_at.strftime('%b %Y') if target_user.created_at else '',
         })
@@ -184,7 +217,7 @@ class UserViewSet(viewsets.ModelViewSet):
         avatar_file = request.FILES.get('avatar')
         if not avatar_file:
             return Response(
-                {'error': 'No avatar file provided.'},
+                {'error': _('No avatar file provided.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -192,14 +225,14 @@ class UserViewSet(viewsets.ModelViewSet):
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
         if avatar_file.content_type not in allowed_types:
             return Response(
-                {'error': 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP.'},
+                {'error': _('Invalid file type. Allowed: JPEG, PNG, GIF, WebP.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Validate file size (5MB max)
         if avatar_file.size > 5 * 1024 * 1024:
             return Response(
-                {'error': 'File too large. Maximum size is 5MB.'},
+                {'error': _('File too large. Maximum size is 5MB.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -216,7 +249,7 @@ class UserViewSet(viewsets.ModelViewSet):
         valid_magic = any(header.startswith(sig) for sig in magic_signatures)
         if not valid_magic:
             return Response(
-                {'error': 'File content does not match an allowed image format.'},
+                {'error': _('File content does not match an allowed image format.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -224,6 +257,12 @@ class UserViewSet(viewsets.ModelViewSet):
         # Delete old avatar image if exists
         if user.avatar_image:
             user.avatar_image.delete(save=False)
+
+        # Sanitize filename: use UUID to prevent path traversal
+        ext = os.path.splitext(avatar_file.name)[1].lower()
+        if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+            ext = '.jpg'
+        avatar_file.name = f'{uuid_mod.uuid4().hex}{ext}'
 
         user.avatar_image = avatar_file
         user.save(update_fields=['avatar_image'])
@@ -240,6 +279,7 @@ class UserViewSet(viewsets.ModelViewSet):
         stats = {
             'level': user.level,
             'xp': user.xp,
+            'xp_to_next_level': 100 - (user.xp % 100),
             'streak_days': user.streak_days,
             'total_dreams': user.dreams.count(),
             'active_dreams': user.dreams.filter(status='active').count(),
@@ -273,7 +313,7 @@ class UserViewSet(viewsets.ModelViewSet):
         password = request.data.get('password')
         if not password or not user.check_password(password):
             return Response(
-                {'error': 'Invalid password. Please confirm your password to delete your account.'},
+                {'error': _('Invalid password. Please confirm your password to delete your account.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -324,13 +364,25 @@ class UserViewSet(viewsets.ModelViewSet):
         user.is_active = False
         user.save()
 
-        # Delete auth tokens
-        from rest_framework.authtoken.models import Token
-        Token.objects.filter(user=user).delete()
+        # Delete auth tokens (JWT outstanding + legacy DRF tokens)
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+            OutstandingToken.objects.filter(user=user).delete()
+        except ImportError:
+            pass  # simplejwt token_blacklist not installed
+        except Exception as e:
+            logger.error('Failed to clean up JWT tokens for user %s: %s', user.id, e)
+        try:
+            from rest_framework.authtoken.models import Token
+            Token.objects.filter(user=user).delete()
+        except ImportError:
+            pass  # DRF authtoken not installed
+        except Exception as e:
+            logger.error('Failed to clean up DRF tokens for user %s: %s', user.id, e)
 
         return Response({
-            'message': 'Account scheduled for deletion. Your data has been anonymized. '
-                       'The account will be permanently deleted in 30 days.',
+            'message': _('Account scheduled for deletion. Your data has been anonymized. '
+                         'The account will be permanently deleted in 30 days.'),
         })
 
     @extend_schema(
@@ -418,20 +470,20 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if not new_email:
             return Response(
-                {'error': 'new_email is required.'},
+                {'error': _('new_email is required.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if not password or not request.user.check_password(password):
             return Response(
-                {'error': 'Invalid password.'},
+                {'error': _('Invalid password.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Check if email is already taken
         if User.objects.filter(email=new_email).exclude(id=request.user.id).exists():
             return Response(
-                {'error': 'This email is already in use.'},
+                {'error': _('This email is already in use.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -454,7 +506,7 @@ class UserViewSet(viewsets.ModelViewSet):
         send_email_change_verification.delay(request.user.id, new_email, token)
 
         return Response({
-            'message': 'Verification email sent to the new address. Please check your inbox.',
+            'message': _('Verification email sent to the new address. Please check your inbox.'),
         })
 
     @extend_schema(summary="Get dashboard", description="Aggregated dashboard data: heatmap, stats, upcoming tasks, top dreams", tags=["Users"], responses={200: dict, 404: OpenApiResponse(description='Resource not found.')})
@@ -497,6 +549,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'streak_days': user.streak_days,
             'xp': user.xp,
             'level': user.level,
+            'xp_to_next_level': 100 - (user.xp % 100),
         }
 
         # Upcoming tasks: next 5 scheduled tasks
@@ -599,7 +652,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # Validate structure
         if not isinstance(prefs, dict):
             return Response(
-                {'error': 'Expected a JSON object with notification preferences.'},
+                {'error': _('Expected a JSON object with notification preferences.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -616,7 +669,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 continue
             if not isinstance(value, bool):
                 return Response(
-                    {'error': f'Invalid value for "{key}": expected true/false.'},
+                    {'error': _('Invalid value for "%(key)s": expected true/false.') % {'key': key}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             validated[key] = value
@@ -645,7 +698,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         if user.totp_enabled:
             return Response(
-                {'error': '2FA is already enabled.'},
+                {'error': _('2FA is already enabled.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         secret = pyotp.random_base32()
@@ -670,16 +723,16 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         if not user.totp_secret:
             return Response(
-                {'error': 'Run 2FA setup first.'},
+                {'error': _('Run 2FA setup first.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         totp = pyotp.TOTP(user.totp_secret)
         if totp.verify(code):
             user.totp_enabled = True
             user.save(update_fields=['totp_enabled'])
-            return Response({'message': '2FA enabled successfully.'})
+            return Response({'message': _('2FA enabled successfully.')})
         return Response(
-            {'error': 'Invalid code.'},
+            {'error': _('Invalid code.')},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -699,25 +752,25 @@ class UserViewSet(viewsets.ModelViewSet):
         code = request.data.get('code', '')
         if not user.check_password(password):
             return Response(
-                {'error': 'Invalid password.'},
+                {'error': _('Invalid password.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if not user.totp_enabled:
             return Response(
-                {'error': '2FA is not enabled.'},
+                {'error': _('2FA is not enabled.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         totp = pyotp.TOTP(user.totp_secret)
         if not totp.verify(code):
             return Response(
-                {'error': 'Invalid 2FA code.'},
+                {'error': _('Invalid 2FA code.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         user.totp_enabled = False
         user.totp_secret = ''
         user.backup_codes = None
         user.save(update_fields=['totp_enabled', 'totp_secret', 'backup_codes'])
-        return Response({'message': '2FA disabled.'})
+        return Response({'message': _('2FA disabled.')})
 
     @extend_schema(
         summary="Generate backup codes",
@@ -725,14 +778,14 @@ class UserViewSet(viewsets.ModelViewSet):
         responses={200: dict},
         tags=["Users"],
     )
-    @action(detail=False, methods=['post'], url_path='2fa/backup-codes')
+    @action(detail=False, methods=['post'], url_path='2fa/backup-codes', throttle_classes=[TwoFactorRateThrottle])
     def generate_backup_codes(self, request):
         """Generate 10 one-time backup codes."""
         import hashlib
         user = request.user
         if not user.totp_enabled:
             return Response(
-                {'error': '2FA must be enabled first.'},
+                {'error': _('2FA must be enabled first.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         codes = [secrets.token_hex(4) for _ in range(10)]
@@ -741,7 +794,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save(update_fields=['backup_codes'])
         return Response({
             'backup_codes': codes,
-            'message': 'Save these codes securely. They cannot be shown again.',
+            'message': _('Save these codes securely. They cannot be shown again.'),
         })
 
     # ── Onboarding ───────────────────────────────────────────────────
@@ -758,4 +811,4 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         user.onboarding_completed = True
         user.save(update_fields=['onboarding_completed'])
-        return Response({'message': 'Onboarding completed.'})
+        return Response({'message': _('Onboarding completed.')})

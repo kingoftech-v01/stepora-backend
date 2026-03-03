@@ -2,6 +2,7 @@
 Custom serializers for dj-rest-auth.
 """
 
+from django.utils.translation import gettext as _
 from dj_rest_auth.registration.serializers import RegisterSerializer as DefaultRegisterSerializer
 from rest_framework import serializers
 from apps.users.models import User
@@ -13,11 +14,17 @@ class RegisterSerializer(DefaultRegisterSerializer):
     username = None
     display_name = serializers.CharField(max_length=255, required=False, default='')
 
+    def validate_display_name(self, value):
+        if value:
+            from core.validators import validate_display_name
+            return validate_display_name(value)
+        return value
+
     def validate_email(self, email):
         email = super().validate_email(email)
         if User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError(
-                'An account with this email already exists.'
+                _('An account with this email already exists.')
             )
         return email
 

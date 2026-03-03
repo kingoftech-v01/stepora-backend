@@ -185,6 +185,32 @@ Upload an image with an optional text prompt. The image is analyzed via GPT-4 Vi
 | `ConversationSummarySerializer` | Summary with `key_points`, `start_message`, `end_message` |
 | `ConversationTemplateSerializer` | Template with `icon`, `starter_messages`, `description` |
 
+## Agora Token Endpoints
+
+Token generation endpoints for Agora.io RTM (real-time messaging) and RTC (voice/video calls). Defined in `agora_views.py`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/agora/config/` | Returns the Agora App ID |
+| POST | `/agora/rtm-token/` | Generate an RTM token for the authenticated user (24h TTL) |
+| POST | `/agora/rtc-token/` | Generate an RTC token for a channel (1h TTL). Body: `channelName` |
+
+**Permission:** `IsAuthenticated`
+
+**Environment variables required:**
+
+| Variable | Description |
+|----------|-------------|
+| `AGORA_APP_ID` | Agora project App ID |
+| `AGORA_APP_CERTIFICATE` | Agora project App Certificate |
+
+> **Important — Agora Console Setup:** Setting the environment variables alone is **not enough**. You must also enable the **Signaling** service in the [Agora Console](https://console.agora.io):
+>
+> 1. Projects → pencil icon → **All features** → **Signaling** → **Basic information** → select a data center
+> 2. **Subscriptions** → **Signaling** → subscribe to the **Free Package** or a paid plan
+>
+> Without this, RTM login will fail with error code **2010026** (`LOGIN_REJECTED_BY_SERVER`) and buddy/circle chat messages will not be delivered in real-time. See `DEPLOYMENT.md` for full setup steps.
+
 ## WebSocket Consumer
 
 ### AIChatConsumer (formerly ChatConsumer)

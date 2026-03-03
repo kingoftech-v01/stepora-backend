@@ -3,6 +3,7 @@ Serializers for Dreams app.
 """
 
 from rest_framework import serializers
+from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
 from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
 
@@ -172,7 +173,7 @@ class DreamSerializer(serializers.ModelSerializer):
             'id', 'user', 'title', 'description', 'category',
             'target_date', 'priority', 'status',
             'progress_percentage', 'completed_at',
-            'has_two_minute_start', 'vision_image_url',
+            'has_two_minute_start', 'is_public', 'is_favorited', 'vision_image_url',
             'calibration_status',
             'goals_count', 'tasks_count', 'tags',
             'sparkline_data',
@@ -270,7 +271,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'target_date', 'priority', 'status',
             'ai_analysis', 'vision_image_url',
             'progress_percentage', 'completed_at',
-            'has_two_minute_start',
+            'has_two_minute_start', 'is_public',
             'calibration_status', 'calibration_responses',
             'milestones', 'goals', 'obstacles',
             'milestones_count', 'completed_milestones_count',
@@ -345,6 +346,125 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         return list(obj.taggings.values_list('tag__name', flat=True))
 
 
+class PublicGoalSerializer(serializers.ModelSerializer):
+    """Goal serializer for public dream viewing — NO tasks exposed."""
+
+    tasks_count = serializers.SerializerMethodField()
+    completed_tasks_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Goal
+        fields = [
+            'id', 'title', 'description', 'order',
+            'status', 'progress_percentage',
+            'tasks_count', 'completed_tasks_count',
+        ]
+
+    def get_tasks_count(self, obj) -> int:
+        return len(obj.tasks.all())
+
+    def get_completed_tasks_count(self, obj) -> int:
+        return len([t for t in obj.tasks.all() if t.status == 'completed'])
+
+
+class PublicMilestoneSerializer(serializers.ModelSerializer):
+    """Milestone serializer for public dream viewing — goals without tasks."""
+
+    goals = PublicGoalSerializer(many=True, read_only=True)
+    goals_count = serializers.SerializerMethodField()
+    completed_goals_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DreamMilestone
+        fields = [
+            'id', 'title', 'description', 'order',
+            'status', 'progress_percentage',
+            'goals', 'goals_count', 'completed_goals_count',
+        ]
+
+    def get_goals_count(self, obj) -> int:
+        return len(obj.goals.all())
+
+    def get_completed_goals_count(self, obj) -> int:
+        return len([g for g in obj.goals.all() if g.status == 'completed'])
+
+
+class PublicDreamDetailSerializer(serializers.ModelSerializer):
+    """Read-only serializer for viewing another user's public dream.
+    Exposes milestones and goals but NOT tasks, obstacles, AI analysis,
+    calibration data, or collaborators."""
+
+    milestones = PublicMilestoneSerializer(many=True, read_only=True)
+    goals = PublicGoalSerializer(many=True, read_only=True)
+    milestones_count = serializers.SerializerMethodField()
+    completed_milestones_count = serializers.SerializerMethodField()
+    goals_count = serializers.SerializerMethodField()
+    completed_goal_count = serializers.SerializerMethodField()
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Dream
+        fields = [
+            'id', 'user', 'title', 'description', 'category',
+            'target_date', 'priority', 'status',
+            'progress_percentage', 'is_public',
+            'milestones', 'goals',
+            'milestones_count', 'completed_milestones_count',
+            'goals_count', 'completed_goal_count',
+            'total_tasks', 'completed_tasks',
+            'days_left', 'tags', 'owner_name',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_milestones_count(self, obj) -> int:
+        if hasattr(obj, '_milestones_count'):
+            return obj._milestones_count
+        return obj.milestones.count()
+
+    def get_completed_milestones_count(self, obj) -> int:
+        if hasattr(obj, '_completed_milestones_count'):
+            return obj._completed_milestones_count
+        return obj.milestones.filter(status='completed').count()
+
+    def get_goals_count(self, obj) -> int:
+        if hasattr(obj, '_goals_count'):
+            return obj._goals_count
+        return obj.goals.count()
+
+    def get_completed_goal_count(self, obj) -> int:
+        if hasattr(obj, '_completed_goals_count'):
+            return obj._completed_goals_count
+        return obj.goals.filter(status='completed').count()
+
+    def get_total_tasks(self, obj) -> int:
+        if hasattr(obj, '_total_tasks'):
+            return obj._total_tasks
+        return sum(len(g.tasks.all()) for g in obj.goals.all())
+
+    def get_completed_tasks(self, obj) -> int:
+        if hasattr(obj, '_completed_tasks'):
+            return obj._completed_tasks
+        return sum(len([t for t in g.tasks.all() if t.status == 'completed']) for g in obj.goals.all())
+
+    def get_days_left(self, obj):
+        if not obj.target_date:
+            return None
+        from django.utils import timezone
+        delta = obj.target_date - timezone.now()
+        return max(0, delta.days)
+
+    def get_tags(self, obj) -> list:
+        return list(obj.taggings.values_list('tag__name', flat=True))
+
+    def get_owner_name(self, obj) -> str:
+        return obj.user.display_name or ''
+
+
 class DreamCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating dreams."""
 
@@ -374,11 +494,11 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         max_date = now + timedelta(days=1095)  # ~3 years
         if value < min_date:
             raise serializers.ValidationError(
-                "Target date must be at least 1 month from now."
+                _("Target date must be at least 1 month from now.")
             )
         if value > max_date:
             raise serializers.ValidationError(
-                "Target date must be within 3 years from now."
+                _("Target date must be within 3 years from now.")
             )
         return value
 
@@ -386,7 +506,7 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         """Validate, sanitize, and moderate dream title."""
         value = sanitize_text(value)
         if len(value) < 3:
-            raise serializers.ValidationError("Title must be at least 3 characters long")
+            raise serializers.ValidationError(_("Title must be at least 3 characters long"))
 
         from core.moderation import ContentModerationService
         result = ContentModerationService().moderate_text(value, context='dream_title')
@@ -399,7 +519,7 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         """Validate, sanitize, and moderate dream description."""
         value = sanitize_text(value)
         if len(value) < 10:
-            raise serializers.ValidationError("Description must be at least 10 characters long")
+            raise serializers.ValidationError(_("Description must be at least 10 characters long"))
 
         from core.moderation import ContentModerationService
         result = ContentModerationService().moderate_text(value, context='dream_description')
@@ -420,7 +540,7 @@ class DreamUpdateSerializer(serializers.ModelSerializer):
         model = Dream
         fields = [
             'title', 'description', 'category',
-            'target_date', 'priority', 'status'
+            'target_date', 'priority', 'status', 'is_public'
         ]
         extra_kwargs = {
             'title': {'help_text': 'Updated title for the dream.'},
@@ -442,11 +562,11 @@ class DreamUpdateSerializer(serializers.ModelSerializer):
         max_date = now + timedelta(days=1095)  # ~3 years
         if value < min_date:
             raise serializers.ValidationError(
-                "Target date must be at least 1 month from now."
+                _("Target date must be at least 1 month from now.")
             )
         if value > max_date:
             raise serializers.ValidationError(
-                "Target date must be within 3 years from now."
+                _("Target date must be within 3 years from now.")
             )
         return value
 

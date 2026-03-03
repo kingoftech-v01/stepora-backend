@@ -5,8 +5,11 @@ Provides strict validation for UUIDs, pagination parameters,
 search queries, and field-specific regex patterns.
 """
 
+import ipaddress
 import re
+import socket
 import uuid
+from urllib.parse import urlparse
 
 from rest_framework.exceptions import ValidationError
 
@@ -120,3 +123,39 @@ def validate_text_length(value, max_length=MAX_TEXT_FIELD_LENGTH, field_name='Te
             f'{field_name} must be at most {max_length} characters.'
         )
     return value
+
+
+def validate_url_no_ssrf(url):
+    """
+    Validate that a URL is safe to fetch (no SSRF).
+    Blocks private/reserved IP ranges, non-HTTP schemes, and localhost.
+    """
+    if not url or not isinstance(url, str):
+        raise ValidationError('URL is required.')
+
+    parsed = urlparse(url)
+
+    # Only allow http/https schemes
+    if parsed.scheme not in ('http', 'https'):
+        raise ValidationError('Only HTTP/HTTPS URLs are allowed.')
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValidationError('Invalid URL: no hostname.')
+
+    # Block localhost and common loopback names
+    blocked_hostnames = {'localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'}
+    if hostname.lower() in blocked_hostnames:
+        raise ValidationError('URLs pointing to localhost are not allowed.')
+
+    # Resolve hostname and check for private/reserved IPs
+    try:
+        resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _type, _proto, _canonname, sockaddr in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
+                raise ValidationError('URLs pointing to private/internal networks are not allowed.')
+    except socket.gaierror:
+        raise ValidationError('Could not resolve hostname.')
+
+    return url

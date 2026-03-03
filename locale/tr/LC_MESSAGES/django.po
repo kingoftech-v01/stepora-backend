@@ -1,0 +1,1524 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-02 20:16+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+#: apps/buddies/tasks.py:57
+msgid "Check in with your buddy!"
+msgstr "Arkadaşınla iletişime geç!"
+
+#: apps/buddies/tasks.py:58
+#, python-format
+msgid ""
+"It's been a while since you encouraged %(name)s. Send them some motivation!"
+msgstr "%(name)s'ı teşvik etmeyeli bir süre oldu. Biraz motivasyon gönder!"
+
+#: apps/buddies/tasks.py:60 apps/buddies/views.py:707
+msgid "your buddy"
+msgstr "arkadaşın"
+
+#: apps/buddies/views.py:162
+msgid "userId is required."
+msgstr "userId gereklidir."
+
+#: apps/buddies/views.py:194 apps/circles/views.py:752
+#: apps/conversations/views.py:762 apps/dreams/views.py:957
+#: apps/dreams/views.py:1114 apps/social/views.py:186 apps/social/views.py:341
+#: apps/social/views.py:489 apps/social/views.py:592 apps/social/views.py:624
+#: apps/social/views.py:726 apps/social/views.py:1726 apps/users/views.py:61
+msgid "User not found."
+msgstr "Kullanıcı bulunamadı."
+
+#: apps/buddies/views.py:262
+msgid "conversationId and content are required."
+msgstr "conversationId ve içerik gereklidir."
+
+#: apps/buddies/views.py:266
+msgid "Message too long. Maximum 5000 characters."
+msgstr "Mesaj çok uzun. Maksimum 5000 karakter."
+
+#: apps/buddies/views.py:272
+msgid "Invalid conversationId."
+msgstr "Geçersiz conversationId."
+
+#: apps/buddies/views.py:277
+msgid "Conversation not found."
+msgstr "Sohbet bulunamadı."
+
+#: apps/buddies/views.py:285
+msgid "Access denied."
+msgstr "Erişim reddedildi."
+
+#: apps/buddies/views.py:296
+msgid "Cannot determine recipient."
+msgstr "Alıcı belirlenemiyor."
+
+#: apps/buddies/views.py:300
+msgid "Cannot send message"
+msgstr "Mesaj gönderilemedi"
+
+#: apps/buddies/views.py:319
+#, python-format
+msgid "Message from %(name)s"
+msgstr "%(name)s'dan mesaj"
+
+#: apps/buddies/views.py:319 apps/buddies/views.py:697
+#: apps/conversations/views.py:863 apps/notifications/tasks.py:526
+msgid "Your buddy"
+msgstr "Arkadaşın"
+
+#: apps/buddies/views.py:361 apps/buddies/views.py:647
+#: apps/buddies/views.py:731
+msgid "Active buddy pairing not found."
+msgstr "Aktif arkadaş eşleştirmesi bulunamadı."
+
+#: apps/buddies/views.py:367 apps/buddies/views.py:653
+#: apps/buddies/views.py:737
+msgid "You are not part of this pairing."
+msgstr "Bu eşleştirmenin bir parçası değilsiniz."
+
+#: apps/buddies/views.py:426 apps/buddies/views.py:523
+msgid "You already have an active buddy pairing."
+msgstr "Zaten aktif bir arkadaş eşleştirmeniz var."
+
+#: apps/buddies/views.py:516
+msgid "You cannot pair with yourself."
+msgstr "Kendinizle eşleşemezsiniz."
+
+#: apps/buddies/views.py:531
+msgid "Partner user not found."
+msgstr "Partner kullanıcı bulunamadı."
+
+#: apps/buddies/views.py:542
+msgid "This user already has an active buddy pairing."
+msgstr "Bu kullanıcının zaten aktif bir arkadaş eşleştirmesi var."
+
+#: apps/buddies/views.py:562
+#, python-format
+msgid "Buddy pairing created with %(name)s."
+msgstr "%(name)s ile arkadaş eşleştirmesi oluşturuldu."
+
+#: apps/buddies/views.py:562 apps/social/views.py:367
+msgid "user"
+msgstr "kullanıcı"
+
+#: apps/buddies/views.py:587 apps/buddies/views.py:615
+msgid "Pending buddy pairing not found."
+msgstr "Bekleyen arkadaş eşleştirmesi bulunamadı."
+
+#: apps/buddies/views.py:594
+msgid "Buddy pairing accepted."
+msgstr "Arkadaş eşleştirmesi kabul edildi."
+
+#: apps/buddies/views.py:623
+msgid "Buddy pairing rejected."
+msgstr "Arkadaş eşleştirmesi reddedildi."
+
+#: apps/buddies/views.py:695
+msgid "Buddy Encouragement"
+msgstr "Arkadaş Teşviki"
+
+#: apps/buddies/views.py:697
+#, python-format
+msgid "%(name)s sent you encouragement!"
+msgstr "%(name)s sana teşvik gönderdi!"
+
+#: apps/buddies/views.py:707
+#, python-format
+msgid "Encouragement sent to %(name)s."
+msgstr "%(name)s'a teşvik gönderildi."
+
+#: apps/buddies/views.py:745
+msgid "Buddy pairing ended."
+msgstr "Arkadaş eşleştirmesi sona erdi."
+
+#: apps/calendar/serializers.py:93 apps/calendar/serializers.py:106
+#: apps/calendar/serializers.py:150
+msgid "End time must be after start time"
+msgstr "Bitiş zamanı başlangıç zamanından sonra olmalıdır"
+
+#: apps/calendar/serializers.py:154
+msgid "Day of week must be between 0 (Monday) and 6 (Sunday)"
+msgstr "Haftanın günü 0 (Pazartesi) ile 6 (Pazar) arasında olmalıdır"
+
+#: apps/calendar/views.py:106 apps/calendar/views.py:120
+msgid "This event conflicts with existing events."
+msgstr "Bu etkinlik mevcut etkinliklerle çakışıyor."
+
+#: apps/calendar/views.py:108 apps/calendar/views.py:122
+#: apps/calendar/views.py:157
+msgid "Set force=true to save anyway."
+msgstr "Yine de kaydetmek için force=true ayarlayın."
+
+#: apps/calendar/views.py:155
+msgid "This time conflicts with existing events."
+msgstr "Bu zaman mevcut etkinliklerle çakışıyor."
+
+#: apps/calendar/views.py:230
+msgid "start and end dates required (ISO format)"
+msgstr "Başlangıç ve bitiş tarihleri gerekli (ISO formatı)"
+
+#: apps/calendar/views.py:239
+msgid "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
+msgstr "Geçersiz tarih formatı. ISO formatı kullanın (YYYY-AA-GGTHH:DD:SS)"
+
+#: apps/calendar/views.py:307
+msgid "task_id and new_date required"
+msgstr "task_id ve new_date gerekli"
+
+#: apps/calendar/views.py:321
+msgid "Task rescheduled successfully"
+msgstr "Görev başarıyla yeniden planlandı"
+
+#: apps/calendar/views.py:328
+msgid "Task not found"
+msgstr "Görev bulunamadı"
+
+#: apps/calendar/views.py:333
+msgid "Invalid date format"
+msgstr "Geçersiz tarih formatı"
+
+#: apps/calendar/views.py:355
+msgid "date and duration_mins are required"
+msgstr "date ve duration_mins gerekli"
+
+#: apps/calendar/views.py:364
+msgid "Invalid date or duration format"
+msgstr "Geçersiz tarih veya süre formatı"
+
+#: apps/calendar/views.py:370
+msgid "Duration must be between 5 and 480 minutes"
+msgstr "Süre 5 ile 480 dakika arasında olmalıdır"
+
+#: apps/calendar/views.py:515
+msgid "Google Calendar integration is not configured."
+msgstr "Google Takvim entegrasyonu yapılandırılmamış."
+
+#: apps/calendar/views.py:554
+msgid "Authorization code is required."
+msgstr "Yetkilendirme kodu gerekli."
+
+#: apps/calendar/views.py:565
+#, python-format
+msgid "Token exchange failed: %(error)s"
+msgstr "Token değişimi başarısız: %(error)s"
+
+#: apps/calendar/views.py:609
+msgid "Google Calendar not connected."
+msgstr "Google Takvim bağlı değil."
+
+#: apps/calendar/views.py:636
+msgid "No integration found."
+msgstr "Entegrasyon bulunamadı."
+
+#: apps/calendar/views.py:663
+msgid "Feed not found."
+msgstr "Akış bulunamadı."
+
+#: apps/calendar/views.py:731
+msgid "Missing authorization code."
+msgstr "Yetkilendirme kodu eksik."
+
+#: apps/circles/serializers.py:291 apps/circles/serializers.py:425
+#: apps/circles/serializers.py:458 apps/circles/views.py:929
+#: apps/circles/views.py:1021
+msgid "Anonymous"
+msgstr "Anonim"
+
+#: apps/circles/views.py:210 apps/circles/views.py:1449
+msgid "You are already a member of this circle."
+msgstr "Zaten bu çevrenin üyesisiniz."
+
+#: apps/circles/views.py:217 apps/circles/views.py:1455
+msgid "This circle has reached its maximum number of members."
+msgstr "Bu çevre maksimum üye sayısına ulaştı."
+
+#: apps/circles/views.py:224
+msgid "This circle is private. You need an invitation to join."
+msgstr "Bu çevre özeldir. Katılmak için bir davet gerekir."
+
+#: apps/circles/views.py:235 apps/circles/views.py:1471
+#, python-format
+msgid "Successfully joined %(name)s."
+msgstr "%(name)s'a başarıyla katıldınız."
+
+#: apps/circles/views.py:268
+msgid "You are not a member of this circle."
+msgstr "Bu çevrenin üyesi değilsiniz."
+
+#: apps/circles/views.py:303
+#, python-format
+msgid "Successfully left %(name)s."
+msgstr "%(name)s'dan başarıyla ayrıldınız."
+
+#: apps/circles/views.py:328
+msgid "You must be a member to view the feed."
+msgstr "Akışı görüntülemek için üye olmalısınız."
+
+#: apps/circles/views.py:368
+msgid "You must be a member to post."
+msgstr "Gönderi paylaşmak için üye olmalısınız."
+
+#: apps/circles/views.py:429
+msgid "Only admins can update this circle."
+msgstr "Yalnızca yöneticiler bu çevreyi güncelleyebilir."
+
+#: apps/circles/views.py:460
+msgid "Only admins can delete this circle."
+msgstr "Yalnızca yöneticiler bu çevreyi silebilir."
+
+#: apps/circles/views.py:486 apps/circles/views.py:524
+#: apps/circles/views.py:565 apps/circles/views.py:598
+msgid "Post not found."
+msgstr "Gönderi bulunamadı."
+
+#: apps/circles/views.py:494
+msgid "You do not have permission to edit this post."
+msgstr "Bu gönderiyi düzenleme izniniz yok."
+
+#: apps/circles/views.py:531
+msgid "You do not have permission to delete this post."
+msgstr "Bu gönderiyi silme izniniz yok."
+
+#: apps/circles/views.py:558
+msgid "You must be a member to react."
+msgstr "Tepki vermek için üye olmalısınız."
+
+#: apps/circles/views.py:577
+msgid "Reaction added."
+msgstr "Tepki eklendi."
+
+#: apps/circles/views.py:578
+msgid "Reaction updated."
+msgstr "Tepki güncellendi."
+
+#: apps/circles/views.py:605
+msgid "No reaction found."
+msgstr "Tepki bulunamadı."
+
+#: apps/circles/views.py:607
+msgid "Reaction removed."
+msgstr "Tepki kaldırıldı."
+
+#: apps/circles/views.py:628
+msgid "Only admins can promote members."
+msgstr "Yalnızca yöneticiler üyeleri yükseltebilir."
+
+#: apps/circles/views.py:635 apps/circles/views.py:673
+#: apps/circles/views.py:710
+msgid "Member not found."
+msgstr "Üye bulunamadı."
+
+#: apps/circles/views.py:639
+msgid "Cannot change an admin role."
+msgstr "Yönetici rolü değiştirilemez."
+
+#: apps/circles/views.py:646
+#, python-format
+msgid "%(name)s promoted to moderator."
+msgstr "%(name)s moderatörlüğe yükseltildi."
+
+#: apps/circles/views.py:646 apps/circles/views.py:684
+msgid "User"
+msgstr "Kullanıcı"
+
+#: apps/circles/views.py:666
+msgid "Only admins can demote members."
+msgstr "Yalnızca yöneticiler üyeleri düşürebilir."
+
+#: apps/circles/views.py:677
+msgid "Only moderators can be demoted."
+msgstr "Yalnızca moderatörler düşürülebilir."
+
+#: apps/circles/views.py:684
+#, python-format
+msgid "%(name)s demoted to member."
+msgstr "%(name)s üyeliğe düşürüldü."
+
+#: apps/circles/views.py:703
+msgid "Only admins and moderators can remove members."
+msgstr "Yalnızca yöneticiler ve moderatörler üyeleri kaldırabilir."
+
+#: apps/circles/views.py:714
+msgid "Cannot remove an admin."
+msgstr "Yönetici kaldırılamaz."
+
+#: apps/circles/views.py:719
+msgid "Member removed from circle."
+msgstr "Üye çevreden kaldırıldı."
+
+#: apps/circles/views.py:740
+msgid "Only admins and moderators can invite users."
+msgstr "Yalnızca yöneticiler ve moderatörler kullanıcı davet edebilir."
+
+#: apps/circles/views.py:756
+msgid "User is already a member of this circle."
+msgstr "Kullanıcı zaten bu çevrenin üyesi."
+
+#: apps/circles/views.py:765
+msgid "An invitation is already pending for this user."
+msgstr "Bu kullanıcı için zaten bekleyen bir davet var."
+
+#: apps/circles/views.py:799
+msgid "Only admins and moderators can generate invite links."
+msgstr "Yalnızca yöneticiler ve moderatörler davet bağlantısı oluşturabilir."
+
+#: apps/circles/views.py:833
+msgid "Only admins and moderators can view invitations."
+msgstr "Yalnızca yöneticiler ve moderatörler davetleri görüntüleyebilir."
+
+#: apps/circles/views.py:864
+msgid "You must be a member of the circle."
+msgstr "Çevrenin üyesi olmalısınız."
+
+#: apps/circles/views.py:871 apps/circles/views.py:912
+msgid "Challenge not found."
+msgstr "Meydan okuma bulunamadı."
+
+#: apps/circles/views.py:875
+msgid "You must join the challenge first."
+msgstr "Önce meydan okumaya katılmalısınız."
+
+#: apps/circles/views.py:955
+msgid "You must be a member to view chat."
+msgstr "Sohbeti görüntülemek için üye olmalısınız."
+
+#: apps/circles/views.py:996
+msgid "You must be a member to send messages."
+msgstr "Mesaj göndermek için üye olmalısınız."
+
+#: apps/circles/views.py:1003
+msgid "Content is required."
+msgstr "İçerik gereklidir."
+
+#: apps/circles/views.py:1058
+msgid "You must be a member to start a call."
+msgstr "Arama başlatmak için üye olmalısınız."
+
+#: apps/circles/views.py:1066
+msgid "A call is already active in this circle."
+msgstr "Bu çevrede zaten aktif bir arama var."
+
+#: apps/circles/views.py:1073 apps/conversations/views.py:756
+msgid "call_type must be voice or video."
+msgstr "call_type voice veya video olmalıdır."
+
+#: apps/circles/views.py:1107 apps/circles/views.py:1322
+#: apps/conversations/views.py:1027 apps/dreams/views.py:980
+#: apps/notifications/tasks.py:510 apps/social/views.py:1542
+#: apps/social/views.py:1596 apps/social/views.py:1670
+msgid "Someone"
+msgstr "Birisi"
+
+#: apps/circles/views.py:1137
+msgid "You must be a member."
+msgstr "Üye olmalısınız."
+
+#: apps/circles/views.py:1144
+msgid "No active call in this circle."
+msgstr "Bu çevrede aktif arama yok."
+
+#: apps/circles/views.py:1180 apps/circles/views.py:1227
+msgid "No active call."
+msgstr "Aktif arama yok."
+
+#: apps/circles/views.py:1190
+msgid "You are not in this call."
+msgstr "Bu aramada değilsiniz."
+
+#: apps/circles/views.py:1235
+msgid "Only the initiator or an admin can end the call."
+msgstr "Yalnızca başlatıcı veya yönetici aramayı sonlandırabilir."
+
+#: apps/circles/views.py:1328
+#, python-format
+msgid "%(name)s started a %(type)s call"
+msgstr "%(name)s bir %(type)s araması başlattı"
+
+#: apps/circles/views.py:1329
+#, python-format
+msgid "Join the call in %(circle)s"
+msgstr "%(circle)s'daki aramaya katılın"
+
+#: apps/circles/views.py:1381
+msgid "You must be a member of the circle to join this challenge."
+msgstr "Bu meydan okumaya katılmak için çevrenin üyesi olmalısınız."
+
+#: apps/circles/views.py:1388
+msgid "You have already joined this challenge."
+msgstr "Bu meydan okumaya zaten katıldınız."
+
+#: apps/circles/views.py:1395
+#, python-format
+msgid "Successfully joined challenge: %(title)s."
+msgstr "Meydan okumaya başarıyla katıldınız: %(title)s."
+
+#: apps/circles/views.py:1426
+msgid "Invalid or expired invite code."
+msgstr "Geçersiz veya süresi dolmuş davet kodu."
+
+#: apps/circles/views.py:1434
+msgid "This invitation has expired."
+msgstr "Bu davet süresi dolmuş."
+
+#: apps/circles/views.py:1443
+msgid "This invitation is for another user."
+msgstr "Bu davet başka bir kullanıcı için."
+
+#: apps/conversations/serializers.py:49
+msgid "Message content cannot be empty"
+msgstr "Mesaj içeriği boş olamaz"
+
+#: apps/conversations/serializers.py:184
+#, python-format
+msgid "Invalid conversation type. Must be one of: %(types)s"
+msgstr "Geçersiz sohbet türü. Şunlardan biri olmalı: %(types)s"
+
+#: apps/conversations/serializers.py:195
+#, python-format
+msgid ""
+"Conversations of type '%(type)s' must be linked to a dream. Please provide a "
+"dream ID."
+msgstr "'%(type)s' türündeki sohbetler bir hayale bağlı olmalıdır. Lütfen bir hayal ID'si sağlayın."
+
+#: apps/conversations/views.py:270
+#, python-format
+msgid "AI produced an invalid response: %(message)s"
+msgstr "AI geçersiz bir yanıt üretti: %(message)s"
+
+#: apps/conversations/views.py:300
+msgid "No audio file provided."
+msgstr "Ses dosyası sağlanmadı."
+
+#: apps/conversations/views.py:304
+msgid "Audio file too large. Max 25MB."
+msgstr "Ses dosyası çok büyük. Maks 25MB."
+
+#: apps/conversations/views.py:315
+#, python-format
+msgid ""
+"Unsupported audio format: %(format)s. Allowed: mp3, m4a, wav, webm, ogg, "
+"flac, aac."
+msgstr "Desteklenmeyen ses formatı: %(format)s. İzin verilen: mp3, m4a, wav, webm, ogg, flac, aac."
+
+#: apps/conversations/views.py:373
+msgid "No image file provided."
+msgstr "Görsel dosyası sağlanmadı."
+
+#: apps/conversations/views.py:377
+msgid "Image too large. Max 20MB."
+msgstr "Görsel çok büyük. Maks 20MB."
+
+#: apps/conversations/views.py:407
+msgid "Invalid image URL."
+msgstr "Geçersiz görsel URL'si."
+
+#: apps/conversations/views.py:490 apps/conversations/views.py:512
+#: apps/conversations/views.py:535
+msgid "Message not found."
+msgstr "Mesaj bulunamadı."
+
+#: apps/conversations/views.py:539
+msgid "emoji is required."
+msgstr "emoji gereklidir."
+
+#: apps/conversations/views.py:637
+msgid "PDF export is not available. Install reportlab."
+msgstr "PDF dışa aktarma kullanılamıyor. reportlab yükleyin."
+
+#: apps/conversations/views.py:753
+msgid "callee_id is required."
+msgstr "callee_id gereklidir."
+
+#: apps/conversations/views.py:765
+msgid "Cannot call yourself."
+msgstr "Kendinizi arayamazsınız."
+
+#: apps/conversations/views.py:770
+msgid "Cannot call this user"
+msgstr "Bu kullanıcı aranamaz"
+
+#: apps/conversations/views.py:826 apps/conversations/views.py:851
+#: apps/conversations/views.py:902 apps/conversations/views.py:926
+#: apps/conversations/views.py:996
+msgid "Call not found."
+msgstr "Arama bulunamadı."
+
+#: apps/conversations/views.py:829
+msgid "Only the callee can accept."
+msgstr "Yalnızca aranan kabul edebilir."
+
+#: apps/conversations/views.py:832
+#, python-format
+msgid "Call is %(status)s, cannot accept."
+msgstr "Arama %(status)s durumunda, kabul edilemez."
+
+#: apps/conversations/views.py:854
+msgid "Only the callee can reject."
+msgstr "Yalnızca aranan reddedebilir."
+
+#: apps/conversations/views.py:867
+#, python-format
+msgid "%(name)s declined your call"
+msgstr "%(name)s aramanızı reddetti"
+
+#: apps/conversations/views.py:905 apps/conversations/views.py:998
+msgid "Not a participant."
+msgstr "Katılımcı değil."
+
+#: apps/conversations/views.py:929
+msgid "Only the caller can cancel."
+msgstr "Yalnızca arayan iptal edebilir."
+
+#: apps/conversations/views.py:932
+#, python-format
+msgid "Call is %(status)s, cannot cancel."
+msgstr "Arama %(status)s durumunda, iptal edilemez."
+
+#: apps/conversations/views.py:1041
+#, python-format
+msgid "Incoming %(call_type)s call"
+msgstr "Gelen %(call_type)s araması"
+
+#: apps/conversations/views.py:1042
+#, python-format
+msgid "%(name)s is calling you"
+msgstr "%(name)s sizi arıyor"
+
+#: apps/dreams/serializers.py:497 apps/dreams/serializers.py:565
+msgid "Target date must be at least 1 month from now."
+msgstr "Hedef tarih en az 1 ay sonra olmalıdır."
+
+#: apps/dreams/serializers.py:501 apps/dreams/serializers.py:569
+msgid "Target date must be within 3 years from now."
+msgstr "Hedef tarih 3 yıl içinde olmalıdır."
+
+#: apps/dreams/serializers.py:509
+msgid "Title must be at least 3 characters long"
+msgstr "Başlık en az 3 karakter uzunluğunda olmalıdır"
+
+#: apps/dreams/serializers.py:522
+msgid "Description must be at least 10 characters long"
+msgstr "Açıklama en az 10 karakter uzunluğunda olmalıdır"
+
+#: apps/dreams/tasks.py:66
+msgid "Starting plan generation..."
+msgstr "Plan oluşturma başlıyor..."
+
+#: apps/dreams/tasks.py:88
+msgid "Analyzing your calibration answers..."
+msgstr "Kalibrasyon yanıtlarınız analiz ediliyor..."
+
+#: apps/dreams/tasks.py:104
+msgid "AI is building your personalized plan..."
+msgstr "AI kişiselleştirilmiş planınızı oluşturuyor..."
+
+#: apps/dreams/tasks.py:120
+msgid "Saving your plan..."
+msgstr "Planınız kaydediliyor..."
+
+#: apps/dreams/tasks.py:248
+msgid "Plan generated successfully!"
+msgstr "Plan başarıyla oluşturuldu!"
+
+#: apps/dreams/tasks.py:259
+msgid "Dream not found"
+msgstr "Hayal bulunamadı"
+
+#: apps/dreams/tasks.py:263
+#, python-format
+msgid "AI produced an invalid plan: %(msg)s"
+msgstr "AI geçersiz bir plan üretti: %(msg)s"
+
+#: apps/dreams/tasks.py:304
+#, python-format
+msgid "Get started: %(title)s"
+msgstr "Başlayın: %(title)s"
+
+#: apps/dreams/tasks.py:305
+msgid "First steps toward your dream"
+msgstr "Hayalinize doğru ilk adımlar"
+
+#: apps/dreams/tasks.py:313 apps/dreams/views.py:647
+#, python-format
+msgid "Start now: %(action)s"
+msgstr "Şimdi başlayın: %(action)s"
+
+#: apps/dreams/tasks.py:314
+msgid "This micro-action takes only 2 minutes and will help you get started!"
+msgstr "Bu mikro-eylem sadece 2 dakika sürer ve başlamanıza yardımcı olur!"
+
+#: apps/dreams/tasks.py:329
+msgid "Ready to get started in 2 minutes?"
+msgstr "2 dakikada başlamaya hazır mısınız?"
+
+#: apps/dreams/tasks.py:330
+#, python-format
+msgid "We created a micro-action for your dream: %(action)s"
+msgstr "Hayaliniz için bir mikro-eylem oluşturduk: %(action)s"
+
+#: apps/dreams/tasks.py:421
+msgid "Tasks automatically scheduled"
+msgstr "Görevler otomatik olarak planlandı"
+
+#: apps/dreams/tasks.py:422
+#, python-format
+msgid "%(count)s tasks have been added to your calendar!"
+msgstr "%(count)s görev takviminize eklendi!"
+
+#: apps/dreams/tasks.py:536
+msgid "Dream achieved!"
+msgstr "Hayal gerçekleşti!"
+
+#: apps/dreams/tasks.py:537
+#, python-format
+msgid "Congratulations! You achieved your dream: %(title)s"
+msgstr "Tebrikler! Hayalinizi gerçekleştirdiniz: %(title)s"
+
+#: apps/dreams/tasks.py:593
+#, python-format
+msgid "%(count)s overdue task(s)"
+msgstr "%(count)s gecikmiş görev"
+
+#: apps/dreams/tasks.py:594
+#, python-format
+msgid "You have %(count)s task(s) waiting to be completed!"
+msgstr "Tamamlanmayı bekleyen %(count)s göreviniz var!"
+
+#: apps/dreams/tasks.py:658
+msgid "Suggestions to help you succeed"
+msgstr "Başarmanıza yardımcı öneriler"
+
+#: apps/dreams/tasks.py:715
+msgid "Your vision is ready!"
+msgstr "Vizyonunuz hazır!"
+
+#: apps/dreams/tasks.py:716
+#, python-format
+msgid "We created an inspiring image for your dream: %(title)s"
+msgstr "Hayaliniz için ilham verici bir görsel oluşturduk: %(title)s"
+
+#: apps/dreams/tasks.py:768
+msgid "Dream archived"
+msgstr "Hayal arşivlendi"
+
+#: apps/dreams/tasks.py:769
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been automatically archived after 90 days of "
+"inactivity."
+msgstr "Hayaliniz \\\"%(title)s\\\" 90 gün hareketsizlik sonrasında otomatik olarak arşivlendi."
+
+#: apps/dreams/tasks.py:821
+msgid "Dream paused due to inactivity"
+msgstr "Hareketsizlik nedeniyle hayal duraklatıldı"
+
+#: apps/dreams/tasks.py:823
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been paused after 30 days of inactivity. Open "
+"the app to resume it!"
+msgstr "Hayaliniz \\\"%(title)s\\\" 30 gün hareketsizlik sonrasında duraklatıldı. Devam etmek için uygulamayı açın!"
+
+#: apps/dreams/tasks.py:850
+msgid "Quarter of the way there!"
+msgstr "Yolun dörtte biri tamamlandı!"
+
+#: apps/dreams/tasks.py:851
+msgid "Halfway to your dream!"
+msgstr "Hayalinizin yarısına geldiniz!"
+
+#: apps/dreams/tasks.py:852
+msgid "Almost there! Just a little more!"
+msgstr "Neredeyse tamam! Biraz daha!"
+
+#: apps/dreams/tasks.py:862
+#, python-format
+msgid "%(threshold)s%% - %(message)s"
+msgstr "%(threshold)s%% - %(message)s"
+
+#: apps/dreams/tasks.py:863
+#, python-format
+msgid "Your dream \"%(title)s\" is now %(threshold)s%% complete. %(message)s"
+msgstr "Hayaliniz \\\"%(title)s\\\" şimdi %(threshold)s%% tamamlandı. %(message)s"
+
+#: apps/dreams/views.py:258
+#, python-format
+msgid "AI produced an invalid analysis: %(msg)s"
+msgstr "AI geçersiz bir analiz üretti: %(msg)s"
+
+#: apps/dreams/views.py:290
+msgid "Calibration already completed for this dream"
+msgstr "Bu hayal için kalibrasyon zaten tamamlandı"
+
+#: apps/dreams/views.py:334
+#, python-format
+msgid "AI produced invalid calibration questions: %(msg)s"
+msgstr "AI geçersiz kalibrasyon soruları üretti: %(msg)s"
+
+#: apps/dreams/views.py:380
+msgid "No answers provided"
+msgstr "Yanıt sağlanmadı"
+
+#: apps/dreams/views.py:448 apps/dreams/views.py:481
+msgid "Calibration complete. Ready to generate your personalized plan."
+msgstr "Kalibrasyon tamamlandı. Kişiselleştirilmiş planınız oluşturulmaya hazır."
+
+#: apps/dreams/views.py:509
+#, python-format
+msgid "AI produced invalid follow-up questions: %(msg)s"
+msgstr "AI geçersiz takip soruları üretti: %(msg)s"
+
+#: apps/dreams/views.py:536
+msgid "Calibration skipped. You can generate a plan with basic info."
+msgstr "Kalibrasyon atlandı. Temel bilgilerle plan oluşturabilirsiniz."
+
+#: apps/dreams/views.py:563
+msgid "Plan is being generated..."
+msgstr "Plan oluşturuluyor..."
+
+#: apps/dreams/views.py:573
+msgid "Plan generation started. This may take a few minutes."
+msgstr "Plan oluşturma başladı. Bu birkaç dakika sürebilir."
+
+#: apps/dreams/views.py:594
+msgid "Plan already exists."
+msgstr "Plan zaten mevcut."
+
+#: apps/dreams/views.py:595
+msgid "No plan generation in progress."
+msgstr "Devam eden plan oluşturma yok."
+
+#: apps/dreams/views.py:619
+msgid "2-minute start already generated"
+msgstr "2 dakikalık başlangıç zaten oluşturuldu"
+
+#: apps/dreams/views.py:639
+msgid "Getting Started"
+msgstr "Başlangıç"
+
+#: apps/dreams/views.py:640
+msgid "Initial steps to begin your journey"
+msgstr "Yolculuğunuza başlamak için ilk adımlar"
+
+#: apps/dreams/views.py:718
+#, python-format
+msgid "AI-generated vision for \"%(title)s\""
+msgstr "\\\"%(title)s\\\" için AI tarafından oluşturulan vizyon"
+
+#: apps/dreams/views.py:784
+msgid "Provide image file or image_url."
+msgstr "Görsel dosyası veya image_url sağlayın."
+
+#: apps/dreams/views.py:823
+msgid "Image not found."
+msgstr "Görsel bulunamadı."
+
+#: apps/dreams/views.py:824
+msgid "Image removed."
+msgstr "Görsel kaldırıldı."
+
+#: apps/dreams/views.py:864
+msgid "Dream is already completed."
+msgstr "Hayal zaten tamamlandı."
+
+#: apps/dreams/views.py:888
+#, python-format
+msgid "%(title)s (Copy)"
+msgstr "%(title)s (Kopya)"
+
+#: apps/dreams/views.py:948
+msgid "You cannot share a dream with yourself."
+msgstr "Kendinizle hayal paylaşamazsınız."
+
+#: apps/dreams/views.py:963
+msgid "Dream already shared with this user."
+msgstr "Hayal zaten bu kullanıcıyla paylaşıldı."
+
+#: apps/dreams/views.py:980
+#, python-format
+msgid "%(name)s shared a dream with you!"
+msgstr "%(name)s sizinle bir hayal paylaştı!"
+
+#: apps/dreams/views.py:981
+msgid "You now have access to view this dream."
+msgstr "Artık bu hayali görüntüleme erişiminiz var."
+
+#: apps/dreams/views.py:1018
+msgid "Share not found."
+msgstr "Paylaşım bulunamadı."
+
+#: apps/dreams/views.py:1022
+msgid "Dream unshared."
+msgstr "Hayal paylaşımı kaldırıldı."
+
+#: apps/dreams/views.py:1069
+msgid "Tag not found on this dream."
+msgstr "Bu hayalde etiket bulunamadı."
+
+#: apps/dreams/views.py:1073
+msgid "Tag removed."
+msgstr "Etiket kaldırıldı."
+
+#: apps/dreams/views.py:1094
+msgid "Only the dream owner can add collaborators."
+msgstr "Yalnızca hayal sahibi işbirlikçi ekleyebilir."
+
+#: apps/dreams/views.py:1106
+msgid "You cannot add yourself as a collaborator."
+msgstr "Kendinizi işbirlikçi olarak ekleyemezsiniz."
+
+#: apps/dreams/views.py:1118
+msgid "User is already a collaborator on this dream."
+msgstr "Kullanıcı zaten bu hayalin işbirlikçisi."
+
+#: apps/dreams/views.py:1169
+msgid "Only the dream owner can remove collaborators."
+msgstr "Yalnızca hayal sahibi işbirlikçileri kaldırabilir."
+
+#: apps/dreams/views.py:1180
+msgid "Collaborator not found."
+msgstr "İşbirlikçi bulunamadı."
+
+#: apps/dreams/views.py:1184
+msgid "Collaborator removed."
+msgstr "İşbirlikçi kaldırıldı."
+
+#: apps/dreams/views.py:1354 apps/social/views.py:1336
+#: apps/social/views.py:1869
+msgid "Dream not found."
+msgstr "Hayal bulunamadı."
+
+#: apps/dreams/views.py:1446
+msgid "PDF generation requires the reportlab package."
+msgstr "PDF oluşturma reportlab paketini gerektirir."
+
+#: apps/dreams/views.py:1572
+msgid "Dream milestone is already completed."
+msgstr "Hayal kilometre taşı zaten tamamlandı."
+
+#: apps/dreams/views.py:1624
+msgid "Goal is already completed."
+msgstr "Hedef zaten tamamlandı."
+
+#: apps/dreams/views.py:1729
+msgid "Task is already completed."
+msgstr "Görev zaten tamamlandı."
+
+#: apps/leagues/views.py:175
+msgid "League not found."
+msgstr "Lig bulunamadı."
+
+#: apps/leagues/views.py:182
+msgid "No leagues configured."
+msgstr "Yapılandırılmış lig yok."
+
+#: apps/leagues/views.py:234 apps/leagues/views.py:312
+#: apps/leagues/views.py:424
+msgid "No active season."
+msgstr "Aktif sezon yok."
+
+#: apps/leagues/views.py:328
+msgid "Could not create standing. No leagues configured."
+msgstr "Sıralama oluşturulamadı. Yapılandırılmış lig yok."
+
+#: apps/leagues/views.py:491
+msgid "Season has not ended yet."
+msgstr "Sezon henüz bitmedi."
+
+#: apps/leagues/views.py:504
+msgid "No reward found for this season."
+msgstr "Bu sezon için ödül bulunamadı."
+
+#: apps/leagues/views.py:510
+msgid "Rewards have already been claimed."
+msgstr "Ödüller zaten talep edildi."
+
+#: apps/notifications/serializers.py:166
+msgid "Invalid FCM token."
+msgstr "Geçersiz FCM tokeni."
+
+#: apps/notifications/serializers.py:168
+msgid "FCM token exceeds maximum length."
+msgstr "FCM tokeni maksimum uzunluğu aşıyor."
+
+#: apps/notifications/tasks.py:117
+msgid "Daily motivation"
+msgstr "Günlük motivasyon"
+
+#: apps/notifications/tasks.py:208
+msgid "Your weekly report"
+msgstr "Haftalık raporunuz"
+
+#: apps/notifications/tasks.py:291
+msgid "We are still here for you"
+msgstr "Hâlâ sizin yanınızdayız"
+
+#: apps/notifications/tasks.py:359
+#, python-format
+msgid "Reminder: %(title)s"
+msgstr "Hatırlatma: %(title)s"
+
+#: apps/notifications/tasks.py:360
+msgid "It's time to work on your goal!"
+msgstr "Hedefiniz üzerinde çalışma zamanı!"
+
+#: apps/notifications/tasks.py:423
+#, python-format
+msgid "%(days)s-day streak!"
+msgstr "%(days)s günlük seri!"
+
+#: apps/notifications/tasks.py:424
+#, python-format
+msgid ""
+"Incredible! You maintained your streak for %(days)s consecutive days. Keep "
+"it up!"
+msgstr "İnanılmaz! %(days)s gün üst üste serinizi korudunuz. Devam edin!"
+
+#: apps/notifications/tasks.py:460
+#, python-format
+msgid "Level %(level)s reached!"
+msgstr "Seviye %(level)s'e ulaşıldı!"
+
+#: apps/notifications/tasks.py:461
+#, python-format
+msgid ""
+"Congratulations! You reached level %(level)s. Keep achieving your dreams!"
+msgstr "Tebrikler! Seviye %(level)s'e ulaştınız. Hayallerinizi gerçekleştirmeye devam edin!"
+
+#: apps/notifications/tasks.py:514
+#, python-format
+msgid "Missed %(call_type)s call"
+msgstr "Cevapsız %(call_type)s araması"
+
+#: apps/notifications/tasks.py:515
+#, python-format
+msgid "%(name)s tried to call you"
+msgstr "%(name)s sizi aramaya çalıştı"
+
+#: apps/notifications/tasks.py:530 apps/notifications/tasks.py:555
+#, python-format
+msgid "%(name)s didn't answer"
+msgstr "%(name)s cevap vermedi"
+
+#: apps/notifications/tasks.py:531
+#, python-format
+msgid "Your %(call_type)s call was not answered"
+msgstr "%(call_type)s aramanız cevaplanmadı"
+
+#: apps/notifications/tasks.py:566
+#, python-format
+msgid "Missed %(call_type)s call from %(name)s"
+msgstr "%(name)s'dan cevapsız %(call_type)s araması"
+
+#: apps/notifications/tasks.py:635
+msgid "Task Due"
+msgstr "Görev vadesi"
+
+#: apps/notifications/tasks.py:646 apps/notifications/tasks.py:660
+#, python-format
+msgid "%(title)s"
+msgstr "%(title)s"
+
+#: apps/notifications/tasks.py:647 apps/notifications/tasks.py:661
+msgid "Time to work on your task!"
+msgstr "Göreviniz üzerinde çalışma zamanı!"
+
+#: apps/notifications/templates/notifications/email/notification.html:25
+#: apps/notifications/templates/notifications/email/notification.txt:3
+msgid "Hi"
+msgstr "Merhaba"
+
+#: apps/notifications/templates/notifications/email/notification.html:27
+#: apps/notifications/templates/notifications/email/notification.txt:7
+msgid "Open DreamPlanner"
+msgstr "DreamPlanner'ı Aç"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "DreamPlanner"
+msgstr "DreamPlanner"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "Turn your dreams into reality"
+msgstr "Hayallerinizi gerçeğe dönüştürün"
+
+#: apps/notifications/templates/notifications/email/notification.html:31
+msgid "You can manage notification preferences in your profile settings."
+msgstr "Profil ayarlarınızdan bildirim tercihlerini yönetebilirsiniz."
+
+#: apps/notifications/templates/notifications/email/notification.txt:10
+msgid "DreamPlanner - Turn your dreams into reality"
+msgstr "DreamPlanner - Hayallerinizi gerçeğe dönüştürün"
+
+#: apps/notifications/templates/notifications/email/notification.txt:11
+msgid "Manage notification preferences in your profile settings."
+msgstr "Profil ayarlarınızdan bildirim tercihlerini yönetin."
+
+#: apps/search/views.py:34
+msgid "Query must be at least 2 characters."
+msgstr "Sorgu en az 2 karakter olmalıdır."
+
+#: apps/social/serializers.py:490
+msgid "Cannot provide both image_url and an uploaded file."
+msgstr "Hem image_url hem de yüklenen dosya sağlanamaz."
+
+#: apps/social/serializers.py:494
+msgid "Only one media file (image, video, or audio) can be uploaded per post."
+msgstr "Gönderi başına yalnızca bir medya dosyası (görsel, video veya ses) yüklenebilir."
+
+#: apps/social/serializers.py:501
+msgid "Event title is required for event posts."
+msgstr "Etkinlik gönderileri için etkinlik başlığı gereklidir."
+
+#: apps/social/serializers.py:505
+msgid "Event type is required for event posts."
+msgstr "Etkinlik gönderileri için etkinlik türü gereklidir."
+
+#: apps/social/serializers.py:509
+msgid "Event start and end times are required."
+msgstr "Etkinlik başlangıç ve bitiş zamanları gereklidir."
+
+#: apps/social/serializers.py:513
+msgid "Event end time must be after start time."
+msgstr "Etkinlik bitiş zamanı başlangıç zamanından sonra olmalıdır."
+
+#: apps/social/serializers.py:518 apps/social/serializers.py:688
+msgid "Meeting link is required for virtual events."
+msgstr "Sanal etkinlikler için toplantı bağlantısı gereklidir."
+
+#: apps/social/serializers.py:781
+msgid "A story requires an image or video."
+msgstr "Hikaye için görsel veya video gereklidir."
+
+#: apps/social/serializers.py:783
+msgid "Only one media file per story."
+msgstr "Hikaye başına yalnızca bir medya dosyası."
+
+#: apps/social/views.py:177
+msgid "You cannot send a friend request to yourself."
+msgstr "Kendinize arkadaşlık isteği gönderemezsiniz."
+
+#: apps/social/views.py:196
+msgid "Cannot send friend request to this user."
+msgstr "Bu kullanıcıya arkadaşlık isteği gönderilemez."
+
+#: apps/social/views.py:209
+msgid "You are already friends with this user."
+msgstr "Bu kullanıcıyla zaten arkadaşsınız."
+
+#: apps/social/views.py:214
+msgid "A friend request is already pending."
+msgstr "Bir arkadaşlık isteği zaten beklemede."
+
+#: apps/social/views.py:224 apps/social/views.py:235
+msgid "Friend request sent."
+msgstr "Arkadaşlık isteği gönderildi."
+
+#: apps/social/views.py:264 apps/social/views.py:298 apps/social/views.py:674
+msgid "Friend request not found."
+msgstr "Arkadaşlık isteği bulunamadı."
+
+#: apps/social/views.py:271
+msgid "Friend request accepted."
+msgstr "Arkadaşlık isteği kabul edildi."
+
+#: apps/social/views.py:305
+msgid "Friend request rejected."
+msgstr "Arkadaşlık isteği reddedildi."
+
+#: apps/social/views.py:333
+msgid "You cannot follow yourself."
+msgstr "Kendinizi takip edemezsiniz."
+
+#: apps/social/views.py:351
+msgid "Cannot follow this user."
+msgstr "Bu kullanıcı takip edilemez."
+
+#: apps/social/views.py:357
+msgid "You are already following this user."
+msgstr "Bu kullanıcıyı zaten takip ediyorsunuz."
+
+#: apps/social/views.py:367
+#, python-format
+msgid "Now following %(name)s."
+msgstr "Artık %(name)s'ı takip ediyorsunuz."
+
+#: apps/social/views.py:390
+msgid "You are not following this user."
+msgstr "Bu kullanıcıyı takip etmiyorsunuz."
+
+#: apps/social/views.py:394
+msgid "Successfully unfollowed."
+msgstr "Takip başarıyla bırakıldı."
+
+#: apps/social/views.py:416
+msgid "Friendship not found."
+msgstr "Arkadaşlık bulunamadı."
+
+#: apps/social/views.py:421
+msgid "Friend removed."
+msgstr "Arkadaş kaldırıldı."
+
+#: apps/social/views.py:481
+msgid "You cannot block yourself."
+msgstr "Kendinizi engelleyemezsiniz."
+
+#: apps/social/views.py:495
+msgid "User is already blocked."
+msgstr "Kullanıcı zaten engelli."
+
+#: apps/social/views.py:518
+msgid "User blocked."
+msgstr "Kullanıcı engellendi."
+
+#: apps/social/views.py:541
+msgid "Block not found."
+msgstr "Engel bulunamadı."
+
+#: apps/social/views.py:545
+msgid "User unblocked."
+msgstr "Kullanıcının engeli kaldırıldı."
+
+#: apps/social/views.py:584
+msgid "You cannot report yourself."
+msgstr "Kendinizi şikayet edemezsiniz."
+
+#: apps/social/views.py:604
+msgid "Report submitted. Thank you for helping keep our community safe."
+msgstr "Şikayet gönderildi. Topluluğumuzu güvende tutmaya yardımcı olduğunuz için teşekkürler."
+
+#: apps/social/views.py:679
+msgid "Friend request cancelled."
+msgstr "Arkadaşlık isteği iptal edildi."
+
+#: apps/social/views.py:1126 apps/social/views.py:1179
+msgid "Activity not found."
+msgstr "Aktivite bulunamadı."
+
+#: apps/social/views.py:1186
+msgid "text is required."
+msgstr "Metin gereklidir."
+
+#: apps/social/views.py:1251
+msgid "query is required."
+msgstr "Sorgu gereklidir."
+
+#: apps/social/views.py:1263
+msgid "Search recorded."
+msgstr "Arama kaydedildi."
+
+#: apps/social/views.py:1274
+msgid "Recent searches cleared."
+msgstr "Son aramalar temizlendi."
+
+#: apps/social/views.py:1292
+msgid "Search not found."
+msgstr "Arama bulunamadı."
+
+#: apps/social/views.py:1297
+msgid "Search removed."
+msgstr "Arama kaldırıldı."
+
+#: apps/social/views.py:1352
+msgid "Goal not found."
+msgstr "Hedef bulunamadı."
+
+#: apps/social/views.py:1363
+msgid "Milestone not found."
+msgstr "Kilometre taşı bulunamadı."
+
+#: apps/social/views.py:1374
+msgid "Task not found."
+msgstr "Görev bulunamadı."
+
+#: apps/social/views.py:1432
+msgid "You can only edit your own posts."
+msgstr "Yalnızca kendi gönderilerinizi düzenleyebilirsiniz."
+
+#: apps/social/views.py:1463
+msgid "You can only delete your own posts."
+msgstr "Yalnızca kendi gönderilerinizi silebilirsiniz."
+
+#: apps/social/views.py:1542
+#, python-format
+msgid "%(name)s liked your dream post"
+msgstr "%(name)s hayal gönderinizi beğendi"
+
+#: apps/social/views.py:1565
+msgid "content is required."
+msgstr "İçerik gereklidir."
+
+#: apps/social/views.py:1579
+msgid "Parent comment not found."
+msgstr "Üst yorum bulunamadı."
+
+#: apps/social/views.py:1596
+#, python-format
+msgid "%(name)s commented on your post"
+msgstr "%(name)s gönderinize yorum yaptı"
+
+#: apps/social/views.py:1647
+#, python-format
+msgid "encouragement_type must be one of: %(types)s"
+msgstr "encouragement_type şunlardan biri olmalı: %(types)s"
+
+#: apps/social/views.py:1670
+#, python-format
+msgid "%(name)s encouraged you: %(type)s"
+msgstr "%(name)s sizi teşvik etti: %(type)s"
+
+#: apps/social/views.py:1733
+msgid "Cannot view this user."
+msgstr "Bu kullanıcı görüntülenemez."
+
+#: apps/social/views.py:1898
+msgid "You can only edit your own events."
+msgstr "Yalnızca kendi etkinliklerinizi düzenleyebilirsiniz."
+
+#: apps/social/views.py:1927
+msgid "You can only cancel your own events."
+msgstr "Yalnızca kendi etkinliklerinizi iptal edebilirsiniz."
+
+#: apps/social/views.py:1949
+msgid "Cannot register for a cancelled or completed event."
+msgstr "İptal edilmiş veya tamamlanmış bir etkinliğe kayıt olunamaz."
+
+#: apps/social/views.py:1960
+msgid "Event is full."
+msgstr "Etkinlik dolu."
+
+#: apps/social/views.py:2001
+msgid "Not registered for this event."
+msgstr "Bu etkinliğe kayıtlı değilsiniz."
+
+#: apps/social/views.py:2136
+msgid "You can only delete your own stories."
+msgstr "Yalnızca kendi hikayelerinizi silebilirsiniz."
+
+#: apps/social/views.py:2273
+msgid "You can only see viewers of your own stories."
+msgstr "Yalnızca kendi hikayelerinizin görüntüleyenlerini görebilirsiniz."
+
+#: apps/store/views.py:363 apps/store/views.py:420 apps/store/views.py:478
+msgid "Store item not found."
+msgstr "Mağaza öğesi bulunamadı."
+
+#: apps/store/views.py:532
+msgid "Item not found."
+msgstr "Öğe bulunamadı."
+
+#: apps/store/views.py:537
+msgid "Recipient not found."
+msgstr "Alıcı bulunamadı."
+
+#: apps/subscriptions/views.py:81
+msgid "No active subscription. You are on the free plan."
+msgstr "Aktif abonelik yok. Ücretsiz plandasınız."
+
+#: apps/subscriptions/views.py:125 apps/subscriptions/views.py:162
+#: apps/subscriptions/views.py:189 apps/subscriptions/views.py:221
+#: apps/subscriptions/views.py:277 apps/subscriptions/views.py:305
+#: apps/subscriptions/views.py:336 apps/subscriptions/views.py:366
+msgid "Payment service error. Please try again later."
+msgstr "Ödeme hizmeti hatası. Lütfen daha sonra tekrar deneyin."
+
+#: apps/subscriptions/views.py:195
+msgid "No active subscription to cancel."
+msgstr "İptal edilecek aktif abonelik yok."
+
+#: apps/subscriptions/views.py:227
+msgid "No subscription pending cancellation to reactivate."
+msgstr "Yeniden etkinleştirilecek iptal bekleyen abonelik yok."
+
+#: apps/subscriptions/views.py:256
+msgid "plan_slug is required."
+msgstr "plan_slug gereklidir."
+
+#: apps/subscriptions/views.py:263
+#, python-format
+msgid "No active plan found with slug '%(slug)s'."
+msgstr "'%(slug)s' slug'ına sahip aktif plan bulunamadı."
+
+#: apps/subscriptions/views.py:311
+msgid "No pending plan change to cancel."
+msgstr "İptal edilecek bekleyen plan değişikliği yok."
+
+#: apps/subscriptions/views.py:342
+msgid "No subscription found to sync."
+msgstr "Senkronize edilecek abonelik bulunamadı."
+
+#: apps/users/views.py:200
+msgid "No avatar file provided."
+msgstr "Avatar dosyası sağlanmadı."
+
+#: apps/users/views.py:208
+msgid "Invalid file type. Allowed: JPEG, PNG, GIF, WebP."
+msgstr "Geçersiz dosya türü. İzin verilen: JPEG, PNG, GIF, WebP."
+
+#: apps/users/views.py:215
+msgid "File too large. Maximum size is 5MB."
+msgstr "Dosya çok büyük. Maksimum boyut 5MB."
+
+#: apps/users/views.py:232
+msgid "File content does not match an allowed image format."
+msgstr "Dosya içeriği izin verilen görsel formatıyla eşleşmiyor."
+
+#: apps/users/views.py:296
+msgid "Invalid password. Please confirm your password to delete your account."
+msgstr "Geçersiz şifre. Hesabınızı silmek için şifrenizi onaylayın."
+
+#: apps/users/views.py:352
+msgid ""
+"Account scheduled for deletion. Your data has been anonymized. The account "
+"will be permanently deleted in 30 days."
+msgstr "Hesap silinmek üzere planlandı. Verileriniz anonimleştirildi. Hesap 30 gün içinde kalıcı olarak silinecek."
+
+#: apps/users/views.py:441
+msgid "new_email is required."
+msgstr "new_email gereklidir."
+
+#: apps/users/views.py:447 apps/users/views.py:723
+msgid "Invalid password."
+msgstr "Geçersiz şifre."
+
+#: apps/users/views.py:454
+msgid "This email is already in use."
+msgstr "Bu e-posta zaten kullanımda."
+
+#: apps/users/views.py:477
+msgid "Verification email sent to the new address. Please check your inbox."
+msgstr "Doğrulama e-postası yeni adrese gönderildi. Gelen kutunuzu kontrol edin."
+
+#: apps/users/views.py:623
+msgid "Expected a JSON object with notification preferences."
+msgstr "Bildirim tercihleri içeren bir JSON nesnesi bekleniyor."
+
+#: apps/users/views.py:640
+#, python-format
+msgid "Invalid value for \"%(key)s\": expected true/false."
+msgstr "\\\"%(key)s\\\" için geçersiz değer: true/false bekleniyor."
+
+#: apps/users/views.py:669
+msgid "2FA is already enabled."
+msgstr "İki faktörlü doğrulama zaten etkin."
+
+#: apps/users/views.py:694
+msgid "Run 2FA setup first."
+msgstr "Önce iki faktörlü doğrulama kurulumunu çalıştırın."
+
+#: apps/users/views.py:701
+msgid "2FA enabled successfully."
+msgstr "İki faktörlü doğrulama başarıyla etkinleştirildi."
+
+#: apps/users/views.py:703
+msgid "Invalid code."
+msgstr "Geçersiz kod."
+
+#: apps/users/views.py:728
+msgid "2FA is not enabled."
+msgstr "İki faktörlü doğrulama etkin değil."
+
+#: apps/users/views.py:734
+msgid "Invalid 2FA code."
+msgstr "Geçersiz 2FA kodu."
+
+#: apps/users/views.py:741
+msgid "2FA disabled."
+msgstr "İki faktörlü doğrulama devre dışı."
+
+#: apps/users/views.py:756
+msgid "2FA must be enabled first."
+msgstr "Önce iki faktörlü doğrulama etkinleştirilmelidir."
+
+#: apps/users/views.py:765
+msgid "Save these codes securely. They cannot be shown again."
+msgstr "Bu kodları güvenli bir şekilde saklayın. Tekrar gösterilemezler."
+
+#: apps/users/views.py:782
+msgid "Onboarding completed."
+msgstr "Başlangıç tamamlandı."
+
+#: config/settings/base.py:159
+msgid "English"
+msgstr "İngilizce"
+
+#: config/settings/base.py:160
+msgid "French"
+msgstr "Fransızca"
+
+#: config/settings/base.py:161
+msgid "Spanish"
+msgstr "İspanyolca"
+
+#: config/settings/base.py:162
+msgid "German"
+msgstr "Almanca"
+
+#: config/settings/base.py:163
+msgid "Portuguese"
+msgstr "Portekizce"
+
+#: config/settings/base.py:164
+msgid "Italian"
+msgstr "İtalyanca"
+
+#: config/settings/base.py:165
+msgid "Dutch"
+msgstr "Felemenkçe"
+
+#: config/settings/base.py:166
+msgid "Russian"
+msgstr "Rusça"
+
+#: config/settings/base.py:167
+msgid "Japanese"
+msgstr "Japonca"
+
+#: config/settings/base.py:168
+msgid "Korean"
+msgstr "Korece"
+
+#: config/settings/base.py:169
+msgid "Chinese"
+msgstr "Çince"
+
+#: config/settings/base.py:170
+msgid "Arabic"
+msgstr "Arapça"
+
+#: config/settings/base.py:171
+msgid "Hindi"
+msgstr "Hintçe"
+
+#: config/settings/base.py:172
+msgid "Turkish"
+msgstr "Türkçe"
+
+#: config/settings/base.py:173
+msgid "Polish"
+msgstr "Lehçe"
+
+#: config/settings/base.py:174
+msgid "Haitian Creole"
+msgstr "Haiti Kreolcesi"
+
+#: core/exceptions.py:34
+msgid "An internal error occurred. Please try again later."
+msgstr "Dahili bir hata oluştu. Lütfen daha sonra tekrar deneyin."
+
+#: core/serializers.py:21
+msgid "An account with this email already exists."
+msgstr "Bu e-posta ile bir hesap zaten mevcut."

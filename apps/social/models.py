@@ -7,9 +7,11 @@ acceptance), while follows are unidirectional.
 """
 
 import uuid
+from datetime import timedelta
 
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
 from apps.users.models import User
@@ -455,14 +457,29 @@ class DreamPost(models.Model):
     """
     A dream shared publicly on the social feed.
 
-    Users can post their dreams with captions, images, and GoFundMe links
-    for community support and encouragement.
+    Users can post their dreams with captions, images/videos/audio, and
+    GoFundMe links for community support and encouragement. Posts can be
+    regular, achievement-linked, milestone-linked, or event-linked.
     """
 
     VISIBILITY_CHOICES = [
         ('public', 'Public'),
         ('followers', 'Followers Only'),
         ('private', 'Private'),
+    ]
+
+    MEDIA_TYPE_CHOICES = [
+        ('none', 'None'),
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+    ]
+
+    POST_TYPE_CHOICES = [
+        ('regular', 'Regular'),
+        ('achievement', 'Achievement'),
+        ('milestone', 'Milestone'),
+        ('event', 'Event'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -480,11 +497,54 @@ class DreamPost(models.Model):
     content = EncryptedTextField(
         help_text='Caption/description (encrypted at rest).',
     )
+
+    # Media
     image_url = models.URLField(blank=True, help_text='Optional image URL.')
     image_file = models.ImageField(
         upload_to='dream_posts/', blank=True,
         help_text='Optional uploaded image.',
     )
+    video_file = models.FileField(
+        upload_to='dream_posts/videos/', blank=True,
+        help_text='Optional uploaded video.',
+    )
+    audio_file = models.FileField(
+        upload_to='dream_posts/audio/', blank=True,
+        help_text='Optional uploaded audio.',
+    )
+    media_type = models.CharField(
+        max_length=10, choices=MEDIA_TYPE_CHOICES, default='none',
+        help_text='Type of media attached to this post.',
+    )
+
+    # Post type & linked achievements
+    post_type = models.CharField(
+        max_length=20, choices=POST_TYPE_CHOICES, default='regular',
+        db_index=True,
+        help_text='Type of post (regular, achievement, milestone, event).',
+    )
+    linked_goal = models.ForeignKey(
+        'dreams.Goal',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='celebration_posts',
+        help_text='Goal that was completed (for achievement posts).',
+    )
+    linked_milestone = models.ForeignKey(
+        'dreams.DreamMilestone',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='celebration_posts',
+        help_text='Milestone that was reached (for milestone posts).',
+    )
+    linked_task = models.ForeignKey(
+        'dreams.Task',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='celebration_posts',
+        help_text='Task that was completed (for achievement posts).',
+    )
+
     gofundme_url = models.URLField(
         blank=True, help_text='External fundraising link.',
     )
@@ -494,7 +554,14 @@ class DreamPost(models.Model):
     likes_count = models.IntegerField(default=0, help_text='Denormalized like count.')
     comments_count = models.IntegerField(default=0, help_text='Denormalized comment count.')
     shares_count = models.IntegerField(default=0)
+    saves_count = models.IntegerField(default=0, help_text='Denormalized bookmark count.')
     is_pinned = models.BooleanField(default=False)
+
+    # Bookmarks
+    saved_by = models.ManyToManyField(
+        User, related_name='saved_posts', blank=True,
+        help_text='Users who bookmarked this post.',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -506,6 +573,7 @@ class DreamPost(models.Model):
             models.Index(fields=['user', '-created_at'], name='idx_dreampost_user_date'),
             models.Index(fields=['-created_at'], name='idx_dreampost_created'),
             models.Index(fields=['visibility'], name='idx_dreampost_visibility'),
+            models.Index(fields=['post_type'], name='idx_dreampost_post_type'),
         ]
 
     def __str__(self):
@@ -608,3 +676,236 @@ class DreamEncouragement(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} encouraged: {self.encouragement_type}"
+
+
+class SocialEvent(models.Model):
+    """
+    A social event created by a user for community participation.
+
+    Events can be virtual (with a meeting link), physical (with an address),
+    or challenges (collective goals with start/end dates). Each event is
+    linked to a DreamPost for feed visibility.
+    """
+
+    EVENT_TYPE_CHOICES = [
+        ('virtual', 'Virtual'),
+        ('physical', 'Physical'),
+        ('challenge', 'Challenge'),
+    ]
+
+    STATUS_CHOICES = [
+        ('upcoming', 'Upcoming'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    creator = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='created_events',
+    )
+    post = models.ForeignKey(
+        DreamPost, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='social_event',
+        help_text='The post announcing this event in the feed.',
+    )
+
+    # Content
+    title = EncryptedCharField(max_length=255)
+    description = EncryptedTextField(blank=True, default='')
+    cover_image = models.ImageField(
+        upload_to='events/', blank=True,
+        help_text='Cover image for the event.',
+    )
+
+    # Type
+    event_type = models.CharField(
+        max_length=20, choices=EVENT_TYPE_CHOICES, db_index=True,
+    )
+
+    # Location / Link
+    location = EncryptedCharField(
+        max_length=500, blank=True, default='',
+        help_text='Physical address (encrypted at rest).',
+    )
+    meeting_link = models.URLField(
+        blank=True, help_text='Virtual meeting URL.',
+    )
+
+    # Time
+    start_time = models.DateTimeField(db_index=True)
+    end_time = models.DateTimeField()
+
+    # Challenge specific
+    challenge_description = EncryptedTextField(
+        blank=True, default='',
+        help_text='Detailed challenge rules/description (encrypted at rest).',
+    )
+
+    # Capacity
+    max_participants = models.IntegerField(
+        null=True, blank=True,
+        help_text='Maximum number of participants. Null = unlimited.',
+    )
+
+    # Linked dream
+    dream = models.ForeignKey(
+        'dreams.Dream',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='social_events',
+        help_text='Optionally linked dream.',
+    )
+
+    # Status
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='upcoming', db_index=True,
+    )
+
+    # Denormalized count
+    participants_count = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'social_events'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['creator', '-created_at'], name='idx_sevent_creator_date'),
+            models.Index(fields=['event_type'], name='idx_sevent_type'),
+            models.Index(fields=['status', 'start_time'], name='idx_sevent_status_start'),
+            models.Index(fields=['-created_at'], name='idx_sevent_created'),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.event_type}) by {self.creator.display_name or self.creator.email}"
+
+
+class SocialEventRegistration(models.Model):
+    """
+    Tracks user registrations for social events.
+
+    Each user can register for an event at most once. Registration respects
+    the event's max_participants limit via atomic checks.
+    """
+
+    STATUS_CHOICES = [
+        ('registered', 'Registered'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(
+        SocialEvent, on_delete=models.CASCADE, related_name='registrations',
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='event_registrations',
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='registered',
+    )
+
+    registered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'social_event_registrations'
+        ordering = ['-registered_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event', 'user'], name='unique_event_registration',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['event', 'status'], name='idx_sevent_reg_event_status'),
+            models.Index(fields=['user'], name='idx_sevent_reg_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} -> {self.event.title} ({self.status})"
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Stories — ephemeral media posts (24h expiry)
+# ═══════════════════════════════════════════════════════════════════
+
+class Story(models.Model):
+    """
+    A story is a short-lived media post (image or video) that expires after 24 hours.
+    Similar to Instagram/Snapchat stories.
+    """
+
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='stories',
+    )
+
+    # Media — one per story (image or video)
+    image_file = models.ImageField(
+        upload_to='stories/', blank=True,
+        help_text='Story image.',
+    )
+    video_file = models.FileField(
+        upload_to='stories/videos/', blank=True,
+        help_text='Story video.',
+    )
+    media_type = models.CharField(
+        max_length=10, choices=MEDIA_TYPE_CHOICES, default='image',
+    )
+
+    # Optional text overlay
+    caption = models.CharField(max_length=280, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        help_text='Auto-set to created_at + 24 hours.',
+    )
+
+    # Denormalized view count
+    view_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'stories'
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = (self.created_at or timezone.now()) + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_active(self):
+        return timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"Story by {self.user.email} ({self.media_type}) - {'active' if self.is_active else 'expired'}"
+
+
+class StoryView(models.Model):
+    """Tracks which users have viewed a story."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    story = models.ForeignKey(
+        Story, on_delete=models.CASCADE, related_name='views',
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='story_views',
+    )
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['story', 'user'],
+                name='unique_story_view',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} viewed story {self.story_id}"

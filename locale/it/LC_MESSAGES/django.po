@@ -1,0 +1,1524 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-02 20:16+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+#: apps/buddies/tasks.py:57
+msgid "Check in with your buddy!"
+msgstr "Fai il check-in con il tuo compagno!"
+
+#: apps/buddies/tasks.py:58
+#, python-format
+msgid ""
+"It's been a while since you encouraged %(name)s. Send them some motivation!"
+msgstr "È passato un po' di tempo da quando hai incoraggiato %(name)s. Inviagli un po' di motivazione!"
+
+#: apps/buddies/tasks.py:60 apps/buddies/views.py:707
+msgid "your buddy"
+msgstr "il tuo compagno"
+
+#: apps/buddies/views.py:162
+msgid "userId is required."
+msgstr "userId è obbligatorio."
+
+#: apps/buddies/views.py:194 apps/circles/views.py:752
+#: apps/conversations/views.py:762 apps/dreams/views.py:957
+#: apps/dreams/views.py:1114 apps/social/views.py:186 apps/social/views.py:341
+#: apps/social/views.py:489 apps/social/views.py:592 apps/social/views.py:624
+#: apps/social/views.py:726 apps/social/views.py:1726 apps/users/views.py:61
+msgid "User not found."
+msgstr "Utente non trovato."
+
+#: apps/buddies/views.py:262
+msgid "conversationId and content are required."
+msgstr "conversationId e contenuto sono obbligatori."
+
+#: apps/buddies/views.py:266
+msgid "Message too long. Maximum 5000 characters."
+msgstr "Messaggio troppo lungo. Massimo 5000 caratteri."
+
+#: apps/buddies/views.py:272
+msgid "Invalid conversationId."
+msgstr "conversationId non valido."
+
+#: apps/buddies/views.py:277
+msgid "Conversation not found."
+msgstr "Conversazione non trovata."
+
+#: apps/buddies/views.py:285
+msgid "Access denied."
+msgstr "Accesso negato."
+
+#: apps/buddies/views.py:296
+msgid "Cannot determine recipient."
+msgstr "Impossibile determinare il destinatario."
+
+#: apps/buddies/views.py:300
+msgid "Cannot send message"
+msgstr "Impossibile inviare il messaggio"
+
+#: apps/buddies/views.py:319
+#, python-format
+msgid "Message from %(name)s"
+msgstr "Messaggio da %(name)s"
+
+#: apps/buddies/views.py:319 apps/buddies/views.py:697
+#: apps/conversations/views.py:863 apps/notifications/tasks.py:526
+msgid "Your buddy"
+msgstr "Il tuo compagno"
+
+#: apps/buddies/views.py:361 apps/buddies/views.py:647
+#: apps/buddies/views.py:731
+msgid "Active buddy pairing not found."
+msgstr "Abbinamento compagno attivo non trovato."
+
+#: apps/buddies/views.py:367 apps/buddies/views.py:653
+#: apps/buddies/views.py:737
+msgid "You are not part of this pairing."
+msgstr "Non fai parte di questo abbinamento."
+
+#: apps/buddies/views.py:426 apps/buddies/views.py:523
+msgid "You already have an active buddy pairing."
+msgstr "Hai già un abbinamento compagno attivo."
+
+#: apps/buddies/views.py:516
+msgid "You cannot pair with yourself."
+msgstr "Non puoi abbinarti con te stesso."
+
+#: apps/buddies/views.py:531
+msgid "Partner user not found."
+msgstr "Utente partner non trovato."
+
+#: apps/buddies/views.py:542
+msgid "This user already has an active buddy pairing."
+msgstr "Questo utente ha già un abbinamento compagno attivo."
+
+#: apps/buddies/views.py:562
+#, python-format
+msgid "Buddy pairing created with %(name)s."
+msgstr "Abbinamento compagno creato con %(name)s."
+
+#: apps/buddies/views.py:562 apps/social/views.py:367
+msgid "user"
+msgstr "utente"
+
+#: apps/buddies/views.py:587 apps/buddies/views.py:615
+msgid "Pending buddy pairing not found."
+msgstr "Abbinamento compagno in attesa non trovato."
+
+#: apps/buddies/views.py:594
+msgid "Buddy pairing accepted."
+msgstr "Abbinamento compagno accettato."
+
+#: apps/buddies/views.py:623
+msgid "Buddy pairing rejected."
+msgstr "Abbinamento compagno rifiutato."
+
+#: apps/buddies/views.py:695
+msgid "Buddy Encouragement"
+msgstr "Incoraggiamento compagno"
+
+#: apps/buddies/views.py:697
+#, python-format
+msgid "%(name)s sent you encouragement!"
+msgstr "%(name)s ti ha inviato un incoraggiamento!"
+
+#: apps/buddies/views.py:707
+#, python-format
+msgid "Encouragement sent to %(name)s."
+msgstr "Incoraggiamento inviato a %(name)s."
+
+#: apps/buddies/views.py:745
+msgid "Buddy pairing ended."
+msgstr "Abbinamento compagno terminato."
+
+#: apps/calendar/serializers.py:93 apps/calendar/serializers.py:106
+#: apps/calendar/serializers.py:150
+msgid "End time must be after start time"
+msgstr "L'ora di fine deve essere successiva all'ora di inizio"
+
+#: apps/calendar/serializers.py:154
+msgid "Day of week must be between 0 (Monday) and 6 (Sunday)"
+msgstr "Il giorno della settimana deve essere tra 0 (lunedì) e 6 (domenica)"
+
+#: apps/calendar/views.py:106 apps/calendar/views.py:120
+msgid "This event conflicts with existing events."
+msgstr "Questo evento è in conflitto con eventi esistenti."
+
+#: apps/calendar/views.py:108 apps/calendar/views.py:122
+#: apps/calendar/views.py:157
+msgid "Set force=true to save anyway."
+msgstr "Imposta force=true per salvare comunque."
+
+#: apps/calendar/views.py:155
+msgid "This time conflicts with existing events."
+msgstr "Questo orario è in conflitto con eventi esistenti."
+
+#: apps/calendar/views.py:230
+msgid "start and end dates required (ISO format)"
+msgstr "Date di inizio e fine obbligatorie (formato ISO)"
+
+#: apps/calendar/views.py:239
+msgid "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
+msgstr "Formato data non valido. Usa il formato ISO (AAAA-MM-GGTHH:MM:SS)"
+
+#: apps/calendar/views.py:307
+msgid "task_id and new_date required"
+msgstr "task_id e new_date obbligatori"
+
+#: apps/calendar/views.py:321
+msgid "Task rescheduled successfully"
+msgstr "Attività riprogrammata con successo"
+
+#: apps/calendar/views.py:328
+msgid "Task not found"
+msgstr "Attività non trovata"
+
+#: apps/calendar/views.py:333
+msgid "Invalid date format"
+msgstr "Formato data non valido"
+
+#: apps/calendar/views.py:355
+msgid "date and duration_mins are required"
+msgstr "data e duration_mins sono obbligatori"
+
+#: apps/calendar/views.py:364
+msgid "Invalid date or duration format"
+msgstr "Formato data o durata non valido"
+
+#: apps/calendar/views.py:370
+msgid "Duration must be between 5 and 480 minutes"
+msgstr "La durata deve essere tra 5 e 480 minuti"
+
+#: apps/calendar/views.py:515
+msgid "Google Calendar integration is not configured."
+msgstr "L'integrazione con Google Calendar non è configurata."
+
+#: apps/calendar/views.py:554
+msgid "Authorization code is required."
+msgstr "Il codice di autorizzazione è obbligatorio."
+
+#: apps/calendar/views.py:565
+#, python-format
+msgid "Token exchange failed: %(error)s"
+msgstr "Scambio token fallito: %(error)s"
+
+#: apps/calendar/views.py:609
+msgid "Google Calendar not connected."
+msgstr "Google Calendar non connesso."
+
+#: apps/calendar/views.py:636
+msgid "No integration found."
+msgstr "Nessuna integrazione trovata."
+
+#: apps/calendar/views.py:663
+msgid "Feed not found."
+msgstr "Feed non trovato."
+
+#: apps/calendar/views.py:731
+msgid "Missing authorization code."
+msgstr "Codice di autorizzazione mancante."
+
+#: apps/circles/serializers.py:291 apps/circles/serializers.py:425
+#: apps/circles/serializers.py:458 apps/circles/views.py:929
+#: apps/circles/views.py:1021
+msgid "Anonymous"
+msgstr "Anonimo"
+
+#: apps/circles/views.py:210 apps/circles/views.py:1449
+msgid "You are already a member of this circle."
+msgstr "Sei già membro di questo circolo."
+
+#: apps/circles/views.py:217 apps/circles/views.py:1455
+msgid "This circle has reached its maximum number of members."
+msgstr "Questo circolo ha raggiunto il numero massimo di membri."
+
+#: apps/circles/views.py:224
+msgid "This circle is private. You need an invitation to join."
+msgstr "Questo circolo è privato. Hai bisogno di un invito per unirti."
+
+#: apps/circles/views.py:235 apps/circles/views.py:1471
+#, python-format
+msgid "Successfully joined %(name)s."
+msgstr "Ti sei unito con successo a %(name)s."
+
+#: apps/circles/views.py:268
+msgid "You are not a member of this circle."
+msgstr "Non sei membro di questo circolo."
+
+#: apps/circles/views.py:303
+#, python-format
+msgid "Successfully left %(name)s."
+msgstr "Hai lasciato %(name)s con successo."
+
+#: apps/circles/views.py:328
+msgid "You must be a member to view the feed."
+msgstr "Devi essere membro per visualizzare il feed."
+
+#: apps/circles/views.py:368
+msgid "You must be a member to post."
+msgstr "Devi essere membro per pubblicare."
+
+#: apps/circles/views.py:429
+msgid "Only admins can update this circle."
+msgstr "Solo gli amministratori possono aggiornare questo circolo."
+
+#: apps/circles/views.py:460
+msgid "Only admins can delete this circle."
+msgstr "Solo gli amministratori possono eliminare questo circolo."
+
+#: apps/circles/views.py:486 apps/circles/views.py:524
+#: apps/circles/views.py:565 apps/circles/views.py:598
+msgid "Post not found."
+msgstr "Post non trovato."
+
+#: apps/circles/views.py:494
+msgid "You do not have permission to edit this post."
+msgstr "Non hai il permesso di modificare questo post."
+
+#: apps/circles/views.py:531
+msgid "You do not have permission to delete this post."
+msgstr "Non hai il permesso di eliminare questo post."
+
+#: apps/circles/views.py:558
+msgid "You must be a member to react."
+msgstr "Devi essere membro per reagire."
+
+#: apps/circles/views.py:577
+msgid "Reaction added."
+msgstr "Reazione aggiunta."
+
+#: apps/circles/views.py:578
+msgid "Reaction updated."
+msgstr "Reazione aggiornata."
+
+#: apps/circles/views.py:605
+msgid "No reaction found."
+msgstr "Nessuna reazione trovata."
+
+#: apps/circles/views.py:607
+msgid "Reaction removed."
+msgstr "Reazione rimossa."
+
+#: apps/circles/views.py:628
+msgid "Only admins can promote members."
+msgstr "Solo gli amministratori possono promuovere i membri."
+
+#: apps/circles/views.py:635 apps/circles/views.py:673
+#: apps/circles/views.py:710
+msgid "Member not found."
+msgstr "Membro non trovato."
+
+#: apps/circles/views.py:639
+msgid "Cannot change an admin role."
+msgstr "Impossibile modificare il ruolo di amministratore."
+
+#: apps/circles/views.py:646
+#, python-format
+msgid "%(name)s promoted to moderator."
+msgstr "%(name)s promosso a moderatore."
+
+#: apps/circles/views.py:646 apps/circles/views.py:684
+msgid "User"
+msgstr "Utente"
+
+#: apps/circles/views.py:666
+msgid "Only admins can demote members."
+msgstr "Solo gli amministratori possono retrocedere i membri."
+
+#: apps/circles/views.py:677
+msgid "Only moderators can be demoted."
+msgstr "Solo i moderatori possono essere retrocessi."
+
+#: apps/circles/views.py:684
+#, python-format
+msgid "%(name)s demoted to member."
+msgstr "%(name)s retrocesso a membro."
+
+#: apps/circles/views.py:703
+msgid "Only admins and moderators can remove members."
+msgstr "Solo amministratori e moderatori possono rimuovere i membri."
+
+#: apps/circles/views.py:714
+msgid "Cannot remove an admin."
+msgstr "Impossibile rimuovere un amministratore."
+
+#: apps/circles/views.py:719
+msgid "Member removed from circle."
+msgstr "Membro rimosso dal circolo."
+
+#: apps/circles/views.py:740
+msgid "Only admins and moderators can invite users."
+msgstr "Solo amministratori e moderatori possono invitare utenti."
+
+#: apps/circles/views.py:756
+msgid "User is already a member of this circle."
+msgstr "L'utente è già membro di questo circolo."
+
+#: apps/circles/views.py:765
+msgid "An invitation is already pending for this user."
+msgstr "Un invito è già in sospeso per questo utente."
+
+#: apps/circles/views.py:799
+msgid "Only admins and moderators can generate invite links."
+msgstr "Solo amministratori e moderatori possono generare link di invito."
+
+#: apps/circles/views.py:833
+msgid "Only admins and moderators can view invitations."
+msgstr "Solo amministratori e moderatori possono visualizzare gli inviti."
+
+#: apps/circles/views.py:864
+msgid "You must be a member of the circle."
+msgstr "Devi essere membro del circolo."
+
+#: apps/circles/views.py:871 apps/circles/views.py:912
+msgid "Challenge not found."
+msgstr "Sfida non trovata."
+
+#: apps/circles/views.py:875
+msgid "You must join the challenge first."
+msgstr "Devi prima unirti alla sfida."
+
+#: apps/circles/views.py:955
+msgid "You must be a member to view chat."
+msgstr "Devi essere membro per visualizzare la chat."
+
+#: apps/circles/views.py:996
+msgid "You must be a member to send messages."
+msgstr "Devi essere membro per inviare messaggi."
+
+#: apps/circles/views.py:1003
+msgid "Content is required."
+msgstr "Il contenuto è obbligatorio."
+
+#: apps/circles/views.py:1058
+msgid "You must be a member to start a call."
+msgstr "Devi essere membro per avviare una chiamata."
+
+#: apps/circles/views.py:1066
+msgid "A call is already active in this circle."
+msgstr "Una chiamata è già attiva in questo circolo."
+
+#: apps/circles/views.py:1073 apps/conversations/views.py:756
+msgid "call_type must be voice or video."
+msgstr "call_type deve essere voice o video."
+
+#: apps/circles/views.py:1107 apps/circles/views.py:1322
+#: apps/conversations/views.py:1027 apps/dreams/views.py:980
+#: apps/notifications/tasks.py:510 apps/social/views.py:1542
+#: apps/social/views.py:1596 apps/social/views.py:1670
+msgid "Someone"
+msgstr "Qualcuno"
+
+#: apps/circles/views.py:1137
+msgid "You must be a member."
+msgstr "Devi essere membro."
+
+#: apps/circles/views.py:1144
+msgid "No active call in this circle."
+msgstr "Nessuna chiamata attiva in questo circolo."
+
+#: apps/circles/views.py:1180 apps/circles/views.py:1227
+msgid "No active call."
+msgstr "Nessuna chiamata attiva."
+
+#: apps/circles/views.py:1190
+msgid "You are not in this call."
+msgstr "Non sei in questa chiamata."
+
+#: apps/circles/views.py:1235
+msgid "Only the initiator or an admin can end the call."
+msgstr "Solo l'iniziatore o un amministratore può terminare la chiamata."
+
+#: apps/circles/views.py:1328
+#, python-format
+msgid "%(name)s started a %(type)s call"
+msgstr "%(name)s ha avviato una chiamata %(type)s"
+
+#: apps/circles/views.py:1329
+#, python-format
+msgid "Join the call in %(circle)s"
+msgstr "Unisciti alla chiamata in %(circle)s"
+
+#: apps/circles/views.py:1381
+msgid "You must be a member of the circle to join this challenge."
+msgstr "Devi essere membro del circolo per unirti a questa sfida."
+
+#: apps/circles/views.py:1388
+msgid "You have already joined this challenge."
+msgstr "Ti sei già unito a questa sfida."
+
+#: apps/circles/views.py:1395
+#, python-format
+msgid "Successfully joined challenge: %(title)s."
+msgstr "Ti sei unito alla sfida: %(title)s."
+
+#: apps/circles/views.py:1426
+msgid "Invalid or expired invite code."
+msgstr "Codice di invito non valido o scaduto."
+
+#: apps/circles/views.py:1434
+msgid "This invitation has expired."
+msgstr "Questo invito è scaduto."
+
+#: apps/circles/views.py:1443
+msgid "This invitation is for another user."
+msgstr "Questo invito è per un altro utente."
+
+#: apps/conversations/serializers.py:49
+msgid "Message content cannot be empty"
+msgstr "Il contenuto del messaggio non può essere vuoto"
+
+#: apps/conversations/serializers.py:184
+#, python-format
+msgid "Invalid conversation type. Must be one of: %(types)s"
+msgstr "Tipo di conversazione non valido. Deve essere uno di: %(types)s"
+
+#: apps/conversations/serializers.py:195
+#, python-format
+msgid ""
+"Conversations of type '%(type)s' must be linked to a dream. Please provide a "
+"dream ID."
+msgstr "Le conversazioni di tipo '%(type)s' devono essere collegate a un sogno. Fornisci un ID sogno."
+
+#: apps/conversations/views.py:270
+#, python-format
+msgid "AI produced an invalid response: %(message)s"
+msgstr "L'IA ha prodotto una risposta non valida: %(message)s"
+
+#: apps/conversations/views.py:300
+msgid "No audio file provided."
+msgstr "Nessun file audio fornito."
+
+#: apps/conversations/views.py:304
+msgid "Audio file too large. Max 25MB."
+msgstr "File audio troppo grande. Massimo 25MB."
+
+#: apps/conversations/views.py:315
+#, python-format
+msgid ""
+"Unsupported audio format: %(format)s. Allowed: mp3, m4a, wav, webm, ogg, "
+"flac, aac."
+msgstr "Formato audio non supportato: %(format)s. Consentiti: mp3, m4a, wav, webm, ogg, flac, aac."
+
+#: apps/conversations/views.py:373
+msgid "No image file provided."
+msgstr "Nessun file immagine fornito."
+
+#: apps/conversations/views.py:377
+msgid "Image too large. Max 20MB."
+msgstr "Immagine troppo grande. Massimo 20MB."
+
+#: apps/conversations/views.py:407
+msgid "Invalid image URL."
+msgstr "URL immagine non valido."
+
+#: apps/conversations/views.py:490 apps/conversations/views.py:512
+#: apps/conversations/views.py:535
+msgid "Message not found."
+msgstr "Messaggio non trovato."
+
+#: apps/conversations/views.py:539
+msgid "emoji is required."
+msgstr "emoji è obbligatorio."
+
+#: apps/conversations/views.py:637
+msgid "PDF export is not available. Install reportlab."
+msgstr "L'esportazione PDF non è disponibile. Installa reportlab."
+
+#: apps/conversations/views.py:753
+msgid "callee_id is required."
+msgstr "callee_id è obbligatorio."
+
+#: apps/conversations/views.py:765
+msgid "Cannot call yourself."
+msgstr "Non puoi chiamare te stesso."
+
+#: apps/conversations/views.py:770
+msgid "Cannot call this user"
+msgstr "Impossibile chiamare questo utente"
+
+#: apps/conversations/views.py:826 apps/conversations/views.py:851
+#: apps/conversations/views.py:902 apps/conversations/views.py:926
+#: apps/conversations/views.py:996
+msgid "Call not found."
+msgstr "Chiamata non trovata."
+
+#: apps/conversations/views.py:829
+msgid "Only the callee can accept."
+msgstr "Solo il destinatario può accettare."
+
+#: apps/conversations/views.py:832
+#, python-format
+msgid "Call is %(status)s, cannot accept."
+msgstr "La chiamata è %(status)s, impossibile accettare."
+
+#: apps/conversations/views.py:854
+msgid "Only the callee can reject."
+msgstr "Solo il destinatario può rifiutare."
+
+#: apps/conversations/views.py:867
+#, python-format
+msgid "%(name)s declined your call"
+msgstr "%(name)s ha rifiutato la tua chiamata"
+
+#: apps/conversations/views.py:905 apps/conversations/views.py:998
+msgid "Not a participant."
+msgstr "Non sei un partecipante."
+
+#: apps/conversations/views.py:929
+msgid "Only the caller can cancel."
+msgstr "Solo il chiamante può annullare."
+
+#: apps/conversations/views.py:932
+#, python-format
+msgid "Call is %(status)s, cannot cancel."
+msgstr "La chiamata è %(status)s, impossibile annullare."
+
+#: apps/conversations/views.py:1041
+#, python-format
+msgid "Incoming %(call_type)s call"
+msgstr "Chiamata %(call_type)s in arrivo"
+
+#: apps/conversations/views.py:1042
+#, python-format
+msgid "%(name)s is calling you"
+msgstr "%(name)s ti sta chiamando"
+
+#: apps/dreams/serializers.py:497 apps/dreams/serializers.py:565
+msgid "Target date must be at least 1 month from now."
+msgstr "La data obiettivo deve essere almeno 1 mese da oggi."
+
+#: apps/dreams/serializers.py:501 apps/dreams/serializers.py:569
+msgid "Target date must be within 3 years from now."
+msgstr "La data obiettivo deve essere entro 3 anni da oggi."
+
+#: apps/dreams/serializers.py:509
+msgid "Title must be at least 3 characters long"
+msgstr "Il titolo deve essere lungo almeno 3 caratteri"
+
+#: apps/dreams/serializers.py:522
+msgid "Description must be at least 10 characters long"
+msgstr "La descrizione deve essere lunga almeno 10 caratteri"
+
+#: apps/dreams/tasks.py:66
+msgid "Starting plan generation..."
+msgstr "Avvio generazione del piano..."
+
+#: apps/dreams/tasks.py:88
+msgid "Analyzing your calibration answers..."
+msgstr "Analisi delle tue risposte di calibrazione..."
+
+#: apps/dreams/tasks.py:104
+msgid "AI is building your personalized plan..."
+msgstr "L'IA sta costruendo il tuo piano personalizzato..."
+
+#: apps/dreams/tasks.py:120
+msgid "Saving your plan..."
+msgstr "Salvataggio del piano..."
+
+#: apps/dreams/tasks.py:248
+msgid "Plan generated successfully!"
+msgstr "Piano generato con successo!"
+
+#: apps/dreams/tasks.py:259
+msgid "Dream not found"
+msgstr "Sogno non trovato"
+
+#: apps/dreams/tasks.py:263
+#, python-format
+msgid "AI produced an invalid plan: %(msg)s"
+msgstr "L'IA ha prodotto un piano non valido: %(msg)s"
+
+#: apps/dreams/tasks.py:304
+#, python-format
+msgid "Get started: %(title)s"
+msgstr "Inizia: %(title)s"
+
+#: apps/dreams/tasks.py:305
+msgid "First steps toward your dream"
+msgstr "Primi passi verso il tuo sogno"
+
+#: apps/dreams/tasks.py:313 apps/dreams/views.py:647
+#, python-format
+msgid "Start now: %(action)s"
+msgstr "Inizia ora: %(action)s"
+
+#: apps/dreams/tasks.py:314
+msgid "This micro-action takes only 2 minutes and will help you get started!"
+msgstr "Questa micro-azione richiede solo 2 minuti e ti aiuterà a iniziare!"
+
+#: apps/dreams/tasks.py:329
+msgid "Ready to get started in 2 minutes?"
+msgstr "Pronto per iniziare in 2 minuti?"
+
+#: apps/dreams/tasks.py:330
+#, python-format
+msgid "We created a micro-action for your dream: %(action)s"
+msgstr "Abbiamo creato una micro-azione per il tuo sogno: %(action)s"
+
+#: apps/dreams/tasks.py:421
+msgid "Tasks automatically scheduled"
+msgstr "Attività programmate automaticamente"
+
+#: apps/dreams/tasks.py:422
+#, python-format
+msgid "%(count)s tasks have been added to your calendar!"
+msgstr "%(count)s attività sono state aggiunte al tuo calendario!"
+
+#: apps/dreams/tasks.py:536
+msgid "Dream achieved!"
+msgstr "Sogno realizzato!"
+
+#: apps/dreams/tasks.py:537
+#, python-format
+msgid "Congratulations! You achieved your dream: %(title)s"
+msgstr "Congratulazioni! Hai realizzato il tuo sogno: %(title)s"
+
+#: apps/dreams/tasks.py:593
+#, python-format
+msgid "%(count)s overdue task(s)"
+msgstr "%(count)s attività scadute"
+
+#: apps/dreams/tasks.py:594
+#, python-format
+msgid "You have %(count)s task(s) waiting to be completed!"
+msgstr "Hai %(count)s attività in attesa di essere completate!"
+
+#: apps/dreams/tasks.py:658
+msgid "Suggestions to help you succeed"
+msgstr "Suggerimenti per aiutarti a riuscire"
+
+#: apps/dreams/tasks.py:715
+msgid "Your vision is ready!"
+msgstr "La tua visione è pronta!"
+
+#: apps/dreams/tasks.py:716
+#, python-format
+msgid "We created an inspiring image for your dream: %(title)s"
+msgstr "Abbiamo creato un'immagine ispiratrice per il tuo sogno: %(title)s"
+
+#: apps/dreams/tasks.py:768
+msgid "Dream archived"
+msgstr "Sogno archiviato"
+
+#: apps/dreams/tasks.py:769
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been automatically archived after 90 days of "
+"inactivity."
+msgstr "Il tuo sogno \\\"%(title)s\\\" è stato archiviato automaticamente dopo 90 giorni di inattività."
+
+#: apps/dreams/tasks.py:821
+msgid "Dream paused due to inactivity"
+msgstr "Sogno in pausa per inattività"
+
+#: apps/dreams/tasks.py:823
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been paused after 30 days of inactivity. Open "
+"the app to resume it!"
+msgstr "Il tuo sogno \\\"%(title)s\\\" è stato messo in pausa dopo 30 giorni di inattività. Apri l'app per riprenderlo!"
+
+#: apps/dreams/tasks.py:850
+msgid "Quarter of the way there!"
+msgstr "Un quarto del percorso!"
+
+#: apps/dreams/tasks.py:851
+msgid "Halfway to your dream!"
+msgstr "A metà strada verso il tuo sogno!"
+
+#: apps/dreams/tasks.py:852
+msgid "Almost there! Just a little more!"
+msgstr "Quasi ci siamo! Ancora un po'!"
+
+#: apps/dreams/tasks.py:862
+#, python-format
+msgid "%(threshold)s%% - %(message)s"
+msgstr "%(threshold)s%% - %(message)s"
+
+#: apps/dreams/tasks.py:863
+#, python-format
+msgid "Your dream \"%(title)s\" is now %(threshold)s%% complete. %(message)s"
+msgstr "Il tuo sogno \\\"%(title)s\\\" è ora completo al %(threshold)s%%. %(message)s"
+
+#: apps/dreams/views.py:258
+#, python-format
+msgid "AI produced an invalid analysis: %(msg)s"
+msgstr "L'IA ha prodotto un'analisi non valida: %(msg)s"
+
+#: apps/dreams/views.py:290
+msgid "Calibration already completed for this dream"
+msgstr "Calibrazione già completata per questo sogno"
+
+#: apps/dreams/views.py:334
+#, python-format
+msgid "AI produced invalid calibration questions: %(msg)s"
+msgstr "L'IA ha prodotto domande di calibrazione non valide: %(msg)s"
+
+#: apps/dreams/views.py:380
+msgid "No answers provided"
+msgstr "Nessuna risposta fornita"
+
+#: apps/dreams/views.py:448 apps/dreams/views.py:481
+msgid "Calibration complete. Ready to generate your personalized plan."
+msgstr "Calibrazione completata. Pronto per generare il tuo piano personalizzato."
+
+#: apps/dreams/views.py:509
+#, python-format
+msgid "AI produced invalid follow-up questions: %(msg)s"
+msgstr "L'IA ha prodotto domande di follow-up non valide: %(msg)s"
+
+#: apps/dreams/views.py:536
+msgid "Calibration skipped. You can generate a plan with basic info."
+msgstr "Calibrazione saltata. Puoi generare un piano con le informazioni di base."
+
+#: apps/dreams/views.py:563
+msgid "Plan is being generated..."
+msgstr "Il piano è in fase di generazione..."
+
+#: apps/dreams/views.py:573
+msgid "Plan generation started. This may take a few minutes."
+msgstr "Generazione del piano avviata. Potrebbe richiedere alcuni minuti."
+
+#: apps/dreams/views.py:594
+msgid "Plan already exists."
+msgstr "Il piano esiste già."
+
+#: apps/dreams/views.py:595
+msgid "No plan generation in progress."
+msgstr "Nessuna generazione di piano in corso."
+
+#: apps/dreams/views.py:619
+msgid "2-minute start already generated"
+msgstr "Inizio di 2 minuti già generato"
+
+#: apps/dreams/views.py:639
+msgid "Getting Started"
+msgstr "Per iniziare"
+
+#: apps/dreams/views.py:640
+msgid "Initial steps to begin your journey"
+msgstr "Primi passi per iniziare il tuo percorso"
+
+#: apps/dreams/views.py:718
+#, python-format
+msgid "AI-generated vision for \"%(title)s\""
+msgstr "Visione generata dall'IA per \\\"%(title)s\\\""
+
+#: apps/dreams/views.py:784
+msgid "Provide image file or image_url."
+msgstr "Fornisci un file immagine o image_url."
+
+#: apps/dreams/views.py:823
+msgid "Image not found."
+msgstr "Immagine non trovata."
+
+#: apps/dreams/views.py:824
+msgid "Image removed."
+msgstr "Immagine rimossa."
+
+#: apps/dreams/views.py:864
+msgid "Dream is already completed."
+msgstr "Il sogno è già completato."
+
+#: apps/dreams/views.py:888
+#, python-format
+msgid "%(title)s (Copy)"
+msgstr "%(title)s (Copia)"
+
+#: apps/dreams/views.py:948
+msgid "You cannot share a dream with yourself."
+msgstr "Non puoi condividere un sogno con te stesso."
+
+#: apps/dreams/views.py:963
+msgid "Dream already shared with this user."
+msgstr "Sogno già condiviso con questo utente."
+
+#: apps/dreams/views.py:980
+#, python-format
+msgid "%(name)s shared a dream with you!"
+msgstr "%(name)s ha condiviso un sogno con te!"
+
+#: apps/dreams/views.py:981
+msgid "You now have access to view this dream."
+msgstr "Ora hai accesso per visualizzare questo sogno."
+
+#: apps/dreams/views.py:1018
+msgid "Share not found."
+msgstr "Condivisione non trovata."
+
+#: apps/dreams/views.py:1022
+msgid "Dream unshared."
+msgstr "Sogno non più condiviso."
+
+#: apps/dreams/views.py:1069
+msgid "Tag not found on this dream."
+msgstr "Tag non trovato su questo sogno."
+
+#: apps/dreams/views.py:1073
+msgid "Tag removed."
+msgstr "Tag rimosso."
+
+#: apps/dreams/views.py:1094
+msgid "Only the dream owner can add collaborators."
+msgstr "Solo il proprietario del sogno può aggiungere collaboratori."
+
+#: apps/dreams/views.py:1106
+msgid "You cannot add yourself as a collaborator."
+msgstr "Non puoi aggiungere te stesso come collaboratore."
+
+#: apps/dreams/views.py:1118
+msgid "User is already a collaborator on this dream."
+msgstr "L'utente è già collaboratore di questo sogno."
+
+#: apps/dreams/views.py:1169
+msgid "Only the dream owner can remove collaborators."
+msgstr "Solo il proprietario del sogno può rimuovere i collaboratori."
+
+#: apps/dreams/views.py:1180
+msgid "Collaborator not found."
+msgstr "Collaboratore non trovato."
+
+#: apps/dreams/views.py:1184
+msgid "Collaborator removed."
+msgstr "Collaboratore rimosso."
+
+#: apps/dreams/views.py:1354 apps/social/views.py:1336
+#: apps/social/views.py:1869
+msgid "Dream not found."
+msgstr "Sogno non trovato."
+
+#: apps/dreams/views.py:1446
+msgid "PDF generation requires the reportlab package."
+msgstr "La generazione PDF richiede il pacchetto reportlab."
+
+#: apps/dreams/views.py:1572
+msgid "Dream milestone is already completed."
+msgstr "La tappa del sogno è già completata."
+
+#: apps/dreams/views.py:1624
+msgid "Goal is already completed."
+msgstr "L'obiettivo è già completato."
+
+#: apps/dreams/views.py:1729
+msgid "Task is already completed."
+msgstr "L'attività è già completata."
+
+#: apps/leagues/views.py:175
+msgid "League not found."
+msgstr "Lega non trovata."
+
+#: apps/leagues/views.py:182
+msgid "No leagues configured."
+msgstr "Nessuna lega configurata."
+
+#: apps/leagues/views.py:234 apps/leagues/views.py:312
+#: apps/leagues/views.py:424
+msgid "No active season."
+msgstr "Nessuna stagione attiva."
+
+#: apps/leagues/views.py:328
+msgid "Could not create standing. No leagues configured."
+msgstr "Impossibile creare la classifica. Nessuna lega configurata."
+
+#: apps/leagues/views.py:491
+msgid "Season has not ended yet."
+msgstr "La stagione non è ancora terminata."
+
+#: apps/leagues/views.py:504
+msgid "No reward found for this season."
+msgstr "Nessuna ricompensa trovata per questa stagione."
+
+#: apps/leagues/views.py:510
+msgid "Rewards have already been claimed."
+msgstr "Le ricompense sono già state riscattate."
+
+#: apps/notifications/serializers.py:166
+msgid "Invalid FCM token."
+msgstr "Token FCM non valido."
+
+#: apps/notifications/serializers.py:168
+msgid "FCM token exceeds maximum length."
+msgstr "Il token FCM supera la lunghezza massima."
+
+#: apps/notifications/tasks.py:117
+msgid "Daily motivation"
+msgstr "Motivazione giornaliera"
+
+#: apps/notifications/tasks.py:208
+msgid "Your weekly report"
+msgstr "Il tuo rapporto settimanale"
+
+#: apps/notifications/tasks.py:291
+msgid "We are still here for you"
+msgstr "Siamo ancora qui per te"
+
+#: apps/notifications/tasks.py:359
+#, python-format
+msgid "Reminder: %(title)s"
+msgstr "Promemoria: %(title)s"
+
+#: apps/notifications/tasks.py:360
+msgid "It's time to work on your goal!"
+msgstr "È ora di lavorare sul tuo obiettivo!"
+
+#: apps/notifications/tasks.py:423
+#, python-format
+msgid "%(days)s-day streak!"
+msgstr "Serie di %(days)s giorni!"
+
+#: apps/notifications/tasks.py:424
+#, python-format
+msgid ""
+"Incredible! You maintained your streak for %(days)s consecutive days. Keep "
+"it up!"
+msgstr "Incredibile! Hai mantenuto la tua serie per %(days)s giorni consecutivi. Continua così!"
+
+#: apps/notifications/tasks.py:460
+#, python-format
+msgid "Level %(level)s reached!"
+msgstr "Livello %(level)s raggiunto!"
+
+#: apps/notifications/tasks.py:461
+#, python-format
+msgid ""
+"Congratulations! You reached level %(level)s. Keep achieving your dreams!"
+msgstr "Congratulazioni! Hai raggiunto il livello %(level)s. Continua a realizzare i tuoi sogni!"
+
+#: apps/notifications/tasks.py:514
+#, python-format
+msgid "Missed %(call_type)s call"
+msgstr "Chiamata %(call_type)s persa"
+
+#: apps/notifications/tasks.py:515
+#, python-format
+msgid "%(name)s tried to call you"
+msgstr "%(name)s ha provato a chiamarti"
+
+#: apps/notifications/tasks.py:530 apps/notifications/tasks.py:555
+#, python-format
+msgid "%(name)s didn't answer"
+msgstr "%(name)s non ha risposto"
+
+#: apps/notifications/tasks.py:531
+#, python-format
+msgid "Your %(call_type)s call was not answered"
+msgstr "La tua chiamata %(call_type)s non ha ricevuto risposta"
+
+#: apps/notifications/tasks.py:566
+#, python-format
+msgid "Missed %(call_type)s call from %(name)s"
+msgstr "Chiamata %(call_type)s persa da %(name)s"
+
+#: apps/notifications/tasks.py:635
+msgid "Task Due"
+msgstr "Attività in scadenza"
+
+#: apps/notifications/tasks.py:646 apps/notifications/tasks.py:660
+#, python-format
+msgid "%(title)s"
+msgstr "%(title)s"
+
+#: apps/notifications/tasks.py:647 apps/notifications/tasks.py:661
+msgid "Time to work on your task!"
+msgstr "È ora di lavorare sulla tua attività!"
+
+#: apps/notifications/templates/notifications/email/notification.html:25
+#: apps/notifications/templates/notifications/email/notification.txt:3
+msgid "Hi"
+msgstr "Ciao"
+
+#: apps/notifications/templates/notifications/email/notification.html:27
+#: apps/notifications/templates/notifications/email/notification.txt:7
+msgid "Open DreamPlanner"
+msgstr "Apri DreamPlanner"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "DreamPlanner"
+msgstr "DreamPlanner"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "Turn your dreams into reality"
+msgstr "Trasforma i tuoi sogni in realtà"
+
+#: apps/notifications/templates/notifications/email/notification.html:31
+msgid "You can manage notification preferences in your profile settings."
+msgstr "Puoi gestire le preferenze di notifica nelle impostazioni del profilo."
+
+#: apps/notifications/templates/notifications/email/notification.txt:10
+msgid "DreamPlanner - Turn your dreams into reality"
+msgstr "DreamPlanner - Trasforma i tuoi sogni in realtà"
+
+#: apps/notifications/templates/notifications/email/notification.txt:11
+msgid "Manage notification preferences in your profile settings."
+msgstr "Gestisci le preferenze di notifica nelle impostazioni del profilo."
+
+#: apps/search/views.py:34
+msgid "Query must be at least 2 characters."
+msgstr "La ricerca deve essere di almeno 2 caratteri."
+
+#: apps/social/serializers.py:490
+msgid "Cannot provide both image_url and an uploaded file."
+msgstr "Non è possibile fornire sia image_url che un file caricato."
+
+#: apps/social/serializers.py:494
+msgid "Only one media file (image, video, or audio) can be uploaded per post."
+msgstr "Solo un file multimediale (immagine, video o audio) può essere caricato per post."
+
+#: apps/social/serializers.py:501
+msgid "Event title is required for event posts."
+msgstr "Il titolo dell'evento è obbligatorio per i post evento."
+
+#: apps/social/serializers.py:505
+msgid "Event type is required for event posts."
+msgstr "Il tipo di evento è obbligatorio per i post evento."
+
+#: apps/social/serializers.py:509
+msgid "Event start and end times are required."
+msgstr "L'ora di inizio e fine dell'evento sono obbligatorie."
+
+#: apps/social/serializers.py:513
+msgid "Event end time must be after start time."
+msgstr "L'ora di fine dell'evento deve essere successiva all'ora di inizio."
+
+#: apps/social/serializers.py:518 apps/social/serializers.py:688
+msgid "Meeting link is required for virtual events."
+msgstr "Il link della riunione è obbligatorio per gli eventi virtuali."
+
+#: apps/social/serializers.py:781
+msgid "A story requires an image or video."
+msgstr "Una storia richiede un'immagine o un video."
+
+#: apps/social/serializers.py:783
+msgid "Only one media file per story."
+msgstr "Solo un file multimediale per storia."
+
+#: apps/social/views.py:177
+msgid "You cannot send a friend request to yourself."
+msgstr "Non puoi inviare una richiesta di amicizia a te stesso."
+
+#: apps/social/views.py:196
+msgid "Cannot send friend request to this user."
+msgstr "Impossibile inviare richiesta di amicizia a questo utente."
+
+#: apps/social/views.py:209
+msgid "You are already friends with this user."
+msgstr "Sei già amico di questo utente."
+
+#: apps/social/views.py:214
+msgid "A friend request is already pending."
+msgstr "Una richiesta di amicizia è già in sospeso."
+
+#: apps/social/views.py:224 apps/social/views.py:235
+msgid "Friend request sent."
+msgstr "Richiesta di amicizia inviata."
+
+#: apps/social/views.py:264 apps/social/views.py:298 apps/social/views.py:674
+msgid "Friend request not found."
+msgstr "Richiesta di amicizia non trovata."
+
+#: apps/social/views.py:271
+msgid "Friend request accepted."
+msgstr "Richiesta di amicizia accettata."
+
+#: apps/social/views.py:305
+msgid "Friend request rejected."
+msgstr "Richiesta di amicizia rifiutata."
+
+#: apps/social/views.py:333
+msgid "You cannot follow yourself."
+msgstr "Non puoi seguire te stesso."
+
+#: apps/social/views.py:351
+msgid "Cannot follow this user."
+msgstr "Impossibile seguire questo utente."
+
+#: apps/social/views.py:357
+msgid "You are already following this user."
+msgstr "Stai già seguendo questo utente."
+
+#: apps/social/views.py:367
+#, python-format
+msgid "Now following %(name)s."
+msgstr "Ora segui %(name)s."
+
+#: apps/social/views.py:390
+msgid "You are not following this user."
+msgstr "Non stai seguendo questo utente."
+
+#: apps/social/views.py:394
+msgid "Successfully unfollowed."
+msgstr "Hai smesso di seguire con successo."
+
+#: apps/social/views.py:416
+msgid "Friendship not found."
+msgstr "Amicizia non trovata."
+
+#: apps/social/views.py:421
+msgid "Friend removed."
+msgstr "Amico rimosso."
+
+#: apps/social/views.py:481
+msgid "You cannot block yourself."
+msgstr "Non puoi bloccare te stesso."
+
+#: apps/social/views.py:495
+msgid "User is already blocked."
+msgstr "L'utente è già bloccato."
+
+#: apps/social/views.py:518
+msgid "User blocked."
+msgstr "Utente bloccato."
+
+#: apps/social/views.py:541
+msgid "Block not found."
+msgstr "Blocco non trovato."
+
+#: apps/social/views.py:545
+msgid "User unblocked."
+msgstr "Utente sbloccato."
+
+#: apps/social/views.py:584
+msgid "You cannot report yourself."
+msgstr "Non puoi segnalare te stesso."
+
+#: apps/social/views.py:604
+msgid "Report submitted. Thank you for helping keep our community safe."
+msgstr "Segnalazione inviata. Grazie per aiutarci a mantenere la nostra comunità sicura."
+
+#: apps/social/views.py:679
+msgid "Friend request cancelled."
+msgstr "Richiesta di amicizia annullata."
+
+#: apps/social/views.py:1126 apps/social/views.py:1179
+msgid "Activity not found."
+msgstr "Attività non trovata."
+
+#: apps/social/views.py:1186
+msgid "text is required."
+msgstr "Il testo è obbligatorio."
+
+#: apps/social/views.py:1251
+msgid "query is required."
+msgstr "La ricerca è obbligatoria."
+
+#: apps/social/views.py:1263
+msgid "Search recorded."
+msgstr "Ricerca registrata."
+
+#: apps/social/views.py:1274
+msgid "Recent searches cleared."
+msgstr "Ricerche recenti cancellate."
+
+#: apps/social/views.py:1292
+msgid "Search not found."
+msgstr "Ricerca non trovata."
+
+#: apps/social/views.py:1297
+msgid "Search removed."
+msgstr "Ricerca rimossa."
+
+#: apps/social/views.py:1352
+msgid "Goal not found."
+msgstr "Obiettivo non trovato."
+
+#: apps/social/views.py:1363
+msgid "Milestone not found."
+msgstr "Tappa non trovata."
+
+#: apps/social/views.py:1374
+msgid "Task not found."
+msgstr "Attività non trovata."
+
+#: apps/social/views.py:1432
+msgid "You can only edit your own posts."
+msgstr "Puoi modificare solo i tuoi post."
+
+#: apps/social/views.py:1463
+msgid "You can only delete your own posts."
+msgstr "Puoi eliminare solo i tuoi post."
+
+#: apps/social/views.py:1542
+#, python-format
+msgid "%(name)s liked your dream post"
+msgstr "A %(name)s è piaciuto il tuo post sui sogni"
+
+#: apps/social/views.py:1565
+msgid "content is required."
+msgstr "Il contenuto è obbligatorio."
+
+#: apps/social/views.py:1579
+msgid "Parent comment not found."
+msgstr "Commento genitore non trovato."
+
+#: apps/social/views.py:1596
+#, python-format
+msgid "%(name)s commented on your post"
+msgstr "%(name)s ha commentato il tuo post"
+
+#: apps/social/views.py:1647
+#, python-format
+msgid "encouragement_type must be one of: %(types)s"
+msgstr "encouragement_type deve essere uno di: %(types)s"
+
+#: apps/social/views.py:1670
+#, python-format
+msgid "%(name)s encouraged you: %(type)s"
+msgstr "%(name)s ti ha incoraggiato: %(type)s"
+
+#: apps/social/views.py:1733
+msgid "Cannot view this user."
+msgstr "Impossibile visualizzare questo utente."
+
+#: apps/social/views.py:1898
+msgid "You can only edit your own events."
+msgstr "Puoi modificare solo i tuoi eventi."
+
+#: apps/social/views.py:1927
+msgid "You can only cancel your own events."
+msgstr "Puoi annullare solo i tuoi eventi."
+
+#: apps/social/views.py:1949
+msgid "Cannot register for a cancelled or completed event."
+msgstr "Impossibile registrarsi per un evento annullato o completato."
+
+#: apps/social/views.py:1960
+msgid "Event is full."
+msgstr "L'evento è pieno."
+
+#: apps/social/views.py:2001
+msgid "Not registered for this event."
+msgstr "Non registrato per questo evento."
+
+#: apps/social/views.py:2136
+msgid "You can only delete your own stories."
+msgstr "Puoi eliminare solo le tue storie."
+
+#: apps/social/views.py:2273
+msgid "You can only see viewers of your own stories."
+msgstr "Puoi vedere i visualizzatori solo delle tue storie."
+
+#: apps/store/views.py:363 apps/store/views.py:420 apps/store/views.py:478
+msgid "Store item not found."
+msgstr "Articolo del negozio non trovato."
+
+#: apps/store/views.py:532
+msgid "Item not found."
+msgstr "Articolo non trovato."
+
+#: apps/store/views.py:537
+msgid "Recipient not found."
+msgstr "Destinatario non trovato."
+
+#: apps/subscriptions/views.py:81
+msgid "No active subscription. You are on the free plan."
+msgstr "Nessun abbonamento attivo. Sei nel piano gratuito."
+
+#: apps/subscriptions/views.py:125 apps/subscriptions/views.py:162
+#: apps/subscriptions/views.py:189 apps/subscriptions/views.py:221
+#: apps/subscriptions/views.py:277 apps/subscriptions/views.py:305
+#: apps/subscriptions/views.py:336 apps/subscriptions/views.py:366
+msgid "Payment service error. Please try again later."
+msgstr "Errore del servizio di pagamento. Riprova più tardi."
+
+#: apps/subscriptions/views.py:195
+msgid "No active subscription to cancel."
+msgstr "Nessun abbonamento attivo da annullare."
+
+#: apps/subscriptions/views.py:227
+msgid "No subscription pending cancellation to reactivate."
+msgstr "Nessun abbonamento in attesa di annullamento da riattivare."
+
+#: apps/subscriptions/views.py:256
+msgid "plan_slug is required."
+msgstr "plan_slug è obbligatorio."
+
+#: apps/subscriptions/views.py:263
+#, python-format
+msgid "No active plan found with slug '%(slug)s'."
+msgstr "Nessun piano attivo trovato con slug '%(slug)s'."
+
+#: apps/subscriptions/views.py:311
+msgid "No pending plan change to cancel."
+msgstr "Nessuna modifica del piano in sospeso da annullare."
+
+#: apps/subscriptions/views.py:342
+msgid "No subscription found to sync."
+msgstr "Nessun abbonamento trovato da sincronizzare."
+
+#: apps/users/views.py:200
+msgid "No avatar file provided."
+msgstr "Nessun file avatar fornito."
+
+#: apps/users/views.py:208
+msgid "Invalid file type. Allowed: JPEG, PNG, GIF, WebP."
+msgstr "Tipo di file non valido. Consentiti: JPEG, PNG, GIF, WebP."
+
+#: apps/users/views.py:215
+msgid "File too large. Maximum size is 5MB."
+msgstr "File troppo grande. Dimensione massima 5MB."
+
+#: apps/users/views.py:232
+msgid "File content does not match an allowed image format."
+msgstr "Il contenuto del file non corrisponde a un formato immagine consentito."
+
+#: apps/users/views.py:296
+msgid "Invalid password. Please confirm your password to delete your account."
+msgstr "Password non valida. Conferma la tua password per eliminare il tuo account."
+
+#: apps/users/views.py:352
+msgid ""
+"Account scheduled for deletion. Your data has been anonymized. The account "
+"will be permanently deleted in 30 days."
+msgstr "Account programmato per l'eliminazione. I tuoi dati sono stati anonimizzati. L'account verrà eliminato definitivamente tra 30 giorni."
+
+#: apps/users/views.py:441
+msgid "new_email is required."
+msgstr "new_email è obbligatorio."
+
+#: apps/users/views.py:447 apps/users/views.py:723
+msgid "Invalid password."
+msgstr "Password non valida."
+
+#: apps/users/views.py:454
+msgid "This email is already in use."
+msgstr "Questa email è già in uso."
+
+#: apps/users/views.py:477
+msgid "Verification email sent to the new address. Please check your inbox."
+msgstr "Email di verifica inviata al nuovo indirizzo. Controlla la tua casella di posta."
+
+#: apps/users/views.py:623
+msgid "Expected a JSON object with notification preferences."
+msgstr "Atteso un oggetto JSON con le preferenze di notifica."
+
+#: apps/users/views.py:640
+#, python-format
+msgid "Invalid value for \"%(key)s\": expected true/false."
+msgstr "Valore non valido per \\\"%(key)s\\\": atteso vero/falso."
+
+#: apps/users/views.py:669
+msgid "2FA is already enabled."
+msgstr "L'autenticazione a due fattori è già abilitata."
+
+#: apps/users/views.py:694
+msgid "Run 2FA setup first."
+msgstr "Esegui prima la configurazione dell'autenticazione a due fattori."
+
+#: apps/users/views.py:701
+msgid "2FA enabled successfully."
+msgstr "Autenticazione a due fattori abilitata con successo."
+
+#: apps/users/views.py:703
+msgid "Invalid code."
+msgstr "Codice non valido."
+
+#: apps/users/views.py:728
+msgid "2FA is not enabled."
+msgstr "L'autenticazione a due fattori non è abilitata."
+
+#: apps/users/views.py:734
+msgid "Invalid 2FA code."
+msgstr "Codice 2FA non valido."
+
+#: apps/users/views.py:741
+msgid "2FA disabled."
+msgstr "Autenticazione a due fattori disabilitata."
+
+#: apps/users/views.py:756
+msgid "2FA must be enabled first."
+msgstr "L'autenticazione a due fattori deve essere abilitata prima."
+
+#: apps/users/views.py:765
+msgid "Save these codes securely. They cannot be shown again."
+msgstr "Salva questi codici in modo sicuro. Non possono essere mostrati di nuovo."
+
+#: apps/users/views.py:782
+msgid "Onboarding completed."
+msgstr "Onboarding completato."
+
+#: config/settings/base.py:159
+msgid "English"
+msgstr "Inglese"
+
+#: config/settings/base.py:160
+msgid "French"
+msgstr "Francese"
+
+#: config/settings/base.py:161
+msgid "Spanish"
+msgstr "Spagnolo"
+
+#: config/settings/base.py:162
+msgid "German"
+msgstr "Tedesco"
+
+#: config/settings/base.py:163
+msgid "Portuguese"
+msgstr "Portoghese"
+
+#: config/settings/base.py:164
+msgid "Italian"
+msgstr "Italiano"
+
+#: config/settings/base.py:165
+msgid "Dutch"
+msgstr "Olandese"
+
+#: config/settings/base.py:166
+msgid "Russian"
+msgstr "Russo"
+
+#: config/settings/base.py:167
+msgid "Japanese"
+msgstr "Giapponese"
+
+#: config/settings/base.py:168
+msgid "Korean"
+msgstr "Coreano"
+
+#: config/settings/base.py:169
+msgid "Chinese"
+msgstr "Cinese"
+
+#: config/settings/base.py:170
+msgid "Arabic"
+msgstr "Arabo"
+
+#: config/settings/base.py:171
+msgid "Hindi"
+msgstr "Hindi"
+
+#: config/settings/base.py:172
+msgid "Turkish"
+msgstr "Turco"
+
+#: config/settings/base.py:173
+msgid "Polish"
+msgstr "Polacco"
+
+#: config/settings/base.py:174
+msgid "Haitian Creole"
+msgstr "Creolo haitiano"
+
+#: core/exceptions.py:34
+msgid "An internal error occurred. Please try again later."
+msgstr "Si è verificato un errore interno. Riprova più tardi."
+
+#: core/serializers.py:21
+msgid "An account with this email already exists."
+msgstr "Un account con questa email esiste già."

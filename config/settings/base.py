@@ -4,12 +4,16 @@ Base settings shared across all environments.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (graceful — may fail in containers where env is injected)
+try:
+    load_dotenv()
+except PermissionError:
+    pass
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -19,8 +23,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # validate that DJANGO_SECRET_KEY is set and will fail hard if missing.
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-DO-NOT-USE-IN-PRODUCTION')
 
-# DEBUG defaults to True in base (overridden to False in production.py)
-DEBUG = True
+# DEBUG defaults to False for safety. Explicitly set to True in development.py.
+DEBUG = False
+
+ALLOWED_HOSTS = []
 
 # Application definition
 INSTALLED_APPS = [
@@ -52,6 +58,10 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.apple',
     'dj_rest_auth',
     'dj_rest_auth.registration',
+
+    # JWT
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 
     # Encryption
     'encrypted_model_fields',
@@ -118,7 +128,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('DB_NAME', 'dreamplanner'),
         'USER': os.getenv('DB_USER', 'dreamplanner'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }
@@ -151,23 +161,24 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Supported languages (15 languages)
+# Supported languages (16 languages)
 LANGUAGES = [
     ('en', _('English')),
     ('fr', _('French')),
     ('es', _('Spanish')),
-    ('pt', _('Portuguese')),
-    ('ar', _('Arabic')),
-    ('zh', _('Chinese')),
-    ('hi', _('Hindi')),
-    ('ja', _('Japanese')),
     ('de', _('German')),
-    ('ru', _('Russian')),
-    ('ko', _('Korean')),
+    ('pt', _('Portuguese')),
     ('it', _('Italian')),
-    ('tr', _('Turkish')),
     ('nl', _('Dutch')),
+    ('ru', _('Russian')),
+    ('ja', _('Japanese')),
+    ('ko', _('Korean')),
+    ('zh', _('Chinese')),
+    ('ar', _('Arabic')),
+    ('hi', _('Hindi')),
+    ('tr', _('Turkish')),
     ('pl', _('Polish')),
+    ('ht', _('Haitian Creole')),
 ]
 
 LOCALE_PATHS = [
@@ -179,8 +190,8 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'mediafiles'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -209,7 +220,8 @@ FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', '')
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'core.authentication.ExpiringTokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'core.authentication.ExpiringTokenAuthentication',  # Legacy fallback during migration
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -332,11 +344,13 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Channels (WebSocket)
+# Use REDIS_URL (includes password) when available, fall back to REDIS_HOST/PORT for local dev
+_channels_redis_url = os.getenv('REDIS_URL', '')
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [(os.getenv('REDIS_HOST', 'localhost'), int(os.getenv('REDIS_PORT', 6379)))],
+            "hosts": [_channels_redis_url] if _channels_redis_url else [(os.getenv('REDIS_HOST', 'localhost'), int(os.getenv('REDIS_PORT', 6379)))],
             "capacity": 5000,          # Max messages per channel before oldest dropped
             "expiry": 300,             # Message expiry in seconds
             "group_expiry": 86400,     # Group membership expiry (24 hours)
@@ -345,6 +359,7 @@ CHANNEL_LAYERS = {
 }
 
 # Celery Configuration
+# REDIS_URL should include auth if Redis requires a password: redis://:password@host:port/db
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
@@ -361,7 +376,6 @@ CACHES = {
         'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PARSER_CLASS': 'redis.connection.HiredisParser',
             'CONNECTION_POOL_CLASS_KWARGS': {
                 'max_connections': 50,
                 'retry_on_timeout': True,
@@ -410,19 +424,32 @@ AI_QUOTAS = {
 # django-allauth Configuration
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'optional')
+ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'mandatory')
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_REQUIRED = True
 
-# dj-rest-auth Configuration
+# dj-rest-auth Configuration (JWT mode)
 REST_AUTH = {
-    'USE_JWT': False,
-    'TOKEN_MODEL': 'rest_framework.authtoken.models.Token',
+    'USE_JWT': True,
+    'JWT_AUTH_HTTPONLY': True,
+    'JWT_AUTH_COOKIE': 'dp-refresh',
+    'JWT_AUTH_REFRESH_COOKIE': 'dp-refresh',
+    'JWT_AUTH_SAMESITE': 'Lax',
+    'JWT_AUTH_SECURE': not DEBUG,
+    'JWT_AUTH_COOKIE_PATH': '/api/auth/token/refresh/',
+    'TOKEN_MODEL': None,
     'USER_DETAILS_SERIALIZER': 'apps.users.serializers.UserSerializer',
     'REGISTER_SERIALIZER': 'core.serializers.RegisterSerializer',
+}
+
+# SimpleJWT Configuration
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
 }
 
 # Social Account Providers
@@ -463,6 +490,7 @@ CORS_ALLOWED_METHODS = [
 CORS_ALLOWED_HEADERS = [
     'accept',
     'accept-encoding',
+    'accept-language',
     'authorization',
     'content-type',
     'dnt',
@@ -506,7 +534,7 @@ FREE_TIER_LIMITS = {
 }
 
 # Token expiration
-TOKEN_EXPIRY_HOURS = int(os.getenv('TOKEN_EXPIRY_HOURS', 24))
+TOKEN_EXPIRY_HOURS = int(os.getenv('TOKEN_EXPIRY_HOURS', 4))
 
 # Security settings (will be overridden in production)
 SECURE_SSL_REDIRECT = False
@@ -514,6 +542,7 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
 # Session & Cookie security
+SESSION_COOKIE_NAME = 'dp_session'
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True

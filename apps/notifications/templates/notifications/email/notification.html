@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load i18n %}<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -22,13 +22,13 @@
             <h1>{{ title }}</h1>
         </div>
         <div class="content">
-            <p class="greeting">Hi {{ user_name }},</p>
+            <p class="greeting">{% trans "Hi" %} {{ user_name }},</p>
             <p class="body-text">{{ body }}</p>
-            <p><a href="{{ action_url }}" class="btn">Open DreamPlanner</a></p>
+            <p><a href="{{ action_url }}" class="btn">{% trans "Open DreamPlanner" %}</a></p>
         </div>
         <div class="footer">
-            <p>DreamPlanner &mdash; Turn your dreams into reality</p>
-            <p>You can manage notification preferences in your profile settings.</p>
+            <p>{% trans "DreamPlanner" %} &mdash; {% trans "Turn your dreams into reality" %}</p>
+            <p>{% trans "You can manage notification preferences in your profile settings." %}</p>
         </div>
     </div>
 </body>

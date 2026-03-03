@@ -351,6 +351,13 @@ Circle voice/video calls are powered by [Agora.io](https://www.agora.io/) RTC.
 | `AGORA_APP_ID` | Agora project App ID |
 | `AGORA_APP_CERTIFICATE` | Agora project App Certificate (for token generation) |
 
+**Agora Console setup:** In addition to the environment variables, the **Signaling** service must be enabled in the [Agora Console](https://console.agora.io):
+
+1. Projects → pencil icon → **All features** → **Signaling** → **Basic information** → select a data center
+2. **Subscriptions** → **Signaling** → subscribe to the Free Package or a paid plan
+
+Without this, RTM login fails with error `2010026` (`LOGIN_REJECTED_BY_SERVER`) and real-time chat messages will not be delivered.
+
 **FCM push:** When a call starts, a push notification is sent to all circle members via Firebase Cloud Messaging, allowing them to join even if they are not connected to the WebSocket.
 
 ## Admin

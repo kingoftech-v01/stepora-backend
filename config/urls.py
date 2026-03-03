@@ -16,17 +16,21 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
-from core.social_auth import GoogleLoginView, AppleLoginView
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework_simplejwt.views import TokenRefreshView
+from core.social_auth import GoogleLoginView, AppleLoginView, AppleRedirectView
 
 # Versioned API endpoints (v1)
 api_v1_patterns = [
     # Authentication (dj-rest-auth)
     path('auth/', include('dj_rest_auth.urls')),
     path('auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Social authentication (Google, Apple)
     path('auth/google/', GoogleLoginView.as_view(), name='google_login'),
     path('auth/apple/', AppleLoginView.as_view(), name='apple_login'),
+    path('auth/apple/redirect/', AppleRedirectView.as_view(), name='apple_redirect'),
 
     # API endpoints
     path('users/', include('apps.users.urls')),
@@ -52,8 +56,10 @@ urlpatterns = [
     # Health check
     path('health/', include('core.urls')),
 
-    # API Documentation (restricted to DEBUG or staff in production)
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    # API Documentation (restricted to staff in production)
+    path('api/schema/', SpectacularAPIView.as_view(
+        permission_classes=[IsAdminUser] if not settings.DEBUG else [IsAuthenticated]
+    ), name='schema'),
 
     # Versioned API (canonical)
     path('api/v1/', include((api_v1_patterns, 'api-v1'))),
@@ -62,13 +68,15 @@ urlpatterns = [
     path('api/', include(api_v1_patterns)),
 ]
 
-# Serve media files and API docs in development only
+# Always serve media files (vision board images, etc.)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Serve API docs and static in development only
 if settings.DEBUG:
     urlpatterns += [
         path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
         path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     ]
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # Debug toolbar in development

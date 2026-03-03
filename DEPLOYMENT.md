@@ -48,7 +48,7 @@ This guide covers deploying DreamPlanner to production environments.
 | PostgreSQL 15+ | Database | AWS RDS, Supabase, Railway |
 | Redis 7+ | Cache & Celery broker | AWS ElastiCache, Upstash, Railway |
 | OpenAI | AI features (GPT-4) | OpenAI |
-| Agora.io | Circle voice/video calls (RTC) | Agora.io |
+| Agora.io | Real-time messaging (RTM) + Circle voice/video calls (RTC) | Agora.io |
 | Firebase | Push notifications (FCM) | Google Firebase |
 | Sentry | Error tracking | Sentry.io |
 
@@ -102,7 +102,8 @@ REDIS_URL=redis://your-redis-host.com:6379/0
 # OpenAI
 OPENAI_API_KEY=sk-...
 
-# Agora (circle voice/video calls)
+# Agora (real-time messaging + circle voice/video calls)
+# IMPORTANT: You must also enable Signaling in the Agora Console (see below)
 AGORA_APP_ID=<your-agora-app-id>
 AGORA_APP_CERTIFICATE=<your-agora-app-certificate>
 
@@ -121,6 +122,18 @@ VAPID_PUBLIC_KEY=<your-vapid-public-key>
 VAPID_PRIVATE_KEY=<your-vapid-private-key>
 VAPID_ADMIN_EMAIL=admin@dreamplanner.app
 ```
+
+#### Agora Console Setup (Required for RTM + RTC)
+
+Setting `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` in `.env` is **not enough**. You must also enable the **Signaling** service in the Agora Console, otherwise RTM login will fail with error code **2010026** (`LOGIN_REJECTED_BY_SERVER`).
+
+1. Go to [console.agora.io](https://console.agora.io) and sign in
+2. Navigate to **Projects** → click the **pencil icon** on your project
+3. Go to **All features** → **Signaling** → **Basic information**
+4. Select a **data center** from the dropdown (cannot be changed later)
+5. Go to **Subscriptions** → **Signaling** → subscribe to the **Free Package** (or a paid plan)
+
+> **Troubleshooting:** If buddy/circle chat messages don't appear in real-time and the browser console shows `Error Code 2010026`, it means Signaling is not enabled or the subscription has expired.
 
 #### 3. Run with Docker Compose
 

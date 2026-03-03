@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.utils import timezone as django_timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import (
     extend_schema,
     OpenApiResponse,
@@ -25,6 +26,7 @@ from drf_spectacular.utils import (
 from apps.users.models import User
 from .models import BuddyPairing, BuddyEncouragement
 from core.permissions import CanUseBuddy
+from core.sanitizers import sanitize_text
 from .serializers import (
     BuddyPairingSerializer,
     BuddyProgressSerializer,
@@ -158,7 +160,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         )
 
         if not target_user_id or target_user_id == 'undefined':
-            return Response({'error': 'userId is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('userId is required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         target_user = None
         try:
@@ -190,7 +192,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                     },
                 })
             except Conversation.DoesNotExist:
-                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': _('User not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         # Find active buddy pairing between the two users
         pairing = BuddyPairing.objects.filter(
@@ -222,10 +224,11 @@ class BuddyViewSet(viewsets.GenericViewSet):
             conv = Conversation.objects.create(
                 user=request.user,
                 conversation_type='buddy_chat',
-                title=f'Chat with {target_user.display_name or "Buddy"}',
+                title=target_user.display_name or "Buddy",
                 buddy_pairing=pairing,
                 total_messages=0,
                 total_tokens_used=0,
+                metadata={'target_user_id': str(target_user.id)},
             )
 
         return Response({
@@ -255,25 +258,25 @@ class BuddyViewSet(viewsets.GenericViewSet):
         from django.db.models import F
 
         conv_id = request.data.get('conversationId') or request.data.get('conversation_id')
-        content = (request.data.get('content') or '').strip()
+        content = sanitize_text((request.data.get('content') or '').strip())
 
         if not conv_id or conv_id == 'undefined' or not content:
-            return Response({'error': 'conversationId and content are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('conversationId and content are required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Limit message length to prevent storage abuse
         if len(content) > 5000:
-            return Response({'error': 'Message too long. Maximum 5000 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Message too long. Maximum 5000 characters.')}, status=status.HTTP_400_BAD_REQUEST)
 
         import uuid
         try:
             uuid.UUID(str(conv_id))
         except (ValueError, AttributeError):
-            return Response({'error': 'Invalid conversationId.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Invalid conversationId.')}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             conv = Conversation.objects.get(id=conv_id, conversation_type='buddy_chat')
         except Conversation.DoesNotExist:
-            return Response({'error': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Conversation not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         # Verify user has access (is part of the buddy pairing or owns the conversation)
         has_access = conv.user_id == request.user.id
@@ -281,7 +284,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             bp = conv.buddy_pairing
             has_access = request.user.id in (bp.user1_id, bp.user2_id)
         if not has_access:
-            return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': _('Access denied.')}, status=status.HTTP_403_FORBIDDEN)
 
         # Block enforcement: determine the other user and check
         other_user = None
@@ -291,12 +294,19 @@ class BuddyViewSet(viewsets.GenericViewSet):
         elif conv.user_id != request.user.id:
             other_user = conv.user
 
+        # Fallback: check conversation metadata for target_user_id
+        if not other_user and conv.metadata and conv.metadata.get('target_user_id'):
+            try:
+                other_user = User.objects.get(id=conv.metadata['target_user_id'])
+            except User.DoesNotExist:
+                pass
+
         if not other_user:
-            return Response({'error': 'Cannot determine recipient.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Cannot determine recipient. The other user may no longer exist.')}, status=status.HTTP_400_BAD_REQUEST)
 
         from apps.social.models import BlockedUser
         if BlockedUser.is_blocked(request.user, other_user):
-            return Response({'detail': 'Cannot send message'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Cannot send message')}, status=status.HTTP_403_FORBIDDEN)
 
         msg = Message.objects.create(
             conversation=conv,
@@ -315,7 +325,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             Notification.objects.create(
                 user=other_user,
                 notification_type='buddy',
-                title=f'Message from {request.user.display_name or "Your buddy"}',
+                title=_('Message from %(name)s') % {'name': request.user.display_name or _("Your buddy")},
                 body=content[:100],
                 scheduled_for=django_timezone.now(),
                 data={
@@ -357,13 +367,13 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': 'Active buddy pairing not found.'},
+                {'error': _('Active buddy pairing not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': 'You are not part of this pairing.'},
+                {'error': _('You are not part of this pairing.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -422,7 +432,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
-                {'error': 'You already have an active buddy pairing.'},
+                {'error': _('You already have an active buddy pairing.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -512,14 +522,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         if partner_id == request.user.id:
             return Response(
-                {'error': 'You cannot pair with yourself.'},
+                {'error': _('You cannot pair with yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
-                {'error': 'You already have an active buddy pairing.'},
+                {'error': _('You already have an active buddy pairing.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -527,7 +537,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             partner = User.objects.get(id=partner_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'Partner user not found.'},
+                {'error': _('Partner user not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -538,7 +548,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         if partner_pairing:
             return Response(
-                {'error': 'This user already has an active buddy pairing.'},
+                {'error': _('This user already has an active buddy pairing.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -558,7 +568,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                'message': f'Buddy pairing created with {partner.display_name or "user"}.',
+                'message': _('Buddy pairing created with %(name)s.') % {'name': partner.display_name or _("user")},
                 'pairing_id': str(pairing.id),
             },
             status=status.HTTP_201_CREATED
@@ -583,14 +593,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': 'Pending buddy pairing not found.'},
+                {'error': _('Pending buddy pairing not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         pairing.status = 'active'
         pairing.save(update_fields=['status', 'updated_at'])
 
-        return Response({'message': 'Buddy pairing accepted.'})
+        return Response({'message': _('Buddy pairing accepted.')})
 
     @extend_schema(
         summary="Reject buddy pairing",
@@ -611,7 +621,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': 'Pending buddy pairing not found.'},
+                {'error': _('Pending buddy pairing not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -619,7 +629,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         pairing.ended_at = django_timezone.now()
         pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
 
-        return Response({'message': 'Buddy pairing rejected.'})
+        return Response({'message': _('Buddy pairing rejected.')})
 
     @extend_schema(
         summary="Send encouragement",
@@ -643,13 +653,13 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': 'Active buddy pairing not found.'},
+                {'error': _('Active buddy pairing not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': 'You are not part of this pairing.'},
+                {'error': _('You are not part of this pairing.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -691,9 +701,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
             from apps.notifications.models import Notification
             Notification.objects.create(
                 user=partner,
-                title='Buddy Encouragement',
+                title=_('Buddy Encouragement'),
                 body=serializer.validated_data.get('message', '') or
-                     f'{request.user.display_name or "Your buddy"} sent you encouragement!',
+                     _('%(name)s sent you encouragement!') % {'name': request.user.display_name or _("Your buddy")},
                 notification_type='buddy',
                 scheduled_for=now,
                 status='sent',
@@ -703,7 +713,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             logger.warning("Failed to send buddy notification", exc_info=True)
 
         return Response({
-            'message': f'Encouragement sent to {partner.display_name or "your buddy"}.',
+            'message': _('Encouragement sent to %(name)s.') % {'name': partner.display_name or _("your buddy")},
             'encouragement_streak': pairing.encouragement_streak,
             'best_encouragement_streak': pairing.best_encouragement_streak,
         })
@@ -727,13 +737,13 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': 'Active buddy pairing not found.'},
+                {'error': _('Active buddy pairing not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': 'You are not part of this pairing.'},
+                {'error': _('You are not part of this pairing.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -741,7 +751,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         pairing.ended_at = django_timezone.now()
         pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
 
-        return Response({'message': 'Buddy pairing ended.'})
+        return Response({'message': _('Buddy pairing ended.')})
 
     @extend_schema(
         summary="Buddy pairing history",

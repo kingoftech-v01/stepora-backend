@@ -2,10 +2,15 @@
 Core views for health checks.
 """
 
+import logging
+
+from django.conf import settings
 from django.http import JsonResponse
 from django.db import connection
 from django.core.cache import cache
 import time
+
+logger = logging.getLogger(__name__)
 
 
 def health_check(request):
@@ -57,10 +62,11 @@ def _check_database():
             'latency_ms': round(latency, 2)
         }
     except Exception as e:
-        return {
-            'status': 'down',
-            'error': str(e)
-        }
+        logger.warning("Health check: database down: %s", e)
+        result = {'status': 'down'}
+        if settings.DEBUG:
+            result['error'] = str(e)
+        return result
 
 
 def _check_cache():
@@ -75,7 +81,8 @@ def _check_cache():
             'latency_ms': round(latency, 2)
         }
     except Exception as e:
-        return {
-            'status': 'down',
-            'error': str(e)
-        }
+        logger.warning("Health check: cache down: %s", e)
+        result = {'status': 'down'}
+        if settings.DEBUG:
+            result['error'] = str(e)
+        return result

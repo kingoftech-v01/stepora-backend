@@ -90,7 +90,7 @@
 | Load Balancer | AWS ALB | Traffic distribution |
 | Authentication | dj-rest-auth + allauth | Authentication |
 | AI | OpenAI GPT-4 + DALL-E 3 | Conversational AI |
-| Real-Time Communication | Agora.io RTC | Circle voice/video calls |
+| Real-Time Communication | Agora.io RTM + RTC | Buddy/circle chat (RTM) + circle voice/video calls (RTC). Requires Signaling enabled in Agora Console — see `DEPLOYMENT.md` |
 | Push Notifications | Firebase Cloud Messaging | Buddy chat + circle call push |
 | Monitoring | Sentry | Error tracking |
 | Logs | CloudWatch | Centralized logging |

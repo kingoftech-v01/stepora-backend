@@ -288,15 +288,19 @@ class DailyActivity(models.Model):
 
     @classmethod
     def record_task_completion(cls, user, xp_earned=0, duration_mins=0):
-        """Record a task completion for today."""
+        """Record a task completion for today using atomic DB-level increments."""
+        from django.db.models import F
         today = django_timezone.now().date()
-        activity, _ = cls.objects.get_or_create(
+        activity, created = cls.objects.get_or_create(
             user=user, date=today
         )
-        activity.tasks_completed += 1
-        activity.xp_earned += xp_earned
-        activity.minutes_active += duration_mins
-        activity.save(update_fields=['tasks_completed', 'xp_earned', 'minutes_active'])
+        # Use F() expressions for atomic increment to avoid race conditions
+        cls.objects.filter(user=user, date=today).update(
+            tasks_completed=F('tasks_completed') + 1,
+            xp_earned=F('xp_earned') + xp_earned,
+            minutes_active=F('minutes_active') + duration_mins,
+        )
+        activity.refresh_from_db()
         return activity
 
 

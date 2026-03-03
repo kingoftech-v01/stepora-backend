@@ -15,6 +15,3 @@ class StoreConfig(AppConfig):
     name = 'apps.store'
     verbose_name = 'Store'
 
-    def ready(self):
-        """Perform initialization when the app is ready."""
-        pass

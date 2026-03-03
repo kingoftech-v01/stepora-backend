@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.http import HttpResponse
 from datetime import datetime, timedelta, timezone as dt_timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, inline_serializer
@@ -102,9 +103,9 @@ class CalendarEventViewSet(viewsets.ModelViewSet):
         except ConflictException as e:
             return Response(
                 {
-                    'detail': 'This event conflicts with existing events.',
+                    'detail': _('This event conflicts with existing events.'),
                     'conflicts': e.conflicts,
-                    'hint': 'Set force=true to save anyway.',
+                    'hint': _('Set force=true to save anyway.'),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -116,9 +117,9 @@ class CalendarEventViewSet(viewsets.ModelViewSet):
         except ConflictException as e:
             return Response(
                 {
-                    'detail': 'This event conflicts with existing events.',
+                    'detail': _('This event conflicts with existing events.'),
                     'conflicts': e.conflicts,
-                    'hint': 'Set force=true to save anyway.',
+                    'hint': _('Set force=true to save anyway.'),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -151,9 +152,9 @@ class CalendarEventViewSet(viewsets.ModelViewSet):
         if conflicts.exists() and not force:
             return Response(
                 {
-                    'detail': 'This time conflicts with existing events.',
+                    'detail': _('This time conflicts with existing events.'),
                     'conflicts': CalendarEventSerializer(conflicts, many=True).data,
-                    'hint': 'Set force=true to save anyway.',
+                    'hint': _('Set force=true to save anyway.'),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -226,7 +227,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         if not start_date or not end_date:
             return Response(
-                {'error': 'start and end dates required (ISO format)'},
+                {'error': _('start and end dates required (ISO format)')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -235,7 +236,7 @@ class CalendarViewSet(viewsets.ViewSet):
             end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         except ValueError:
             return Response(
-                {'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)'},
+                {'error': _('Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -303,7 +304,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         if not task_id or not new_date:
             return Response(
-                {'error': 'task_id and new_date required'},
+                {'error': _('task_id and new_date required')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -317,19 +318,19 @@ class CalendarViewSet(viewsets.ViewSet):
             task.save(update_fields=['scheduled_date'])
 
             return Response({
-                'message': 'Task rescheduled successfully',
+                'message': _('Task rescheduled successfully'),
                 'task_id': task.id,
                 'new_date': task.scheduled_date
             })
 
         except Task.DoesNotExist:
             return Response(
-                {'error': 'Task not found'},
+                {'error': _('Task not found')},
                 status=status.HTTP_404_NOT_FOUND
             )
         except ValueError:
             return Response(
-                {'error': 'Invalid date format'},
+                {'error': _('Invalid date format')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -351,7 +352,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         if not date_str or not duration_str:
             return Response(
-                {'error': 'date and duration_mins are required'},
+                {'error': _('date and duration_mins are required')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -360,13 +361,13 @@ class CalendarViewSet(viewsets.ViewSet):
             duration = int(duration_str)
         except ValueError:
             return Response(
-                {'error': 'Invalid date or duration format'},
+                {'error': _('Invalid date or duration format')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if duration < 5 or duration > 480:
             return Response(
-                {'error': 'Duration must be between 5 and 480 minutes'},
+                {'error': _('Duration must be between 5 and 480 minutes')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -511,7 +512,7 @@ class GoogleCalendarAuthView(APIView):
         )
         if not redirect_uri:
             return Response(
-                {'error': 'Google Calendar integration is not configured.'},
+                {'error': _('Google Calendar integration is not configured.')},
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
@@ -550,7 +551,7 @@ class GoogleCalendarCallbackView(APIView):
 
         code = request.data.get('code')
         if not code:
-            return Response({'error': 'Authorization code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Authorization code is required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         redirect_uri = request.data.get(
             'redirect_uri',
@@ -561,7 +562,7 @@ class GoogleCalendarCallbackView(APIView):
         try:
             tokens = service.exchange_code(code, redirect_uri)
         except Exception as e:
-            return Response({'error': f'Token exchange failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Token exchange failed: %(error)s') % {'error': str(e)}}, status=status.HTTP_400_BAD_REQUEST)
 
         integration, _ = GoogleCalendarIntegration.objects.update_or_create(
             user=request.user,
@@ -605,7 +606,7 @@ class GoogleCalendarSyncView(APIView):
         try:
             integration = GoogleCalendarIntegration.objects.get(user=request.user, sync_enabled=True)
         except GoogleCalendarIntegration.DoesNotExist:
-            return Response({'error': 'Google Calendar not connected.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Google Calendar not connected.')}, status=status.HTTP_404_NOT_FOUND)
 
         sync_google_calendar.delay(str(integration.id))
         return Response({'status': 'sync_queued', 'last_sync': integration.last_sync_at})
@@ -632,7 +633,7 @@ class GoogleCalendarDisconnectView(APIView):
         deleted, _ = GoogleCalendarIntegration.objects.filter(user=request.user).delete()
         if deleted:
             return Response({'status': 'disconnected'})
-        return Response({'error': 'No integration found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': _('No integration found.')}, status=status.HTTP_404_NOT_FOUND)
 
 
 class ICalFeedView(APIView):
@@ -659,7 +660,7 @@ class ICalFeedView(APIView):
                 ical_feed_token=feed_token
             )
         except GoogleCalendarIntegration.DoesNotExist:
-            return HttpResponse('Feed not found.', status=404, content_type='text/plain')
+            return HttpResponse(_('Feed not found.'), status=404, content_type='text/plain')
 
         user = integration.user
         now = timezone.now()
@@ -677,7 +678,7 @@ class ICalFeedView(APIView):
             'PRODID:-//DreamPlanner//Calendar//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
-            f'X-WR-CALNAME:DreamPlanner - {user.display_name or user.email}',
+            f'X-WR-CALNAME:DreamPlanner - {_ical_escape(user.display_name or user.email)}',
         ]
 
         for event in events:
@@ -719,6 +720,7 @@ class GoogleCalendarNativeRedirectView(APIView):
     )
     def get(self, request):
         import html
+        import json as json_mod
         code = request.query_params.get('code', '')
         error = request.query_params.get('error', '')
 
@@ -727,20 +729,31 @@ class GoogleCalendarNativeRedirectView(APIView):
         elif code:
             deep_link = f"com.dreamplanner.app://calendar/callback?code={html.escape(code)}"
         else:
-            return HttpResponse('Missing authorization code.', status=400)
+            return HttpResponse(_('Missing authorization code.'), status=400)
 
+        # Use json.dumps for safe JS string embedding (prevents injection)
+        deep_link_js = json_mod.dumps(deep_link)
+        deep_link_html = html.escape(deep_link)
         page = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Redirecting...</title></head>
 <body>
 <p>Redirecting to DreamPlanner...</p>
-<script>window.location.href = "{deep_link}";</script>
-<noscript><a href="{deep_link}">Click here to return to the app</a></noscript>
+<script>window.location.href = {deep_link_js};</script>
+<noscript><a href="{deep_link_html}">Click here to return to the app</a></noscript>
 </body></html>"""
         return HttpResponse(page, content_type='text/html')
 
 
 def _ical_escape(text):
-    """Escape special characters for iCal format."""
+    """Escape special characters for iCal format (RFC 5545)."""
     if not text:
         return ''
-    return text.replace('\\', '\\\\').replace(',', '\\,').replace(';', '\\;').replace('\n', '\\n')
+    return (
+        text
+        .replace('\\', '\\\\')
+        .replace(',', '\\,')
+        .replace(';', '\\;')
+        .replace('\r\n', '\\n')
+        .replace('\r', '\\n')
+        .replace('\n', '\\n')
+    )

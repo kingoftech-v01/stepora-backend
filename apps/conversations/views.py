@@ -16,6 +16,7 @@ from core.openapi_examples import AI_SEND_MESSAGE_REQUEST, AI_SEND_MESSAGE_RESPO
 
 from django.conf import settings
 from django.http import JsonResponse
+from django.utils.translation import gettext as _
 
 from django.db.models import Prefetch
 from .models import Conversation, Message, MessageReadStatus, ConversationTemplate, Call
@@ -29,6 +30,7 @@ from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.permissions import CanUseAI
 from core.ai_validators import validate_chat_response, validate_function_call, AIValidationError, validate_ai_output_safety
+from core.validators import validate_url_no_ssrf
 from core.moderation import ContentModerationService
 from core.throttles import AIRateThrottle, AIChatDailyThrottle, AIVoiceDailyThrottle
 from core.pagination import StandardResultsSetPagination
@@ -112,6 +114,20 @@ class ConversationViewSet(viewsets.ModelViewSet):
                            'summarize', 'generate_plan'):
             return [IsAuthenticated(), CanUseAI()]
         return [IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        """Only the conversation owner can update."""
+        if serializer.instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('You can only modify your own conversations.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Only the conversation owner can delete."""
+        if instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('You can only delete your own conversations.')
+        instance.delete()
 
     def get_queryset(self):
         """Get conversations for current user, including buddy chats they participate in."""
@@ -265,7 +281,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         except AIValidationError as e:
             return Response(
-                {'error': f'AI produced an invalid response: {e.message}'},
+                {'error': _('AI produced an invalid response: %(message)s') % {'message': e.message}},
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except OpenAIError as e:
@@ -295,11 +311,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         audio_file = request.FILES.get('audio')
         if not audio_file:
-            return Response({'error': 'No audio file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('No audio file provided.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate file size (max 25MB — Whisper limit)
         if audio_file.size > 25 * 1024 * 1024:
-            return Response({'error': 'Audio file too large. Max 25MB.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Audio file too large. Max 25MB.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate audio file type
         ALLOWED_AUDIO_TYPES = {
@@ -310,7 +326,26 @@ class ConversationViewSet(viewsets.ModelViewSet):
         content_type = getattr(audio_file, 'content_type', '')
         if content_type not in ALLOWED_AUDIO_TYPES:
             return Response(
-                {'error': f'Unsupported audio format: {content_type}. Allowed: mp3, m4a, wav, webm, ogg, flac, aac.'},
+                {'error': _('Unsupported audio format: %(format)s. Allowed: mp3, m4a, wav, webm, ogg, flac, aac.') % {'format': content_type}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate magic bytes to prevent disguised file uploads
+        header = audio_file.read(12)
+        audio_file.seek(0)
+        valid_audio = (
+            header[:3] == b'ID3' or  # MP3 with ID3 tag
+            header[:2] == b'\xff\xfb' or header[:2] == b'\xff\xf3' or header[:2] == b'\xff\xf2' or  # MP3 sync
+            header[4:8] == b'ftyp' or  # M4A/MP4 container
+            header[:4] == b'RIFF' or  # WAV
+            header[:4] == b'OggS' or  # Ogg
+            header[:4] == b'fLaC' or  # FLAC
+            header[:4] == b'\x1aE\xdf\xa3' or  # WebM/Matroska
+            len(header) >= 4  # Allow through if header too short to validate
+        )
+        if not valid_audio:
+            return Response(
+                {'error': _('Invalid audio file content.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -368,11 +403,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
         user_prompt = request.data.get('prompt', '')
 
         if not image_file:
-            return Response({'error': 'No image file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('No image file provided.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate file size (max 20MB)
         if image_file.size > 20 * 1024 * 1024:
-            return Response({'error': 'Image too large. Max 20MB.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Image too large. Max 20MB.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Moderate user prompt text if provided
         if user_prompt:
@@ -397,6 +432,12 @@ class ConversationViewSet(viewsets.ModelViewSet):
             metadata={'type': 'image'},
         )
         Message.objects.filter(id=user_message.id).update(image_url=image_url)
+
+        # Validate image URL to prevent SSRF
+        try:
+            validate_url_no_ssrf(image_url)
+        except Exception:
+            return Response({'error': _('Invalid image URL.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Analyze image with GPT-4 Vision
         ai_service = OpenAIService()
@@ -479,7 +520,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             message = conversation.messages.get(id=message_id)
         except Message.DoesNotExist:
-            return Response({'error': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Message not found.')}, status=status.HTTP_404_NOT_FOUND)
         message.is_pinned = not message.is_pinned
         message.save(update_fields=['is_pinned'])
         return Response(MessageSerializer(message).data)
@@ -501,7 +542,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             message = conversation.messages.get(id=message_id)
         except Message.DoesNotExist:
-            return Response({'error': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Message not found.')}, status=status.HTTP_404_NOT_FOUND)
         message.is_liked = not message.is_liked
         message.save(update_fields=['is_liked'])
         return Response(MessageSerializer(message).data)
@@ -524,11 +565,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             message = conversation.messages.get(id=message_id)
         except Message.DoesNotExist:
-            return Response({'error': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Message not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         emoji = request.data.get('emoji', '')
         if not emoji:
-            return Response({'error': 'emoji is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('emoji is required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         reactions = message.reactions or []
         if emoji in reactions:
@@ -626,7 +667,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
             except ImportError:
                 return Response(
-                    {'error': 'PDF export is not available. Install reportlab.'},
+                    {'error': _('PDF export is not available. Install reportlab.')},
                     status=status.HTTP_501_NOT_IMPLEMENTED
                 )
 
@@ -742,24 +783,24 @@ class CallViewSet(viewsets.GenericViewSet):
         call_type = request.data.get('call_type', 'voice')
 
         if not callee_id:
-            return Response({'detail': 'callee_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': _('callee_id is required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         if call_type not in ('voice', 'video'):
-            return Response({'detail': 'call_type must be voice or video.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': _('call_type must be voice or video.')}, status=status.HTTP_400_BAD_REQUEST)
 
         from apps.users.models import User
         try:
             callee = User.objects.get(id=callee_id)
         except User.DoesNotExist:
-            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('User not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if callee == request.user:
-            return Response({'detail': 'Cannot call yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': _('Cannot call yourself.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Block enforcement
         from apps.social.models import BlockedUser
         if BlockedUser.is_blocked(request.user, callee):
-            return Response({'detail': 'Cannot call this user'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Cannot call this user')}, status=status.HTTP_403_FORBIDDEN)
 
         # Find buddy pairing if one exists
         from apps.buddies.models import BuddyPairing
@@ -815,13 +856,13 @@ class CallViewSet(viewsets.GenericViewSet):
         """Accept an incoming call."""
         call = self._get_call(pk)
         if not call:
-            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('Call not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if call.callee != request.user:
-            return Response({'detail': 'Only the callee can accept.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Only the callee can accept.')}, status=status.HTTP_403_FORBIDDEN)
 
         if call.status != 'ringing':
-            return Response({'detail': f'Call is {call.status}, cannot accept.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': _('Call is %(status)s, cannot accept.') % {'status': call.status}}, status=status.HTTP_400_BAD_REQUEST)
 
         from django.utils import timezone
         call.status = 'accepted'
@@ -840,10 +881,10 @@ class CallViewSet(viewsets.GenericViewSet):
         """Reject an incoming call."""
         call = self._get_call(pk)
         if not call:
-            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('Call not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if call.callee != request.user:
-            return Response({'detail': 'Only the callee can reject.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Only the callee can reject.')}, status=status.HTTP_403_FORBIDDEN)
 
         call.status = 'rejected'
         call.save(update_fields=['status', 'updated_at'])
@@ -852,11 +893,11 @@ class CallViewSet(viewsets.GenericViewSet):
         try:
             from apps.notifications.models import Notification
             from django.utils import timezone as tz
-            callee_name = call.callee.display_name or 'Your buddy'
+            callee_name = call.callee.display_name or _('Your buddy')
             Notification.objects.create(
                 user=call.caller,
                 notification_type='buddy',
-                title=f'{callee_name} declined your call',
+                title=_('%(name)s declined your call') % {'name': callee_name},
                 body='',
                 scheduled_for=tz.now(),
                 data={'call_id': str(call.id), 'type': 'call_rejected'},
@@ -891,10 +932,10 @@ class CallViewSet(viewsets.GenericViewSet):
         """End an active call."""
         call = self._get_call(pk)
         if not call:
-            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('Call not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if request.user not in (call.caller, call.callee):
-            return Response({'detail': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Not a participant.')}, status=status.HTTP_403_FORBIDDEN)
 
         from django.utils import timezone
         call.status = 'completed'
@@ -915,13 +956,13 @@ class CallViewSet(viewsets.GenericViewSet):
         """Cancel a ringing call (caller only)."""
         call = self._get_call(pk)
         if not call:
-            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('Call not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if call.caller != request.user:
-            return Response({'detail': 'Only the caller can cancel.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Only the caller can cancel.')}, status=status.HTTP_403_FORBIDDEN)
 
         if call.status != 'ringing':
-            return Response({'detail': f'Call is {call.status}, cannot cancel.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': _('Call is %(status)s, cannot cancel.') % {'status': call.status}}, status=status.HTTP_400_BAD_REQUEST)
 
         call.status = 'cancelled'
         call.save(update_fields=['status', 'updated_at'])
@@ -985,9 +1026,9 @@ class CallViewSet(viewsets.GenericViewSet):
         """Get the current status of a call (for polling)."""
         call = self._get_call(pk)
         if not call:
-            return Response({'detail': 'Call not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': _('Call not found.')}, status=status.HTTP_404_NOT_FOUND)
         if request.user not in (call.caller, call.callee):
-            return Response({'detail': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': _('Not a participant.')}, status=status.HTTP_403_FORBIDDEN)
         return Response({
             'callId': str(call.id),
             'status': call.status,
@@ -1016,7 +1057,7 @@ class CallViewSet(viewsets.GenericViewSet):
                 return
 
             fcm = FCMService()
-            caller_name = caller.display_name or caller.username or 'Someone'
+            caller_name = caller.display_name or caller.username or _('Someone')
             data = {
                 'type': 'incoming_call',
                 'call_id': str(call.id),
@@ -1030,8 +1071,8 @@ class CallViewSet(viewsets.GenericViewSet):
                 try:
                     fcm.send_to_token(
                         token=token,
-                        title=f'Incoming {call.call_type} call',
-                        body=f'{caller_name} is calling you',
+                        title=_('Incoming %(call_type)s call') % {'call_type': call.call_type},
+                        body=_('%(name)s is calling you') % {'name': caller_name},
                         data=data,
                     )
                 except Exception:

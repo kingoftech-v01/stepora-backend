@@ -6,6 +6,7 @@ user search results. They provide data optimized for the mobile app's
 social features.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_serializer
 
@@ -14,6 +15,12 @@ from apps.users.models import User
 from .models import (
     Friendship, UserFollow, ActivityFeedItem,
     DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+    SocialEvent, SocialEventRegistration,
+    Story, StoryView,
+)
+from .validators import (
+    validate_image_upload, validate_video_upload,
+    validate_audio_upload, validate_event_cover_upload,
 )
 
 
@@ -135,6 +142,7 @@ class UserSearchResultSerializer(serializers.Serializer):
     influenceScore = serializers.IntegerField(help_text='Influence score (XP).')
     currentLevel = serializers.IntegerField(help_text='Current level.')
     isFriend = serializers.BooleanField(help_text='Whether they are already a friend.')
+    isPendingRequest = serializers.BooleanField(help_text='Whether a friend request is pending.', default=False)
     isFollowing = serializers.BooleanField(help_text='Whether the current user follows them.')
 
 
@@ -254,20 +262,31 @@ class DreamPostSerializer(serializers.ModelSerializer):
     likesCount = serializers.IntegerField(source='likes_count', read_only=True)
     commentsCount = serializers.IntegerField(source='comments_count', read_only=True)
     sharesCount = serializers.IntegerField(source='shares_count', read_only=True)
+    savesCount = serializers.IntegerField(source='saves_count', read_only=True)
     hasLiked = serializers.SerializerMethodField()
+    hasSaved = serializers.SerializerMethodField()
     hasEncouraged = serializers.SerializerMethodField()
     encouragementSummary = serializers.SerializerMethodField()
     gofundmeUrl = serializers.URLField(source='gofundme_url', read_only=True)
     imageUrl = serializers.SerializerMethodField()
+    videoUrl = serializers.SerializerMethodField()
+    audioUrl = serializers.SerializerMethodField()
+    mediaType = serializers.CharField(source='media_type', read_only=True)
+    postType = serializers.CharField(source='post_type', read_only=True)
     dreamTitle = serializers.SerializerMethodField()
+    linkedAchievement = serializers.SerializerMethodField()
+    eventDetail = serializers.SerializerMethodField()
 
     class Meta:
         model = DreamPost
         fields = [
             'id', 'user', 'dream', 'dreamTitle',
-            'content', 'imageUrl', 'gofundmeUrl',
+            'content', 'imageUrl', 'videoUrl', 'audioUrl',
+            'mediaType', 'postType', 'gofundmeUrl',
             'visibility', 'likesCount', 'commentsCount', 'sharesCount',
-            'is_pinned', 'hasLiked', 'hasEncouraged', 'encouragementSummary',
+            'savesCount', 'is_pinned',
+            'hasLiked', 'hasSaved', 'hasEncouraged', 'encouragementSummary',
+            'linkedAchievement', 'eventDetail',
             'createdAt', 'updatedAt',
         ]
         read_only_fields = fields
@@ -288,6 +307,14 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return obj._user_has_liked
         return obj.likes.filter(user=request.user).exists()
 
+    def get_hasSaved(self, obj) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if hasattr(obj, '_user_has_saved'):
+            return obj._user_has_saved
+        return obj.saved_by.filter(id=request.user.id).exists()
+
     def get_hasEncouraged(self, obj) -> bool:
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -303,11 +330,28 @@ class DreamPostSerializer(serializers.ModelSerializer):
         )
         return {item['encouragement_type']: item['count'] for item in counts}
 
+    def _absolute_url(self, relative_url):
+        """Convert a relative media URL to an absolute URL."""
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(relative_url)
+        return relative_url
+
     def get_imageUrl(self, obj) -> str:
         if obj.image_url:
             return obj.image_url
         if obj.image_file:
-            return obj.image_file.url
+            return self._absolute_url(obj.image_file.url)
+        return ''
+
+    def get_videoUrl(self, obj) -> str:
+        if obj.video_file:
+            return self._absolute_url(obj.video_file.url)
+        return ''
+
+    def get_audioUrl(self, obj) -> str:
+        if obj.audio_file:
+            return self._absolute_url(obj.audio_file.url)
         return ''
 
     def get_dreamTitle(self, obj) -> str:
@@ -315,9 +359,51 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return obj.dream.title
         return ''
 
+    def get_linkedAchievement(self, obj) -> dict:
+        if obj.post_type not in ('achievement', 'milestone'):
+            return None
+        result = {'type': obj.post_type}
+        if obj.linked_goal:
+            result['goalTitle'] = obj.linked_goal.title
+        if obj.linked_milestone:
+            result['milestoneTitle'] = obj.linked_milestone.title
+        if obj.linked_task:
+            result['taskTitle'] = obj.linked_task.title
+        if obj.dream:
+            result['dreamTitle'] = obj.dream.title
+        return result
+
+    def get_eventDetail(self, obj) -> dict:
+        if obj.post_type != 'event':
+            return None
+        events = obj.social_event.all()
+        if not events:
+            return None
+        event = events[0]
+        request = self.context.get('request')
+        is_registered = False
+        if request and request.user.is_authenticated:
+            is_registered = event.registrations.filter(
+                user=request.user, status='registered'
+            ).exists()
+        return {
+            'id': str(event.id),
+            'title': event.title,
+            'description': event.description,
+            'eventType': event.event_type,
+            'location': event.location,
+            'meetingLink': event.meeting_link,
+            'startTime': event.start_time.isoformat(),
+            'endTime': event.end_time.isoformat(),
+            'maxParticipants': event.max_participants,
+            'participantsCount': event.participants_count,
+            'status': event.status,
+            'isRegistered': is_registered,
+        }
+
 
 class DreamPostCreateSerializer(serializers.Serializer):
-    """Serializer for creating a dream post."""
+    """Serializer for creating a dream post with optional media and event."""
 
     content = serializers.CharField(max_length=5000)
     dream_id = serializers.UUIDField(required=False, allow_null=True)
@@ -328,6 +414,38 @@ class DreamPostCreateSerializer(serializers.Serializer):
     )
     image_url = serializers.URLField(required=False, default='')
 
+    # Media uploads
+    image_file = serializers.ImageField(required=False, allow_null=True)
+    video_file = serializers.FileField(required=False, allow_null=True)
+    audio_file = serializers.FileField(required=False, allow_null=True)
+
+    # Post type & achievement linking
+    post_type = serializers.ChoiceField(
+        choices=['regular', 'achievement', 'milestone', 'event'],
+        default='regular',
+    )
+    linked_goal_id = serializers.UUIDField(required=False, allow_null=True)
+    linked_milestone_id = serializers.UUIDField(required=False, allow_null=True)
+    linked_task_id = serializers.UUIDField(required=False, allow_null=True)
+
+    # Event fields (only when post_type = 'event')
+    event_title = serializers.CharField(max_length=255, required=False)
+    event_description = serializers.CharField(max_length=5000, required=False, default='')
+    event_type = serializers.ChoiceField(
+        choices=['virtual', 'physical', 'challenge'], required=False,
+    )
+    event_location = serializers.CharField(max_length=500, required=False, default='')
+    event_meeting_link = serializers.URLField(required=False, default='')
+    event_start_time = serializers.DateTimeField(required=False)
+    event_end_time = serializers.DateTimeField(required=False)
+    event_max_participants = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1,
+    )
+    event_cover_image = serializers.ImageField(required=False, allow_null=True)
+    event_challenge_description = serializers.CharField(
+        max_length=5000, required=False, default='',
+    )
+
     def validate_content(self, value):
         return sanitize_text(value)
 
@@ -336,6 +454,72 @@ class DreamPostCreateSerializer(serializers.Serializer):
             from core.sanitizers import sanitize_url
             return sanitize_url(value)
         return value
+
+    def validate_image_file(self, value):
+        if value:
+            validate_image_upload(value)
+        return value
+
+    def validate_video_file(self, value):
+        if value:
+            validate_video_upload(value)
+        return value
+
+    def validate_audio_file(self, value):
+        if value:
+            validate_audio_upload(value)
+        return value
+
+    def validate_event_cover_image(self, value):
+        if value:
+            validate_event_cover_upload(value)
+        return value
+
+    def validate_event_meeting_link(self, value):
+        if value:
+            from core.sanitizers import sanitize_url
+            return sanitize_url(value)
+        return value
+
+    def validate(self, data):
+        # Ensure only one media type
+        media_count = sum(1 for f in [
+            data.get('image_file'), data.get('video_file'), data.get('audio_file'),
+        ] if f)
+        if data.get('image_url') and media_count > 0:
+            raise serializers.ValidationError(
+                _('Cannot provide both image_url and an uploaded file.')
+            )
+        if media_count > 1:
+            raise serializers.ValidationError(
+                _('Only one media file (image, video, or audio) can be uploaded per post.')
+            )
+
+        # Validate event fields when post_type is 'event'
+        if data.get('post_type') == 'event':
+            if not data.get('event_title'):
+                raise serializers.ValidationError(
+                    {'event_title': _('Event title is required for event posts.')}
+                )
+            if not data.get('event_type'):
+                raise serializers.ValidationError(
+                    {'event_type': _('Event type is required for event posts.')}
+                )
+            if not data.get('event_start_time') or not data.get('event_end_time'):
+                raise serializers.ValidationError(
+                    _('Event start and end times are required.')
+                )
+            if data['event_end_time'] <= data['event_start_time']:
+                raise serializers.ValidationError(
+                    _('Event end time must be after start time.')
+                )
+            # Virtual events need a link
+            if data['event_type'] == 'virtual' and not data.get('event_meeting_link'):
+                raise serializers.ValidationError(
+                    {'event_meeting_link': _('Meeting link is required for virtual events.')}
+                )
+
+        return data
 
 
 class DreamPostCommentSerializer(serializers.ModelSerializer):
@@ -385,3 +569,229 @@ class DreamEncouragementSerializer(serializers.ModelSerializer):
             'username': obj.user.display_name or 'Anonymous',
             'avatar': obj.user.avatar_url or '',
         }
+
+
+# ── Social Event serializers ─────────────────────────────────────────
+
+
+class SocialEventSerializer(serializers.ModelSerializer):
+    """Full social event representation."""
+
+    creator = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    startTime = serializers.DateTimeField(source='start_time', read_only=True)
+    endTime = serializers.DateTimeField(source='end_time', read_only=True)
+    eventType = serializers.CharField(source='event_type', read_only=True)
+    meetingLink = serializers.URLField(source='meeting_link', read_only=True)
+    maxParticipants = serializers.IntegerField(source='max_participants', read_only=True)
+    participantsCount = serializers.IntegerField(source='participants_count', read_only=True)
+    coverImageUrl = serializers.SerializerMethodField()
+    challengeDescription = serializers.CharField(
+        source='challenge_description', read_only=True,
+    )
+    isRegistered = serializers.SerializerMethodField()
+    dreamTitle = serializers.SerializerMethodField()
+    postId = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SocialEvent
+        fields = [
+            'id', 'creator', 'postId',
+            'title', 'description', 'coverImageUrl',
+            'eventType', 'location', 'meetingLink',
+            'startTime', 'endTime',
+            'challengeDescription', 'maxParticipants', 'participantsCount',
+            'status', 'isRegistered', 'dreamTitle',
+            'createdAt',
+        ]
+        read_only_fields = fields
+
+    def get_creator(self, obj) -> dict:
+        return {
+            'id': str(obj.creator.id),
+            'username': obj.creator.display_name or 'Anonymous',
+            'avatar': obj.creator.avatar_url or '',
+            'level': obj.creator.level,
+        }
+
+    def get_coverImageUrl(self, obj) -> str:
+        if obj.cover_image:
+            return obj.cover_image.url
+        return ''
+
+    def get_isRegistered(self, obj) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if hasattr(obj, '_user_is_registered'):
+            return obj._user_is_registered
+        return obj.registrations.filter(
+            user=request.user, status='registered'
+        ).exists()
+
+    def get_dreamTitle(self, obj) -> str:
+        if obj.dream:
+            return obj.dream.title
+        return ''
+
+    def get_postId(self, obj) -> str:
+        if obj.post_id:
+            return str(obj.post_id)
+        return ''
+
+
+class SocialEventCreateSerializer(serializers.Serializer):
+    """Serializer for creating a social event standalone (without post)."""
+
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(max_length=5000, required=False, default='')
+    event_type = serializers.ChoiceField(choices=['virtual', 'physical', 'challenge'])
+    location = serializers.CharField(max_length=500, required=False, default='')
+    meeting_link = serializers.URLField(required=False, default='')
+    start_time = serializers.DateTimeField()
+    end_time = serializers.DateTimeField()
+    max_participants = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1,
+    )
+    dream_id = serializers.UUIDField(required=False, allow_null=True)
+    cover_image = serializers.ImageField(required=False, allow_null=True)
+    challenge_description = serializers.CharField(
+        max_length=5000, required=False, default='',
+    )
+
+    def validate_title(self, value):
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        return sanitize_text(value)
+
+    def validate_challenge_description(self, value):
+        return sanitize_text(value)
+
+    def validate_meeting_link(self, value):
+        if value:
+            from core.sanitizers import sanitize_url
+            return sanitize_url(value)
+        return value
+
+    def validate_cover_image(self, value):
+        if value:
+            validate_event_cover_upload(value)
+        return value
+
+    def validate(self, data):
+        if data['end_time'] <= data['start_time']:
+            raise serializers.ValidationError(
+                'Event end time must be after start time.'
+            )
+        if data['event_type'] == 'virtual' and not data.get('meeting_link'):
+            raise serializers.ValidationError(
+                {'meeting_link': _('Meeting link is required for virtual events.')}
+            )
+        return data
+
+
+class SocialEventRegistrationSerializer(serializers.ModelSerializer):
+    """Registration record for a social event."""
+
+    user = serializers.SerializerMethodField()
+    registeredAt = serializers.DateTimeField(source='registered_at', read_only=True)
+
+    class Meta:
+        model = SocialEventRegistration
+        fields = ['id', 'user', 'status', 'registeredAt']
+        read_only_fields = fields
+
+    def get_user(self, obj) -> dict:
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.display_name or 'Anonymous',
+            'avatar': obj.user.avatar_url or '',
+            'level': obj.user.level,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Story Serializers
+# ═══════════════════════════════════════════════════════════════════
+
+class StorySerializer(serializers.ModelSerializer):
+    """Read serializer for a single story."""
+
+    user = serializers.SerializerMethodField()
+    imageUrl = serializers.SerializerMethodField()
+    videoUrl = serializers.SerializerMethodField()
+    mediaType = serializers.CharField(source='media_type', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    expiresAt = serializers.DateTimeField(source='expires_at', read_only=True)
+    viewCount = serializers.IntegerField(source='view_count', read_only=True)
+    hasViewed = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Story
+        fields = [
+            'id', 'user', 'imageUrl', 'videoUrl', 'mediaType',
+            'caption', 'createdAt', 'expiresAt', 'viewCount', 'hasViewed',
+        ]
+        read_only_fields = fields
+
+    def get_user(self, obj) -> dict:
+        return {
+            'id': str(obj.user.id),
+            'username': obj.user.display_name or 'Anonymous',
+            'displayName': obj.user.display_name or 'Anonymous',
+            'avatar': obj.user.avatar_url or '',
+        }
+
+    def _absolute_url(self, relative_url):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(relative_url)
+        return relative_url
+
+    def get_imageUrl(self, obj) -> str:
+        if obj.image_file:
+            return self._absolute_url(obj.image_file.url)
+        return ''
+
+    def get_videoUrl(self, obj) -> str:
+        if obj.video_file:
+            return self._absolute_url(obj.video_file.url)
+        return ''
+
+    def get_hasViewed(self, obj) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if hasattr(obj, '_user_has_viewed'):
+            return obj._user_has_viewed
+        return StoryView.objects.filter(story=obj, user=request.user).exists()
+
+
+class StoryCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a story."""
+
+    image_file = serializers.ImageField(required=False, allow_null=True)
+    video_file = serializers.FileField(required=False, allow_null=True)
+    caption = serializers.CharField(max_length=280, required=False, default='')
+
+    def validate(self, data):
+        has_image = bool(data.get('image_file'))
+        has_video = bool(data.get('video_file'))
+        if not has_image and not has_video:
+            raise serializers.ValidationError(_('A story requires an image or video.'))
+        if has_image and has_video:
+            raise serializers.ValidationError(_('Only one media file per story.'))
+        if has_image:
+            validate_image_upload(data['image_file'])
+        if has_video:
+            validate_video_upload(data['video_file'])
+        return data
+
+
+class StoryFeedGroupSerializer(serializers.Serializer):
+    """Groups stories by user for the feed."""
+
+    user = serializers.DictField()
+    stories = StorySerializer(many=True)
+    hasUnviewed = serializers.BooleanField()

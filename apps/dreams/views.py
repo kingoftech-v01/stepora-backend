@@ -1,6 +1,11 @@
 """
 Views for Dreams app.
 """
+import logging
+import uuid
+import requests as http_requests
+
+logger = logging.getLogger(__name__)
 
 from rest_framework import viewsets, status, generics, views
 from rest_framework.decorators import action
@@ -8,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
@@ -40,7 +46,7 @@ from core.ai_validators import (
     check_plan_calibration_coherence,
     AIValidationError,
 )
-from core.throttles import AIPlanRateThrottle, AIPlanDailyThrottle, AIImageDailyThrottle
+from core.throttles import AIPlanRateThrottle, AIPlanDailyThrottle, AICalibrationRateThrottle, AICalibrationDailyThrottle, AIImageDailyThrottle
 from core.ai_usage import AIUsageTracker
 
 
@@ -111,7 +117,8 @@ class DreamViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """Get dreams for current user, including those they collaborate on."""
+        """Get dreams for current user, including those they collaborate on.
+        For retrieve action, also include public dreams from other users."""
         if getattr(self, 'swagger_fake_view', False):
             return Dream.objects.none()
         from django.db.models import Q
@@ -123,9 +130,15 @@ class DreamViewSet(viewsets.ModelViewSet):
             shared_with=self.request.user
         ).values_list('dream_id', flat=True)
         from django.db.models import Count, Q as DQ
-        qs = Dream.objects.filter(
-            Q(user=self.request.user) | Q(id__in=collab_dream_ids) | Q(id__in=shared_dream_ids)
-        ).prefetch_related(
+
+        # Base filter: own dreams + collaborations + shared
+        base_q = Q(user=self.request.user) | Q(id__in=collab_dream_ids) | Q(id__in=shared_dream_ids)
+
+        # For retrieve, also allow viewing public dreams from anyone
+        if self.action == 'retrieve':
+            base_q = base_q | Q(is_public=True)
+
+        qs = Dream.objects.filter(base_q).prefetch_related(
             'milestones__goals__tasks', 'milestones__obstacles',
             'goals__tasks', 'taggings__tag'
         ).annotate(
@@ -147,31 +160,54 @@ class DreamViewSet(viewsets.ModelViewSet):
         return qs
 
     def get_serializer_class(self):
-        """Return appropriate serializer based on action."""
+        """Return appropriate serializer based on action.
+        For retrieve, use PublicDreamDetailSerializer if viewer is not the owner."""
         if self.action == 'create':
             return DreamCreateSerializer
         elif self.action in ['update', 'partial_update']:
             return DreamUpdateSerializer
         elif self.action == 'retrieve':
+            # Check if the dream belongs to someone else — use public serializer
+            obj = self.get_object_for_serializer_check()
+            if obj and obj.user != self.request.user:
+                from .serializers import PublicDreamDetailSerializer
+                return PublicDreamDetailSerializer
             return DreamDetailSerializer
         return DreamSerializer
 
+    def get_object_for_serializer_check(self):
+        """Get the object without triggering permission checks (used by get_serializer_class)."""
+        try:
+            lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+            pk = self.kwargs.get(lookup_url_kwarg)
+            if pk:
+                return Dream.objects.filter(pk=pk).only('user_id').first()
+        except Exception as e:
+            logger.warning('get_object_for_serializer_check failed: %s', e)
+        return None
+
     def get_permissions(self):
-        """Get permissions based on action — AI and vision features require paid subscriptions."""
+        """Get permissions based on action — AI and vision features require paid subscriptions.
+        For retrieve, allow viewing public dreams without IsOwner check."""
         ai_actions = [
             'analyze', 'start_calibration', 'answer_calibration',
             'generate_plan', 'generate_two_minute_start',
         ]
-        vision_actions = [
-            'generate_vision', 'vision_board_list',
-            'vision_board_add', 'vision_board_remove',
+        vision_ai_actions = ['generate_vision']
+        vision_free_actions = [
+            'vision_board_list', 'vision_board_add', 'vision_board_remove',
         ]
         if self.action in ai_actions:
-            return [IsAuthenticated(), CanUseAI()]
-        if self.action in vision_actions:
-            return [IsAuthenticated(), CanUseVisionBoard()]
+            return [IsAuthenticated(), IsOwner(), CanUseAI()]
+        if self.action in vision_ai_actions:
+            return [IsAuthenticated(), IsOwner(), CanUseVisionBoard()]
+        if self.action in vision_free_actions:
+            return [IsAuthenticated(), IsOwner()]
         if self.action == 'create':
             return [IsAuthenticated(), CanCreateDream()]
+        if self.action == 'retrieve':
+            # Allow any authenticated user to retrieve — queryset handles access
+            return [IsAuthenticated()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -219,7 +255,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         except AIValidationError as e:
             return Response(
-                {'error': f'AI produced an invalid analysis: {e.message}'},
+                {'error': _('AI produced an invalid analysis: %(msg)s') % {'msg': e.message}},
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except OpenAIError as e:
@@ -242,7 +278,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             502: OpenApiResponse(description='AI service error.'),
         },
     )
-    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    @action(detail=True, methods=['post'], throttle_classes=[AICalibrationRateThrottle, AICalibrationDailyThrottle])
     def start_calibration(self, request, pk=None):
         """Generate initial calibration questions (7 questions) for the dream."""
         dream = self.get_object()
@@ -251,7 +287,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         # Check if calibration already completed
         if dream.calibration_status == 'completed':
             return Response(
-                {'message': 'Calibration already completed for this dream'},
+                {'message': _('Calibration already completed for this dream')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -295,7 +331,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         except AIValidationError as e:
             return Response(
-                {'error': f'AI produced invalid calibration questions: {e.message}'},
+                {'error': _('AI produced invalid calibration questions: %(msg)s') % {'msg': e.message}},
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except OpenAIError as e:
@@ -318,7 +354,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             502: OpenApiResponse(description='AI service error.'),
         },
     )
-    @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    @action(detail=True, methods=['post'], throttle_classes=[AICalibrationRateThrottle, AICalibrationDailyThrottle])
     def answer_calibration(self, request, pk=None):
         """
         Submit answers to calibration questions.
@@ -341,7 +377,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if not answers_data:
             return Response(
-                {'error': 'No answers provided'},
+                {'error': _('No answers provided')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -409,7 +445,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 'status': 'completed',
                 'total_questions': total_questions,
                 'answered': answered_count,
-                'message': 'Calibration complete. Ready to generate your personalized plan.',
+                'message': _('Calibration complete. Ready to generate your personalized plan.'),
             })
 
         # Ask AI if we have enough info or need more questions
@@ -442,7 +478,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                     'total_questions': total_questions,
                     'answered': answered_count,
                     'confidence_score': result.confidence_score,
-                    'message': 'Calibration complete. Ready to generate your personalized plan.',
+                    'message': _('Calibration complete. Ready to generate your personalized plan.'),
                 })
             else:
                 # Save validated follow-up questions
@@ -470,7 +506,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         except AIValidationError as e:
             return Response(
-                {'error': f'AI produced invalid follow-up questions: {e.message}'},
+                {'error': _('AI produced invalid follow-up questions: %(msg)s') % {'msg': e.message}},
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except OpenAIError as e:
@@ -497,284 +533,68 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         return Response({
             'status': 'skipped',
-            'message': 'Calibration skipped. You can generate a plan with basic info.',
+            'message': _('Calibration skipped. You can generate a plan with basic info.'),
         })
 
     @extend_schema(
         summary="Generate plan",
-        description="Generate a complete AI-powered plan with goals and tasks, using calibration data if available",
+        description="Dispatch AI plan generation as a background task. Returns 202 with status URL to poll.",
         tags=["Dreams"],
         responses={
-            200: DreamDetailSerializer,
+            202: OpenApiResponse(description='Plan generation started.'),
             403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description='Dream not found.'),
             429: OpenApiResponse(description='Rate limit exceeded.'),
-            500: OpenApiResponse(description='Internal server error.'),
-            502: OpenApiResponse(description='AI service error.'),
         },
     )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def generate_plan(self, request, pk=None):
-        """Generate complete plan for dream with AI, enriched by calibration data."""
+        """Dispatch plan generation as a Celery background task."""
+        from .tasks import generate_dream_plan_task, set_plan_status
+
         dream = self.get_object()
-        ai_service = OpenAIService()
 
-        user_context = {
-            'timezone': dream.user.timezone,
-            'work_schedule': dream.user.work_schedule or {},
-        }
+        # Check if already generating
+        from .tasks import get_plan_status
+        current = get_plan_status(str(dream.id))
+        if current and current.get('status') == 'generating':
+            return Response({
+                'status': 'generating',
+                'message': current.get('message', _('Plan is being generated...')),
+            }, status=status.HTTP_202_ACCEPTED)
 
-        # If calibration was completed, build rich context from Q&A
-        calibration_profile_dict = None
-        calibration_context_dict = None
-        if dream.calibration_status == 'completed':
-            qa_pairs = list(
-                CalibrationResponse.objects.filter(
-                    dream=dream,
-                    answer__gt=''
-                ).order_by('question_number').values('question', 'answer')
-            )
+        # Dispatch Celery task
+        set_plan_status(str(dream.id), 'generating', message='Starting plan generation...')
+        generate_dream_plan_task.delay(str(dream.id), str(request.user.id))
 
-            if qa_pairs:
-                try:
-                    raw_summary = ai_service.generate_calibration_summary(
-                        dream.title,
-                        dream.description,
-                        qa_pairs
-                    )
-                    # Validate calibration summary
-                    summary = validate_calibration_summary(raw_summary)
-                    calibration_profile_dict = summary.user_profile.model_dump()
-                    calibration_context_dict = summary.model_dump()
+        logger.info(f"generate_plan: dispatched Celery task for dream={dream.id}")
+        return Response({
+            'status': 'generating',
+            'message': _('Plan generation started. This may take a few minutes.'),
+        }, status=status.HTTP_202_ACCEPTED)
 
-                    user_context['calibration_profile'] = calibration_profile_dict
-                    user_context['plan_recommendations'] = summary.plan_recommendations.model_dump()
-                    if summary.enriched_description:
-                        user_context['enriched_description'] = summary.enriched_description
-                except (OpenAIError, AIValidationError):
-                    pass  # Fall back to basic plan generation
+    @extend_schema(
+        summary="Plan generation status",
+        description="Poll for the status of a background plan generation task.",
+        tags=["Dreams"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'])
+    def plan_status(self, request, pk=None):
+        """Check the status of plan generation for a dream."""
+        from .tasks import get_plan_status
 
-        try:
-            # Generate plan with AI (now with calibration context)
-            raw_plan = ai_service.generate_plan(
-                dream.title,
-                dream.description,
-                user_context,
-                target_date=str(dream.target_date) if dream.target_date else None,
-            )
+        dream = self.get_object()
+        status_data = get_plan_status(str(dream.id))
 
-            # Validate the entire plan structure
-            plan = validate_plan_response(raw_plan)
+        if not status_data:
+            # No generation in progress — check if dream already has milestones
+            has_plan = DreamMilestone.objects.filter(dream=dream).exists() or Goal.objects.filter(dream=dream).exists()
+            if has_plan:
+                return Response({'status': 'completed', 'message': _('Plan already exists.')})
+            return Response({'status': 'idle', 'message': _('No plan generation in progress.')})
 
-            # Increment AI usage counter (counts as 1 even if calibration summary was also generated)
-            AIUsageTracker().increment(request.user, 'ai_plan')
-
-            # Check coherence between plan and calibration data
-            coherence_warnings = check_plan_calibration_coherence(
-                plan, calibration_profile_dict
-            )
-
-            # Save validated AI analysis (include calibration summary)
-            analysis_data = plan.model_dump()
-            if calibration_context_dict:
-                analysis_data['calibration_summary'] = calibration_context_dict
-            if coherence_warnings:
-                analysis_data['coherence_warnings'] = coherence_warnings
-            dream.ai_analysis = analysis_data
-            dream.save(update_fields=['ai_analysis'])
-
-            from datetime import timedelta, date as date_type
-
-            def _parse_date(date_str):
-                """Safely parse YYYY-MM-DD string to date object."""
-                if not date_str:
-                    return None
-                try:
-                    return date_type.fromisoformat(str(date_str).strip()[:10])
-                except (ValueError, TypeError):
-                    return None
-
-            plan_start = dream.created_at or timezone.now()
-
-            if plan.milestones:
-                # NEW: Milestone-based plan creation
-                # Dream -> Milestones -> Goals -> Tasks, with Obstacles on milestones/goals
-                milestones_to_create = [
-                    DreamMilestone(
-                        dream=dream,
-                        title=ms.title,
-                        description=ms.description,
-                        order=ms.order,
-                        target_date=(plan_start + timedelta(days=ms.target_day)) if ms.target_day else None,
-                        expected_date=_parse_date(ms.expected_date),
-                        deadline_date=_parse_date(ms.deadline_date),
-                    )
-                    for ms in plan.milestones
-                ]
-                db_milestones = DreamMilestone.objects.bulk_create(milestones_to_create)
-
-                # Build milestone lookup by order for obstacle linking
-                milestone_by_order = {ms.order: db_ms for ms, db_ms in zip(plan.milestones, db_milestones)}
-
-                # Create all goals across all milestones
-                goals_to_create = []
-                goal_data_pairs = []  # (plan_goal_data, milestone_index)
-                for ms_idx, ms_data in enumerate(plan.milestones):
-                    for goal_data in ms_data.goals:
-                        goals_to_create.append(
-                            Goal(
-                                dream=dream,
-                                milestone=db_milestones[ms_idx],
-                                title=goal_data.title,
-                                description=goal_data.description,
-                                order=goal_data.order,
-                                estimated_minutes=goal_data.estimated_minutes,
-                                expected_date=_parse_date(goal_data.expected_date),
-                                deadline_date=_parse_date(goal_data.deadline_date),
-                            )
-                        )
-                        goal_data_pairs.append((goal_data, ms_idx))
-                db_goals = Goal.objects.bulk_create(goals_to_create)
-
-                # Build goal lookup by (milestone_order, goal_order) for obstacle linking
-                goal_by_key = {}
-                for i, (goal_data, ms_idx) in enumerate(goal_data_pairs):
-                    ms_order = plan.milestones[ms_idx].order
-                    goal_by_key[(ms_order, goal_data.order)] = db_goals[i]
-
-                # Create all tasks across all goals
-                tasks_to_create = []
-                for i, (goal_data, _) in enumerate(goal_data_pairs):
-                    for task in goal_data.tasks:
-                        scheduled = None
-                        if hasattr(task, 'day_number') and task.day_number:
-                            scheduled = plan_start + timedelta(days=task.day_number - 1)
-                        tasks_to_create.append(
-                            Task(
-                                goal=db_goals[i],
-                                title=task.title,
-                                description=task.description,
-                                order=task.order,
-                                duration_mins=task.duration_mins,
-                                scheduled_date=scheduled,
-                                expected_date=_parse_date(task.expected_date),
-                                deadline_date=_parse_date(task.deadline_date),
-                            )
-                        )
-                Task.objects.bulk_create(tasks_to_create)
-
-                # Create milestone-level obstacles
-                obstacles_to_create = []
-                for ms_idx, ms_data in enumerate(plan.milestones):
-                    for obs in ms_data.obstacles:
-                        # Link obstacle to milestone, and optionally to a goal
-                        linked_goal = None
-                        if obs.goal_order is not None:
-                            linked_goal = goal_by_key.get((ms_data.order, obs.goal_order))
-                        obstacles_to_create.append(
-                            Obstacle(
-                                dream=dream,
-                                milestone=db_milestones[ms_idx],
-                                goal=linked_goal,
-                                title=obs.title,
-                                description=obs.description,
-                                solution=obs.solution,
-                                obstacle_type='predicted',
-                            )
-                        )
-
-                # Create dream-level obstacles (potential_obstacles)
-                for obstacle in plan.potential_obstacles:
-                    linked_milestone = None
-                    linked_goal = None
-                    if obstacle.milestone_order is not None:
-                        linked_milestone = milestone_by_order.get(obstacle.milestone_order)
-                    if obstacle.milestone_order is not None and obstacle.goal_order is not None:
-                        linked_goal = goal_by_key.get((obstacle.milestone_order, obstacle.goal_order))
-                    obstacles_to_create.append(
-                        Obstacle(
-                            dream=dream,
-                            milestone=linked_milestone,
-                            goal=linked_goal,
-                            title=obstacle.title,
-                            description=obstacle.description,
-                            solution=obstacle.solution,
-                            obstacle_type='predicted',
-                        )
-                    )
-                Obstacle.objects.bulk_create(obstacles_to_create)
-
-            else:
-                # LEGACY: Direct goals without milestones (backward compatible)
-                goals_to_create = [
-                    Goal(
-                        dream=dream,
-                        title=goal.title,
-                        description=goal.description,
-                        order=goal.order,
-                        estimated_minutes=goal.estimated_minutes,
-                    )
-                    for goal in plan.goals
-                ]
-                db_goals = Goal.objects.bulk_create(goals_to_create)
-
-                tasks_to_create = []
-                for i, goal_data in enumerate(plan.goals):
-                    for task in goal_data.tasks:
-                        scheduled = None
-                        if hasattr(task, 'day_number') and task.day_number:
-                            scheduled = plan_start + timedelta(days=task.day_number - 1)
-                        tasks_to_create.append(
-                            Task(
-                                goal=db_goals[i],
-                                title=task.title,
-                                description=task.description,
-                                order=task.order,
-                                duration_mins=task.duration_mins,
-                                scheduled_date=scheduled,
-                            )
-                        )
-                Task.objects.bulk_create(tasks_to_create)
-
-                # Create obstacles using bulk_create
-                obstacles_to_create = [
-                    Obstacle(
-                        dream=dream,
-                        title=obstacle.title,
-                        description=obstacle.description,
-                        solution=obstacle.solution,
-                        obstacle_type='predicted',
-                    )
-                    for obstacle in plan.potential_obstacles
-                ]
-                Obstacle.objects.bulk_create(obstacles_to_create)
-
-            # Refresh dream from DB with prefetch for serialization
-            dream.refresh_from_db()
-            response_data = DreamDetailSerializer(dream).data
-            # Include evidence so frontend can show the user WHY each step exists
-            response_data['plan_evidence'] = {
-                'calibration_references': plan.calibration_references,
-                'coherence_warnings': coherence_warnings,
-            }
-            # Include generation info (chunk count, etc.) if available
-            if hasattr(plan, 'generation_info') and plan.generation_info:
-                response_data['generation_info'] = plan.generation_info
-            elif isinstance(analysis_data.get('generation_info'), dict):
-                response_data['generation_info'] = analysis_data['generation_info']
-
-            return Response(response_data)
-
-        except AIValidationError as e:
-            return Response(
-                {'error': f'AI produced an invalid plan: {e.message}'},
-                status=status.HTTP_502_BAD_GATEWAY
-            )
-        except OpenAIError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(status_data)
 
     @extend_schema(
         summary="Generate 2-minute start",
@@ -796,7 +616,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if dream.has_two_minute_start:
             return Response(
-                {'message': '2-minute start already generated'},
+                {'message': _('2-minute start already generated')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -816,15 +636,15 @@ class DreamViewSet(viewsets.ModelViewSet):
             if not first_goal:
                 first_goal = Goal.objects.create(
                     dream=dream,
-                    title="Getting Started",
-                    description="Initial steps to begin your journey",
+                    title=_("Getting Started"),
+                    description=_("Initial steps to begin your journey"),
                     order=0
                 )
 
             # Create 2-minute task
             Task.objects.create(
                 goal=first_goal,
-                title=f"🚀 Start: {micro_action}",
+                title=_("Start now: %(action)s") % {'action': micro_action},
                 duration_mins=2,
                 order=0,
                 is_two_minute_start=True
@@ -860,27 +680,62 @@ class DreamViewSet(viewsets.ModelViewSet):
         ai_service = OpenAIService()
 
         try:
+            # Gather rich context for a more realistic, personalized image
+            milestone_titles = list(
+                dream.milestones.order_by('order').values_list('title', flat=True)
+            )
+            calibration_profile = None
+            if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+                cal_summary = dream.ai_analysis.get('calibration_summary', {})
+                calibration_profile = cal_summary.get('user_profile') if isinstance(cal_summary, dict) else None
+
             image_url = ai_service.generate_vision_image(
                 dream.title,
-                dream.description
+                dream.description,
+                category=dream.category,
+                milestones=milestone_titles,
+                calibration_profile=calibration_profile,
             )
 
             # Increment AI usage counter
             AIUsageTracker().increment(request.user, 'ai_image')
 
-            dream.vision_image_url = image_url
-            dream.save(update_fields=['vision_image_url'])
+            # Download the image from OpenAI (temporary URL, expires in ~1 hour)
+            # and save it as a local file so it persists permanently.
+            saved_image_file = None
+            try:
+                resp = http_requests.get(image_url, timeout=60)
+                resp.raise_for_status()
+                from django.core.files.base import ContentFile
+                filename = f"vision_{dream.id}_{uuid.uuid4().hex[:8]}.png"
+                saved_image_file = ContentFile(resp.content, name=filename)
+            except Exception as dl_err:
+                logger.warning(f"Failed to download vision image for dream {dream.id}: {dl_err}")
 
-            # Also add to vision board gallery
-            VisionBoardImage.objects.create(
+            # Create vision board image entry with the local file
+            vbi = VisionBoardImage(
                 dream=dream,
-                image_url=image_url,
-                caption=f'AI-generated vision for "{dream.title}"',
+                caption=_('AI-generated vision for "%(title)s"') % {'title': dream.title},
                 is_ai_generated=True,
                 order=dream.vision_images.count(),
             )
+            if saved_image_file:
+                vbi.image_file.save(saved_image_file.name, saved_image_file, save=False)
+            else:
+                # Fallback: store the temporary URL (will expire)
+                vbi.image_url = image_url
+            vbi.save()
 
-            return Response({'image_url': image_url})
+            # Build the permanent URL for the saved image
+            if vbi.image_file:
+                permanent_url = request.build_absolute_uri(vbi.image_file.url)
+            else:
+                permanent_url = image_url
+
+            dream.vision_image_url = permanent_url
+            dream.save(update_fields=['vision_image_url'])
+
+            return Response({'image_url': permanent_url})
 
         except OpenAIError as e:
             return Response(
@@ -926,7 +781,47 @@ class DreamViewSet(viewsets.ModelViewSet):
         caption = request.data.get('caption', '')
 
         if not image_file and not image_url:
-            return Response({'error': 'Provide image file or image_url.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('Provide image file or image_url.')}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate uploaded image file type and size
+        if image_file:
+            ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+            content_type = getattr(image_file, 'content_type', '')
+            if content_type not in ALLOWED_IMAGE_TYPES:
+                return Response(
+                    {'error': _('Unsupported image format. Allowed: JPEG, PNG, WebP, GIF.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if image_file.size > 10 * 1024 * 1024:
+                return Response(
+                    {'error': _('Image file too large. Max 10MB.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Validate magic bytes
+            header = image_file.read(12)
+            image_file.seek(0)
+            valid_magic = (
+                header[:3] == b'\xff\xd8\xff' or  # JPEG
+                header[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
+                header[:4] == b'RIFF' and header[8:12] == b'WEBP' or  # WebP
+                header[:6] in (b'GIF87a', b'GIF89a')  # GIF
+            )
+            if not valid_magic:
+                return Response(
+                    {'error': _('Invalid image file.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Validate URL to prevent SSRF
+        if image_url:
+            from core.validators import validate_url_no_ssrf
+            try:
+                validate_url_no_ssrf(image_url)
+            except Exception:
+                return Response(
+                    {'error': _('Invalid or unsafe image URL.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         vbi = VisionBoardImage(
             dream=dream,
@@ -938,6 +833,14 @@ class DreamViewSet(viewsets.ModelViewSet):
         if image_url:
             vbi.image_url = image_url
         vbi.save()
+
+        # Update dream's primary vision image if it doesn't have one yet
+        if not dream.vision_image_url:
+            if vbi.image_file:
+                dream.vision_image_url = request.build_absolute_uri(vbi.image_file.url)
+            elif vbi.image_url:
+                dream.vision_image_url = vbi.image_url
+            dream.save(update_fields=['vision_image_url'])
 
         return Response(VisionBoardImageSerializer(vbi).data, status=status.HTTP_201_CREATED)
 
@@ -957,8 +860,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         dream = self.get_object()
         deleted, _ = VisionBoardImage.objects.filter(dream=dream, id=image_id).delete()
         if deleted == 0:
-            return Response({'error': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
-        return Response({'message': 'Image removed.'})
+            return Response({'error': _('Image not found.')}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'message': _('Image removed.')})
 
     @extend_schema(
         summary="Progress history",
@@ -998,11 +901,28 @@ class DreamViewSet(viewsets.ModelViewSet):
         dream = self.get_object()
         if dream.status == 'completed':
             return Response(
-                {'error': 'Dream is already completed.'},
+                {'error': _('Dream is already completed.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         dream.complete()
 
+        return Response(DreamSerializer(dream).data)
+
+    @extend_schema(
+        summary="Toggle dream favorite",
+        description="Toggle the is_favorited flag on a dream (for vision board likes).",
+        tags=["Dreams"],
+        responses={
+            200: DreamSerializer,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
+    @action(detail=True, methods=['post'])
+    def like(self, request, pk=None):
+        """Toggle the favorited status of a dream."""
+        dream = self.get_object()
+        dream.is_favorited = not dream.is_favorited
+        dream.save(update_fields=['is_favorited', 'updated_at'])
         return Response(DreamSerializer(dream).data)
 
     @extend_schema(
@@ -1022,7 +942,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         # Create the dream copy
         new_dream = Dream.objects.create(
             user=request.user,
-            title=f"{original.title} (Copy)",
+            title=_("%(title)s (Copy)") % {'title': original.title},
             description=original.description,
             category=original.category,
             target_date=original.target_date,
@@ -1082,7 +1002,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if shared_with_id == request.user.id:
             return Response(
-                {'error': 'You cannot share a dream with yourself.'},
+                {'error': _('You cannot share a dream with yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1091,13 +1011,13 @@ class DreamViewSet(viewsets.ModelViewSet):
             target_user = User.objects.get(id=shared_with_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if SharedDream.objects.filter(dream=dream, shared_with=target_user).exists():
             return Response(
-                {'error': 'Dream already shared with this user.'},
+                {'error': _('Dream already shared with this user.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1114,8 +1034,8 @@ class DreamViewSet(viewsets.ModelViewSet):
             Notification.objects.create(
                 user=target_user,
                 notification_type='progress',
-                title=f'{request.user.display_name or "Someone"} shared a dream with you!',
-                body=f'You now have access to view this dream.',
+                title=_('%(name)s shared a dream with you!') % {'name': request.user.display_name or _("Someone")},
+                body=_('You now have access to view this dream.'),
                 scheduled_for=timezone.now(),
                 data={
                     'type': 'dream_shared',
@@ -1152,11 +1072,11 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if deleted_count == 0:
             return Response(
-                {'error': 'Share not found.'},
+                {'error': _('Share not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response({'message': 'Dream unshared.'})
+        return Response({'message': _('Dream unshared.')})
 
     @extend_schema(
         summary="Add tag to dream",
@@ -1203,11 +1123,11 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if deleted_count == 0:
             return Response(
-                {'error': 'Tag not found on this dream.'},
+                {'error': _('Tag not found on this dream.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response({'message': 'Tag removed.'})
+        return Response({'message': _('Tag removed.')})
 
     @extend_schema(
         summary="Add collaborator",
@@ -1228,7 +1148,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if dream.user != request.user:
             return Response(
-                {'error': 'Only the dream owner can add collaborators.'},
+                {'error': _('Only the dream owner can add collaborators.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1240,7 +1160,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if target_user_id == request.user.id:
             return Response(
-                {'error': 'You cannot add yourself as a collaborator.'},
+                {'error': _('You cannot add yourself as a collaborator.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1248,11 +1168,11 @@ class DreamViewSet(viewsets.ModelViewSet):
         try:
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
-            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('User not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if DreamCollaborator.objects.filter(dream=dream, user=target_user).exists():
             return Response(
-                {'error': 'User is already a collaborator on this dream.'},
+                {'error': _('User is already a collaborator on this dream.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1303,7 +1223,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if dream.user != request.user:
             return Response(
-                {'error': 'Only the dream owner can remove collaborators.'},
+                {'error': _('Only the dream owner can remove collaborators.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1314,11 +1234,11 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         if deleted_count == 0:
             return Response(
-                {'error': 'Collaborator not found.'},
+                {'error': _('Collaborator not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({'message': 'Collaborator removed.'})
+        return Response({'message': _('Collaborator removed.')})
 
 
 class SharedWithMeView(generics.ListAPIView):
@@ -1488,7 +1408,7 @@ class DreamPDFExportView(views.APIView):
             ).get(id=dream_id, user=request.user)
         except Dream.DoesNotExist:
             return Response(
-                {'error': 'Dream not found.'},
+                {'error': _('Dream not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1580,7 +1500,7 @@ class DreamPDFExportView(views.APIView):
 
         except ImportError:
             return Response(
-                {'error': 'PDF generation requires the reportlab package.'},
+                {'error': _('PDF generation requires the reportlab package.')},
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
@@ -1706,7 +1626,7 @@ class DreamMilestoneViewSet(viewsets.ModelViewSet):
         milestone = self.get_object()
         if milestone.status == 'completed':
             return Response(
-                {'error': 'Dream milestone is already completed.'},
+                {'error': _('Dream milestone is already completed.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         milestone.complete()
@@ -1758,7 +1678,7 @@ class GoalViewSet(viewsets.ModelViewSet):
         goal = self.get_object()
         if goal.status == 'completed':
             return Response(
-                {'error': 'Goal is already completed.'},
+                {'error': _('Goal is already completed.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         goal.complete()
@@ -1863,7 +1783,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         if task.status == 'completed':
             return Response(
-                {'error': 'Task is already completed.'},
+                {'error': _('Task is already completed.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
         task.complete()

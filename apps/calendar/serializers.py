@@ -3,6 +3,7 @@ Serializers for Calendar app.
 """
 
 from rest_framework import serializers
+from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
 from .models import CalendarEvent, TimeBlock
 
@@ -89,7 +90,7 @@ class CalendarEventCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """Validate that end_time is after start_time."""
         if data['start_time'] >= data['end_time']:
-            raise serializers.ValidationError("End time must be after start time")
+            raise serializers.ValidationError(_("End time must be after start time"))
         return data
 
 
@@ -102,7 +103,7 @@ class CalendarEventRescheduleSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data['start_time'] >= data['end_time']:
-            raise serializers.ValidationError("End time must be after start time")
+            raise serializers.ValidationError(_("End time must be after start time"))
         return data
 
 
@@ -146,11 +147,11 @@ class TimeBlockSerializer(serializers.ModelSerializer):
         """Validate time block."""
         if 'start_time' in data and 'end_time' in data:
             if data['start_time'] >= data['end_time']:
-                raise serializers.ValidationError("End time must be after start time")
+                raise serializers.ValidationError(_("End time must be after start time"))
 
         if 'day_of_week' in data:
             if not 0 <= data['day_of_week'] <= 6:
-                raise serializers.ValidationError("Day of week must be between 0 (Monday) and 6 (Sunday)")
+                raise serializers.ValidationError(_("Day of week must be between 0 (Monday) and 6 (Sunday)"))
 
         return data
 

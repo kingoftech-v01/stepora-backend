@@ -151,8 +151,8 @@ class GoogleCalendarService:
         if calendar_event.location:
             body['location'] = calendar_event.location
 
-        # Check if event has a Google ID stored in metadata
-        google_id = (calendar_event.metadata or {}).get('google_event_id') if hasattr(calendar_event, 'metadata') else None
+        # Check if event already has a Google Calendar ID
+        google_id = calendar_event.google_event_id or None
 
         if google_id:
             event = service.events().update(
@@ -165,6 +165,9 @@ class GoogleCalendarService:
                 calendarId=self.integration.calendar_id,
                 body=body,
             ).execute()
+            # Persist the new Google event ID back to the local record
+            calendar_event.google_event_id = event['id']
+            calendar_event.save(update_fields=['google_event_id', 'updated_at'])
 
         return event['id']
 

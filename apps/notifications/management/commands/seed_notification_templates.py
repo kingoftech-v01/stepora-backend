@@ -51,6 +51,55 @@ class Command(BaseCommand):
                 'body_template': "Your buddy {buddy_name} completed a task today. Send them a message of encouragement!",
                 'is_active': True,
             },
+            {
+                'name': 'buddy_message',
+                'notification_type': 'buddy',
+                'title_template': 'New Buddy Message',
+                'body_template': '{buddy_name} sent you a message. Tap to read!',
+                'is_active': True,
+            },
+            {
+                'name': 'circle_call',
+                'notification_type': 'social',
+                'title_template': 'Circle Call Started',
+                'body_template': '{caller_name} started a {call_type} call in {circle_name}. Join now!',
+                'is_active': True,
+            },
+            {
+                'name': 'circle_message',
+                'notification_type': 'social',
+                'title_template': 'New Circle Message',
+                'body_template': '{sender_name} sent a message in {circle_name}.',
+                'is_active': True,
+            },
+            {
+                'name': 'dream_post_like',
+                'notification_type': 'social',
+                'title_template': 'Someone Liked Your Post',
+                'body_template': '{liker_name} liked your dream post. Keep sharing your journey!',
+                'is_active': True,
+            },
+            {
+                'name': 'dream_post_comment',
+                'notification_type': 'social',
+                'title_template': 'New Comment on Your Post',
+                'body_template': '{commenter_name} commented: "{comment_preview}"',
+                'is_active': True,
+            },
+            {
+                'name': 'dream_post_encouragement',
+                'notification_type': 'social',
+                'title_template': 'You Received Encouragement!',
+                'body_template': '{encourager_name} sent you a "{encouragement_type}" on your dream post!',
+                'is_active': True,
+            },
+            {
+                'name': 'dream_post_share',
+                'notification_type': 'social',
+                'title_template': 'Your Post Was Shared',
+                'body_template': '{sharer_name} shared your dream post with their followers!',
+                'is_active': True,
+            },
         ]
 
         count = 0

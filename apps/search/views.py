@@ -2,6 +2,7 @@
 Search API views.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -30,7 +31,7 @@ class GlobalSearchView(APIView):
         query = request.query_params.get('q', '').strip()
         if not query or len(query) < 2:
             return Response(
-                {'detail': 'Query must be at least 2 characters.'},
+                {'detail': _('Query must be at least 2 characters.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -45,21 +46,25 @@ class GlobalSearchView(APIView):
         response_data = {}
 
         if 'dreams' in raw_results and raw_results['dreams']:
-            dreams = Dream.objects.filter(id__in=raw_results['dreams'])
+            dreams = Dream.objects.filter(id__in=raw_results['dreams'], user=request.user)
             response_data['dreams'] = [
                 {'id': str(d.id), 'title': d.title, 'status': d.status}
                 for d in dreams
             ]
 
         if 'goals' in raw_results and raw_results['goals']:
-            goals = Goal.objects.filter(id__in=raw_results['goals']).select_related('dream')
+            goals = Goal.objects.filter(
+                id__in=raw_results['goals'], dream__user=request.user,
+            ).select_related('dream')
             response_data['goals'] = [
                 {'id': str(g.id), 'title': g.title, 'dream_id': str(g.dream_id)}
                 for g in goals
             ]
 
         if 'tasks' in raw_results and raw_results['tasks']:
-            tasks = Task.objects.filter(id__in=raw_results['tasks']).select_related('goal')
+            tasks = Task.objects.filter(
+                id__in=raw_results['tasks'], goal__dream__user=request.user,
+            ).select_related('goal')
             response_data['tasks'] = [
                 {'id': str(t.id), 'title': t.title, 'goal_id': str(t.goal_id)}
                 for t in tasks
@@ -67,7 +72,8 @@ class GlobalSearchView(APIView):
 
         if 'messages' in raw_results and raw_results['messages']:
             msgs = Message.objects.filter(
-                id__in=raw_results['messages']
+                id__in=raw_results['messages'],
+                conversation__user=request.user,
             ).select_related('conversation')
             response_data['messages'] = [
                 {
@@ -87,15 +93,22 @@ class GlobalSearchView(APIView):
             ]
 
         if 'calendar' in raw_results and raw_results['calendar']:
-            events = CalendarEvent.objects.filter(id__in=raw_results['calendar'])
+            events = CalendarEvent.objects.filter(
+                id__in=raw_results['calendar'], user=request.user,
+            )
             response_data['calendar'] = [
                 {'id': str(e.id), 'title': e.title, 'start_time': e.start_time.isoformat()}
                 for e in events
             ]
 
         if 'circles' in raw_results and raw_results['circles']:
+            from apps.circles.models import CircleMembership
+            user_circle_ids = CircleMembership.objects.filter(
+                user=request.user
+            ).values_list('circle_id', flat=True)
             posts = CirclePost.objects.filter(
-                id__in=raw_results['circles']
+                id__in=raw_results['circles'],
+                circle_id__in=user_circle_ids,
             ).select_related('circle')
             response_data['circles'] = [
                 {

@@ -63,6 +63,12 @@ app.conf.beat_schedule = {
         'schedule': 15.0,  # Every 15 seconds
     },
 
+    # Check for tasks due in the next 3 minutes and send FCM push
+    'check-due-tasks': {
+        'task': 'apps.notifications.tasks.check_due_tasks',
+        'schedule': 180.0,  # Every 3 minutes
+    },
+
     # === Dream Tasks ===
 
     # Update dream progress daily at 3 AM

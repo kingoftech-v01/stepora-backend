@@ -6,6 +6,7 @@ memberships, posts, and challenges. They provide both list and detail
 representations optimized for the mobile app's needs.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from core.sanitizers import sanitize_text
@@ -287,7 +288,7 @@ class CirclePostSerializer(serializers.ModelSerializer):
         """Return author display info."""
         return {
             'id': str(obj.author.id),
-            'username': obj.author.display_name or 'Anonymous',
+            'username': obj.author.display_name or _('Anonymous'),
             'avatar': obj.author.avatar_url or '',
         }
 
@@ -421,7 +422,7 @@ class CircleInvitationSerializer(serializers.ModelSerializer):
 
     def get_inviteeName(self, obj) -> str:
         if obj.invitee:
-            return obj.invitee.display_name or 'Anonymous'
+            return obj.invitee.display_name or _('Anonymous')
         return None
 
 
@@ -454,7 +455,7 @@ class ChallengeProgressSerializer(serializers.ModelSerializer):
         }
 
     def get_userName(self, obj) -> str:
-        return obj.user.display_name or 'Anonymous'
+        return obj.user.display_name or _('Anonymous')
 
     def get_userAvatar(self, obj) -> str:
         return obj.user.avatar_url or ''

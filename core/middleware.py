@@ -49,16 +49,24 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        csp = getattr(settings, 'CSP_POLICY', self.DEFAULT_CSP)
-        response['Content-Security-Policy'] = csp
+        # Always set transport/framing headers
         response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response['Permissions-Policy'] = (
-            'geolocation=(), microphone=(self), camera=(self), payment=()'
-        )
         response['X-Content-Type-Options'] = 'nosniff'
         response['X-Frame-Options'] = 'DENY'
         response['Cross-Origin-Opener-Policy'] = 'same-origin'
         response['Cross-Origin-Resource-Policy'] = 'cross-origin'
+
+        # CSP and Permissions-Policy only apply to HTML documents.
+        # Setting them on JSON API responses is meaningless and can cause
+        # browsers to apply a second, more restrictive policy to the page.
+        content_type = response.get('Content-Type', '')
+        is_api = request.path.startswith('/api/') and 'text/html' not in content_type
+        if not is_api:
+            csp = getattr(settings, 'CSP_POLICY', self.DEFAULT_CSP)
+            response['Content-Security-Policy'] = csp
+            response['Permissions-Policy'] = (
+                'geolocation=(), microphone=(self), camera=(self), payment=()'
+            )
 
         # HSTS — enforce HTTPS for 1 year, include subdomains
         if not settings.DEBUG:

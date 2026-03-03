@@ -7,7 +7,7 @@ and activity feed items.
 
 from django.contrib import admin
 
-from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser
+from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser, Story, StoryView
 
 
 @admin.register(Friendship)
@@ -143,3 +143,18 @@ class ReportedUserAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(Story)
+class StoryAdmin(admin.ModelAdmin):
+    list_display = ['user', 'media_type', 'created_at', 'expires_at', 'view_count']
+    list_filter = ['media_type', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'caption']
+    readonly_fields = ['id', 'created_at', 'view_count']
+
+
+@admin.register(StoryView)
+class StoryViewAdmin(admin.ModelAdmin):
+    list_display = ['story', 'user', 'viewed_at']
+    list_filter = ['viewed_at']
+    readonly_fields = ['id', 'viewed_at']

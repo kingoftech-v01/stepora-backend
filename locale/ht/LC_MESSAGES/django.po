@@ -1,0 +1,1524 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-02 20:25+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: ht\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: apps/buddies/tasks.py:57
+msgid "Check in with your buddy!"
+msgstr "Tcheke patne ou a!"
+
+#: apps/buddies/tasks.py:58
+#, python-format
+msgid ""
+"It's been a while since you encouraged %(name)s. Send them some motivation!"
+msgstr "Sa fè yon ti tan depi ou ankouraje %(name)s. Voye yon ti motivasyon ba yo!"
+
+#: apps/buddies/tasks.py:60 apps/buddies/views.py:707
+msgid "your buddy"
+msgstr "patne ou"
+
+#: apps/buddies/views.py:162
+msgid "userId is required."
+msgstr "userId obligatwa."
+
+#: apps/buddies/views.py:194 apps/circles/views.py:752
+#: apps/conversations/views.py:762 apps/dreams/views.py:957
+#: apps/dreams/views.py:1114 apps/social/views.py:186 apps/social/views.py:341
+#: apps/social/views.py:489 apps/social/views.py:592 apps/social/views.py:624
+#: apps/social/views.py:726 apps/social/views.py:1726 apps/users/views.py:61
+msgid "User not found."
+msgstr "Itilizatè pa jwenn."
+
+#: apps/buddies/views.py:262
+msgid "conversationId and content are required."
+msgstr "conversationId ak content obligatwa."
+
+#: apps/buddies/views.py:266
+msgid "Message too long. Maximum 5000 characters."
+msgstr "Mesaj la twò long. Maksimòm 5000 karaktè."
+
+#: apps/buddies/views.py:272
+msgid "Invalid conversationId."
+msgstr "conversationId envalid."
+
+#: apps/buddies/views.py:277
+msgid "Conversation not found."
+msgstr "Konvèsasyon pa jwenn."
+
+#: apps/buddies/views.py:285
+msgid "Access denied."
+msgstr "Aksè refize."
+
+#: apps/buddies/views.py:296
+msgid "Cannot determine recipient."
+msgstr "Pa kapab detèmine destinatè a."
+
+#: apps/buddies/views.py:300
+msgid "Cannot send message"
+msgstr "Pa kapab voye mesaj"
+
+#: apps/buddies/views.py:319
+#, python-format
+msgid "Message from %(name)s"
+msgstr "Mesaj de %(name)s"
+
+#: apps/buddies/views.py:319 apps/buddies/views.py:697
+#: apps/conversations/views.py:863 apps/notifications/tasks.py:526
+msgid "Your buddy"
+msgstr "Patne ou"
+
+#: apps/buddies/views.py:361 apps/buddies/views.py:647
+#: apps/buddies/views.py:731
+msgid "Active buddy pairing not found."
+msgstr "Pa jwenn okenn akoupleman patne aktif."
+
+#: apps/buddies/views.py:367 apps/buddies/views.py:653
+#: apps/buddies/views.py:737
+msgid "You are not part of this pairing."
+msgstr "Ou pa fè pati akoupleman sa a."
+
+#: apps/buddies/views.py:426 apps/buddies/views.py:523
+msgid "You already have an active buddy pairing."
+msgstr "Ou deja gen yon akoupleman patne aktif."
+
+#: apps/buddies/views.py:516
+msgid "You cannot pair with yourself."
+msgstr "Ou pa kapab akouple ak tèt ou."
+
+#: apps/buddies/views.py:531
+msgid "Partner user not found."
+msgstr "Itilizatè patne pa jwenn."
+
+#: apps/buddies/views.py:542
+msgid "This user already has an active buddy pairing."
+msgstr "Itilizatè sa a deja gen yon akoupleman patne aktif."
+
+#: apps/buddies/views.py:562
+#, python-format
+msgid "Buddy pairing created with %(name)s."
+msgstr "Akoupleman patne kreye ak %(name)s."
+
+#: apps/buddies/views.py:562 apps/social/views.py:367
+msgid "user"
+msgstr "itilizatè"
+
+#: apps/buddies/views.py:587 apps/buddies/views.py:615
+msgid "Pending buddy pairing not found."
+msgstr "Akoupleman patne an atant pa jwenn."
+
+#: apps/buddies/views.py:594
+msgid "Buddy pairing accepted."
+msgstr "Akoupleman patne aksepte."
+
+#: apps/buddies/views.py:623
+msgid "Buddy pairing rejected."
+msgstr "Akoupleman patne rejte."
+
+#: apps/buddies/views.py:695
+msgid "Buddy Encouragement"
+msgstr "Ankourajman Patne"
+
+#: apps/buddies/views.py:697
+#, python-format
+msgid "%(name)s sent you encouragement!"
+msgstr "%(name)s voye ankourajman ba ou!"
+
+#: apps/buddies/views.py:707
+#, python-format
+msgid "Encouragement sent to %(name)s."
+msgstr "Ankourajman voye bay %(name)s."
+
+#: apps/buddies/views.py:745
+msgid "Buddy pairing ended."
+msgstr "Akoupleman patne fini."
+
+#: apps/calendar/serializers.py:93 apps/calendar/serializers.py:106
+#: apps/calendar/serializers.py:150
+msgid "End time must be after start time"
+msgstr "Lè fen an dwe apre lè kòmansman an"
+
+#: apps/calendar/serializers.py:154
+msgid "Day of week must be between 0 (Monday) and 6 (Sunday)"
+msgstr "Jou semèn nan dwe ant 0 (Lendi) ak 6 (Dimanch)"
+
+#: apps/calendar/views.py:106 apps/calendar/views.py:120
+msgid "This event conflicts with existing events."
+msgstr "Evènman sa a an konfli ak evènman ki egziste deja."
+
+#: apps/calendar/views.py:108 apps/calendar/views.py:122
+#: apps/calendar/views.py:157
+msgid "Set force=true to save anyway."
+msgstr "Mete force=true pou anrejistre kanmenm."
+
+#: apps/calendar/views.py:155
+msgid "This time conflicts with existing events."
+msgstr "Lè sa a an konfli ak evènman ki egziste deja."
+
+#: apps/calendar/views.py:230
+msgid "start and end dates required (ISO format)"
+msgstr "Dat kòmansman ak fen obligatwa (fòma ISO)"
+
+#: apps/calendar/views.py:239
+msgid "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"
+msgstr "Fòma dat envalid. Sèvi ak fòma ISO (YYYY-MM-DDTHH:MM:SS)"
+
+#: apps/calendar/views.py:307
+msgid "task_id and new_date required"
+msgstr "task_id ak new_date obligatwa"
+
+#: apps/calendar/views.py:321
+msgid "Task rescheduled successfully"
+msgstr "Tach replanifye avèk siksè"
+
+#: apps/calendar/views.py:328
+msgid "Task not found"
+msgstr "Tach pa jwenn"
+
+#: apps/calendar/views.py:333
+msgid "Invalid date format"
+msgstr "Fòma dat envalid"
+
+#: apps/calendar/views.py:355
+msgid "date and duration_mins are required"
+msgstr "date ak duration_mins obligatwa"
+
+#: apps/calendar/views.py:364
+msgid "Invalid date or duration format"
+msgstr "Fòma dat oswa dire envalid"
+
+#: apps/calendar/views.py:370
+msgid "Duration must be between 5 and 480 minutes"
+msgstr "Dire a dwe ant 5 ak 480 minit"
+
+#: apps/calendar/views.py:515
+msgid "Google Calendar integration is not configured."
+msgstr "Entegrasyon Google Calendar pa konfigire."
+
+#: apps/calendar/views.py:554
+msgid "Authorization code is required."
+msgstr "Kòd otorizasyon obligatwa."
+
+#: apps/calendar/views.py:565
+#, python-format
+msgid "Token exchange failed: %(error)s"
+msgstr "Echanj token echwe: %(error)s"
+
+#: apps/calendar/views.py:609
+msgid "Google Calendar not connected."
+msgstr "Google Calendar pa konekte."
+
+#: apps/calendar/views.py:636
+msgid "No integration found."
+msgstr "Pa jwenn okenn entegrasyon."
+
+#: apps/calendar/views.py:663
+msgid "Feed not found."
+msgstr "Fil pa jwenn."
+
+#: apps/calendar/views.py:731
+msgid "Missing authorization code."
+msgstr "Kòd otorizasyon manke."
+
+#: apps/circles/serializers.py:291 apps/circles/serializers.py:425
+#: apps/circles/serializers.py:458 apps/circles/views.py:929
+#: apps/circles/views.py:1021
+msgid "Anonymous"
+msgstr "Anonim"
+
+#: apps/circles/views.py:210 apps/circles/views.py:1449
+msgid "You are already a member of this circle."
+msgstr "Ou deja manm sèk sa a."
+
+#: apps/circles/views.py:217 apps/circles/views.py:1455
+msgid "This circle has reached its maximum number of members."
+msgstr "Sèk sa a rive nan kantite maksimòm manm li."
+
+#: apps/circles/views.py:224
+msgid "This circle is private. You need an invitation to join."
+msgstr "Sèk sa a prive. Ou bezwen yon envitasyon pou rantre."
+
+#: apps/circles/views.py:235 apps/circles/views.py:1471
+#, python-format
+msgid "Successfully joined %(name)s."
+msgstr "Rantre avèk siksè nan %(name)s."
+
+#: apps/circles/views.py:268
+msgid "You are not a member of this circle."
+msgstr "Ou pa manm sèk sa a."
+
+#: apps/circles/views.py:303
+#, python-format
+msgid "Successfully left %(name)s."
+msgstr "Kite %(name)s avèk siksè."
+
+#: apps/circles/views.py:328
+msgid "You must be a member to view the feed."
+msgstr "Ou dwe manm pou wè fil la."
+
+#: apps/circles/views.py:368
+msgid "You must be a member to post."
+msgstr "Ou dwe manm pou pibliye."
+
+#: apps/circles/views.py:429
+msgid "Only admins can update this circle."
+msgstr "Sèlman administratè kapab mete sèk sa a ajou."
+
+#: apps/circles/views.py:460
+msgid "Only admins can delete this circle."
+msgstr "Sèlman administratè kapab efase sèk sa a."
+
+#: apps/circles/views.py:486 apps/circles/views.py:524
+#: apps/circles/views.py:565 apps/circles/views.py:598
+msgid "Post not found."
+msgstr "Piblikasyon pa jwenn."
+
+#: apps/circles/views.py:494
+msgid "You do not have permission to edit this post."
+msgstr "Ou pa gen pèmisyon pou modifye piblikasyon sa a."
+
+#: apps/circles/views.py:531
+msgid "You do not have permission to delete this post."
+msgstr "Ou pa gen pèmisyon pou efase piblikasyon sa a."
+
+#: apps/circles/views.py:558
+msgid "You must be a member to react."
+msgstr "Ou dwe manm pou reyaji."
+
+#: apps/circles/views.py:577
+msgid "Reaction added."
+msgstr "Reyaksyon ajoute."
+
+#: apps/circles/views.py:578
+msgid "Reaction updated."
+msgstr "Reyaksyon mete ajou."
+
+#: apps/circles/views.py:605
+msgid "No reaction found."
+msgstr "Pa jwenn okenn reyaksyon."
+
+#: apps/circles/views.py:607
+msgid "Reaction removed."
+msgstr "Reyaksyon retire."
+
+#: apps/circles/views.py:628
+msgid "Only admins can promote members."
+msgstr "Sèlman administratè kapab pwomote manm."
+
+#: apps/circles/views.py:635 apps/circles/views.py:673
+#: apps/circles/views.py:710
+msgid "Member not found."
+msgstr "Manm pa jwenn."
+
+#: apps/circles/views.py:639
+msgid "Cannot change an admin role."
+msgstr "Pa kapab chanje wòl administratè a."
+
+#: apps/circles/views.py:646
+#, python-format
+msgid "%(name)s promoted to moderator."
+msgstr "%(name)s pwomote kòm moderatè."
+
+#: apps/circles/views.py:646 apps/circles/views.py:684
+msgid "User"
+msgstr "Itilizatè"
+
+#: apps/circles/views.py:666
+msgid "Only admins can demote members."
+msgstr "Sèlman administratè kapab degradi manm."
+
+#: apps/circles/views.py:677
+msgid "Only moderators can be demoted."
+msgstr "Sèlman moderatè kapab degradi."
+
+#: apps/circles/views.py:684
+#, python-format
+msgid "%(name)s demoted to member."
+msgstr "%(name)s degradi kòm manm."
+
+#: apps/circles/views.py:703
+msgid "Only admins and moderators can remove members."
+msgstr "Sèlman administratè ak moderatè kapab retire manm."
+
+#: apps/circles/views.py:714
+msgid "Cannot remove an admin."
+msgstr "Pa kapab retire yon administratè."
+
+#: apps/circles/views.py:719
+msgid "Member removed from circle."
+msgstr "Manm retire nan sèk la."
+
+#: apps/circles/views.py:740
+msgid "Only admins and moderators can invite users."
+msgstr "Sèlman administratè ak moderatè kapab envite itilizatè."
+
+#: apps/circles/views.py:756
+msgid "User is already a member of this circle."
+msgstr "Itilizatè a deja manm sèk sa a."
+
+#: apps/circles/views.py:765
+msgid "An invitation is already pending for this user."
+msgstr "Yon envitasyon deja an atant pou itilizatè sa a."
+
+#: apps/circles/views.py:799
+msgid "Only admins and moderators can generate invite links."
+msgstr "Sèlman administratè ak moderatè kapab kreye lyen envitasyon."
+
+#: apps/circles/views.py:833
+msgid "Only admins and moderators can view invitations."
+msgstr "Sèlman administratè ak moderatè kapab wè envitasyon yo."
+
+#: apps/circles/views.py:864
+msgid "You must be a member of the circle."
+msgstr "Ou dwe manm sèk la."
+
+#: apps/circles/views.py:871 apps/circles/views.py:912
+msgid "Challenge not found."
+msgstr "Defi pa jwenn."
+
+#: apps/circles/views.py:875
+msgid "You must join the challenge first."
+msgstr "Ou dwe rantre nan defi a anvan."
+
+#: apps/circles/views.py:955
+msgid "You must be a member to view chat."
+msgstr "Ou dwe manm pou wè chat la."
+
+#: apps/circles/views.py:996
+msgid "You must be a member to send messages."
+msgstr "Ou dwe manm pou voye mesaj."
+
+#: apps/circles/views.py:1003
+msgid "Content is required."
+msgstr "Kontni obligatwa."
+
+#: apps/circles/views.py:1058
+msgid "You must be a member to start a call."
+msgstr "Ou dwe manm pou kòmanse yon apèl."
+
+#: apps/circles/views.py:1066
+msgid "A call is already active in this circle."
+msgstr "Yon apèl deja aktif nan sèk sa a."
+
+#: apps/circles/views.py:1073 apps/conversations/views.py:756
+msgid "call_type must be voice or video."
+msgstr "call_type dwe voice oswa video."
+
+#: apps/circles/views.py:1107 apps/circles/views.py:1322
+#: apps/conversations/views.py:1027 apps/dreams/views.py:980
+#: apps/notifications/tasks.py:510 apps/social/views.py:1542
+#: apps/social/views.py:1596 apps/social/views.py:1670
+msgid "Someone"
+msgstr "Yon moun"
+
+#: apps/circles/views.py:1137
+msgid "You must be a member."
+msgstr "Ou dwe manm."
+
+#: apps/circles/views.py:1144
+msgid "No active call in this circle."
+msgstr "Pa gen apèl aktif nan sèk sa a."
+
+#: apps/circles/views.py:1180 apps/circles/views.py:1227
+msgid "No active call."
+msgstr "Pa gen apèl aktif."
+
+#: apps/circles/views.py:1190
+msgid "You are not in this call."
+msgstr "Ou pa nan apèl sa a."
+
+#: apps/circles/views.py:1235
+msgid "Only the initiator or an admin can end the call."
+msgstr "Sèlman moun ki te kòmanse a oswa yon administratè kapab fini apèl la."
+
+#: apps/circles/views.py:1328
+#, python-format
+msgid "%(name)s started a %(type)s call"
+msgstr "%(name)s kòmanse yon apèl %(type)s"
+
+#: apps/circles/views.py:1329
+#, python-format
+msgid "Join the call in %(circle)s"
+msgstr "Rantre nan apèl la nan %(circle)s"
+
+#: apps/circles/views.py:1381
+msgid "You must be a member of the circle to join this challenge."
+msgstr "Ou dwe manm sèk la pou rantre nan defi sa a."
+
+#: apps/circles/views.py:1388
+msgid "You have already joined this challenge."
+msgstr "Ou deja rantre nan defi sa a."
+
+#: apps/circles/views.py:1395
+#, python-format
+msgid "Successfully joined challenge: %(title)s."
+msgstr "Rantre avèk siksè nan defi: %(title)s."
+
+#: apps/circles/views.py:1426
+msgid "Invalid or expired invite code."
+msgstr "Kòd envitasyon envalid oswa ekspire."
+
+#: apps/circles/views.py:1434
+msgid "This invitation has expired."
+msgstr "Envitasyon sa a ekspire."
+
+#: apps/circles/views.py:1443
+msgid "This invitation is for another user."
+msgstr "Envitasyon sa a se pou yon lòt itilizatè."
+
+#: apps/conversations/serializers.py:49
+msgid "Message content cannot be empty"
+msgstr "Kontni mesaj la pa kapab vid"
+
+#: apps/conversations/serializers.py:184
+#, python-format
+msgid "Invalid conversation type. Must be one of: %(types)s"
+msgstr "Tip konvèsasyon envalid. Dwe youn nan: %(types)s"
+
+#: apps/conversations/serializers.py:195
+#, python-format
+msgid ""
+"Conversations of type '%(type)s' must be linked to a dream. Please provide a "
+"dream ID."
+msgstr "Konvèsasyon tip '%(type)s' dwe konekte ak yon rèv. Tanpri bay ID rèv la."
+
+#: apps/conversations/views.py:270
+#, python-format
+msgid "AI produced an invalid response: %(message)s"
+msgstr "AI pwodui yon repons envalid: %(message)s"
+
+#: apps/conversations/views.py:300
+msgid "No audio file provided."
+msgstr "Pa gen fichye odyo bay."
+
+#: apps/conversations/views.py:304
+msgid "Audio file too large. Max 25MB."
+msgstr "Fichye odyo a twò gwo. Maks 25MB."
+
+#: apps/conversations/views.py:315
+#, python-format
+msgid ""
+"Unsupported audio format: %(format)s. Allowed: mp3, m4a, wav, webm, ogg, "
+"flac, aac."
+msgstr "Fòma odyo pa sipòte: %(format)s. Aksepte: mp3, m4a, wav, webm, ogg, flac, aac."
+
+#: apps/conversations/views.py:373
+msgid "No image file provided."
+msgstr "Pa gen fichye imaj bay."
+
+#: apps/conversations/views.py:377
+msgid "Image too large. Max 20MB."
+msgstr "Imaj la twò gwo. Maks 20MB."
+
+#: apps/conversations/views.py:407
+msgid "Invalid image URL."
+msgstr "URL imaj envalid."
+
+#: apps/conversations/views.py:490 apps/conversations/views.py:512
+#: apps/conversations/views.py:535
+msgid "Message not found."
+msgstr "Mesaj pa jwenn."
+
+#: apps/conversations/views.py:539
+msgid "emoji is required."
+msgstr "emoji obligatwa."
+
+#: apps/conversations/views.py:637
+msgid "PDF export is not available. Install reportlab."
+msgstr "Ekspòtasyon PDF pa disponib. Enstale reportlab."
+
+#: apps/conversations/views.py:753
+msgid "callee_id is required."
+msgstr "callee_id obligatwa."
+
+#: apps/conversations/views.py:765
+msgid "Cannot call yourself."
+msgstr "Ou pa kapab rele tèt ou."
+
+#: apps/conversations/views.py:770
+msgid "Cannot call this user"
+msgstr "Pa kapab rele itilizatè sa a"
+
+#: apps/conversations/views.py:826 apps/conversations/views.py:851
+#: apps/conversations/views.py:902 apps/conversations/views.py:926
+#: apps/conversations/views.py:996
+msgid "Call not found."
+msgstr "Apèl pa jwenn."
+
+#: apps/conversations/views.py:829
+msgid "Only the callee can accept."
+msgstr "Sèlman moun yo rele a kapab aksepte."
+
+#: apps/conversations/views.py:832
+#, python-format
+msgid "Call is %(status)s, cannot accept."
+msgstr "Apèl la se %(status)s, pa kapab aksepte."
+
+#: apps/conversations/views.py:854
+msgid "Only the callee can reject."
+msgstr "Sèlman moun yo rele a kapab refize."
+
+#: apps/conversations/views.py:867
+#, python-format
+msgid "%(name)s declined your call"
+msgstr "%(name)s refize apèl ou a"
+
+#: apps/conversations/views.py:905 apps/conversations/views.py:998
+msgid "Not a participant."
+msgstr "Pa yon patisipan."
+
+#: apps/conversations/views.py:929
+msgid "Only the caller can cancel."
+msgstr "Sèlman moun ki rele a kapab anile."
+
+#: apps/conversations/views.py:932
+#, python-format
+msgid "Call is %(status)s, cannot cancel."
+msgstr "Apèl la se %(status)s, pa kapab anile."
+
+#: apps/conversations/views.py:1041
+#, python-format
+msgid "Incoming %(call_type)s call"
+msgstr "Apèl %(call_type)s ap vini"
+
+#: apps/conversations/views.py:1042
+#, python-format
+msgid "%(name)s is calling you"
+msgstr "%(name)s ap rele ou"
+
+#: apps/dreams/serializers.py:497 apps/dreams/serializers.py:565
+msgid "Target date must be at least 1 month from now."
+msgstr "Dat sib la dwe omwen 1 mwa depi kounye a."
+
+#: apps/dreams/serializers.py:501 apps/dreams/serializers.py:569
+msgid "Target date must be within 3 years from now."
+msgstr "Dat sib la dwe nan 3 lane depi kounye a."
+
+#: apps/dreams/serializers.py:509
+msgid "Title must be at least 3 characters long"
+msgstr "Tit la dwe gen omwen 3 karaktè"
+
+#: apps/dreams/serializers.py:522
+msgid "Description must be at least 10 characters long"
+msgstr "Deskripsyon an dwe gen omwen 10 karaktè"
+
+#: apps/dreams/tasks.py:66
+msgid "Starting plan generation..."
+msgstr "Ap kòmanse jenerasyon plan..."
+
+#: apps/dreams/tasks.py:88
+msgid "Analyzing your calibration answers..."
+msgstr "Ap analize repons kalibrasyon ou yo..."
+
+#: apps/dreams/tasks.py:104
+msgid "AI is building your personalized plan..."
+msgstr "AI ap konstwi plan pèsonalize ou a..."
+
+#: apps/dreams/tasks.py:120
+msgid "Saving your plan..."
+msgstr "Ap anrejistre plan ou a..."
+
+#: apps/dreams/tasks.py:248
+msgid "Plan generated successfully!"
+msgstr "Plan jenere avèk siksè!"
+
+#: apps/dreams/tasks.py:259
+msgid "Dream not found"
+msgstr "Rèv pa jwenn"
+
+#: apps/dreams/tasks.py:263
+#, python-format
+msgid "AI produced an invalid plan: %(msg)s"
+msgstr "AI pwodui yon plan envalid: %(msg)s"
+
+#: apps/dreams/tasks.py:304
+#, python-format
+msgid "Get started: %(title)s"
+msgstr "Kòmanse: %(title)s"
+
+#: apps/dreams/tasks.py:305
+msgid "First steps toward your dream"
+msgstr "Premye pa nan direksyon rèv ou a"
+
+#: apps/dreams/tasks.py:313 apps/dreams/views.py:647
+#, python-format
+msgid "Start now: %(action)s"
+msgstr "Kòmanse kounye a: %(action)s"
+
+#: apps/dreams/tasks.py:314
+msgid "This micro-action takes only 2 minutes and will help you get started!"
+msgstr "Mikwo-aksyon sa a pran sèlman 2 minit epi li ap ede ou kòmanse!"
+
+#: apps/dreams/tasks.py:329
+msgid "Ready to get started in 2 minutes?"
+msgstr "Pare pou kòmanse nan 2 minit?"
+
+#: apps/dreams/tasks.py:330
+#, python-format
+msgid "We created a micro-action for your dream: %(action)s"
+msgstr "Nou kreye yon mikwo-aksyon pou rèv ou a: %(action)s"
+
+#: apps/dreams/tasks.py:421
+msgid "Tasks automatically scheduled"
+msgstr "Tach yo planifye otomatikman"
+
+#: apps/dreams/tasks.py:422
+#, python-format
+msgid "%(count)s tasks have been added to your calendar!"
+msgstr "%(count)s tach ajoute nan kalandriye ou a!"
+
+#: apps/dreams/tasks.py:536
+msgid "Dream achieved!"
+msgstr "Rèv reyalize!"
+
+#: apps/dreams/tasks.py:537
+#, python-format
+msgid "Congratulations! You achieved your dream: %(title)s"
+msgstr "Felisitasyon! Ou reyalize rèv ou a: %(title)s"
+
+#: apps/dreams/tasks.py:593
+#, python-format
+msgid "%(count)s overdue task(s)"
+msgstr "%(count)s tach an reta"
+
+#: apps/dreams/tasks.py:594
+#, python-format
+msgid "You have %(count)s task(s) waiting to be completed!"
+msgstr "Ou gen %(count)s tach kap tann pou konplete!"
+
+#: apps/dreams/tasks.py:658
+msgid "Suggestions to help you succeed"
+msgstr "Konsèy pou ede ou reyisi"
+
+#: apps/dreams/tasks.py:715
+msgid "Your vision is ready!"
+msgstr "Vizyon ou a pare!"
+
+#: apps/dreams/tasks.py:716
+#, python-format
+msgid "We created an inspiring image for your dream: %(title)s"
+msgstr "Nou kreye yon imaj enspirant pou rèv ou a: %(title)s"
+
+#: apps/dreams/tasks.py:768
+msgid "Dream archived"
+msgstr "Rèv achive"
+
+#: apps/dreams/tasks.py:769
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been automatically archived after 90 days of "
+"inactivity."
+msgstr "Rèv ou a \\\"%(title)s\\\" achive otomatikman apre 90 jou inaktivite."
+
+#: apps/dreams/tasks.py:821
+msgid "Dream paused due to inactivity"
+msgstr "Rèv kanpe akoz inaktivite"
+
+#: apps/dreams/tasks.py:823
+#, python-format
+msgid ""
+"Your dream \"%(title)s\" has been paused after 30 days of inactivity. Open "
+"the app to resume it!"
+msgstr "Rèv ou a \\\"%(title)s\\\" kanpe apre 30 jou inaktivite. Ouvri aplikasyon an pou rekòmanse li!"
+
+#: apps/dreams/tasks.py:850
+msgid "Quarter of the way there!"
+msgstr "Ka nan chemen an!"
+
+#: apps/dreams/tasks.py:851
+msgid "Halfway to your dream!"
+msgstr "Mwatye nan rèv ou a!"
+
+#: apps/dreams/tasks.py:852
+msgid "Almost there! Just a little more!"
+msgstr "Prèske rive! Yon ti kras ankò!"
+
+#: apps/dreams/tasks.py:862
+#, python-format
+msgid "%(threshold)s%% - %(message)s"
+msgstr "%(threshold)s%% - %(message)s"
+
+#: apps/dreams/tasks.py:863
+#, python-format
+msgid "Your dream \"%(title)s\" is now %(threshold)s%% complete. %(message)s"
+msgstr "Rèv ou a \\\"%(title)s\\\" kounye a konplete %(threshold)s%%. %(message)s"
+
+#: apps/dreams/views.py:258
+#, python-format
+msgid "AI produced an invalid analysis: %(msg)s"
+msgstr "AI pwodui yon analiz envalid: %(msg)s"
+
+#: apps/dreams/views.py:290
+msgid "Calibration already completed for this dream"
+msgstr "Kalibrasyon deja fini pou rèv sa a"
+
+#: apps/dreams/views.py:334
+#, python-format
+msgid "AI produced invalid calibration questions: %(msg)s"
+msgstr "AI pwodui kesyon kalibrasyon envalid: %(msg)s"
+
+#: apps/dreams/views.py:380
+msgid "No answers provided"
+msgstr "Pa gen repons bay"
+
+#: apps/dreams/views.py:448 apps/dreams/views.py:481
+msgid "Calibration complete. Ready to generate your personalized plan."
+msgstr "Kalibrasyon fini. Pare pou jenere plan pèsonalize ou a."
+
+#: apps/dreams/views.py:509
+#, python-format
+msgid "AI produced invalid follow-up questions: %(msg)s"
+msgstr "AI pwodui kesyon swivi envalid: %(msg)s"
+
+#: apps/dreams/views.py:536
+msgid "Calibration skipped. You can generate a plan with basic info."
+msgstr "Kalibrasyon sote. Ou kapab jenere yon plan ak enfòmasyon debaz."
+
+#: apps/dreams/views.py:563
+msgid "Plan is being generated..."
+msgstr "Plan an ap jenere..."
+
+#: apps/dreams/views.py:573
+msgid "Plan generation started. This may take a few minutes."
+msgstr "Jenerasyon plan kòmanse. Sa kapab pran kèk minit."
+
+#: apps/dreams/views.py:594
+msgid "Plan already exists."
+msgstr "Plan an deja egziste."
+
+#: apps/dreams/views.py:595
+msgid "No plan generation in progress."
+msgstr "Pa gen jenerasyon plan an kou."
+
+#: apps/dreams/views.py:619
+msgid "2-minute start already generated"
+msgstr "Demaraj 2-minit deja jenere"
+
+#: apps/dreams/views.py:639
+msgid "Getting Started"
+msgstr "Kòmanse"
+
+#: apps/dreams/views.py:640
+msgid "Initial steps to begin your journey"
+msgstr "Premye etap pou kòmanse vwayaj ou a"
+
+#: apps/dreams/views.py:718
+#, python-format
+msgid "AI-generated vision for \"%(title)s\""
+msgstr "Vizyon AI jenere pou \\\"%(title)s\\\""
+
+#: apps/dreams/views.py:784
+msgid "Provide image file or image_url."
+msgstr "Bay fichye imaj oswa image_url."
+
+#: apps/dreams/views.py:823
+msgid "Image not found."
+msgstr "Imaj pa jwenn."
+
+#: apps/dreams/views.py:824
+msgid "Image removed."
+msgstr "Imaj retire."
+
+#: apps/dreams/views.py:864
+msgid "Dream is already completed."
+msgstr "Rèv la deja konplete."
+
+#: apps/dreams/views.py:888
+#, python-format
+msgid "%(title)s (Copy)"
+msgstr "%(title)s (Kopi)"
+
+#: apps/dreams/views.py:948
+msgid "You cannot share a dream with yourself."
+msgstr "Ou pa kapab pataje yon rèv ak tèt ou."
+
+#: apps/dreams/views.py:963
+msgid "Dream already shared with this user."
+msgstr "Rèv la deja pataje ak itilizatè sa a."
+
+#: apps/dreams/views.py:980
+#, python-format
+msgid "%(name)s shared a dream with you!"
+msgstr "%(name)s pataje yon rèv ak ou!"
+
+#: apps/dreams/views.py:981
+msgid "You now have access to view this dream."
+msgstr "Ou gen aksè kounye a pou wè rèv sa a."
+
+#: apps/dreams/views.py:1018
+msgid "Share not found."
+msgstr "Pataj pa jwenn."
+
+#: apps/dreams/views.py:1022
+msgid "Dream unshared."
+msgstr "Rèv pa pataje ankò."
+
+#: apps/dreams/views.py:1069
+msgid "Tag not found on this dream."
+msgstr "Tag pa jwenn sou rèv sa a."
+
+#: apps/dreams/views.py:1073
+msgid "Tag removed."
+msgstr "Tag retire."
+
+#: apps/dreams/views.py:1094
+msgid "Only the dream owner can add collaborators."
+msgstr "Sèlman pwopriyetè rèv la kapab ajoute kolaboratè."
+
+#: apps/dreams/views.py:1106
+msgid "You cannot add yourself as a collaborator."
+msgstr "Ou pa kapab ajoute tèt ou kòm kolaboratè."
+
+#: apps/dreams/views.py:1118
+msgid "User is already a collaborator on this dream."
+msgstr "Itilizatè a deja yon kolaboratè sou rèv sa a."
+
+#: apps/dreams/views.py:1169
+msgid "Only the dream owner can remove collaborators."
+msgstr "Sèlman pwopriyetè rèv la kapab retire kolaboratè."
+
+#: apps/dreams/views.py:1180
+msgid "Collaborator not found."
+msgstr "Kolaboratè pa jwenn."
+
+#: apps/dreams/views.py:1184
+msgid "Collaborator removed."
+msgstr "Kolaboratè retire."
+
+#: apps/dreams/views.py:1354 apps/social/views.py:1336
+#: apps/social/views.py:1869
+msgid "Dream not found."
+msgstr "Rèv pa jwenn."
+
+#: apps/dreams/views.py:1446
+msgid "PDF generation requires the reportlab package."
+msgstr "Jenerasyon PDF mande pake reportlab."
+
+#: apps/dreams/views.py:1572
+msgid "Dream milestone is already completed."
+msgstr "Etap enpòtan rèv la deja konplete."
+
+#: apps/dreams/views.py:1624
+msgid "Goal is already completed."
+msgstr "Objektif la deja konplete."
+
+#: apps/dreams/views.py:1729
+msgid "Task is already completed."
+msgstr "Tach la deja konplete."
+
+#: apps/leagues/views.py:175
+msgid "League not found."
+msgstr "Lig pa jwenn."
+
+#: apps/leagues/views.py:182
+msgid "No leagues configured."
+msgstr "Pa gen lig konfigire."
+
+#: apps/leagues/views.py:234 apps/leagues/views.py:312
+#: apps/leagues/views.py:424
+msgid "No active season."
+msgstr "Pa gen sezon aktif."
+
+#: apps/leagues/views.py:328
+msgid "Could not create standing. No leagues configured."
+msgstr "Pa kapab kreye klasman. Pa gen lig konfigire."
+
+#: apps/leagues/views.py:491
+msgid "Season has not ended yet."
+msgstr "Sezon an poko fini."
+
+#: apps/leagues/views.py:504
+msgid "No reward found for this season."
+msgstr "Pa jwenn rekonpans pou sezon sa a."
+
+#: apps/leagues/views.py:510
+msgid "Rewards have already been claimed."
+msgstr "Rekonpans yo deja reklame."
+
+#: apps/notifications/serializers.py:166
+msgid "Invalid FCM token."
+msgstr "Token FCM envalid."
+
+#: apps/notifications/serializers.py:168
+msgid "FCM token exceeds maximum length."
+msgstr "Token FCM depase longè maksimòm."
+
+#: apps/notifications/tasks.py:117
+msgid "Daily motivation"
+msgstr "Motivasyon chak jou"
+
+#: apps/notifications/tasks.py:208
+msgid "Your weekly report"
+msgstr "Rapò semèn ou a"
+
+#: apps/notifications/tasks.py:291
+msgid "We are still here for you"
+msgstr "Nou toujou la pou ou"
+
+#: apps/notifications/tasks.py:359
+#, python-format
+msgid "Reminder: %(title)s"
+msgstr "Rapèl: %(title)s"
+
+#: apps/notifications/tasks.py:360
+msgid "It's time to work on your goal!"
+msgstr "Li lè pou travay sou objektif ou a!"
+
+#: apps/notifications/tasks.py:423
+#, python-format
+msgid "%(days)s-day streak!"
+msgstr "Seri %(days)s jou!"
+
+#: apps/notifications/tasks.py:424
+#, python-format
+msgid ""
+"Incredible! You maintained your streak for %(days)s consecutive days. Keep "
+"it up!"
+msgstr "Enkwayab! Ou kenbe seri ou pou %(days)s jou youn apre lòt. Kontinye konsa!"
+
+#: apps/notifications/tasks.py:460
+#, python-format
+msgid "Level %(level)s reached!"
+msgstr "Nivo %(level)s atenn!"
+
+#: apps/notifications/tasks.py:461
+#, python-format
+msgid ""
+"Congratulations! You reached level %(level)s. Keep achieving your dreams!"
+msgstr "Felisitasyon! Ou rive nan nivo %(level)s. Kontinye reyalize rèv ou yo!"
+
+#: apps/notifications/tasks.py:514
+#, python-format
+msgid "Missed %(call_type)s call"
+msgstr "Apèl %(call_type)s manke"
+
+#: apps/notifications/tasks.py:515
+#, python-format
+msgid "%(name)s tried to call you"
+msgstr "%(name)s te eseye rele ou"
+
+#: apps/notifications/tasks.py:530 apps/notifications/tasks.py:555
+#, python-format
+msgid "%(name)s didn't answer"
+msgstr "%(name)s pa reponn"
+
+#: apps/notifications/tasks.py:531
+#, python-format
+msgid "Your %(call_type)s call was not answered"
+msgstr "Apèl %(call_type)s ou a pa reponn"
+
+#: apps/notifications/tasks.py:566
+#, python-format
+msgid "Missed %(call_type)s call from %(name)s"
+msgstr "Apèl %(call_type)s manke de %(name)s"
+
+#: apps/notifications/tasks.py:635
+msgid "Task Due"
+msgstr "Tach an reta"
+
+#: apps/notifications/tasks.py:646 apps/notifications/tasks.py:660
+#, python-format
+msgid "%(title)s"
+msgstr "%(title)s"
+
+#: apps/notifications/tasks.py:647 apps/notifications/tasks.py:661
+msgid "Time to work on your task!"
+msgstr "Li lè pou travay sou tach ou a!"
+
+#: apps/notifications/templates/notifications/email/notification.html:25
+#: apps/notifications/templates/notifications/email/notification.txt:3
+msgid "Hi"
+msgstr "Bonjou"
+
+#: apps/notifications/templates/notifications/email/notification.html:27
+#: apps/notifications/templates/notifications/email/notification.txt:7
+msgid "Open DreamPlanner"
+msgstr "Ouvri DreamPlanner"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "DreamPlanner"
+msgstr "DreamPlanner"
+
+#: apps/notifications/templates/notifications/email/notification.html:30
+msgid "Turn your dreams into reality"
+msgstr "Tounen rèv ou yo an reyalite"
+
+#: apps/notifications/templates/notifications/email/notification.html:31
+msgid "You can manage notification preferences in your profile settings."
+msgstr "Ou kapab jere preferans notifikasyon nan paramèt pwofil ou a."
+
+#: apps/notifications/templates/notifications/email/notification.txt:10
+msgid "DreamPlanner - Turn your dreams into reality"
+msgstr "DreamPlanner - Tounen rèv ou yo an reyalite"
+
+#: apps/notifications/templates/notifications/email/notification.txt:11
+msgid "Manage notification preferences in your profile settings."
+msgstr "Jere preferans notifikasyon nan paramèt pwofil ou a."
+
+#: apps/search/views.py:34
+msgid "Query must be at least 2 characters."
+msgstr "Rechèch la dwe gen omwen 2 karaktè."
+
+#: apps/social/serializers.py:490
+msgid "Cannot provide both image_url and an uploaded file."
+msgstr "Pa kapab bay image_url ak yon fichye telechaje an menm tan."
+
+#: apps/social/serializers.py:494
+msgid "Only one media file (image, video, or audio) can be uploaded per post."
+msgstr "Sèlman yon fichye medya (imaj, videyo, oswa odyo) kapab telechaje pa piblikasyon."
+
+#: apps/social/serializers.py:501
+msgid "Event title is required for event posts."
+msgstr "Tit evènman obligatwa pou piblikasyon evènman."
+
+#: apps/social/serializers.py:505
+msgid "Event type is required for event posts."
+msgstr "Tip evènman obligatwa pou piblikasyon evènman."
+
+#: apps/social/serializers.py:509
+msgid "Event start and end times are required."
+msgstr "Lè kòmansman ak fen evènman obligatwa."
+
+#: apps/social/serializers.py:513
+msgid "Event end time must be after start time."
+msgstr "Lè fen evènman dwe apre lè kòmansman."
+
+#: apps/social/serializers.py:518 apps/social/serializers.py:688
+msgid "Meeting link is required for virtual events."
+msgstr "Lyen reyinyon obligatwa pou evènman vityèl."
+
+#: apps/social/serializers.py:781
+msgid "A story requires an image or video."
+msgstr "Yon istwa mande yon imaj oswa videyo."
+
+#: apps/social/serializers.py:783
+msgid "Only one media file per story."
+msgstr "Sèlman yon fichye medya pa istwa."
+
+#: apps/social/views.py:177
+msgid "You cannot send a friend request to yourself."
+msgstr "Ou pa kapab voye yon demann zanmi bay tèt ou."
+
+#: apps/social/views.py:196
+msgid "Cannot send friend request to this user."
+msgstr "Pa kapab voye demann zanmi bay itilizatè sa a."
+
+#: apps/social/views.py:209
+msgid "You are already friends with this user."
+msgstr "Ou deja zanmi ak itilizatè sa a."
+
+#: apps/social/views.py:214
+msgid "A friend request is already pending."
+msgstr "Yon demann zanmi deja an atant."
+
+#: apps/social/views.py:224 apps/social/views.py:235
+msgid "Friend request sent."
+msgstr "Demann zanmi voye."
+
+#: apps/social/views.py:264 apps/social/views.py:298 apps/social/views.py:674
+msgid "Friend request not found."
+msgstr "Demann zanmi pa jwenn."
+
+#: apps/social/views.py:271
+msgid "Friend request accepted."
+msgstr "Demann zanmi aksepte."
+
+#: apps/social/views.py:305
+msgid "Friend request rejected."
+msgstr "Demann zanmi rejte."
+
+#: apps/social/views.py:333
+msgid "You cannot follow yourself."
+msgstr "Ou pa kapab swiv tèt ou."
+
+#: apps/social/views.py:351
+msgid "Cannot follow this user."
+msgstr "Pa kapab swiv itilizatè sa a."
+
+#: apps/social/views.py:357
+msgid "You are already following this user."
+msgstr "Ou deja ap swiv itilizatè sa a."
+
+#: apps/social/views.py:367
+#, python-format
+msgid "Now following %(name)s."
+msgstr "Kounye a ap swiv %(name)s."
+
+#: apps/social/views.py:390
+msgid "You are not following this user."
+msgstr "Ou pa ap swiv itilizatè sa a."
+
+#: apps/social/views.py:394
+msgid "Successfully unfollowed."
+msgstr "Sispann swiv avèk siksè."
+
+#: apps/social/views.py:416
+msgid "Friendship not found."
+msgstr "Amitye pa jwenn."
+
+#: apps/social/views.py:421
+msgid "Friend removed."
+msgstr "Zanmi retire."
+
+#: apps/social/views.py:481
+msgid "You cannot block yourself."
+msgstr "Ou pa kapab bloke tèt ou."
+
+#: apps/social/views.py:495
+msgid "User is already blocked."
+msgstr "Itilizatè a deja bloke."
+
+#: apps/social/views.py:518
+msgid "User blocked."
+msgstr "Itilizatè bloke."
+
+#: apps/social/views.py:541
+msgid "Block not found."
+msgstr "Blokin pa jwenn."
+
+#: apps/social/views.py:545
+msgid "User unblocked."
+msgstr "Itilizatè debloke."
+
+#: apps/social/views.py:584
+msgid "You cannot report yourself."
+msgstr "Ou pa kapab rapòte tèt ou."
+
+#: apps/social/views.py:604
+msgid "Report submitted. Thank you for helping keep our community safe."
+msgstr "Rapò soumèt. Mèsi paske ou ede kenbe kominote nou an an sekirite."
+
+#: apps/social/views.py:679
+msgid "Friend request cancelled."
+msgstr "Demann zanmi anile."
+
+#: apps/social/views.py:1126 apps/social/views.py:1179
+msgid "Activity not found."
+msgstr "Aktivite pa jwenn."
+
+#: apps/social/views.py:1186
+msgid "text is required."
+msgstr "text obligatwa."
+
+#: apps/social/views.py:1251
+msgid "query is required."
+msgstr "query obligatwa."
+
+#: apps/social/views.py:1263
+msgid "Search recorded."
+msgstr "Rechèch anrejistre."
+
+#: apps/social/views.py:1274
+msgid "Recent searches cleared."
+msgstr "Rechèch resan yo efase."
+
+#: apps/social/views.py:1292
+msgid "Search not found."
+msgstr "Rechèch pa jwenn."
+
+#: apps/social/views.py:1297
+msgid "Search removed."
+msgstr "Rechèch retire."
+
+#: apps/social/views.py:1352
+msgid "Goal not found."
+msgstr "Objektif pa jwenn."
+
+#: apps/social/views.py:1363
+msgid "Milestone not found."
+msgstr "Etap enpòtan pa jwenn."
+
+#: apps/social/views.py:1374
+msgid "Task not found."
+msgstr "Tach pa jwenn."
+
+#: apps/social/views.py:1432
+msgid "You can only edit your own posts."
+msgstr "Ou kapab modifye sèlman pwòp piblikasyon ou yo."
+
+#: apps/social/views.py:1463
+msgid "You can only delete your own posts."
+msgstr "Ou kapab efase sèlman pwòp piblikasyon ou yo."
+
+#: apps/social/views.py:1542
+#, python-format
+msgid "%(name)s liked your dream post"
+msgstr "%(name)s renmen piblikasyon rèv ou a"
+
+#: apps/social/views.py:1565
+msgid "content is required."
+msgstr "content obligatwa."
+
+#: apps/social/views.py:1579
+msgid "Parent comment not found."
+msgstr "Kòmantè paran pa jwenn."
+
+#: apps/social/views.py:1596
+#, python-format
+msgid "%(name)s commented on your post"
+msgstr "%(name)s kòmante sou piblikasyon ou a"
+
+#: apps/social/views.py:1647
+#, python-format
+msgid "encouragement_type must be one of: %(types)s"
+msgstr "encouragement_type dwe youn nan: %(types)s"
+
+#: apps/social/views.py:1670
+#, python-format
+msgid "%(name)s encouraged you: %(type)s"
+msgstr "%(name)s ankouraje ou: %(type)s"
+
+#: apps/social/views.py:1733
+msgid "Cannot view this user."
+msgstr "Pa kapab wè itilizatè sa a."
+
+#: apps/social/views.py:1898
+msgid "You can only edit your own events."
+msgstr "Ou kapab modifye sèlman pwòp evènman ou yo."
+
+#: apps/social/views.py:1927
+msgid "You can only cancel your own events."
+msgstr "Ou kapab anile sèlman pwòp evènman ou yo."
+
+#: apps/social/views.py:1949
+msgid "Cannot register for a cancelled or completed event."
+msgstr "Pa kapab enskri pou yon evènman anile oswa fini."
+
+#: apps/social/views.py:1960
+msgid "Event is full."
+msgstr "Evènman an plen."
+
+#: apps/social/views.py:2001
+msgid "Not registered for this event."
+msgstr "Pa enskri pou evènman sa a."
+
+#: apps/social/views.py:2136
+msgid "You can only delete your own stories."
+msgstr "Ou kapab efase sèlman pwòp istwa ou yo."
+
+#: apps/social/views.py:2273
+msgid "You can only see viewers of your own stories."
+msgstr "Ou kapab wè moun ki gade sèlman pwòp istwa ou yo."
+
+#: apps/store/views.py:363 apps/store/views.py:420 apps/store/views.py:478
+msgid "Store item not found."
+msgstr "Atik magazen pa jwenn."
+
+#: apps/store/views.py:532
+msgid "Item not found."
+msgstr "Atik pa jwenn."
+
+#: apps/store/views.py:537
+msgid "Recipient not found."
+msgstr "Destinatè pa jwenn."
+
+#: apps/subscriptions/views.py:81
+msgid "No active subscription. You are on the free plan."
+msgstr "Pa gen abònman aktif. Ou sou plan gratis la."
+
+#: apps/subscriptions/views.py:125 apps/subscriptions/views.py:162
+#: apps/subscriptions/views.py:189 apps/subscriptions/views.py:221
+#: apps/subscriptions/views.py:277 apps/subscriptions/views.py:305
+#: apps/subscriptions/views.py:336 apps/subscriptions/views.py:366
+msgid "Payment service error. Please try again later."
+msgstr "Erè sèvis peman. Tanpri eseye ankò pita."
+
+#: apps/subscriptions/views.py:195
+msgid "No active subscription to cancel."
+msgstr "Pa gen abònman aktif pou anile."
+
+#: apps/subscriptions/views.py:227
+msgid "No subscription pending cancellation to reactivate."
+msgstr "Pa gen abònman an atant anilasyon pou reaktive."
+
+#: apps/subscriptions/views.py:256
+msgid "plan_slug is required."
+msgstr "plan_slug obligatwa."
+
+#: apps/subscriptions/views.py:263
+#, python-format
+msgid "No active plan found with slug '%(slug)s'."
+msgstr "Pa jwenn plan aktif ak slug '%(slug)s'."
+
+#: apps/subscriptions/views.py:311
+msgid "No pending plan change to cancel."
+msgstr "Pa gen chanjman plan an atant pou anile."
+
+#: apps/subscriptions/views.py:342
+msgid "No subscription found to sync."
+msgstr "Pa jwenn abònman pou senkronize."
+
+#: apps/users/views.py:200
+msgid "No avatar file provided."
+msgstr "Pa gen fichye avatar bay."
+
+#: apps/users/views.py:208
+msgid "Invalid file type. Allowed: JPEG, PNG, GIF, WebP."
+msgstr "Tip fichye envalid. Aksepte: JPEG, PNG, GIF, WebP."
+
+#: apps/users/views.py:215
+msgid "File too large. Maximum size is 5MB."
+msgstr "Fichye a twò gwo. Gwosè maksimòm se 5MB."
+
+#: apps/users/views.py:232
+msgid "File content does not match an allowed image format."
+msgstr "Kontni fichye a pa koresponn ak yon fòma imaj aksepte."
+
+#: apps/users/views.py:296
+msgid "Invalid password. Please confirm your password to delete your account."
+msgstr "Modpas envalid. Tanpri konfime modpas ou pou efase kont ou a."
+
+#: apps/users/views.py:352
+msgid ""
+"Account scheduled for deletion. Your data has been anonymized. The account "
+"will be permanently deleted in 30 days."
+msgstr "Kont planifye pou efase. Done ou yo anonimize. Kont lan ap efase pou tout bon nan 30 jou."
+
+#: apps/users/views.py:441
+msgid "new_email is required."
+msgstr "new_email obligatwa."
+
+#: apps/users/views.py:447 apps/users/views.py:723
+msgid "Invalid password."
+msgstr "Modpas envalid."
+
+#: apps/users/views.py:454
+msgid "This email is already in use."
+msgstr "Imèl sa a deja an itilizasyon."
+
+#: apps/users/views.py:477
+msgid "Verification email sent to the new address. Please check your inbox."
+msgstr "Imèl verifikasyon voye nan nouvo adrès la. Tanpri tcheke bwat resepsyon ou."
+
+#: apps/users/views.py:623
+msgid "Expected a JSON object with notification preferences."
+msgstr "Atann yon objè JSON ak preferans notifikasyon."
+
+#: apps/users/views.py:640
+#, python-format
+msgid "Invalid value for \"%(key)s\": expected true/false."
+msgstr "Valè envalid pou \\\"%(key)s\\\": atann true/false."
+
+#: apps/users/views.py:669
+msgid "2FA is already enabled."
+msgstr "2FA deja aktive."
+
+#: apps/users/views.py:694
+msgid "Run 2FA setup first."
+msgstr "Kouri konfigirasyon 2FA anvan."
+
+#: apps/users/views.py:701
+msgid "2FA enabled successfully."
+msgstr "2FA aktive avèk siksè."
+
+#: apps/users/views.py:703
+msgid "Invalid code."
+msgstr "Kòd envalid."
+
+#: apps/users/views.py:728
+msgid "2FA is not enabled."
+msgstr "2FA pa aktive."
+
+#: apps/users/views.py:734
+msgid "Invalid 2FA code."
+msgstr "Kòd 2FA envalid."
+
+#: apps/users/views.py:741
+msgid "2FA disabled."
+msgstr "2FA dezaktive."
+
+#: apps/users/views.py:756
+msgid "2FA must be enabled first."
+msgstr "2FA dwe aktive anvan."
+
+#: apps/users/views.py:765
+msgid "Save these codes securely. They cannot be shown again."
+msgstr "Anrejistre kòd sa yo an sekirite. Yo pa kapab montre ankò."
+
+#: apps/users/views.py:782
+msgid "Onboarding completed."
+msgstr "Entegrasyon konplete."
+
+#: config/settings/base.py:159
+msgid "English"
+msgstr "Anglè"
+
+#: config/settings/base.py:160
+msgid "French"
+msgstr "Fransè"
+
+#: config/settings/base.py:161
+msgid "Spanish"
+msgstr "Panyòl"
+
+#: config/settings/base.py:162
+msgid "German"
+msgstr "Alman"
+
+#: config/settings/base.py:163
+msgid "Portuguese"
+msgstr "Pòtigè"
+
+#: config/settings/base.py:164
+msgid "Italian"
+msgstr "Italyen"
+
+#: config/settings/base.py:165
+msgid "Dutch"
+msgstr "Olandè"
+
+#: config/settings/base.py:166
+msgid "Russian"
+msgstr "Ris"
+
+#: config/settings/base.py:167
+msgid "Japanese"
+msgstr "Japonè"
+
+#: config/settings/base.py:168
+msgid "Korean"
+msgstr "Koreyen"
+
+#: config/settings/base.py:169
+msgid "Chinese"
+msgstr "Chinwa"
+
+#: config/settings/base.py:170
+msgid "Arabic"
+msgstr "Arab"
+
+#: config/settings/base.py:171
+msgid "Hindi"
+msgstr "Endi"
+
+#: config/settings/base.py:172
+msgid "Turkish"
+msgstr "Tik"
+
+#: config/settings/base.py:173
+msgid "Polish"
+msgstr "Polonè"
+
+#: config/settings/base.py:174
+msgid "Haitian Creole"
+msgstr "Kreyòl Ayisyen"
+
+#: core/exceptions.py:34
+msgid "An internal error occurred. Please try again later."
+msgstr "Yon erè entèn rive. Tanpri eseye ankò pita."
+
+#: core/serializers.py:21
+msgid "An account with this email already exists."
+msgstr "Yon kont ak imèl sa a deja egziste."

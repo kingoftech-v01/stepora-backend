@@ -28,8 +28,13 @@ class AIRateThrottle(UserRateThrottle):
 
 
 class AIPlanRateThrottle(UserRateThrottle):
-    """Per-minute burst rate limiting for AI plan generation (3/min)."""
+    """Per-minute burst rate limiting for AI plan generation (5/min)."""
     scope = 'ai_plan'
+
+
+class AICalibrationRateThrottle(UserRateThrottle):
+    """Per-minute burst rate limiting for calibration questions (15/min)."""
+    scope = 'ai_calibration'
 
 
 class SearchRateThrottle(UserRateThrottle):
@@ -90,6 +95,11 @@ class AIPlanDailyThrottle(DailyAIQuotaThrottle):
     category = 'ai_plan'
 
 
+class AICalibrationDailyThrottle(DailyAIQuotaThrottle):
+    """Daily quota for calibration questions (separate from plan generation)."""
+    category = 'ai_calibration'
+
+
 class AIImageDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for AI image generation (DALL-E)."""
     category = 'ai_image'
@@ -98,3 +108,13 @@ class AIImageDailyThrottle(DailyAIQuotaThrottle):
 class AIVoiceDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for voice transcription."""
     category = 'ai_voice'
+
+
+class TwoFactorRateThrottle(UserRateThrottle):
+    """Rate limiting for 2FA operations (backup codes, setup)."""
+    rate = '5/hour'
+
+
+class EmailVerificationRateThrottle(AnonRateThrottle):
+    """Rate limiting for email verification token attempts."""
+    rate = '10/hour'

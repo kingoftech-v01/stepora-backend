@@ -35,12 +35,15 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView,
     FeedLikeView, FeedCommentView, RecentSearchViewSet, DreamPostViewSet,
+    SocialEventViewSet, StoryViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'', FriendshipViewSet, basename='social')
 router.register(r'recent-searches', RecentSearchViewSet, basename='recent-searches')
 router.register(r'posts', DreamPostViewSet, basename='dream-post')
+router.register(r'events', SocialEventViewSet, basename='social-event')
+router.register(r'stories', StoryViewSet, basename='story')
 
 urlpatterns = [
     path('feed/friends', ActivityFeedView.as_view(), name='friends-feed'),

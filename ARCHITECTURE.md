@@ -416,8 +416,10 @@ services:
 | `SENTRY_DSN` | Error tracking |
 | `VAPID_PUBLIC_KEY` | Web Push public key |
 | `VAPID_PRIVATE_KEY` | Web Push private key |
-| `AGORA_APP_ID` | Agora project App ID (circle voice/video calls) |
-| `AGORA_APP_CERTIFICATE` | Agora project App Certificate (RTC token generation) |
+| `AGORA_APP_ID` | Agora project App ID (RTM messaging + RTC calls) |
+| `AGORA_APP_CERTIFICATE` | Agora project App Certificate (token generation) |
+
+> **Agora setup:** Signaling must be enabled in the [Agora Console](https://console.agora.io) (Projects → All features → Signaling → select data center + subscribe). Without this, RTM login fails with error `2010026`. See `DEPLOYMENT.md`.
 
 ### Notification Delivery Flow
 

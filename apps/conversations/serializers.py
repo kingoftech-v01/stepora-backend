@@ -5,6 +5,7 @@ Serializers for Conversations app.
 from typing import Optional
 
 from rest_framework import serializers
+from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
 from .models import Conversation, Message, MessageReadStatus, ConversationSummary, ConversationTemplate, Call
 
@@ -45,7 +46,7 @@ class MessageCreateSerializer(serializers.Serializer):
     def validate_content(self, value):
         """Validate and sanitize message content."""
         if not value.strip():
-            raise serializers.ValidationError("Message content cannot be empty")
+            raise serializers.ValidationError(_("Message content cannot be empty"))
         return sanitize_text(value.strip())
 
 
@@ -127,9 +128,9 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
-    """Detailed serializer for Conversation with messages."""
+    """Detailed serializer for Conversation with messages (latest 50)."""
 
-    messages = MessageSerializer(many=True, read_only=True, help_text='List of messages in the conversation.')
+    messages = serializers.SerializerMethodField(help_text='Latest messages in the conversation (max 50).')
     dream_title = serializers.CharField(source='dream.title', read_only=True, allow_null=True, help_text='Title of the linked dream.')
 
     class Meta:
@@ -157,6 +158,11 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
         }
 
 
+    def get_messages(self, obj):
+        """Return the latest 50 messages to prevent response bloat."""
+        msgs = obj.messages.order_by('-created_at')[:50]
+        return MessageSerializer(reversed(list(msgs)), many=True).data
+
     def validate_title(self, value):
         """Sanitize conversation title."""
         if value:
@@ -180,7 +186,7 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         """Validate conversation type."""
         valid_types = [choice[0] for choice in Conversation.TYPE_CHOICES]
         if value not in valid_types:
-            raise serializers.ValidationError(f"Invalid conversation type. Must be one of: {', '.join(valid_types)}")
+            raise serializers.ValidationError(_("Invalid conversation type. Must be one of: %(types)s") % {'types': ', '.join(valid_types)})
         return value
 
     def validate(self, attrs):
@@ -191,8 +197,8 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
 
         if conv_type in dream_required_types and not dream:
             raise serializers.ValidationError(
-                f"Conversations of type '{conv_type}' must be linked to a dream. "
-                f"Please provide a dream ID."
+                _("Conversations of type '%(type)s' must be linked to a dream. "
+                  "Please provide a dream ID.") % {'type': conv_type}
             )
         return attrs
 

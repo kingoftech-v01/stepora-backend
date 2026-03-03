@@ -2,6 +2,7 @@
 Serializers for Notifications app.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 from core.sanitizers import sanitize_text
 from .models import Notification, NotificationTemplate, NotificationBatch, WebPushSubscription, UserDevice
@@ -162,7 +163,7 @@ class UserDeviceSerializer(serializers.ModelSerializer):
     def validate_fcm_token(self, value):
         """Validate FCM token is not empty and has reasonable length."""
         if not value or len(value) < 20:
-            raise serializers.ValidationError("Invalid FCM token.")
+            raise serializers.ValidationError(_("Invalid FCM token."))
         if len(value) > 4096:
-            raise serializers.ValidationError("FCM token exceeds maximum length.")
+            raise serializers.ValidationError(_("FCM token exceeds maximum length."))
         return value

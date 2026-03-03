@@ -48,6 +48,18 @@ class Dream(models.Model):
     progress_percentage = models.FloatField(default=0.0)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    # Privacy
+    is_public = models.BooleanField(
+        default=False,
+        help_text='Whether this dream is publicly visible to other users'
+    )
+
+    # Favorites
+    is_favorited = models.BooleanField(
+        default=False,
+        help_text='Whether the user has favorited this dream on the vision board'
+    )
+
     # 2-minute start
     has_two_minute_start = models.BooleanField(default=False)
 
@@ -100,6 +112,25 @@ class Dream(models.Model):
         # Record progress snapshot for sparkline display
         DreamProgressSnapshot.record_snapshot(self)
 
+    # Map dream category to gamification attribute
+    CATEGORY_TO_ATTRIBUTE = {
+        'health': 'health',
+        'career': 'career',
+        'relationships': 'relationships',
+        'personal': 'personal_growth',
+        'finance': 'finance',
+        'hobbies': 'hobbies',
+    }
+
+    def _award_category_xp(self, amount):
+        """Award XP to the matching skill radar category."""
+        attr = self.CATEGORY_TO_ATTRIBUTE.get(self.category)
+        if not attr:
+            return
+        from apps.users.models import GamificationProfile
+        profile, _ = GamificationProfile.objects.get_or_create(user=self.user)
+        profile.add_attribute_xp(attr, amount)
+
     def complete(self):
         """Mark dream as completed."""
         if self.status == 'completed':
@@ -112,6 +143,9 @@ class Dream(models.Model):
 
         # Award XP to user
         self.user.add_xp(500)  # Completing a dream gives 500 XP
+
+        # Award category XP to skill radar
+        self._award_category_xp(500)
 
         # Check achievements
         from apps.users.services import AchievementService
@@ -216,6 +250,7 @@ class DreamMilestone(models.Model):
 
         # Award XP
         self.dream.user.add_xp(200)  # Completing a milestone gives 200 XP
+        self.dream._award_category_xp(200)
 
         # Check achievements
         from apps.users.services import AchievementService
@@ -275,7 +310,7 @@ class Goal(models.Model):
 
     class Meta:
         db_table = 'goals'
-        ordering = ['dream', 'order']
+        ordering = ['dream', 'milestone__order', 'order']
         indexes = [
             models.Index(fields=['dream', 'order']),
             models.Index(fields=['status']),
@@ -324,6 +359,7 @@ class Goal(models.Model):
 
         # Award XP
         self.dream.user.add_xp(100)  # Completing a goal gives 100 XP
+        self.dream._award_category_xp(100)
 
         # Check achievements
         from apps.users.services import AchievementService
@@ -408,6 +444,7 @@ class Task(models.Model):
         # Award XP based on duration
         xp_amount = max(10, (self.duration_mins or 30) // 3)  # Minimum 10 XP
         self.goal.dream.user.add_xp(xp_amount)
+        self.goal.dream._award_category_xp(xp_amount)
 
         # Update user activity
         self.goal.dream.user.update_activity()
@@ -428,7 +465,11 @@ class Task(models.Model):
         AchievementService.check_achievements(self.goal.dream.user)
 
     def _update_streak(self):
-        """Update user's streak based on consecutive day completions."""
+        """Update user's streak based on consecutive day completions (atomic)."""
+        from django.db.models import F
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         user = self.goal.dream.user
         today = timezone.now().date()
         last_activity_date = user.last_activity.date()
@@ -437,13 +478,13 @@ class Task(models.Model):
             # Already counted today
             return
         elif last_activity_date == today - timezone.timedelta(days=1):
-            # Consecutive day
-            user.streak_days += 1
+            # Consecutive day — atomic increment
+            User.objects.filter(id=user.id).update(streak_days=F('streak_days') + 1)
         else:
-            # Streak broken
-            user.streak_days = 1
+            # Streak broken — reset
+            User.objects.filter(id=user.id).update(streak_days=1)
 
-        user.save(update_fields=['streak_days'])
+        user.refresh_from_db(fields=['streak_days'])
 
 
 class Obstacle(models.Model):

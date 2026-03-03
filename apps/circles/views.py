@@ -5,6 +5,7 @@ Provides API endpoints for circle management, membership, feed posts,
 and challenges. All endpoints require authentication.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -179,6 +180,13 @@ class CircleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Retrieve circle detail with members and challenges."""
         instance = self.get_object()
+        # Private circles require membership to view details
+        if not instance.is_public:
+            if not CircleMembership.objects.filter(circle=instance, user=request.user).exists():
+                return Response(
+                    {'error': _('You must be a member to view this circle.')},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         serializer = self.get_serializer(instance)
         return Response({'circle': serializer.data})
 
@@ -206,21 +214,21 @@ class CircleViewSet(viewsets.ModelViewSet):
         # Check if already a member
         if CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You are already a member of this circle.'},
+                {'error': _('You are already a member of this circle.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Check if circle is full
         if circle.is_full:
             return Response(
-                {'error': 'This circle has reached its maximum number of members.'},
+                {'error': _('This circle has reached its maximum number of members.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Check if public
         if not circle.is_public:
             return Response(
-                {'error': 'This circle is private. You need an invitation to join.'},
+                {'error': _('This circle is private. You need an invitation to join.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -231,7 +239,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         )
 
         return Response({
-            'message': f'Successfully joined {circle.name}.',
+            'message': _('Successfully joined %(name)s.') % {'name': circle.name},
             'circle_id': str(circle.id),
         })
 
@@ -264,7 +272,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             )
         except CircleMembership.DoesNotExist:
             return Response(
-                {'error': 'You are not a member of this circle.'},
+                {'error': _('You are not a member of this circle.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -299,7 +307,7 @@ class CircleViewSet(viewsets.ModelViewSet):
                     circle.save(update_fields=['creator'])
 
         membership.delete()
-        return Response({'message': f'Successfully left {circle.name}.'})
+        return Response({'message': _('Successfully left %(name)s.') % {'name': circle.name}})
 
     @extend_schema(
         summary="Get circle feed",
@@ -324,7 +332,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         # Verify membership
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to view the feed.'},
+                {'error': _('You must be a member to view the feed.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -364,7 +372,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         # Verify membership
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to post.'},
+                {'error': _('You must be a member to post.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -398,6 +406,13 @@ class CircleViewSet(viewsets.ModelViewSet):
         Returns active and upcoming challenges, ordered by start date.
         """
         circle = self.get_object()
+
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': _('You must be a member to view challenges.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         challenges = CircleChallenge.objects.filter(
             circle=circle,
             status__in=['upcoming', 'active']
@@ -425,7 +440,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not membership or membership.role != 'admin':
             return Response(
-                {'error': 'Only admins can update this circle.'},
+                {'error': _('Only admins can update this circle.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -456,7 +471,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not membership or membership.role != 'admin':
             return Response(
-                {'error': 'Only admins can delete this circle.'},
+                {'error': _('Only admins can delete this circle.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -482,7 +497,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         try:
             post = CirclePost.objects.get(id=post_id, circle=circle)
         except CirclePost.DoesNotExist:
-            return Response({'error': 'Post not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Post not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         # Only author or moderator/admin can edit
         is_author = post.author == request.user
@@ -490,7 +505,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not is_author and not is_mod:
             return Response(
-                {'error': 'You do not have permission to edit this post.'},
+                {'error': _('You do not have permission to edit this post.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -520,14 +535,14 @@ class CircleViewSet(viewsets.ModelViewSet):
         try:
             post = CirclePost.objects.get(id=post_id, circle=circle)
         except CirclePost.DoesNotExist:
-            return Response({'error': 'Post not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Post not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         is_author = post.author == request.user
         is_mod = self._is_admin_or_moderator(circle, request.user)
 
         if not is_author and not is_mod:
             return Response(
-                {'error': 'You do not have permission to delete this post.'},
+                {'error': _('You do not have permission to delete this post.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -554,14 +569,14 @@ class CircleViewSet(viewsets.ModelViewSet):
         # Verify membership
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to react.'},
+                {'error': _('You must be a member to react.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         try:
             post = CirclePost.objects.get(id=post_id, circle=circle)
         except CirclePost.DoesNotExist:
-            return Response({'error': 'Post not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Post not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = PostReactionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -573,8 +588,8 @@ class CircleViewSet(viewsets.ModelViewSet):
         )
 
         if created:
-            return Response({'message': 'Reaction added.'}, status=status.HTTP_201_CREATED)
-        return Response({'message': 'Reaction updated.'})
+            return Response({'message': _('Reaction added.')}, status=status.HTTP_201_CREATED)
+        return Response({'message': _('Reaction updated.')})
 
     @extend_schema(
         summary="Remove reaction from a post",
@@ -591,19 +606,25 @@ class CircleViewSet(viewsets.ModelViewSet):
         """Remove a reaction from a circle post."""
         circle = self.get_object()
 
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': _('You must be a member to unreact.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             post = CirclePost.objects.get(id=post_id, circle=circle)
         except CirclePost.DoesNotExist:
-            return Response({'error': 'Post not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Post not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         deleted_count, _ = PostReaction.objects.filter(
             post=post, user=request.user
         ).delete()
 
         if deleted_count == 0:
-            return Response({'error': 'No reaction found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('No reaction found.')}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({'message': 'Reaction removed.'})
+        return Response({'message': _('Reaction removed.')})
 
     @extend_schema(
         summary="Promote a member",
@@ -624,25 +645,25 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not my_membership or my_membership.role != 'admin':
             return Response(
-                {'error': 'Only admins can promote members.'},
+                {'error': _('Only admins can promote members.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         try:
             target_membership = CircleMembership.objects.get(id=member_id, circle=circle)
         except CircleMembership.DoesNotExist:
-            return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Member not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if target_membership.role == 'admin':
             return Response(
-                {'error': 'Cannot change an admin role.'},
+                {'error': _('Cannot change an admin role.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         target_membership.role = 'moderator'
         target_membership.save(update_fields=['role'])
 
-        return Response({'message': f'{target_membership.user.display_name or "User"} promoted to moderator.'})
+        return Response({'message': _('%(name)s promoted to moderator.') % {'name': target_membership.user.display_name or _("User")}})
 
     @extend_schema(
         summary="Demote a member",
@@ -662,25 +683,25 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not my_membership or my_membership.role != 'admin':
             return Response(
-                {'error': 'Only admins can demote members.'},
+                {'error': _('Only admins can demote members.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         try:
             target_membership = CircleMembership.objects.get(id=member_id, circle=circle)
         except CircleMembership.DoesNotExist:
-            return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Member not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if target_membership.role != 'moderator':
             return Response(
-                {'error': 'Only moderators can be demoted.'},
+                {'error': _('Only moderators can be demoted.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         target_membership.role = 'member'
         target_membership.save(update_fields=['role'])
 
-        return Response({'message': f'{target_membership.user.display_name or "User"} demoted to member.'})
+        return Response({'message': _('%(name)s demoted to member.') % {'name': target_membership.user.display_name or _("User")}})
 
     @extend_schema(
         summary="Remove a member",
@@ -699,23 +720,23 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not self._is_admin_or_moderator(circle, request.user):
             return Response(
-                {'error': 'Only admins and moderators can remove members.'},
+                {'error': _('Only admins and moderators can remove members.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         try:
             target_membership = CircleMembership.objects.get(id=member_id, circle=circle)
         except CircleMembership.DoesNotExist:
-            return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Member not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if target_membership.role == 'admin':
             return Response(
-                {'error': 'Cannot remove an admin.'},
+                {'error': _('Cannot remove an admin.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         target_membership.delete()
-        return Response({'message': 'Member removed from circle.'})
+        return Response({'message': _('Member removed from circle.')})
 
     @extend_schema(
         summary="Invite a user to a circle",
@@ -736,7 +757,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not self._is_admin_or_moderator(circle, request.user):
             return Response(
-                {'error': 'Only admins and moderators can invite users.'},
+                {'error': _('Only admins and moderators can invite users.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -748,11 +769,11 @@ class CircleViewSet(viewsets.ModelViewSet):
         try:
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
-            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('User not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if CircleMembership.objects.filter(circle=circle, user=target_user).exists():
             return Response(
-                {'error': 'User is already a member of this circle.'},
+                {'error': _('User is already a member of this circle.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -761,7 +782,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             circle=circle, invitee=target_user, status='pending'
         ).exists():
             return Response(
-                {'error': 'An invitation is already pending for this user.'},
+                {'error': _('An invitation is already pending for this user.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -772,6 +793,22 @@ class CircleViewSet(viewsets.ModelViewSet):
             invite_code=secrets.token_urlsafe(12),
             expires_at=django_timezone.now() + timedelta(days=7),
         )
+
+        # Notify the invitee
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=target_user,
+                notification_type='buddy',
+                title=_('Circle Invitation'),
+                body=_('%(name)s invited you to join "%(circle)s".') % {
+                    'name': request.user.display_name or 'Someone',
+                    'circle': circle.name,
+                },
+                data={'screen': 'circle', 'circleId': str(circle.id)},
+            )
+        except Exception:
+            pass
 
         return Response(
             CircleInvitationSerializer(invitation).data,
@@ -795,7 +832,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not self._is_admin_or_moderator(circle, request.user):
             return Response(
-                {'error': 'Only admins and moderators can generate invite links.'},
+                {'error': _('Only admins and moderators can generate invite links.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -829,7 +866,7 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         if not self._is_admin_or_moderator(circle, request.user):
             return Response(
-                {'error': 'Only admins and moderators can view invitations.'},
+                {'error': _('Only admins and moderators can view invitations.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -860,18 +897,18 @@ class CircleViewSet(viewsets.ModelViewSet):
         # Verify membership
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member of the circle.'},
+                {'error': _('You must be a member of the circle.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         try:
             challenge = CircleChallenge.objects.get(id=challenge_id, circle=circle)
         except CircleChallenge.DoesNotExist:
-            return Response({'error': 'Challenge not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Challenge not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         if not challenge.participants.filter(id=request.user.id).exists():
             return Response(
-                {'error': 'You must join the challenge first.'},
+                {'error': _('You must join the challenge first.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -905,10 +942,16 @@ class CircleViewSet(viewsets.ModelViewSet):
         """Get leaderboard for a challenge, ranked by total progress."""
         circle = self.get_object()
 
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': _('You must be a member of the circle.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             challenge = CircleChallenge.objects.get(id=challenge_id, circle=circle)
         except CircleChallenge.DoesNotExist:
-            return Response({'error': 'Challenge not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Challenge not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         from django.db.models import Sum
 
@@ -925,7 +968,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             leaderboard.append({
                 'rank': idx,
                 'user_id': str(entry['user__id']),
-                'user_display_name': entry['user__display_name'] or 'Anonymous',
+                'user_display_name': entry['user__display_name'] or _('Anonymous'),
                 'user_avatar_url': entry['user__avatar_url'] or '',
                 'total_progress': entry['total_progress'] or 0,
                 'is_current_user': entry['user__id'] == request.user.id,
@@ -951,7 +994,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         circle = self.get_object()
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to view chat.'},
+                {'error': _('You must be a member to view chat.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -992,14 +1035,14 @@ class CircleViewSet(viewsets.ModelViewSet):
         circle = self.get_object()
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to send messages.'},
+                {'error': _('You must be a member to send messages.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         content = request.data.get('content', '').strip()
         if not content:
             return Response(
-                {'error': 'content is required.'},
+                {'error': _('Content is required.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1017,7 +1060,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
             channel_layer = get_channel_layer()
-            sender_name = request.user.display_name or 'Anonymous'
+            sender_name = request.user.display_name or _('Anonymous')
             async_to_sync(channel_layer.group_send)(
                 f'circle_chat_{circle.id}',
                 {
@@ -1054,7 +1097,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         circle = self.get_object()
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member to start a call.'},
+                {'error': _('You must be a member to start a call.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1062,14 +1105,14 @@ class CircleViewSet(viewsets.ModelViewSet):
         active_call = CircleCall.objects.filter(circle=circle, status='active').first()
         if active_call:
             return Response(
-                {'error': 'A call is already active in this circle.', 'call_id': str(active_call.id)},
+                {'error': _('A call is already active in this circle.'), 'call_id': str(active_call.id)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         call_type = request.data.get('call_type', 'voice')
         if call_type not in ('voice', 'video'):
             return Response(
-                {'error': 'call_type must be voice or video.'},
+                {'error': _('call_type must be voice or video.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1103,7 +1146,7 @@ class CircleViewSet(viewsets.ModelViewSet):
                         'id': str(call.id),
                         'type': call_type,
                         'initiator_id': str(request.user.id),
-                        'initiator_name': request.user.display_name or 'Someone',
+                        'initiator_name': request.user.display_name or _('Someone'),
                     },
                 },
             )
@@ -1133,14 +1176,14 @@ class CircleViewSet(viewsets.ModelViewSet):
         circle = self.get_object()
         if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You must be a member.'},
+                {'error': _('You must be a member.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         call = CircleCall.objects.filter(circle=circle, status='active').first()
         if not call:
             return Response(
-                {'error': 'No active call in this circle.'},
+                {'error': _('No active call in this circle.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1176,7 +1219,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         call = CircleCall.objects.filter(circle=circle, status='active').first()
         if not call:
             return Response(
-                {'error': 'No active call.'},
+                {'error': _('No active call.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1186,7 +1229,7 @@ class CircleViewSet(viewsets.ModelViewSet):
             )
         except CircleCallParticipant.DoesNotExist:
             return Response(
-                {'error': 'You are not in this call.'},
+                {'error': _('You are not in this call.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1223,7 +1266,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         call = CircleCall.objects.filter(circle=circle, status='active').first()
         if not call:
             return Response(
-                {'error': 'No active call.'},
+                {'error': _('No active call.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1231,7 +1274,7 @@ class CircleViewSet(viewsets.ModelViewSet):
         is_admin = self._is_admin_or_moderator(circle, request.user)
         if not is_initiator and not is_admin:
             return Response(
-                {'error': 'Only the initiator or an admin can end the call.'},
+                {'error': _('Only the initiator or an admin can end the call.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1264,6 +1307,13 @@ class CircleViewSet(viewsets.ModelViewSet):
     def call_active(self, request, pk=None):
         """Get active call if any."""
         circle = self.get_object()
+
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': _('You must be a member of the circle.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         call = CircleCall.objects.filter(circle=circle, status='active').first()
         if not call:
             return Response({'active_call': None})
@@ -1318,14 +1368,14 @@ class CircleViewSet(viewsets.ModelViewSet):
             if not tokens:
                 return
 
-            caller_name = initiator.display_name or 'Someone'
+            caller_name = initiator.display_name or _('Someone')
             fcm = FCMService()
             for token in tokens:
                 try:
                     fcm.send_to_token(
                         token=token,
-                        title=f'{caller_name} started a {call.call_type} call',
-                        body=f'Join the call in {circle.name}',
+                        title=_('%(name)s started a %(type)s call') % {'name': caller_name, 'type': call.call_type},
+                        body=_('Join the call in %(circle)s') % {'circle': circle.name},
                         data={
                             'type': 'circle_call',
                             'circle_id': str(circle.id),
@@ -1377,21 +1427,21 @@ class ChallengeViewSet(viewsets.GenericViewSet):
             user=request.user
         ).exists():
             return Response(
-                {'error': 'You must be a member of the circle to join this challenge.'},
+                {'error': _('You must be a member of the circle to join this challenge.')},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         # Check if already a participant
         if challenge.participants.filter(id=request.user.id).exists():
             return Response(
-                {'error': 'You have already joined this challenge.'},
+                {'error': _('You have already joined this challenge.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         challenge.participants.add(request.user)
 
         return Response({
-            'message': f'Successfully joined challenge: {challenge.title}.',
+            'message': _('Successfully joined challenge: %(title)s.') % {'title': challenge.title},
             'challenge_id': str(challenge.id),
         })
 
@@ -1422,7 +1472,7 @@ class JoinByInviteCodeView(APIView):
             )
         except CircleInvitation.DoesNotExist:
             return Response(
-                {'error': 'Invalid or expired invite code.'},
+                {'error': _('Invalid or expired invite code.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1430,7 +1480,7 @@ class JoinByInviteCodeView(APIView):
             invitation.status = 'expired'
             invitation.save(update_fields=['status'])
             return Response(
-                {'error': 'This invitation has expired.'},
+                {'error': _('This invitation has expired.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1439,19 +1489,19 @@ class JoinByInviteCodeView(APIView):
         # If this is a direct invite, verify it's for this user
         if invitation.invitee and invitation.invitee != request.user:
             return Response(
-                {'error': 'This invitation is for another user.'},
+                {'error': _('This invitation is for another user.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if CircleMembership.objects.filter(circle=circle, user=request.user).exists():
             return Response(
-                {'error': 'You are already a member of this circle.'},
+                {'error': _('You are already a member of this circle.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if circle.is_full:
             return Response(
-                {'error': 'This circle has reached its maximum number of members.'},
+                {'error': _('This circle has reached its maximum number of members.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1467,7 +1517,7 @@ class JoinByInviteCodeView(APIView):
             invitation.save(update_fields=['status'])
 
         return Response({
-            'message': f'Successfully joined {circle.name}.',
+            'message': _('Successfully joined %(name)s.') % {'name': circle.name},
             'circle_id': str(circle.id),
         })
 

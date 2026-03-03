@@ -464,3 +464,21 @@ class RefundRequestDisplaySerializer(serializers.ModelSerializer):
             'created_at': {'help_text': 'Timestamp when the request was submitted.'},
             'updated_at': {'help_text': 'Timestamp when the request was last updated.'},
         }
+
+
+class RefundProcessSerializer(serializers.Serializer):
+    """Serializer for admin processing of a refund request."""
+
+    refund_id = serializers.UUIDField(
+        help_text='UUID of the refund request to process.',
+    )
+    action = serializers.ChoiceField(
+        choices=['approve', 'reject'],
+        help_text='Action to take: "approve" or "reject".',
+    )
+    admin_notes = serializers.CharField(
+        required=False,
+        default='',
+        max_length=2000,
+        help_text='Optional notes from admin about this decision.',
+    )

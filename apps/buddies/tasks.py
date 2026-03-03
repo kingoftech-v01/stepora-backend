@@ -10,6 +10,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,10 @@ def send_buddy_checkin_reminders():
             try:
                 Notification.objects.create(
                     user=user,
-                    title='Check in with your buddy!',
-                    body=f"It's been a while since you encouraged "
-                         f"{partner.display_name or 'your buddy'}. "
-                         f"Send them some motivation!",
+                    title=_('Check in with your buddy!'),
+                    body=_("It's been a while since you encouraged "
+                           "%(name)s. "
+                           "Send them some motivation!") % {'name': partner.display_name or _('your buddy')},
                     notification_type='buddy',
                     scheduled_for=now,
                     status='sent',

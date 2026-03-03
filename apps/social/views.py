@@ -5,6 +5,7 @@ Provides API endpoints for friendships, follows, activity feeds,
 and user search. All endpoints require authentication.
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -30,6 +31,8 @@ from .models import (
     Friendship, UserFollow, ActivityFeedItem, ActivityLike,
     ActivityComment, BlockedUser, ReportedUser, RecentSearch,
     DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+    SocialEvent, SocialEventRegistration,
+    Story, StoryView,
 )
 from .serializers import (
     FriendSerializer,
@@ -46,6 +49,12 @@ from .serializers import (
     DreamPostCreateSerializer,
     DreamPostCommentSerializer,
     DreamEncouragementSerializer,
+    SocialEventSerializer,
+    SocialEventCreateSerializer,
+    SocialEventRegistrationSerializer,
+    StorySerializer,
+    StoryCreateSerializer,
+    StoryFeedGroupSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,7 +174,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         # Cannot befriend yourself
         if target_user_id == request.user.id:
             return Response(
-                {'error': 'You cannot send a friend request to yourself.'},
+                {'error': _('You cannot send a friend request to yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -174,7 +183,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -184,7 +193,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             Q(blocker=target_user, blocked=request.user)
         ).exists():
             return Response(
-                {'error': 'Cannot send friend request to this user.'},
+                {'error': _('Cannot send friend request to this user.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -197,12 +206,12 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         if existing:
             if existing.status == 'accepted':
                 return Response(
-                    {'error': 'You are already friends with this user.'},
+                    {'error': _('You are already friends with this user.')},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             elif existing.status == 'pending':
                 return Response(
-                    {'error': 'A friend request is already pending.'},
+                    {'error': _('A friend request is already pending.')},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             elif existing.status == 'rejected':
@@ -212,7 +221,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 existing.user2 = target_user
                 existing.save(update_fields=['status', 'user1', 'user2', 'updated_at'])
                 return Response(
-                    {'message': 'Friend request sent.'},
+                    {'message': _('Friend request sent.')},
                     status=status.HTTP_201_CREATED
                 )
 
@@ -222,8 +231,21 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             status='pending'
         )
 
+        # Send push notification to the recipient
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=target_user,
+                notification_type='buddy',
+                title=_('New Friend Request'),
+                body=_('%(name)s sent you a friend request.') % {'name': request.user.display_name or 'Someone'},
+                data={'screen': 'friends', 'userId': str(request.user.id)},
+            )
+        except Exception:
+            pass
+
         return Response(
-            {'message': 'Friend request sent.'},
+            {'message': _('Friend request sent.')},
             status=status.HTTP_201_CREATED
         )
 
@@ -252,14 +274,27 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             )
         except Friendship.DoesNotExist:
             return Response(
-                {'error': 'Friend request not found.'},
+                {'error': _('Friend request not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         friendship.status = 'accepted'
         friendship.save(update_fields=['status', 'updated_at'])
 
-        return Response({'message': 'Friend request accepted.'})
+        # Notify the sender that their request was accepted
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=friendship.user1,
+                notification_type='buddy',
+                title=_('Friend Request Accepted'),
+                body=_('%(name)s accepted your friend request!') % {'name': request.user.display_name or 'Someone'},
+                data={'screen': 'friends', 'userId': str(request.user.id)},
+            )
+        except Exception:
+            pass
+
+        return Response({'message': _('Friend request accepted.')})
 
     @extend_schema(
         summary="Reject friend request",
@@ -286,14 +321,14 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             )
         except Friendship.DoesNotExist:
             return Response(
-                {'error': 'Friend request not found.'},
+                {'error': _('Friend request not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         friendship.status = 'rejected'
         friendship.save(update_fields=['status', 'updated_at'])
 
-        return Response({'message': 'Friend request rejected.'})
+        return Response({'message': _('Friend request rejected.')})
 
     @extend_schema(
         summary="Follow a user",
@@ -321,7 +356,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if target_user_id == request.user.id:
             return Response(
-                {'error': 'You cannot follow yourself.'},
+                {'error': _('You cannot follow yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -329,7 +364,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -339,13 +374,13 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             Q(blocker=target_user, blocked=request.user)
         ).exists():
             return Response(
-                {'error': 'Cannot follow this user.'},
+                {'error': _('Cannot follow this user.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if UserFollow.objects.filter(follower=request.user, following=target_user).exists():
             return Response(
-                {'error': 'You are already following this user.'},
+                {'error': _('You are already following this user.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -355,7 +390,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         )
 
         return Response(
-            {'message': f'Now following {target_user.display_name or "user"}.'},
+            {'message': _('Now following %(name)s.') % {'name': target_user.display_name or _("user")}},
             status=status.HTTP_201_CREATED
         )
 
@@ -378,11 +413,11 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if deleted_count == 0:
             return Response(
-                {'error': 'You are not following this user.'},
+                {'error': _('You are not following this user.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response({'message': 'Successfully unfollowed.'})
+        return Response({'message': _('Successfully unfollowed.')})
 
     @extend_schema(
         summary="Remove friend",
@@ -404,12 +439,12 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if not friendship:
             return Response(
-                {'error': 'Friendship not found.'},
+                {'error': _('Friendship not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         friendship.delete()
-        return Response({'message': 'Friend removed.'})
+        return Response({'message': _('Friend removed.')})
 
     @extend_schema(
         summary="Sent friend requests",
@@ -469,7 +504,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if target_user_id == request.user.id:
             return Response(
-                {'error': 'You cannot block yourself.'},
+                {'error': _('You cannot block yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -477,13 +512,13 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if BlockedUser.objects.filter(blocker=request.user, blocked=target_user).exists():
             return Response(
-                {'error': 'User is already blocked.'},
+                {'error': _('User is already blocked.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -506,7 +541,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         ).delete()
 
         return Response(
-            {'message': 'User blocked.'},
+            {'message': _('User blocked.')},
             status=status.HTTP_201_CREATED
         )
 
@@ -529,11 +564,11 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if deleted_count == 0:
             return Response(
-                {'error': 'Block not found.'},
+                {'error': _('Block not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response({'message': 'User unblocked.'})
+        return Response({'message': _('User unblocked.')})
 
     @extend_schema(
         summary="List blocked users",
@@ -572,7 +607,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         if target_user_id == request.user.id:
             return Response(
-                {'error': 'You cannot report yourself.'},
+                {'error': _('You cannot report yourself.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -580,7 +615,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=target_user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -592,7 +627,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         )
 
         return Response(
-            {'message': 'Report submitted. Thank you for helping keep our community safe.'},
+            {'message': _('Report submitted. Thank you for helping keep our community safe.')},
             status=status.HTTP_201_CREATED
         )
 
@@ -612,7 +647,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -662,12 +697,12 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             )
         except Friendship.DoesNotExist:
             return Response(
-                {'error': 'Friend request not found.'},
+                {'error': _('Friend request not found.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         friendship.delete()
-        return Response({'message': 'Friend request cancelled.'})
+        return Response({'message': _('Friend request cancelled.')})
 
     @extend_schema(
         summary="Online friends",
@@ -714,8 +749,18 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Return 404 if blocked in either direction
+        if BlockedUser.objects.filter(
+            Q(blocker=request.user, blocked=target_user) |
+            Q(blocker=target_user, blocked=request.user)
+        ).exists():
+            return Response(
+                {'error': _('User not found.')},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         follower_count = UserFollow.objects.filter(following=target_user).count()
@@ -900,11 +945,17 @@ class UserSearchView(generics.ListAPIView):
         page = self.paginate_queryset(users_qs)
         users_page = page if page is not None else users_qs[:20]
 
-        # Pre-fetch friendship and follow status — 2 queries instead of loading all objects
+        # Pre-fetch friendship and follow status — 3 queries instead of loading all objects
         friend_ids = set(
             Friendship.objects.filter(user1=request.user, status='accepted').values_list('user2_id', flat=True)
         ) | set(
             Friendship.objects.filter(user2=request.user, status='accepted').values_list('user1_id', flat=True)
+        )
+
+        pending_ids = set(
+            Friendship.objects.filter(user1=request.user, status='pending').values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(user2=request.user, status='pending').values_list('user1_id', flat=True)
         )
 
         following_ids = set(
@@ -937,6 +988,7 @@ class UserSearchView(generics.ListAPIView):
                 'influenceScore': user.xp,
                 'currentLevel': user.level,
                 'isFriend': user.id in friend_ids,
+                'isPendingRequest': user.id in pending_ids,
                 'isFollowing': user.id in following_ids,
             })
 
@@ -1073,6 +1125,12 @@ class FollowSuggestionsView(generics.ListAPIView):
             else:
                 title = 'Dreamer'
 
+            # Check pending status for suggestions
+            is_pending = Friendship.objects.filter(
+                Q(user1=user, user2=u) | Q(user1=u, user2=user),
+                status='pending'
+            ).exists()
+
             results.append({
                 'id': u.id,
                 'username': u.display_name or 'Anonymous',
@@ -1081,6 +1139,7 @@ class FollowSuggestionsView(generics.ListAPIView):
                 'influenceScore': u.xp,
                 'currentLevel': u.level,
                 'isFriend': False,
+                'isPendingRequest': is_pending,
                 'isFollowing': False,
             })
 
@@ -1114,7 +1173,17 @@ class FeedLikeView(APIView):
             activity = ActivityFeedItem.objects.get(id=activity_id)
         except ActivityFeedItem.DoesNotExist:
             return Response(
-                {'error': 'Activity not found.'},
+                {'error': _('Activity not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check block status — blocked users should not interact
+        if BlockedUser.objects.filter(
+            Q(blocker=request.user, blocked=activity.user) |
+            Q(blocker=activity.user, blocked=request.user)
+        ).exists():
+            return Response(
+                {'error': _('Activity not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1167,14 +1236,24 @@ class FeedCommentView(APIView):
             activity = ActivityFeedItem.objects.get(id=activity_id)
         except ActivityFeedItem.DoesNotExist:
             return Response(
-                {'error': 'Activity not found.'},
+                {'error': _('Activity not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check block status — blocked users should not interact
+        if BlockedUser.objects.filter(
+            Q(blocker=request.user, blocked=activity.user) |
+            Q(blocker=activity.user, blocked=request.user)
+        ).exists():
+            return Response(
+                {'error': _('Activity not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         text = request.data.get('text', '').strip()
         if not text:
             return Response(
-                {'error': 'text is required.'},
+                {'error': _('text is required.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1239,7 +1318,7 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
         query = request.data.get('query', '').strip()
         search_type = request.data.get('search_type', 'all')
         if not query:
-            return Response({'error': 'query is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': _('query is required.')}, status=status.HTTP_400_BAD_REQUEST)
 
         # Avoid duplicates — delete older same query
         RecentSearch.objects.filter(user=request.user, query=query).delete()
@@ -1251,7 +1330,7 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
         ).order_by('-created_at').values_list('id', flat=True)[20:]
         RecentSearch.objects.filter(id__in=list(old_ids)).delete()
 
-        return Response({'message': 'Search recorded.'}, status=status.HTTP_201_CREATED)
+        return Response({'message': _('Search recorded.')}, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         summary="Clear recent searches",
@@ -1262,7 +1341,7 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
     def clear_searches(self, request):
         """Clear all recent searches."""
         RecentSearch.objects.filter(user=request.user).delete()
-        return Response({'message': 'Recent searches cleared.'})
+        return Response({'message': _('Recent searches cleared.')})
 
     @extend_schema(
         summary="Remove a recent search",
@@ -1280,12 +1359,12 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
             search = RecentSearch.objects.get(id=pk, user=request.user)
         except RecentSearch.DoesNotExist:
             return Response(
-                {'error': 'Search not found.'},
+                {'error': _('Search not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         search.delete()
-        return Response({'message': 'Search removed.'})
+        return Response({'message': _('Search removed.')})
 
 
 class DreamPostViewSet(viewsets.ModelViewSet):
@@ -1299,10 +1378,38 @@ class DreamPostViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = DreamPostSerializer
 
+    def _get_blocked_ids(self, user):
+        """Get set of user IDs blocked in either direction."""
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=user) | Q(blocked=user)
+        ).values_list('blocker_id', 'blocked_id')
+        for blocker_id, blocked_id in blocked_qs:
+            if blocker_id != user.id:
+                blocked_ids.add(blocker_id)
+            if blocked_id != user.id:
+                blocked_ids.add(blocked_id)
+        return blocked_ids
+
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return DreamPost.objects.none()
-        return DreamPost.objects.select_related('user', 'dream').order_by('-created_at')
+        user = self.request.user
+        blocked_ids = self._get_blocked_ids(user)
+
+        # Get followed user IDs for followers-only visibility
+        followed_ids = set(
+            UserFollow.objects.filter(follower=user).values_list('following_id', flat=True)
+        )
+
+        # User can see: own posts, public posts, followers-only posts from people they follow
+        return DreamPost.objects.filter(
+            Q(user=user) |
+            Q(visibility='public') |
+            Q(visibility='followers', user_id__in=followed_ids)
+        ).exclude(
+            user_id__in=blocked_ids,
+        ).select_related('user', 'dream').order_by('-created_at')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -1310,7 +1417,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         return DreamPostSerializer
 
     def create(self, request, *args, **kwargs):
-        """Create a new dream post."""
+        """Create a new dream post with optional media and event."""
         serializer = DreamPostCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -1324,18 +1431,91 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 dream = Dream.objects.get(id=dream_id, user=request.user)
             except Dream.DoesNotExist:
                 return Response(
-                    {'error': 'Dream not found.'},
+                    {'error': _('Dream not found.')},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+
+        # Validate linked achievement items
+        linked_goal = None
+        linked_milestone = None
+        linked_task = None
+        if data.get('linked_goal_id'):
+            from apps.dreams.models import Goal
+            try:
+                linked_goal = Goal.objects.get(
+                    id=data['linked_goal_id'], dream__user=request.user,
+                )
+            except Goal.DoesNotExist:
+                return Response(
+                    {'error': _('Goal not found.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        if data.get('linked_milestone_id'):
+            from apps.dreams.models import DreamMilestone
+            try:
+                linked_milestone = DreamMilestone.objects.get(
+                    id=data['linked_milestone_id'], dream__user=request.user,
+                )
+            except DreamMilestone.DoesNotExist:
+                return Response(
+                    {'error': _('Milestone not found.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        if data.get('linked_task_id'):
+            from apps.dreams.models import Task
+            try:
+                linked_task = Task.objects.get(
+                    id=data['linked_task_id'], dream__user=request.user,
+                )
+            except Task.DoesNotExist:
+                return Response(
+                    {'error': _('Task not found.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        # Determine media type
+        media_type = 'none'
+        if data.get('image_file') or data.get('image_url'):
+            media_type = 'image'
+        elif data.get('video_file'):
+            media_type = 'video'
+        elif data.get('audio_file'):
+            media_type = 'audio'
 
         post = DreamPost.objects.create(
             user=request.user,
             dream=dream,
             content=data['content'],
             image_url=data.get('image_url', ''),
+            image_file=data.get('image_file') or '',
+            video_file=data.get('video_file') or '',
+            audio_file=data.get('audio_file') or '',
+            media_type=media_type,
+            post_type=data.get('post_type', 'regular'),
+            linked_goal=linked_goal,
+            linked_milestone=linked_milestone,
+            linked_task=linked_task,
             gofundme_url=data.get('gofundme_url', ''),
             visibility=data.get('visibility', 'public'),
         )
+
+        # Create linked event if post_type is 'event'
+        if data.get('post_type') == 'event':
+            SocialEvent.objects.create(
+                creator=request.user,
+                post=post,
+                title=data['event_title'],
+                description=data.get('event_description', ''),
+                event_type=data['event_type'],
+                location=data.get('event_location', ''),
+                meeting_link=data.get('event_meeting_link', ''),
+                start_time=data['event_start_time'],
+                end_time=data['event_end_time'],
+                max_participants=data.get('event_max_participants'),
+                cover_image=data.get('event_cover_image') or '',
+                challenge_description=data.get('event_challenge_description', ''),
+                dream=dream,
+            )
 
         return Response(
             DreamPostSerializer(post, context={'request': request}).data,
@@ -1347,7 +1527,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         post = self.get_object()
         if post.user != request.user:
             return Response(
-                {'error': 'You can only edit your own posts.'},
+                {'error': _('You can only edit your own posts.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1378,7 +1558,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         post = self.get_object()
         if post.user != request.user:
             return Response(
-                {'error': 'You can only delete your own posts.'},
+                {'error': _('You can only delete your own posts.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
         post.delete()
@@ -1457,7 +1637,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             # Create notification
             self._notify_post_owner(
                 post, request.user,
-                title=f"{request.user.display_name or 'Someone'} liked your dream post",
+                title=_("%(name)s liked your dream post") % {'name': request.user.display_name or _('Someone')},
             )
             return Response({'liked': True, 'likes_count': post.likes_count + 1})
         else:
@@ -1480,7 +1660,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         content = request.data.get('content', '').strip()
         if not content:
             return Response(
-                {'error': 'content is required.'},
+                {'error': _('content is required.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1494,7 +1674,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 parent = DreamPostComment.objects.get(id=parent_id, post=post)
             except DreamPostComment.DoesNotExist:
                 return Response(
-                    {'error': 'Parent comment not found.'},
+                    {'error': _('Parent comment not found.')},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -1511,7 +1691,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
 
         self._notify_post_owner(
             post, request.user,
-            title=f"{request.user.display_name or 'Someone'} commented on your post",
+            title=_("%(name)s commented on your post") % {'name': request.user.display_name or _('Someone')},
         )
 
         return Response(
@@ -1562,7 +1742,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         valid_types = [t[0] for t in DreamEncouragement.ENCOURAGEMENT_TYPES]
         if encouragement_type not in valid_types:
             return Response(
-                {'error': f'encouragement_type must be one of: {", ".join(valid_types)}'},
+                {'error': _('encouragement_type must be one of: %(types)s') % {'types': ", ".join(valid_types)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1585,7 +1765,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             )
             self._notify_post_owner(
                 post, request.user,
-                title=f"{request.user.display_name or 'Someone'} encouraged you: {type_display}",
+                title=_("%(name)s encouraged you: %(type)s") % {'name': request.user.display_name or _('Someone'), 'type': type_display},
             )
 
         return Response(
@@ -1641,14 +1821,14 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
-                {'error': 'User not found.'},
+                {'error': _('User not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         # Check if blocked
         if BlockedUser.is_blocked(request.user, target_user):
             return Response(
-                {'error': 'Cannot view this user.'},
+                {'error': _('Cannot view this user.')},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1678,6 +1858,48 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         )
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Save/unsave a post",
+        description="Toggle bookmark on a dream post.",
+        tags=["Social Feed"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def save(self, request, pk=None):
+        """Toggle bookmark/save on a post."""
+        post = self.get_object()
+        if post.saved_by.filter(id=request.user.id).exists():
+            post.saved_by.remove(request.user)
+            DreamPost.objects.filter(id=post.id).update(
+                saves_count=F('saves_count') - 1
+            )
+            return Response({'saved': False, 'saves_count': max(0, post.saves_count - 1)})
+        else:
+            post.saved_by.add(request.user)
+            DreamPost.objects.filter(id=post.id).update(
+                saves_count=F('saves_count') + 1
+            )
+            return Response({'saved': True, 'saves_count': post.saves_count + 1})
+
+    @extend_schema(
+        summary="List saved posts",
+        description="Return all posts bookmarked by the current user.",
+        tags=["Social Feed"],
+        responses={200: DreamPostSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def saved(self, request):
+        """List all posts saved/bookmarked by the current user."""
+        saved_posts = DreamPost.objects.filter(
+            saved_by=request.user
+        ).select_related('user').order_by('-created_at')
+        page = self.paginate_queryset(saved_posts)
+        if page is not None:
+            serializer = DreamPostSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        serializer = DreamPostSerializer(saved_posts, many=True, context={'request': request})
+        return Response(serializer.data)
+
     def _notify_post_owner(self, post, actor, title):
         """Create a notification for the post owner."""
         if post.user == actor:
@@ -1699,3 +1921,522 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             )
         except Exception:
             logger.debug("Failed to create social notification", exc_info=True)
+
+
+class SocialEventViewSet(viewsets.ModelViewSet):
+    """
+    Social events: CRUD, register/unregister, participants.
+
+    All endpoints live under /api/social/events/.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = SocialEventSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return SocialEvent.objects.none()
+        user = self.request.user
+        # Exclude events from blocked users
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=user) | Q(blocked=user)
+        ).values_list('blocker_id', 'blocked_id')
+        for blocker_id, blocked_id in blocked_qs:
+            if blocker_id != user.id:
+                blocked_ids.add(blocker_id)
+            if blocked_id != user.id:
+                blocked_ids.add(blocked_id)
+        return SocialEvent.objects.exclude(
+            creator_id__in=blocked_ids,
+        ).select_related(
+            'creator', 'dream', 'post',
+        ).order_by('-created_at')
+
+    def retrieve(self, request, *args, **kwargs):
+        """Retrieve event — strip meeting_link for non-participants."""
+        event = self.get_object()
+        data = SocialEventSerializer(event, context={'request': request}).data
+        # Only show meeting_link to creator or registered participants
+        is_participant = (
+            event.creator == request.user or
+            SocialEventRegistration.objects.filter(
+                event=event, user=request.user, status='registered',
+            ).exists()
+        )
+        if not is_participant:
+            data.pop('meeting_link', None)
+        return Response(data)
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return SocialEventCreateSerializer
+        return SocialEventSerializer
+
+    @extend_schema(
+        summary="Create event",
+        description="Create a standalone social event (not linked to a post).",
+        tags=["Social Events"],
+        responses={201: SocialEventSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        """Create a new social event."""
+        serializer = SocialEventCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        dream = None
+        if data.get('dream_id'):
+            from apps.dreams.models import Dream
+            try:
+                dream = Dream.objects.get(id=data['dream_id'], user=request.user)
+            except Dream.DoesNotExist:
+                return Response(
+                    {'error': _('Dream not found.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        event = SocialEvent.objects.create(
+            creator=request.user,
+            title=data['title'],
+            description=data.get('description', ''),
+            event_type=data['event_type'],
+            location=data.get('location', ''),
+            meeting_link=data.get('meeting_link', ''),
+            start_time=data['start_time'],
+            end_time=data['end_time'],
+            max_participants=data.get('max_participants'),
+            cover_image=data.get('cover_image') or '',
+            challenge_description=data.get('challenge_description', ''),
+            dream=dream,
+        )
+
+        return Response(
+            SocialEventSerializer(event, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        """Edit own event."""
+        event = self.get_object()
+        if event.creator != request.user:
+            return Response(
+                {'error': _('You can only edit your own events.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from core.sanitizers import sanitize_text
+        for field in ('title', 'description', 'challenge_description'):
+            val = request.data.get(field)
+            if val is not None:
+                setattr(event, field, sanitize_text(val))
+
+        for field in ('location', 'meeting_link', 'start_time', 'end_time',
+                      'max_participants', 'event_type', 'status'):
+            val = request.data.get(field)
+            if val is not None:
+                setattr(event, field, val)
+
+        event.save()
+        return Response(
+            SocialEventSerializer(event, context={'request': request}).data,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Cancel own event (soft delete)."""
+        event = self.get_object()
+        if event.creator != request.user:
+            return Response(
+                {'error': _('You can only cancel your own events.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        event.status = 'cancelled'
+        event.save(update_fields=['status', 'updated_at'])
+        return Response(
+            SocialEventSerializer(event, context={'request': request}).data,
+        )
+
+    @extend_schema(
+        summary="Register for event",
+        description="Register the current user for a social event.",
+        tags=["Social Events"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def register(self, request, pk=None):
+        """Register for an event."""
+        event = self.get_object()
+
+        if event.status in ('cancelled', 'completed'):
+            return Response(
+                {'error': _('Cannot register for a cancelled or completed event.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Atomic capacity check
+        from django.db import transaction
+        with transaction.atomic():
+            locked_event = SocialEvent.objects.select_for_update().get(id=event.id)
+            if (locked_event.max_participants is not None
+                    and locked_event.participants_count >= locked_event.max_participants):
+                return Response(
+                    {'error': _('Event is full.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            reg, created = SocialEventRegistration.objects.get_or_create(
+                event=locked_event,
+                user=request.user,
+                defaults={'status': 'registered'},
+            )
+            if not created and reg.status == 'cancelled':
+                reg.status = 'registered'
+                reg.save(update_fields=['status'])
+                created = True  # treat as new registration
+
+            if created:
+                SocialEvent.objects.filter(id=event.id).update(
+                    participants_count=F('participants_count') + 1
+                )
+
+        return Response({
+            'registered': True,
+            'participantsCount': locked_event.participants_count + (1 if created else 0),
+        })
+
+    @extend_schema(
+        summary="Unregister from event",
+        description="Cancel registration for a social event.",
+        tags=["Social Events"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def unregister(self, request, pk=None):
+        """Cancel registration for an event."""
+        event = self.get_object()
+
+        try:
+            reg = SocialEventRegistration.objects.get(
+                event=event, user=request.user, status='registered',
+            )
+        except SocialEventRegistration.DoesNotExist:
+            return Response(
+                {'error': _('Not registered for this event.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reg.status = 'cancelled'
+        reg.save(update_fields=['status'])
+        SocialEvent.objects.filter(id=event.id).update(
+            participants_count=F('participants_count') - 1
+        )
+
+        return Response({
+            'registered': False,
+            'participantsCount': max(0, event.participants_count - 1),
+        })
+
+    @extend_schema(
+        summary="Event participants",
+        description="List registered participants for an event.",
+        tags=["Social Events"],
+        responses={200: SocialEventRegistrationSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'])
+    def participants(self, request, pk=None):
+        """List participants of an event."""
+        event = self.get_object()
+        regs = SocialEventRegistration.objects.filter(
+            event=event, status='registered',
+        ).select_related('user').order_by('-registered_at')
+
+        page = self.paginate_queryset(regs)
+        if page is not None:
+            serializer = SocialEventRegistrationSerializer(
+                page, many=True, context={'request': request},
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SocialEventRegistrationSerializer(
+            regs, many=True, context={'request': request},
+        )
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Events feed",
+        description="Upcoming events for the social feed.",
+        tags=["Social Events"],
+        responses={200: SocialEventSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'])
+    def feed(self, request):
+        """Get upcoming events for the feed."""
+        from django.utils import timezone
+        events = SocialEvent.objects.filter(
+            status__in=['upcoming', 'active'],
+            end_time__gte=timezone.now(),
+        ).select_related('creator', 'dream', 'post').order_by('start_time')
+
+        page = self.paginate_queryset(events)
+        if page is not None:
+            serializer = SocialEventSerializer(
+                page, many=True, context={'request': request},
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SocialEventSerializer(
+            events[:50], many=True, context={'request': request},
+        )
+        return Response(serializer.data)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Stories — ephemeral media posts (24h)
+# ═══════════════════════════════════════════════════════════════════
+
+class StoryViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for stories (ephemeral 24h media posts).
+
+    create   — upload a story (image or video + optional caption)
+    destroy  — delete own story
+    feed     — GET stories feed grouped by user
+    my_stories — GET current user's active stories
+    view     — POST mark a story as viewed
+    viewers  — GET list of viewers for own story
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = StorySerializer
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return StoryCreateSerializer
+        return StorySerializer
+
+    def get_queryset(self):
+        from django.utils import timezone
+        user = self.request.user
+        now = timezone.now()
+
+        # Build visible user set (friends + followed + self)
+        friend_ids = set(
+            Friendship.objects.filter(
+                Q(user1=user, status='accepted') |
+                Q(user2=user, status='accepted')
+            ).values_list('user1_id', 'user2_id').distinct()
+        )
+        flat_friend_ids = set()
+        for pair in friend_ids:
+            flat_friend_ids.update(pair)
+        flat_friend_ids.discard(user.id)
+
+        followed_ids = set(
+            UserFollow.objects.filter(follower=user).values_list('following_id', flat=True)
+        )
+
+        # Blocked users (both directions)
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=user) | Q(blocked=user)
+        ).values_list('blocker_id', 'blocked_id')
+        for pair in blocked_qs:
+            blocked_ids.update(pair)
+        blocked_ids.discard(user.id)
+
+        visible_user_ids = (flat_friend_ids | followed_ids | {user.id}) - blocked_ids
+
+        return Story.objects.filter(
+            user_id__in=visible_user_ids,
+            expires_at__gt=now,
+        ).select_related('user').order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        """Create a new story."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from core.sanitizers import sanitize_text
+
+        serializer = StoryCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        now = timezone.now()
+        story = Story(
+            user=request.user,
+            caption=sanitize_text(data.get('caption', ''), 280),
+            expires_at=now + timedelta(hours=24),
+        )
+
+        if data.get('image_file'):
+            story.image_file = data['image_file']
+            story.media_type = 'image'
+        elif data.get('video_file'):
+            story.video_file = data['video_file']
+            story.media_type = 'video'
+
+        story.save()
+
+        return Response(
+            StorySerializer(story, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete own story."""
+        story = self.get_object()
+        if story.user != request.user:
+            return Response(
+                {'error': _('You can only delete your own stories.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        story.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'])
+    def feed(self, request):
+        """
+        Get stories feed grouped by user.
+        Returns friends' and followed users' active stories, grouped by user.
+        Current user's stories are included first.
+        """
+        from django.utils import timezone
+        from collections import OrderedDict
+
+        user = request.user
+        now = timezone.now()
+
+        # Get friend and followed user IDs
+        friend_ids = set(
+            Friendship.objects.filter(
+                Q(user1=user, status='accepted') |
+                Q(user2=user, status='accepted')
+            ).values_list('user1_id', 'user2_id').distinct()
+        )
+        # Flatten tuples and remove self
+        flat_friend_ids = set()
+        for pair in friend_ids:
+            flat_friend_ids.update(pair)
+        flat_friend_ids.discard(user.id)
+
+        followed_ids = set(
+            UserFollow.objects.filter(follower=user).values_list('following_id', flat=True)
+        )
+
+        # Blocked users (both directions)
+        blocked_ids = set()
+        blocked_qs = BlockedUser.objects.filter(
+            Q(blocker=user) | Q(blocked=user)
+        ).values_list('blocker_id', 'blocked_id')
+        for pair in blocked_qs:
+            blocked_ids.update(pair)
+        blocked_ids.discard(user.id)
+
+        # All relevant user IDs (friends + followed + self)
+        relevant_ids = (flat_friend_ids | followed_ids | {user.id}) - blocked_ids
+
+        # Active stories from relevant users
+        stories = Story.objects.filter(
+            user_id__in=relevant_ids,
+            expires_at__gt=now,
+        ).select_related('user').annotate(
+            _user_has_viewed=Exists(
+                StoryView.objects.filter(story=OuterRef('pk'), user=user)
+            ),
+        ).order_by('user_id', '-created_at')
+
+        # Group by user
+        groups = OrderedDict()
+        for story in stories:
+            uid = str(story.user_id)
+            if uid not in groups:
+                groups[uid] = {
+                    'user': {
+                        'id': uid,
+                        'username': story.user.display_name or 'Anonymous',
+                        'displayName': story.user.display_name or 'Anonymous',
+                        'avatar': story.user.avatar_url or '',
+                    },
+                    'stories': [],
+                    'hasUnviewed': False,
+                }
+            groups[uid]['stories'].append(story)
+            if not story._user_has_viewed:
+                groups[uid]['hasUnviewed'] = True
+
+        # Sort: current user first, then unviewed, then viewed
+        my_uid = str(user.id)
+        result = []
+        if my_uid in groups:
+            my_group = groups.pop(my_uid)
+            my_group['stories'] = StorySerializer(
+                my_group['stories'], many=True, context={'request': request},
+            ).data
+            result.append(my_group)
+
+        # Unviewed first
+        unviewed = []
+        viewed = []
+        for uid, group in groups.items():
+            group['stories'] = StorySerializer(
+                group['stories'], many=True, context={'request': request},
+            ).data
+            if group['hasUnviewed']:
+                unviewed.append(group)
+            else:
+                viewed.append(group)
+
+        result.extend(unviewed)
+        result.extend(viewed)
+
+        return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='my_stories')
+    def my_stories(self, request):
+        """Get current user's active stories."""
+        from django.utils import timezone
+        stories = Story.objects.filter(
+            user=request.user,
+            expires_at__gt=timezone.now(),
+        ).order_by('-created_at')
+        serializer = StorySerializer(stories, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='view')
+    def mark_viewed(self, request, pk=None):
+        """Mark a story as viewed."""
+        story = self.get_object()
+        if story.user == request.user:
+            return Response({'status': 'own_story'})
+
+        _, created = StoryView.objects.get_or_create(
+            story=story, user=request.user,
+        )
+        if created:
+            Story.objects.filter(id=story.id).update(
+                view_count=F('view_count') + 1,
+            )
+        return Response({'status': 'viewed'})
+
+    @action(detail=True, methods=['get'])
+    def viewers(self, request, pk=None):
+        """Get list of viewers for own story."""
+        story = self.get_object()
+        if story.user != request.user:
+            return Response(
+                {'error': _('You can only see viewers of your own stories.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        views = StoryView.objects.filter(story=story).select_related('user').order_by('-viewed_at')
+        result = []
+        for v in views:
+            result.append({
+                'id': str(v.user.id),
+                'username': v.user.display_name or 'Anonymous',
+                'avatar': v.user.avatar_url or '',
+                'viewedAt': v.viewed_at.isoformat(),
+            })
+        return Response(result)

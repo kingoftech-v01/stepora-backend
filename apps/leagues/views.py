@@ -6,6 +6,7 @@ All leaderboard data exposes user scores and badges but NEVER their dreams
 (privacy by design).
 """
 
+from django.utils.translation import gettext as _
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -171,14 +172,14 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                 league = League.objects.get(id=league_id)
             except League.DoesNotExist:
                 return Response(
-                    {'error': 'League not found.'},
+                    {'error': _('League not found.')},
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
             league = LeagueService.get_user_league(request.user)
             if not league:
                 return Response(
-                    {'error': 'No leagues configured.'},
+                    {'error': _('No leagues configured.')},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
@@ -230,7 +231,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
 
         if not season:
             return Response(
-                {'error': 'No active season.'},
+                {'error': _('No active season.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -308,7 +309,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         season = Season.get_active_season()
         if not season:
             return Response(
-                {'error': 'No active season.'},
+                {'error': _('No active season.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -324,7 +325,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
             standing = LeagueService.update_standing(request.user)
             if not standing:
                 return Response(
-                    {'error': 'Could not create standing. No leagues configured.'},
+                    {'error': _('Could not create standing. No leagues configured.')},
                     status=status.HTTP_404_NOT_FOUND
                 )
             # Re-fetch with proper relations
@@ -420,7 +421,7 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
         season = Season.get_active_season()
         if not season:
             return Response(
-                {'error': 'No active season.'},
+                {'error': _('No active season.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -487,7 +488,7 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
 
         if not season.has_ended:
             return Response(
-                {'error': 'Season has not ended yet.'},
+                {'error': _('Season has not ended yet.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -500,13 +501,13 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
             )
         except SeasonReward.DoesNotExist:
             return Response(
-                {'error': 'No reward found for this season.'},
+                {'error': _('No reward found for this season.')},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if reward.rewards_claimed:
             return Response(
-                {'error': 'Rewards have already been claimed.'},
+                {'error': _('Rewards have already been claimed.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

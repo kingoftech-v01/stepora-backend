@@ -27,7 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
             'can_create_dream', 'is_premium',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'email', 'xp', 'level', 'streak_days', 'last_activity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'email', 'subscription', 'subscription_ends', 'xp', 'level', 'streak_days', 'last_activity', 'created_at', 'updated_at']
         extra_kwargs = {
             'id': {'help_text': 'Unique user identifier.'},
             'email': {'help_text': 'User email address.'},

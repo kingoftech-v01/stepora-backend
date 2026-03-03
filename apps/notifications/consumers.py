@@ -5,8 +5,11 @@ WebSocket consumer for real-time notification delivery.
 import json
 import time
 import asyncio
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
@@ -66,8 +69,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps({'type': 'ping'}))
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning('Heartbeat loop error for user %s: %s', getattr(self, 'user_id', '?'), e)
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
@@ -199,8 +202,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_all_read(self):
         from .models import Notification
-        from django.utils import timezone
-        return Notification.objects.filter(
+        deleted, _ = Notification.objects.filter(
             user=self.user,
-            read_at__isnull=True,
-        ).update(read_at=timezone.now())
+        ).delete()
+        return deleted

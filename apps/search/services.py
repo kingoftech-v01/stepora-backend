@@ -16,6 +16,7 @@ from apps.search.documents import (
     UserDocument,
     CalendarEventDocument,
     CirclePostDocument,
+    CircleChallengeDocument,
     ActivityCommentDocument,
 )
 
@@ -101,12 +102,52 @@ class SearchService:
         return [hit.meta.id for hit in response]
 
     @staticmethod
-    def search_circle_posts(query, circle_id=None, limit=MAX_RESULTS):
-        """Search circle posts by content."""
+    def search_circle_posts(query, user=None, circle_id=None, limit=MAX_RESULTS):
+        """Search circle posts by content, scoped to user's circles."""
         s = CirclePostDocument.search()
         if circle_id:
             s = s.filter('term', circle_id=str(circle_id))
+        elif user:
+            # Only search posts in circles the user is a member of
+            from apps.circles.models import CircleMembership
+            user_circle_ids = list(
+                CircleMembership.objects.filter(user=user).values_list('circle_id', flat=True)
+            )
+            if not user_circle_ids:
+                return []
+            s = s.filter('terms', circle_id=[str(cid) for cid in user_circle_ids])
         s = s.query(ESQ('match', content={'query': query, 'fuzziness': 'AUTO'}))
+        s = s[:limit]
+        response = s.execute()
+        return [hit.meta.id for hit in response]
+
+    @staticmethod
+    def search_circle_challenges(query, user=None, circle_id=None, limit=MAX_RESULTS):
+        """Search circle challenges by title/description, scoped to user's circles."""
+        s = CircleChallengeDocument.search()
+        if circle_id:
+            s = s.filter('term', circle_id=str(circle_id))
+        elif user:
+            from apps.circles.models import CircleMembership
+            user_circle_ids = list(
+                CircleMembership.objects.filter(user=user).values_list('circle_id', flat=True)
+            )
+            if not user_circle_ids:
+                return []
+            s = s.filter('terms', circle_id=[str(cid) for cid in user_circle_ids])
+        s = s.query(
+            ESQ('multi_match', query=query, fields=['title^2', 'description'], fuzziness='AUTO')
+        )
+        s = s[:limit]
+        response = s.execute()
+        return [hit.meta.id for hit in response]
+
+    @staticmethod
+    def search_activity_comments(user, query, limit=MAX_RESULTS):
+        """Search activity comments by text for a specific user."""
+        s = ActivityCommentDocument.search()
+        s = s.filter('term', user_id=str(user.id))
+        s = s.query(ESQ('match', text={'query': query, 'fuzziness': 'AUTO'}))
         s = s[:limit]
         response = s.execute()
         return [hit.meta.id for hit in response]
@@ -120,14 +161,15 @@ class SearchService:
             user: The requesting user
             query: Search query string
             types: Optional list of types to search ('dreams', 'goals', 'tasks',
-                   'messages', 'users', 'calendar', 'circles')
+                   'messages', 'users', 'calendar', 'circles',
+                   'circle_challenges', 'activity_comments')
             limit: Max results per type
 
         Returns:
             Dict of {type: [id, ...]} for each searched type.
         """
         if not types:
-            types = ['dreams', 'goals', 'tasks', 'messages', 'users', 'calendar']
+            types = ['dreams', 'goals', 'tasks', 'messages', 'users', 'calendar', 'circles', 'circle_challenges', 'activity_comments']
 
         results = {}
 
@@ -138,7 +180,9 @@ class SearchService:
             'messages': lambda: SearchService.search_messages(user, query, limit=limit),
             'users': lambda: SearchService.search_users(query, limit),
             'calendar': lambda: SearchService.search_calendar(user, query, limit),
-            'circles': lambda: SearchService.search_circle_posts(query, limit=limit),
+            'circles': lambda: SearchService.search_circle_posts(query, user=user, limit=limit),
+            'circle_challenges': lambda: SearchService.search_circle_challenges(query, user=user, limit=limit),
+            'activity_comments': lambda: SearchService.search_activity_comments(user, query, limit=limit),
         }
 
         for search_type in types:

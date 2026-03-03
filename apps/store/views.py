@@ -9,12 +9,13 @@ require authentication.
 
 import logging
 
+from django.utils.translation import gettext as _
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from rest_framework import viewsets, status, views
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -36,6 +37,7 @@ from .serializers import (
     GiftSerializer,
     RefundRequestSerializer,
     RefundRequestDisplaySerializer,
+    RefundProcessSerializer,
 )
 from .services import (
     StoreService,
@@ -359,7 +361,7 @@ class PurchaseView(views.APIView):
             item = StoreItem.objects.get(id=item_id)
         except StoreItem.DoesNotExist:
             return Response(
-                {'error': 'Store item not found.'},
+                {'error': _('Store item not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -416,7 +418,7 @@ class PurchaseConfirmView(views.APIView):
             item = StoreItem.objects.get(id=item_id)
         except StoreItem.DoesNotExist:
             return Response(
-                {'error': 'Store item not found.'},
+                {'error': _('Store item not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -474,7 +476,7 @@ class XPPurchaseView(views.APIView):
             item = StoreItem.objects.get(id=item_id)
         except StoreItem.DoesNotExist:
             return Response(
-                {'error': 'Store item not found.'},
+                {'error': _('Store item not found.')},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -528,12 +530,12 @@ class GiftSendView(views.APIView):
         try:
             item = StoreItem.objects.get(id=serializer.validated_data['item_id'])
         except StoreItem.DoesNotExist:
-            return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Item not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             recipient = User.objects.get(id=serializer.validated_data['recipient_id'])
         except User.DoesNotExist:
-            return Response({'error': 'Recipient not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': _('Recipient not found.')}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             result = StoreService.send_gift(
@@ -636,3 +638,103 @@ class RefundRequestView(views.APIView):
         ).select_related('inventory_entry', 'inventory_entry__item')
         serializer = RefundRequestDisplaySerializer(requests_qs, many=True)
         return Response(serializer.data)
+
+
+class RefundAdminView(views.APIView):
+    """Admin-only endpoint for processing (approving/rejecting) refund requests."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        summary='List all refund requests (admin)',
+        description='Retrieve all refund requests. Admin only.',
+        tags=['Store Admin'],
+        responses={200: RefundRequestDisplaySerializer(many=True)},
+    )
+    def get(self, request):
+        refund_qs = RefundRequest.objects.select_related(
+            'user', 'inventory_entry', 'inventory_entry__item',
+        ).order_by('-created_at')
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            refund_qs = refund_qs.filter(status=status_filter)
+
+        # Limit results to prevent unbounded queries
+        limit = min(int(request.query_params.get('limit', 100)), 500)
+        offset = max(int(request.query_params.get('offset', 0)), 0)
+        total = refund_qs.count()
+        refund_qs = refund_qs[offset:offset + limit]
+
+        serializer = RefundRequestDisplaySerializer(refund_qs, many=True)
+        return Response({
+            'count': total,
+            'results': serializer.data,
+        })
+
+    @extend_schema(
+        summary='Process refund request (admin)',
+        description='Approve or reject a pending refund request.',
+        tags=['Store Admin'],
+        request=RefundProcessSerializer,
+        responses={
+            200: RefundRequestDisplaySerializer,
+            400: OpenApiResponse(description='Validation error or invalid state.'),
+            404: OpenApiResponse(description='Refund request not found.'),
+        },
+    )
+    def post(self, request):
+        serializer = RefundProcessSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        refund_id = serializer.validated_data['refund_id']
+
+        try:
+            refund_req = RefundRequest.objects.select_related(
+                'inventory_entry', 'inventory_entry__item', 'user',
+            ).get(id=refund_id)
+        except RefundRequest.DoesNotExist:
+            return Response(
+                {'error': _('Refund request not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if refund_req.status != 'pending':
+            return Response(
+                {'error': _('Only pending refund requests can be processed.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        action = serializer.validated_data['action']
+        admin_notes = serializer.validated_data.get('admin_notes', '')
+
+        if action == 'approve':
+            try:
+                StoreService.process_refund(
+                    refund_request_id=refund_req.id,
+                    approve=True,
+                    admin_notes=admin_notes,
+                )
+                refund_req.refresh_from_db()
+            except StoreServiceError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            try:
+                StoreService.process_refund(
+                    refund_request_id=refund_req.id,
+                    approve=False,
+                    admin_notes=admin_notes,
+                )
+                refund_req.refresh_from_db()
+            except StoreServiceError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.info(
+            'Admin %s %sd refund request %s for user %s',
+            request.user.email, action, refund_req.id, refund_req.user.email,
+        )
+
+        return Response(
+            RefundRequestDisplaySerializer(refund_req).data,
+            status=status.HTTP_200_OK,
+        )

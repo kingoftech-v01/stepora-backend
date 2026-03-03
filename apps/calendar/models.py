@@ -59,6 +59,15 @@ class CalendarEvent(models.Model):
         help_text='Parent event if this is a recurring instance.'
     )
 
+    # Google Calendar sync
+    google_event_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Google Calendar event ID for bidirectional sync.'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

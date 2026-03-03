@@ -8,7 +8,7 @@ for efficient store management.
 
 from django.contrib import admin
 
-from .models import StoreCategory, StoreItem, UserInventory
+from .models import StoreCategory, StoreItem, UserInventory, Wishlist, Gift, RefundRequest
 
 
 class StoreItemInline(admin.TabularInline):
@@ -146,3 +146,91 @@ class UserInventoryAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+
+
+@admin.register(Wishlist)
+class WishlistAdmin(admin.ModelAdmin):
+    """Admin interface for Wishlist model."""
+
+    list_display = ['user', 'item', 'created_at']
+    list_filter = ['item__item_type', 'item__rarity', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'item__name']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'item']
+
+    fieldsets = (
+        ('Wishlist Entry', {
+            'fields': ('user', 'item'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+@admin.register(Gift)
+class GiftAdmin(admin.ModelAdmin):
+    """Admin interface for Gift model."""
+
+    list_display = [
+        'sender', 'recipient', 'item', 'is_claimed', 'claimed_at', 'created_at',
+    ]
+    list_filter = ['is_claimed', 'item__item_type', 'item__rarity', 'created_at']
+    search_fields = [
+        'sender__email', 'recipient__email', 'item__name', 'stripe_payment_intent_id',
+    ]
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'claimed_at']
+    raw_id_fields = ['sender', 'recipient', 'item']
+
+    fieldsets = (
+        ('Gift Details', {
+            'fields': ('sender', 'recipient', 'item', 'message'),
+        }),
+        ('Payment', {
+            'fields': ('stripe_payment_intent_id',),
+        }),
+        ('Status', {
+            'fields': ('is_claimed', 'claimed_at'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+@admin.register(RefundRequest)
+class RefundRequestAdmin(admin.ModelAdmin):
+    """Admin interface for RefundRequest model."""
+
+    list_display = [
+        'user', 'item_name', 'status', 'stripe_refund_id', 'created_at', 'updated_at',
+    ]
+    list_filter = ['status', 'created_at']
+    search_fields = [
+        'user__email', 'user__display_name',
+        'inventory_entry__item__name', 'stripe_refund_id',
+    ]
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'updated_at', 'user', 'inventory_entry', 'reason']
+
+    fieldsets = (
+        ('Request Details', {
+            'fields': ('user', 'inventory_entry', 'reason'),
+        }),
+        ('Admin Review', {
+            'fields': ('status', 'admin_notes', 'stripe_refund_id'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def item_name(self, obj):
+        return obj.inventory_entry.item.name
+
+    item_name.short_description = 'Item'

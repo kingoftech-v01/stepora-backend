@@ -27,9 +27,12 @@ from apps.calendar.models import CalendarEvent, TimeBlock
 from apps.circles.models import (
     ChallengeProgress,
     Circle,
+    CircleCall,
+    CircleCallParticipant,
     CircleChallenge,
     CircleInvitation,
     CircleMembership,
+    CircleMessage,
     CirclePost,
     PostReaction,
 )
@@ -52,6 +55,10 @@ from apps.notifications.models import Notification
 from apps.social.models import (
     ActivityFeedItem,
     BlockedUser,
+    DreamEncouragement,
+    DreamPost,
+    DreamPostComment,
+    DreamPostLike,
     Friendship,
     RecentSearch,
     ReportedUser,
@@ -390,6 +397,112 @@ CONV_MESSAGES = {
     ],
 }
 
+# Circle chat message templates
+CIRCLE_CHAT_MESSAGES = [
+    "Good morning everyone! Ready to crush it today?",
+    "Just finished my daily task. Who else is on track?",
+    "Has anyone tried that new technique we talked about?",
+    "I'm struggling with consistency this week. Any tips?",
+    "Quick update: hit my weekly goal early!",
+    "Can we schedule a group call this weekend?",
+    "Love the energy in this circle lately!",
+    "Sharing a win: I finally completed that milestone!",
+    "Anyone want to do an accountability check-in?",
+    "Just read something great about habit formation. Should I share?",
+    "Checking in - how's everyone doing today?",
+    "Made some progress on my goal. Small steps!",
+    "Thanks for the encouragement yesterday, it really helped.",
+    "Who's up for a challenge this week?",
+    "Feeling motivated after seeing everyone's updates!",
+    "Need some advice - how do you handle setbacks?",
+    "Proud of this group. We're all making progress!",
+    "Reminder: don't compare your chapter 1 to someone's chapter 20.",
+    "Just had a great idea for our next challenge.",
+    "Happy to be part of this circle. You all inspire me!",
+]
+
+# Dream post content templates
+DREAM_POST_TEMPLATES = [
+    "Just took the first step toward my dream of {dream}. The journey begins! #DreamPlanner #Goals",
+    "Week {week} update on my {dream} journey. Progress feels slow but I'm staying consistent.",
+    "Milestone reached! I'm {progress}% closer to {dream}. Every small win counts!",
+    "Reflecting on why I started chasing {dream}. The 'why' keeps me going on tough days.",
+    "Sharing my morning routine that's been helping me work toward {dream}. Structure = freedom!",
+    "Today was hard but I showed up anyway. {dream} won't achieve itself. #Discipline",
+    "3 lessons I've learned so far while pursuing {dream}: patience, consistency, and self-compassion.",
+    "Celebrating a small win today! One step closer to {dream}.",
+    "Started my day at 5:30am to work on {dream}. Early mornings hit different when you have purpose.",
+    "The power of community: this app helped me find people on the same journey toward {dream}.",
+    "Accountability update: completed all my tasks this week for {dream}! Streak going strong.",
+    "Visualization board for {dream} is complete. Seeing it every day keeps me focused.",
+    "Big announcement: I just crossed the halfway mark on {dream}! Let's go!",
+    "Grateful for my buddy who keeps me accountable on {dream}. Find your accountability partner!",
+    "Plot twist: a setback on {dream} taught me more than a month of smooth sailing.",
+    "One year ago I wouldn't have believed I'd be this close to {dream}. Trust the process.",
+    "Dream update: {dream} is becoming real. Here's what I did differently this month.",
+    "Needed this reminder today: progress isn't always linear. Still committed to {dream}.",
+    "Just shared my {dream} goal with my circle. Making it public = making it real.",
+    "End of month review: {dream} progress at {progress}%. Adjusting my approach for next month.",
+]
+
+# Dream post comment templates
+DREAM_POST_COMMENT_TEMPLATES = [
+    "This is so inspiring! Keep going!",
+    "Love this update! You're doing amazing.",
+    "I'm on a similar journey. We got this!",
+    "Needed to see this today. Thank you for sharing!",
+    "Your consistency is incredible. Goals!",
+    "How do you stay so motivated?",
+    "This made my day. Proud of you!",
+    "Can you share more about your routine?",
+    "Amazing progress! You should be so proud.",
+    "Following your journey closely. So motivating!",
+    "What a great milestone to hit!",
+    "Your dedication is showing. Keep it up!",
+    "This is exactly the energy I needed today.",
+    "You're proof that consistency pays off!",
+    "Love the positive vibes! Sharing with my circle.",
+]
+
+# Dream post comment reply templates
+DREAM_POST_REPLY_TEMPLATES = [
+    "Thank you so much! Means a lot.",
+    "We definitely got this together!",
+    "Happy to share! Ask me anything.",
+    "It's all about showing up every day.",
+    "Your support means everything!",
+    "We're all in this together!",
+    "Thanks for following along!",
+    "That's so kind of you to say!",
+]
+
+# Encouragement types for DreamEncouragement
+ENCOURAGEMENT_TYPES = ['you_got_this', 'keep_going', 'inspired', 'proud', 'fire']
+
+# Encouragement messages for DreamEncouragement
+DREAM_ENCOURAGEMENT_MESSAGES = [
+    "Believe in yourself - you've come so far!",
+    "Your journey inspires me every single day.",
+    "Keep pushing! The best is yet to come.",
+    "You're a testament to what consistency looks like.",
+    "So proud of how far you've come!",
+    "Never stop dreaming. You're making it happen!",
+    "Your progress speaks volumes. Keep going!",
+    "Sending all the positive energy your way!",
+    "",  # Some encouragements have no message, just the type
+    "",
+    "",
+]
+
+# GoFundMe-style URLs for demo posts
+GOFUNDME_URLS = [
+    'https://www.gofundme.com/f/marathon-training-gear',
+    'https://www.gofundme.com/f/music-studio-equipment',
+    'https://www.gofundme.com/f/coding-bootcamp-tuition',
+    'https://www.gofundme.com/f/art-supplies-for-portfolio',
+    'https://www.gofundme.com/f/travel-dream-southeast-asia',
+]
+
 # Notification templates
 NOTIF_TEMPLATES = [
     {'type': 'reminder', 'title': 'Task Reminder', 'body': "Don't forget: {task}"},
@@ -455,17 +568,32 @@ class Command(BaseCommand):
             self._create_achievements_and_searches(users, arch_map)
             self._create_calls(users, arch_map)
             self._create_message_read_statuses(users)
+            self._create_circle_chat_messages(users, arch_map)
+            self._create_circle_calls(users, arch_map)
+            self._create_dream_posts(users, dreams, arch_map)
 
-        self.stdout.write(self.style.SUCCESS('Demo data seeded successfully! (~12,000 records)'))
+        self.stdout.write(self.style.SUCCESS('Demo data seeded successfully! (~15,000 records)'))
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     def _flush(self):
-        count, _ = User.objects.filter(email__endswith=f'@{DEMO_EMAIL_DOMAIN}').delete()
-        # Clean up orphaned circles, tags, etc.
-        Circle.objects.filter(creator__isnull=True).delete()
-        self.stdout.write(self.style.WARNING(f'Flushed {count} demo records.'))
+        from django.db.models.signals import post_delete
+        from apps.dreams.signals import recalculate_goal_progress_on_task_delete
+        from apps.dreams.models import Task as DreamTask
+
+        # Disconnect signal that creates snapshots during cascade delete
+        post_delete.disconnect(recalculate_goal_progress_on_task_delete, sender=DreamTask)
+
+        try:
+            # Delete users (cascades most other models)
+            count, _ = User.objects.filter(email__endswith=f'@{DEMO_EMAIL_DOMAIN}').delete()
+            # Clean up orphaned circles
+            Circle.objects.filter(creator__isnull=True).delete()
+            self.stdout.write(self.style.WARNING(f'Flushed {count} demo records.'))
+        finally:
+            # Reconnect signal
+            post_delete.connect(recalculate_goal_progress_on_task_delete, sender=DreamTask)
 
     def _run_prerequisites(self):
         self.stdout.write('Running prerequisite seed commands...')
@@ -538,7 +666,15 @@ class Command(BaseCommand):
                 u.last_seen = NOW
             users.append(u)
 
-        self.stdout.write(f'  Created {len(users)} users.')
+        # Verify all emails so demo users can log in
+        from allauth.account.models import EmailAddress
+        email_records = [
+            EmailAddress(user=u, email=u.email, verified=True, primary=True)
+            for u in users
+        ]
+        EmailAddress.objects.bulk_create(email_records, batch_size=50, ignore_conflicts=True)
+
+        self.stdout.write(f'  Created {len(users)} users (emails verified).')
         return users
 
     # ------------------------------------------------------------------
@@ -1528,3 +1664,351 @@ class Command(BaseCommand):
 
         MessageReadStatus.objects.bulk_create(statuses, batch_size=200, ignore_conflicts=True)
         self.stdout.write(f'  Created {len(statuses)} message read statuses.')
+
+    # ------------------------------------------------------------------
+    # Phase 24: Circle Chat Messages
+    # ------------------------------------------------------------------
+    def _create_circle_chat_messages(self, users, arch_map):
+        circles = list(Circle.objects.filter(
+            creator__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ))
+        if not circles:
+            self.stdout.write(self.style.WARNING('  No circles found. Skipping circle chat messages.'))
+            return
+
+        messages = []
+        for circle in circles:
+            member_ids = list(
+                CircleMembership.objects.filter(circle=circle).values_list('user_id', flat=True)
+            )
+            member_users = list(User.objects.filter(pk__in=member_ids))
+            if not member_users:
+                continue
+
+            # Each circle gets 15-40 chat messages spread over the last 14 days
+            num_messages = random.randint(15, 40)
+            for i in range(num_messages):
+                sender = random.choice(member_users)
+                created = self._rand_dt(14, 0)
+                messages.append(CircleMessage(
+                    circle=circle,
+                    sender=sender,
+                    content=random.choice(CIRCLE_CHAT_MESSAGES),
+                    metadata={'sender_id': str(sender.id)},
+                    created_at=created,
+                ))
+
+        CircleMessage.objects.bulk_create(messages, batch_size=500)
+        self.stdout.write(f'  Created {len(messages)} circle chat messages.')
+
+    # ------------------------------------------------------------------
+    # Phase 25: Circle Calls (Agora voice/video)
+    # ------------------------------------------------------------------
+    def _create_circle_calls(self, users, arch_map):
+        circles = list(Circle.objects.filter(
+            creator__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ))
+        if not circles:
+            self.stdout.write(self.style.WARNING('  No circles found. Skipping circle calls.'))
+            return
+
+        calls = []
+        participants = []
+        call_notifs = []
+
+        for circle in circles:
+            member_ids = list(
+                CircleMembership.objects.filter(circle=circle).values_list('user_id', flat=True)
+            )
+            member_users = list(User.objects.filter(pk__in=member_ids))
+            if len(member_users) < 2:
+                continue
+
+            # Each circle gets 2-5 past calls
+            num_calls = random.randint(2, 5)
+            for _ in range(num_calls):
+                initiator = random.choice(member_users)
+                call_type = random.choice(['voice', 'voice', 'video'])
+                status = random.choices(
+                    ['completed', 'cancelled'],
+                    weights=[4, 1],
+                    k=1,
+                )[0]
+
+                call_id = uuid.uuid4()
+                started = self._rand_dt(21, 1)
+                ended = None
+                duration = 0
+
+                if status == 'completed':
+                    duration = random.randint(120, 3600)  # 2-60 min
+                    ended = started + timedelta(seconds=duration)
+                elif status == 'cancelled':
+                    ended = started + timedelta(seconds=random.randint(5, 30))
+
+                call = CircleCall(
+                    id=call_id,
+                    circle=circle,
+                    initiator=initiator,
+                    call_type=call_type,
+                    status=status,
+                    agora_channel=str(call_id),
+                    started_at=started,
+                    ended_at=ended,
+                    duration_seconds=duration,
+                )
+                calls.append(call)
+
+                # Participants: initiator + 1-5 random members
+                call_members = [initiator]
+                others = [u for u in member_users if u != initiator]
+                num_joining = min(random.randint(1, 5), len(others))
+                call_members.extend(random.sample(others, num_joining))
+
+                for member in call_members:
+                    join_offset = random.randint(0, 30)
+                    left_at = ended if ended else started + timedelta(seconds=random.randint(60, 600))
+                    participants.append(CircleCallParticipant(
+                        call=call,
+                        user=member,
+                        joined_at=started + timedelta(seconds=join_offset),
+                        left_at=left_at,
+                    ))
+
+                # Notification for call
+                for member in member_users:
+                    if member != initiator:
+                        call_notifs.append(Notification(
+                            user=member,
+                            notification_type='social',
+                            title=f'{initiator.display_name} started a {call_type} call',
+                            body=f'Join the {call_type} call in {circle.name}!',
+                            status='sent',
+                            sent_at=started,
+                            scheduled_for=started,
+                        ))
+
+        CircleCall.objects.bulk_create(calls, batch_size=200)
+        CircleCallParticipant.objects.bulk_create(participants, batch_size=500, ignore_conflicts=True)
+        if call_notifs:
+            Notification.objects.bulk_create(call_notifs, batch_size=500)
+        self.stdout.write(
+            f'  Created {len(calls)} circle calls, {len(participants)} participants, '
+            f'{len(call_notifs)} call notifications.'
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 26: Dream Posts, Likes, Comments, Encouragements
+    # ------------------------------------------------------------------
+    def _create_dream_posts(self, users, dreams, arch_map):
+        power = arch_map.get('power', [])
+        social = arch_map.get('social', [])
+        premium = arch_map.get('premium', [])
+        casual = arch_map.get('casual', [])
+
+        active_users = power + social + premium + casual
+        if not active_users:
+            self.stdout.write(self.style.WARNING('  No active users. Skipping dream posts.'))
+            return
+
+        # Build user -> dreams map
+        user_dreams = {}
+        for dream in dreams:
+            user_dreams.setdefault(dream.user_id, []).append(dream)
+
+        posts = []
+        post_user_dream = []  # Track (user, dream) for each post
+
+        # Power users: 5-10 posts, social: 8-15, premium: 3-6, casual: 1-3
+        counts = {
+            'power': (5, 10), 'social': (8, 15),
+            'premium': (3, 6), 'casual': (1, 3),
+        }
+
+        for user in active_users:
+            persona = next((p for p in USER_PERSONAS if p['display_name'] == user.display_name), None)
+            if not persona:
+                continue
+            arch = persona['arch']
+            lo, hi = counts.get(arch, (1, 3))
+            num_posts = random.randint(lo, hi)
+            my_dreams = user_dreams.get(user.pk, [])
+
+            for i in range(num_posts):
+                dream = random.choice(my_dreams) if my_dreams else None
+                dream_title = dream.title if dream else 'my goals'
+                content = random.choice(DREAM_POST_TEMPLATES).format(
+                    dream=dream_title,
+                    week=random.randint(1, 12),
+                    progress=random.randint(10, 95),
+                )
+
+                # 10% of posts have a GoFundMe link
+                gofundme = random.choice(GOFUNDME_URLS) if random.random() < 0.10 else ''
+
+                # Visibility: power/social mostly public, others mixed
+                if arch in ('power', 'social'):
+                    visibility = 'public' if random.random() < 0.85 else 'followers'
+                elif arch == 'premium':
+                    visibility = random.choice(['public', 'public', 'followers'])
+                else:
+                    visibility = random.choice(['public', 'followers', 'private'])
+
+                post = DreamPost(
+                    user=user,
+                    dream=dream,
+                    content=content,
+                    gofundme_url=gofundme,
+                    visibility=visibility,
+                    created_at=self._rand_dt(30, 0),
+                )
+                posts.append(post)
+                post_user_dream.append((user, dream))
+
+        DreamPost.objects.bulk_create(posts, batch_size=500)
+        # Refresh to get IDs
+        posts = list(DreamPost.objects.filter(
+            user__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ).select_related('user'))
+        self.stdout.write(f'  Created {len(posts)} dream posts.')
+
+        if not posts:
+            return
+
+        # --- Likes ---
+        likes = []
+        liked_pairs = set()
+        for post in posts:
+            # Each post gets 0-12 likes from random active users
+            num_likes = random.randint(0, 12)
+            likers = random.sample(active_users, min(num_likes, len(active_users)))
+            for liker in likers:
+                pair = (post.pk, liker.pk)
+                if pair in liked_pairs:
+                    continue
+                liked_pairs.add(pair)
+                likes.append(DreamPostLike(post=post, user=liker))
+
+        DreamPostLike.objects.bulk_create(likes, batch_size=1000, ignore_conflicts=True)
+        # Update denormalized counts
+        for post in posts:
+            post.likes_count = sum(1 for l in likes if l.post_id == post.pk)
+        DreamPost.objects.bulk_update(posts, ['likes_count'], batch_size=500)
+        self.stdout.write(f'  Created {len(likes)} dream post likes.')
+
+        # --- Comments (with threaded replies) ---
+        comments = []
+        for post in posts:
+            num_comments = random.randint(0, 6)
+            commenters = random.sample(active_users, min(num_comments, len(active_users)))
+            for commenter in commenters:
+                comment = DreamPostComment(
+                    post=post,
+                    user=commenter,
+                    content=random.choice(DREAM_POST_COMMENT_TEMPLATES),
+                    created_at=post.created_at + timedelta(
+                        hours=random.randint(1, 48),
+                    ),
+                )
+                comments.append(comment)
+
+        DreamPostComment.objects.bulk_create(comments, batch_size=1000)
+        # Refresh to get IDs for replies
+        comments = list(DreamPostComment.objects.filter(
+            user__email__endswith=f'@{DEMO_EMAIL_DOMAIN}',
+        ))
+
+        # Threaded replies: 20% of comments get 1-2 replies
+        replies = []
+        for comment in comments:
+            if random.random() < 0.20:
+                num_replies = random.randint(1, 2)
+                for _ in range(num_replies):
+                    replier = random.choice(active_users)
+                    replies.append(DreamPostComment(
+                        post=comment.post,
+                        user=replier,
+                        content=random.choice(DREAM_POST_REPLY_TEMPLATES),
+                        parent=comment,
+                        created_at=comment.created_at + timedelta(
+                            hours=random.randint(1, 24),
+                        ),
+                    ))
+        DreamPostComment.objects.bulk_create(replies, batch_size=500)
+        total_comments = len(comments) + len(replies)
+
+        # Update denormalized comment counts
+        for post in posts:
+            post.comments_count = (
+                sum(1 for c in comments if c.post_id == post.pk)
+                + sum(1 for r in replies if r.post_id == post.pk)
+            )
+        DreamPost.objects.bulk_update(posts, ['comments_count'], batch_size=500)
+        self.stdout.write(f'  Created {total_comments} comments ({len(replies)} threaded replies).')
+
+        # --- Encouragements ---
+        encouragements = []
+        encouraged_pairs = set()
+        for post in posts:
+            # Each post gets 0-5 encouragements
+            num_enc = random.randint(0, 5)
+            encouragers = random.sample(active_users, min(num_enc, len(active_users)))
+            for encourager in encouragers:
+                pair = (post.pk, encourager.pk)
+                if pair in encouraged_pairs:
+                    continue
+                encouraged_pairs.add(pair)
+                encouragements.append(DreamEncouragement(
+                    post=post,
+                    user=encourager,
+                    encouragement_type=random.choice(ENCOURAGEMENT_TYPES),
+                    message=random.choice(DREAM_ENCOURAGEMENT_MESSAGES),
+                    created_at=post.created_at + timedelta(
+                        hours=random.randint(1, 72),
+                    ),
+                ))
+
+        DreamEncouragement.objects.bulk_create(encouragements, batch_size=1000, ignore_conflicts=True)
+        self.stdout.write(f'  Created {len(encouragements)} dream encouragements.')
+
+        # --- Notifications for social interactions ---
+        social_notifs = []
+        # Sample some likes for notifications
+        for like in random.sample(likes, min(50, len(likes))):
+            if like.user != like.post.user:
+                social_notifs.append(Notification(
+                    user=like.post.user,
+                    notification_type='social',
+                    title=f'{like.user.display_name} liked your post',
+                    body='Check out who liked your dream post!',
+                    status=random.choice(['sent', 'sent', 'read']),
+                    sent_at=self._rand_dt(7, 0),
+                    scheduled_for=self._rand_dt(7, 0),
+                ))
+        # Sample some comments for notifications
+        for comment in random.sample(comments, min(30, len(comments))):
+            if comment.user != comment.post.user:
+                social_notifs.append(Notification(
+                    user=comment.post.user,
+                    notification_type='social',
+                    title=f'{comment.user.display_name} commented on your post',
+                    body=comment.content[:80],
+                    status=random.choice(['sent', 'sent', 'read']),
+                    sent_at=self._rand_dt(7, 0),
+                    scheduled_for=self._rand_dt(7, 0),
+                ))
+        # Sample some encouragements for notifications
+        for enc in random.sample(encouragements, min(30, len(encouragements))):
+            if enc.user != enc.post.user:
+                social_notifs.append(Notification(
+                    user=enc.post.user,
+                    notification_type='social',
+                    title=f'{enc.user.display_name} encouraged your dream!',
+                    body=f'Sent you a "{enc.encouragement_type.replace("_", " ")}" reaction.',
+                    status=random.choice(['sent', 'sent', 'read']),
+                    sent_at=self._rand_dt(7, 0),
+                    scheduled_for=self._rand_dt(7, 0),
+                ))
+        if social_notifs:
+            Notification.objects.bulk_create(social_notifs, batch_size=500)
+        self.stdout.write(f'  Created {len(social_notifs)} social notifications.')

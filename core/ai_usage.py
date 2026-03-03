@@ -59,6 +59,7 @@ class AIUsageTracker:
                 return {
                     'ai_chat': plan.ai_chat_daily_limit,
                     'ai_plan': plan.ai_plan_daily_limit,
+                    'ai_calibration': getattr(plan, 'ai_calibration_daily_limit', 50),
                     'ai_image': plan.ai_image_daily_limit,
                     'ai_voice': plan.ai_voice_daily_limit,
                     'ai_background': plan.ai_background_daily_limit,
@@ -66,13 +67,15 @@ class AIUsageTracker:
         except Exception:
             pass
 
-        return {
-            'ai_chat': tier_defaults.get('ai_chat', 0),
-            'ai_plan': tier_defaults.get('ai_plan', 0),
-            'ai_image': tier_defaults.get('ai_image', 0),
-            'ai_voice': tier_defaults.get('ai_voice', 0),
-            'ai_background': tier_defaults.get('ai_background', 0),
-        }
+        # Return all categories from tier defaults (includes ai_calibration etc.)
+        result = {}
+        for key in tier_defaults:
+            result[key] = tier_defaults.get(key, 0)
+        # Ensure standard categories always present
+        for key in ('ai_chat', 'ai_plan', 'ai_calibration', 'ai_image', 'ai_voice', 'ai_background'):
+            if key not in result:
+                result[key] = 0
+        return result
 
     def check_quota(self, user, category):
         """

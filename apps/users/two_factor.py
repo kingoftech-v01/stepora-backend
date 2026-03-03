@@ -7,6 +7,7 @@ Secrets are stored in the User model's EncryptedCharField (not app_prefs).
 """
 
 import hashlib
+import os as _os
 import pyotp
 import secrets
 import logging
@@ -17,6 +18,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as drf_serializers
+
+from core.throttles import TwoFactorRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +37,18 @@ def _generate_backup_codes(count=BACKUP_CODE_COUNT):
 
 
 def _hash_code(code):
-    """Hash a backup code for secure storage."""
-    return hashlib.sha256(code.encode()).hexdigest()
+    """Hash a backup code for secure storage using PBKDF2 with a fixed app-level salt."""
+    # Using a fixed salt derived from FIELD_ENCRYPTION_KEY avoids storing per-code salts
+    # while still preventing rainbow table attacks on the 8-char hex codes.
+    salt = hashlib.sha256(b'dreamplanner-backup-codes').digest()
+    return hashlib.pbkdf2_hmac('sha256', code.encode(), salt, iterations=100_000).hex()
 
 
 class TwoFactorSetupView(APIView):
     """Generate a TOTP secret and provisioning URI for setup."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TwoFactorRateThrottle]
 
     @extend_schema(
         summary="Setup 2FA",
@@ -63,12 +70,14 @@ class TwoFactorSetupView(APIView):
             issuer_name='DreamPlanner',
         )
 
-        # Store pending secret in app_prefs (temporary, cleared on verify)
-        # Only the pending secret lives here briefly; active secret uses EncryptedCharField
+        # Store pending secret in the EncryptedCharField (not app_prefs)
+        # and use a flag in app_prefs to mark it as pending (not yet verified)
+        user.totp_secret = secret
         prefs = user.app_prefs or {}
-        prefs['totp_pending_secret'] = secret
+        prefs['totp_pending'] = True
+        prefs.pop('totp_pending_secret', None)  # Clean up legacy key
         user.app_prefs = prefs
-        user.save(update_fields=['app_prefs'])
+        user.save(update_fields=['totp_secret', 'app_prefs'])
 
         return Response({
             'secret': secret,
@@ -81,6 +90,7 @@ class TwoFactorVerifyView(APIView):
     """Verify a TOTP code to complete 2FA setup or login verification."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TwoFactorRateThrottle]
 
     @extend_schema(
         summary="Verify 2FA code",
@@ -107,11 +117,9 @@ class TwoFactorVerifyView(APIView):
 
         prefs = user.app_prefs or {}
 
-        # Check if we're completing setup (pending secret) or verifying login
-        pending_secret = prefs.get('totp_pending_secret')
-        active_secret = user.totp_secret  # EncryptedCharField
-
-        secret = pending_secret or active_secret
+        # Check if we're completing setup (pending flag) or verifying login
+        is_pending = prefs.get('totp_pending', False)
+        secret = user.totp_secret  # EncryptedCharField (holds both pending and active secrets)
 
         if not secret:
             return Response(
@@ -140,25 +148,24 @@ class TwoFactorVerifyView(APIView):
             )
 
         # If completing setup, activate the secret and generate backup codes
-        if pending_secret:
+        if is_pending:
             backup_codes = _generate_backup_codes()
             hashed_codes = [_hash_code(c) for c in backup_codes]
 
-            # Store in encrypted model fields
-            user.totp_secret = pending_secret
+            # Secret is already in the EncryptedCharField — just enable 2FA
             user.totp_enabled = True
             user.backup_codes = hashed_codes
 
-            # Clear pending secret from app_prefs
+            # Clear pending flag and any legacy app_prefs TOTP data
+            prefs.pop('totp_pending', None)
             prefs.pop('totp_pending_secret', None)
-            # Clean up any legacy app_prefs TOTP data
             prefs.pop('totp_secret', None)
             prefs.pop('totp_enabled', None)
             prefs.pop('totp_backup_codes', None)
             user.app_prefs = prefs
 
             user.save(update_fields=[
-                'totp_secret', 'totp_enabled', 'backup_codes', 'app_prefs'
+                'totp_enabled', 'backup_codes', 'app_prefs'
             ])
 
             return Response({
@@ -175,6 +182,7 @@ class TwoFactorDisableView(APIView):
     """Disable 2FA for the current user."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TwoFactorRateThrottle]
 
     @extend_schema(
         summary="Disable 2FA",

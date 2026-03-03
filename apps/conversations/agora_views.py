@@ -84,6 +84,38 @@ def agora_rtc_token(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Verify the user is an authorized participant for this channel
+    from django.db.models import Q
+    from apps.conversations.models import Call
+
+    authorized = False
+
+    # Check 1:1 calls — channel name is the call UUID
+    if Call.objects.filter(
+        Q(id=channel_name),
+        Q(caller=request.user) | Q(callee=request.user),
+        status__in=['ringing', 'accepted', 'in_progress'],
+    ).exists():
+        authorized = True
+
+    if not authorized:
+        # Check circle calls
+        from apps.circles.models import CircleCall, CircleMembership
+        circle_call = CircleCall.objects.filter(
+            Q(id=channel_name) | Q(agora_channel=channel_name),
+            status='active',
+        ).select_related('circle').first()
+        if circle_call and CircleMembership.objects.filter(
+            circle=circle_call.circle, user=request.user,
+        ).exists():
+            authorized = True
+
+    if not authorized:
+        return Response(
+            {'detail': 'Not authorized for this channel.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     uid = str(request.user.id)
     expiration_seconds = 3600  # 1 hour
     current_timestamp = int(time.time())

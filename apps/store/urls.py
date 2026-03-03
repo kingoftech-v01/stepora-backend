@@ -31,6 +31,7 @@ from .views import (
     GiftClaimView,
     GiftListView,
     RefundRequestView,
+    RefundAdminView,
 )
 
 router = DefaultRouter()
@@ -50,4 +51,6 @@ urlpatterns = [
     path('gifts/', GiftListView.as_view(), name='store-gift-list'),
     # Refunds
     path('refunds/', RefundRequestView.as_view(), name='store-refund'),
+    # Admin refund management
+    path('admin/refunds/', RefundAdminView.as_view(), name='store-refund-admin'),
 ]

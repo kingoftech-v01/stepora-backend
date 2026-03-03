@@ -4,8 +4,12 @@ Production settings
 
 import sys
 from .base import *
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    _has_sentry = True
+except ImportError:
+    _has_sentry = False
 
 DEBUG = False
 
@@ -37,6 +41,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
@@ -45,6 +50,9 @@ SECURE_HSTS_PRELOAD = True
 # Strict cookie security in production
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
+
+# JWT refresh cookie must be Secure in production
+REST_AUTH['JWT_AUTH_SECURE'] = True
 
 # CORS - Strict in production (frontend and backend on separate servers)
 CORS_ALLOW_ALL_ORIGINS = False
@@ -75,7 +83,7 @@ if AWS_STORAGE_BUCKET_NAME:
     }
 
 # Sentry error tracking
-if os.getenv('SENTRY_DSN'):
+if _has_sentry and os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
         dsn=os.getenv('SENTRY_DSN'),
         integrations=[DjangoIntegration()],
@@ -105,8 +113,8 @@ DATABASES['default']['OPTIONS'] = {
     'sslmode': os.getenv('DB_SSLMODE', 'prefer'),
 }
 
-# Redis SSL for production (use rediss:// scheme)
+# Redis connection for production (supports redis:// and rediss:// schemes)
 _redis_url = os.getenv('REDIS_URL', '')
-if _redis_url.startswith('rediss://'):
+if _redis_url:
     CACHES['default']['LOCATION'] = _redis_url
     CHANNEL_LAYERS['default']['CONFIG']['hosts'] = [_redis_url]
