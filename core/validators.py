@@ -129,6 +129,9 @@ def validate_url_no_ssrf(url):
     """
     Validate that a URL is safe to fetch (no SSRF).
     Blocks private/reserved IP ranges, non-HTTP schemes, and localhost.
+
+    Returns (url, resolved_ip) so callers can pin the connection to the
+    validated IP address, preventing DNS rebinding (TOCTOU) attacks.
     """
     if not url or not isinstance(url, str):
         raise ValidationError('URL is required.')
@@ -149,13 +152,16 @@ def validate_url_no_ssrf(url):
         raise ValidationError('URLs pointing to localhost are not allowed.')
 
     # Resolve hostname and check for private/reserved IPs
+    resolved_ip = None
     try:
         resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for family, _type, _proto, _canonname, sockaddr in resolved:
             ip = ipaddress.ip_address(sockaddr[0])
             if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
                 raise ValidationError('URLs pointing to private/internal networks are not allowed.')
+            if resolved_ip is None:
+                resolved_ip = str(ip)
     except socket.gaierror:
         raise ValidationError('Could not resolve hostname.')
 
-    return url
+    return url, resolved_ip

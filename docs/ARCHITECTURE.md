@@ -186,17 +186,19 @@ dreamplanner/
 ### Token Auth Flow
 
 ```
-1. POST /api/auth/registration/     → Creates user, returns token
-   POST /api/auth/login/            → Validates credentials, returns token
+1. POST /api/auth/registration/     → Creates user, returns JWT (access + refresh)
+   POST /api/auth/login/            → Validates credentials, returns JWT
+                                      (or challenge token if 2FA enabled)
+   POST /api/auth/2fa-challenge/    → Verifies OTP with challenge token, returns JWT
 
 2. All subsequent requests:
-   Authorization: Bearer <token>    (or Token <token>)
+   Authorization: Bearer <access_token>
 
-3. Token expires after 24 hours (configurable via TOKEN_EXPIRY_HOURS)
-   → Client must re-login to get a new token
+3. Access token is short-lived; refresh token is set as httpOnly cookie on web.
+   Silent refresh on page load via POST /api/auth/token/refresh/.
 ```
 
-**Implementation**: `core/authentication.py` → `ExpiringTokenAuthentication`
+**Implementation**: `core/auth_views.py` → `NativeAwareLoginView`, `TwoFactorChallengeView`
 
 ### Social Auth
 

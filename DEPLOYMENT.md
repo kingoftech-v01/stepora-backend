@@ -175,6 +175,8 @@ server {
     ssl_certificate /etc/ssl/certs/dreamplanner.crt;
     ssl_certificate_key /etc/ssl/private/dreamplanner.key;
 
+    client_max_body_size 110m;  # Match Django DATA_UPLOAD_MAX_MEMORY_SIZE
+
     location / {
         proxy_pass http://django;
         proxy_set_header Host $host;
@@ -426,15 +428,23 @@ gunicorn --workers 2 --threads 4 --max-requests 1000
 
 ## Security Checklist
 
+See **[PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md)** for the full pre-GA checklist including all security, infrastructure, and environment variable requirements.
+
+Quick summary:
+
 - [ ] Django SECRET_KEY is unique and secure
 - [ ] DEBUG=False in production
 - [ ] ALLOWED_HOSTS configured properly
-- [ ] HTTPS enforced
-- [ ] CORS origins restricted
-- [ ] Database credentials secured
-- [ ] Rate limiting enabled
-- [ ] Security headers configured
-- [ ] Admin URL changed from `/admin/`
+- [ ] HTTPS enforced with HSTS (1 year, includeSubDomains, preload)
+- [ ] CORS origins restricted (`CORS_ORIGIN` env var set)
+- [ ] Database credentials secured, `sslmode=require`
+- [ ] Rate limiting enabled (auth endpoints: 5/min)
+- [ ] Security headers configured (CSP, X-Frame-Options: DENY, COOP, CORP)
+- [ ] `FIELD_ENCRYPTION_KEY` moved to secret manager (not hardcoded)
+- [ ] All secrets rotated after beta
+- [ ] `client_max_body_size 110m` set in nginx (matches Django `DATA_UPLOAD_MAX_MEMORY_SIZE`)
+- [ ] Sentry DSN configured
+- [ ] SMTP configured for email verification
 
 ## Backup Strategy
 
@@ -463,5 +473,5 @@ psql -h $DB_HOST -U $DB_USER $DB_NAME < backup_20240101.sql
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** March 2026
 **Maintained by:** DreamPlanner Team

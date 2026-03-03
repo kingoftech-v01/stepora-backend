@@ -28,6 +28,7 @@ from .serializers import (
 )
 from core.audit import log_data_export, log_account_change
 from core.throttles import ExportRateThrottle, TwoFactorRateThrottle
+from .two_factor import _hash_code as hash_backup_code
 from core.ai_usage import AIUsageTracker
 
 
@@ -781,15 +782,14 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='2fa/backup-codes', throttle_classes=[TwoFactorRateThrottle])
     def generate_backup_codes(self, request):
         """Generate 10 one-time backup codes."""
-        import hashlib
         user = request.user
         if not user.totp_enabled:
             return Response(
                 {'error': _('2FA must be enabled first.')},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        codes = [secrets.token_hex(4) for _ in range(10)]
-        hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
+        codes = [secrets.token_hex(4).upper() for _ in range(10)]
+        hashed = [hash_backup_code(c) for c in codes]
         user.backup_codes = hashed
         user.save(update_fields=['backup_codes'])
         return Response({

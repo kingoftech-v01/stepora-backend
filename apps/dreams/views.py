@@ -816,7 +816,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         if image_url:
             from core.validators import validate_url_no_ssrf
             try:
-                validate_url_no_ssrf(image_url)
+                validate_url_no_ssrf(image_url)  # returns (url, resolved_ip); raises on unsafe
             except Exception:
                 return Response(
                     {'error': _('Invalid or unsafe image URL.')},

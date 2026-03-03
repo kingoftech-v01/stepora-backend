@@ -435,7 +435,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         # Validate image URL to prevent SSRF
         try:
-            validate_url_no_ssrf(image_url)
+            _validated_url, _resolved_ip = validate_url_no_ssrf(image_url)
         except Exception:
             return Response({'error': _('Invalid image URL.')}, status=status.HTTP_400_BAD_REQUEST)
 

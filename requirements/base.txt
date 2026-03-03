@@ -87,5 +87,5 @@ firebase-admin>=6.2.0
 agora-token-builder>=1.0.0
 
 # Production server
-gunicorn==21.2.0
+gunicorn>=22.0.0,<24.0
 uvicorn[standard]==0.25.0

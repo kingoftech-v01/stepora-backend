@@ -213,12 +213,18 @@ HARMFUL_DREAM_PATTERNS_ILLEGAL = [
         r'\b(steal|rob|hack\s+into|break\s+into|forge|counterfeit|drug\s+deal|sell\s+drugs|traffic)\b',
         re.IGNORECASE,
     ),
+    # FR: "voler" means both "to fly" and "to steal" — require theft context
+    # to avoid false positives on dreams about flying.
     re.compile(
-        r'\b(voler|cambrioler|pirater|falsifier|vendre\s+de\s+la\s+drogue|trafic)\b',
+        r'\b(cambrioler|pirater|falsifier|vendre\s+de\s+la\s+drogue|trafic\s+de\s+|trafiquant)\b',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'\bvoler\s+(quelqu|qqch|de\s+l\'argent|dans\s+(un|une|le|la|les)\s)',
         re.IGNORECASE,
     ),
     re.compile(r'\b(scam|fraud|con\s+someone|deceive|catfish|impersonate)\b', re.IGNORECASE),
-    re.compile(r'\b(arnaquer|frauder|escroquer|usurper)\b', re.IGNORECASE),
+    re.compile(r'\b(arnaquer|frauder|escroquer|usurper|d[eé]rober)\b', re.IGNORECASE),
 ]
 
 

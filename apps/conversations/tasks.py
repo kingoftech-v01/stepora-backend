@@ -37,16 +37,27 @@ def transcribe_voice_message(self, message_id):
             logger.info(f"Message {message_id} already transcribed, skipping.")
             return
 
-        # Validate audio URL to prevent SSRF
+        # Validate audio URL to prevent SSRF (returns resolved IP to pin connection)
         from core.validators import validate_url_no_ssrf
         try:
-            validate_url_no_ssrf(message.audio_url)
+            _validated_url, resolved_ip = validate_url_no_ssrf(message.audio_url)
         except Exception as e:
             logger.error(f"Invalid audio URL for message {message_id}: {e}")
             return
 
         # Download the audio file to a temp location
-        response = requests.get(message.audio_url, timeout=60)
+        # Pin to the resolved IP to prevent DNS rebinding attacks
+        from urllib.parse import urlparse
+        _parsed = urlparse(message.audio_url)
+        _port = _parsed.port or (443 if _parsed.scheme == 'https' else 80)
+        _pinned_url = message.audio_url
+        if resolved_ip and _parsed.hostname:
+            _pinned_url = message.audio_url.replace(_parsed.hostname, resolved_ip, 1)
+        response = requests.get(
+            _pinned_url, timeout=60,
+            headers={'Host': _parsed.hostname} if resolved_ip else {},
+            verify=True,
+        )
         response.raise_for_status()
 
         # Determine file extension from content type

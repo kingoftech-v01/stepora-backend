@@ -96,21 +96,33 @@ if _has_sentry and os.getenv('SENTRY_DSN'):
 LOGGING['root']['level'] = 'WARNING'
 LOGGING['loggers']['apps']['level'] = 'INFO'
 
-# Email (production uses real SMTP)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Email (production uses real SMTP when configured)
 EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
+
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    # SMTP not configured — use console backend to prevent crashes
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    ACCOUNT_EMAIL_VERIFICATION = 'none'
+    import warnings
+    warnings.warn(
+        'EMAIL_HOST_USER / EMAIL_HOST_PASSWORD not set. '
+        'Email verification is DISABLED. Set SMTP credentials for production.',
+        stacklevel=1,
+    )
 
 # Database connection pooling
 DATABASES['default']['CONN_MAX_AGE'] = 600
 DATABASES['default']['OPTIONS'] = {
     'connect_timeout': 10,
     'options': '-c statement_timeout=30000',  # 30 seconds
-    'sslmode': os.getenv('DB_SSLMODE', 'prefer'),
+    'sslmode': os.getenv('DB_SSLMODE', 'require'),
 }
 
 # Redis connection for production (supports redis:// and rediss:// schemes)

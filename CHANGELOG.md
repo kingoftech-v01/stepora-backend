@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-03-03
+
+### Security
+- **2FA enforcement at login** — New challenge token flow: credentials validated → signed challenge token issued (5min TTL) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification. New `TwoFactorChallengeView` endpoint at `/api/auth/2fa-challenge/`
+- **Account lockout** — 5 failed login attempts locks IP + email for 15 minutes via Redis
+- **Rate limiting on auth** — `AuthRateThrottle` (5/min) wired to login, register, password reset, and password reset confirm views
+- **SSRF DNS rebinding fix** — `validate_url_no_ssrf()` now returns `(url, resolved_ip)` for connection pinning, preventing TOCTOU/DNS rebinding attacks
+- **Backup code hashing** — Fixed inconsistency: replaced `hashlib.sha256` with PBKDF2 (100k iterations) matching `two_factor.py`
+- **CSP hardening** — Added `frame-ancestors 'none'` on both frontend meta tag and backend `SecurityHeadersMiddleware`
+- **Clickjacking** — `X-Frame-Options: DENY` in production settings + middleware
+- **DB SSL** — Changed default `sslmode` from `prefer` to `require` in production settings
+- **Cookie security** — `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, `JWT_AUTH_SECURE` all True in production
+- **Upload limits** — `DATA_UPLOAD_MAX_MEMORY_SIZE=110MB`, `FILE_UPLOAD_MAX_MEMORY_SIZE=10MB` at Django level
+- **Protected routes** — `/change-password` wrapped in `ProtectedRoute` on frontend
+- **npm supply chain** — Added `overrides` for `serialize-javascript>=7.0.3`, 0 npm audit vulnerabilities
+- **gunicorn CVE-2024-1135** — Upgraded to `>=22.0.0,<24.0`
+- **WebSocket auth** — Token now sent in message body (not URL query string), JWT signature + expiry validated
+- **Error redaction** — 5xx responses return generic message in production, full error logged server-side
+
+### Added
+- `PRODUCTION_CHECKLIST.md` — Comprehensive pre-GA checklist covering security, infrastructure, and environment variables
+- `TwoFactorChallengeView` — Unauthenticated endpoint for 2FA verification using signed challenge tokens
+- Frontend 2FA challenge screen with OTP input on `LoginScreen.jsx`
+- `AUTH.TFA_CHALLENGE` endpoint constant in frontend `endpoints.js`
+
+### Changed
+- `NativeAwareLoginView` now intercepts 2FA-enabled users and returns challenge token instead of JWT
+- Backend `validate_url_no_ssrf()` returns `(url, resolved_ip)` tuple instead of just URL
+- SSRF callers in `conversations/tasks.py` and `conversations/views.py` updated for DNS pinning
+- Frontend `AuthContext.jsx` login flow passes `challengeToken` for 2FA
+- HSTS set to 1 year with `includeSubDomains` and `preload`
+
 ## [1.3.0] - 2026-02-27
 
 ### Added
@@ -123,9 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 #### Security
 - Multi-tier rate limiting
-- Input validation with Zod/Django validators
+- Input validation with Django validators and DRF serializers
 - CORS protection
-- Security headers with Helmet
+- Security headers via SecurityHeadersMiddleware
 
 #### Tests
 - Unit tests for all models

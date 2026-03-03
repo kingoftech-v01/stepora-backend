@@ -176,7 +176,7 @@ def generate_dream_plan_task(self, dream_id, user_id):
                 goal_by_key[(ms_order, goal_data.order)] = db_goals[i]
 
             tasks_to_create = []
-            for i, (goal_data, _) in enumerate(goal_data_pairs):
+            for i, (goal_data, _ms_idx) in enumerate(goal_data_pairs):
                 for task in goal_data.tasks:
                     scheduled = None
                     if hasattr(task, 'day_number') and task.day_number:

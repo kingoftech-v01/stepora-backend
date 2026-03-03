@@ -347,10 +347,11 @@ class DreamEncouragement(models.Model):
 
 ### 4.1 Authentication (dj-rest-auth)
 ```
-All API requests require a token in the header:
-Authorization: Token <key>
-or
-Authorization: Bearer <key>
+All API requests require a JWT access token in the header:
+Authorization: Bearer <access_token>
+
+Refresh tokens are set as httpOnly cookies on web.
+Login with 2FA enabled returns a challenge token — JWT is only issued after OTP verification via POST /api/auth/2fa-challenge/.
 ```
 
 ### 4.2 Users

@@ -137,9 +137,11 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Web Push Subscriptions**: Register/manage browser push subscriptions via VAPID
 
 ### Authentication and Security
-- **django-allauth + dj-rest-auth**: Token-based authentication (Token and Bearer variants)
+- **django-allauth + dj-rest-auth**: JWT authentication (short-lived access tokens, httpOnly refresh cookies)
 - **Social Auth**: Google Sign-In and Apple Sign-In via allauth social providers
-- **Two-Factor Authentication (TOTP)**: Setup, verify, disable, status check, backup code regeneration
+- **Two-Factor Authentication (TOTP)**: Setup, verify, disable, status check, backup code regeneration. Login with 2FA uses challenge token flow — no JWT tokens issued until OTP is verified.
+- **Account lockout**: 5 failed login attempts locks IP + email for 15 minutes via Redis
+- **Rate limiting**: `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
 - **Email Change Verification**: Secure email change with verification link (24-hour expiry)
 - **Password Management**: Change password, forgot password flow
 
@@ -190,7 +192,7 @@ dreamplanner/
 | **Background Jobs** | Celery 5.3.4 + django-celery-beat |
 | **Database** | PostgreSQL 15 (prod) / SQLite (dev) |
 | **Cache/Broker** | Redis 7 |
-| **Authentication** | django-allauth + dj-rest-auth (Token auth) |
+| **Authentication** | django-allauth + dj-rest-auth (JWT auth) |
 | **Social Auth** | Google Sign-In, Apple Sign-In |
 | **AI** | OpenAI GPT-4, DALL-E 3, Whisper, GPT-4V |
 | **Real-Time Calls** | Agora.io RTC (voice/video) |
@@ -343,25 +345,27 @@ DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
 ### Authentication
 
-Token authentication via dj-rest-auth:
+JWT authentication via dj-rest-auth:
 ```
-Authorization: Token <auth_token>
-Authorization: Bearer <auth_token>
+Authorization: Bearer <access_token>
 ```
 
-WebSocket authentication via query parameter:
-```
-ws://localhost:9000/ws/conversations/{id}/?token=<auth_token>
+Refresh tokens are set as httpOnly cookies on web, or stored via `@capacitor/preferences` on native.
+
+WebSocket authentication via message body (sent after connection opens):
+```json
+{"type": "authenticate", "token": "<access_token>"}
 ```
 
 ### Authentication Endpoints
 ```
-POST   /api/auth/login/                        # Login (email + password)
+POST   /api/auth/login/                        # Login (email + password) — returns JWT or challenge token if 2FA enabled
+POST   /api/auth/2fa-challenge/                # Verify 2FA code with challenge token — returns JWT
 POST   /api/auth/logout/                       # Logout
 POST   /api/auth/registration/                 # Register new account
 POST   /api/auth/password/change/              # Change password
-POST   /api/auth/password/reset/               # Request password reset
-POST   /api/auth/password/reset/confirm/       # Confirm password reset
+POST   /api/auth/password/reset/               # Request password reset (rate limited: 5/min)
+POST   /api/auth/password/reset/confirm/       # Confirm password reset (rate limited: 5/min)
 GET    /api/auth/user/                         # Get authenticated user
 POST   /api/auth/google/                       # Google Sign-In
 POST   /api/auth/apple/                        # Apple Sign-In
@@ -815,9 +819,12 @@ docker compose exec web python manage.py seed_store
 ## Security
 
 ### Authentication & Authorization
-- **Token auth** — django-allauth + dj-rest-auth with Token/Bearer variants
+- **JWT auth** — django-allauth + dj-rest-auth with short-lived access tokens and httpOnly refresh cookies
+- **2FA enforcement at login** — Challenge token flow: credentials validated → signed challenge token issued (5min TTL) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification.
+- **Account lockout** — 5 failed login attempts locks IP + email for 15 minutes via Redis
+- **Rate limiting** — `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
 - **Social auth** — Google Sign-In and Apple Sign-In via allauth providers
-- **Two-Factor (TOTP)** — Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with SHA-256.
+- **Two-Factor (TOTP)** — Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with PBKDF2 (100k iterations).
 - **9 permission classes** — Enforce subscription tier limits across all endpoints
 
 ### Infrastructure Security
@@ -841,11 +848,17 @@ All security headers are set by the Docker-internal nginx (`docker/nginx.conf`).
 
 ### Application Security
 - **Production mode** — `DEBUG=False`, `SECURE_PROXY_SSL_HEADER` set, `SECURE_SSL_REDIRECT=False` (external nginx handles TLS)
-- **CORS** — Whitelist only (`CORS_ALLOW_ALL_ORIGINS=False`), credentials allowed
+- **CORS** — Whitelist only (`CORS_ALLOW_ALL_ORIGINS=False`), origins from env var, credentials allowed
 - **CSRF** — `CSRF_TRUSTED_ORIGINS` configured for cross-origin frontend
-- **Cookies** — `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True`, `SameSite=Lax`
+- **Cookies** — `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True`, `JWT_AUTH_SECURE=True`, `SameSite=Lax`
+- **HSTS** — 1 year, `includeSubDomains`, `preload`
 - **SQL injection** — Protected via Django ORM
-- **XSS** — SecurityHeadersMiddleware sets CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP
+- **XSS** — DOMPurify with restricted `ALLOWED_TAGS` on frontend, `nh3` sanitizer on backend. SecurityHeadersMiddleware sets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, COOP, CORP
+- **SSRF prevention** — `validate_url_no_ssrf()` resolves DNS once and returns IP for connection pinning (prevents TOCTOU/DNS rebinding)
+- **Upload validation** — Type + size + magic byte checks on all file uploads, UUID filenames. Django-level ceilings: `DATA_UPLOAD_MAX_MEMORY_SIZE=110MB`, `FILE_UPLOAD_MAX_MEMORY_SIZE=10MB`
+- **DB SSL** — `sslmode=require` default in production
+- **WebSocket auth** — Token in message body (not URL), JWT signature + expiry validated
+- **Error redaction** — 5xx responses return generic message in production, full error logged server-side
 - **DRF throttling** — Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min
 - **Input validation** — DRF Serializers + custom validation (avatar magic bytes, notification schema whitelist, channel name regex, message length limits)
 

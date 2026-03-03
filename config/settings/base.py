@@ -196,6 +196,11 @@ MEDIA_ROOT = BASE_DIR / 'mediafiles'
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Upload size limits — 110 MB ceiling to accommodate 100 MB video uploads.
+# Nginx should also enforce client_max_body_size at the same level.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 115_343_360   # ~110 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10_485_760    # 10 MB (files > this go to disk)
+
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8100')
 
