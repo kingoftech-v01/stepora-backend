@@ -30,6 +30,7 @@ from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
     CircleMessage, CircleCall, CircleCallParticipant,
+    CirclePoll, PollOption, PollVote,
 )
 from core.permissions import CanUseCircles
 from core.pagination import StandardResultsSetPagination
@@ -42,6 +43,7 @@ from .serializers import (
     CirclePostCreateSerializer,
     CirclePostUpdateSerializer,
     CircleChallengeSerializer,
+    CircleChallengeCreateSerializer,
     PostReactionSerializer,
     MemberRoleSerializer,
     CircleInvitationSerializer,
@@ -50,6 +52,7 @@ from .serializers import (
     ChallengeProgressCreateSerializer,
     CircleMessageSerializer,
     CircleCallSerializer,
+    PollVoteInputSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,6 +134,8 @@ class CircleViewSet(viewsets.ModelViewSet):
             return CirclePostSerializer
         if self.action == 'challenges':
             return CircleChallengeSerializer
+        if self.action == 'create_challenge':
+            return CircleChallengeCreateSerializer
         return CircleListSerializer
 
     def get_queryset(self):
@@ -385,7 +390,23 @@ class CircleViewSet(viewsets.ModelViewSet):
             content=create_serializer.validated_data['content']
         )
 
-        serializer = CirclePostSerializer(post)
+        # Create attached poll if provided
+        poll_data = create_serializer.validated_data.get('poll')
+        if poll_data:
+            poll = CirclePoll.objects.create(
+                post=post,
+                question=poll_data['question'],
+                allows_multiple=poll_data.get('allowsMultiple', False),
+                ends_at=poll_data.get('endsAt'),
+            )
+            for idx, option_data in enumerate(poll_data['options']):
+                PollOption.objects.create(
+                    poll=poll,
+                    text=option_data['text'],
+                    order=idx,
+                )
+
+        serializer = CirclePostSerializer(post, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -420,6 +441,67 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         serializer = CircleChallengeSerializer(challenges, many=True, context={'request': request})
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Create a challenge",
+        description="Create a new challenge for this circle. Only admins and moderators can create challenges.",
+        request=CircleChallengeCreateSerializer,
+        responses={
+            201: CircleChallengeSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Only admins/moderators can create challenges.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
+        tags=["Circles"],
+    )
+    @action(detail=True, methods=['post'], url_path='challenges/create')
+    def create_challenge(self, request, pk=None):
+        """
+        Create a new challenge in this circle.
+
+        Only admins and moderators can create challenges. The challenge
+        creator is automatically set to the requesting user.
+        """
+        circle = self.get_object()
+
+        # Verify admin/moderator role
+        membership = CircleMembership.objects.filter(
+            circle=circle, user=request.user
+        ).first()
+
+        if not membership or membership.role not in ('admin', 'moderator'):
+            return Response(
+                {'error': _('Only admins and moderators can create challenges.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = CircleChallengeCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        from django.utils import timezone as tz
+        now = tz.now()
+        challenge_status = 'active' if data['start_date'] <= now else 'upcoming'
+
+        challenge = CircleChallenge.objects.create(
+            circle=circle,
+            creator=request.user,
+            title=data['title'],
+            description=data.get('description', ''),
+            challenge_type=data['challenge_type'],
+            target_value=data['target_value'],
+            start_date=data['start_date'],
+            end_date=data['end_date'],
+            status=challenge_status,
+        )
+
+        # Auto-join the creator
+        challenge.participants.add(request.user)
+
+        return Response(
+            CircleChallengeSerializer(challenge, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @extend_schema(
         summary="Update a circle",
@@ -625,6 +707,90 @@ class CircleViewSet(viewsets.ModelViewSet):
             return Response({'error': _('No reaction found.')}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({'message': _('Reaction removed.')})
+
+    @extend_schema(
+        summary="Vote on a poll",
+        description=(
+            "Cast a vote on a circle post's poll. Send option_ids as a list. "
+            "For single-choice polls, send exactly one ID. For multiple-choice, send one or more. "
+            "Voting again replaces previous votes."
+        ),
+        request=PollVoteInputSerializer,
+        responses={
+            200: OpenApiResponse(description="Vote recorded."),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Not a member or poll ended."),
+            404: OpenApiResponse(description="Post or poll not found."),
+        },
+        tags=["Circles"],
+    )
+    @action(detail=True, methods=['post'], url_path=r'posts/(?P<post_id>[0-9a-f-]+)/vote')
+    def vote_on_poll(self, request, pk=None, post_id=None):
+        """Cast a vote on a circle post's poll."""
+        circle = self.get_object()
+
+        # Verify membership
+        if not CircleMembership.objects.filter(circle=circle, user=request.user).exists():
+            return Response(
+                {'error': _('You must be a member to vote.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            post = CirclePost.objects.get(id=post_id, circle=circle)
+        except CirclePost.DoesNotExist:
+            return Response({'error': _('Post not found.')}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            poll = post.poll
+        except CirclePoll.DoesNotExist:
+            return Response({'error': _('This post does not have a poll.')}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if poll has ended
+        if poll.is_ended:
+            return Response(
+                {'error': _('This poll has ended.')},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = PollVoteInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        option_ids = serializer.validated_data['option_ids']
+
+        # Validate all option_ids belong to this poll
+        valid_options = PollOption.objects.filter(poll=poll, id__in=option_ids)
+        if valid_options.count() != len(option_ids):
+            return Response(
+                {'error': _('One or more option IDs are invalid.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # For single-choice polls, only one option allowed
+        if not poll.allows_multiple and len(option_ids) > 1:
+            return Response(
+                {'error': _('This poll only allows a single choice.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Remove previous votes by this user on this poll, then create new ones
+        PollVote.objects.filter(
+            option__poll=poll,
+            user=request.user,
+        ).delete()
+
+        for option in valid_options:
+            PollVote.objects.create(
+                option=option,
+                user=request.user,
+            )
+
+        # Return updated poll data
+        from .serializers import CirclePollSerializer
+        poll_data = CirclePollSerializer(poll, context={'request': request}).data
+        return Response({
+            'message': _('Vote recorded.'),
+            'poll': poll_data,
+        })
 
     @extend_schema(
         summary="Promote a member",

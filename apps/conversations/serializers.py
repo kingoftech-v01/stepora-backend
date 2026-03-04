@@ -7,7 +7,7 @@ from typing import Optional
 from rest_framework import serializers
 from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
-from .models import Conversation, Message, MessageReadStatus, ConversationSummary, ConversationTemplate, Call
+from .models import Conversation, Message, MessageReadStatus, ConversationSummary, ConversationTemplate, Call, ConversationBranch, ChatMemory
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -17,9 +17,9 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             'id', 'conversation', 'role', 'content',
-            'audio_url', 'transcription', 'image_url',
+            'audio_url', 'audio_duration', 'transcription', 'image_url',
             'is_pinned', 'is_liked', 'reactions',
-            'metadata', 'created_at'
+            'branch', 'metadata', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
         extra_kwargs = {
@@ -28,11 +28,13 @@ class MessageSerializer(serializers.ModelSerializer):
             'role': {'help_text': 'Role of the message sender (user or assistant).'},
             'content': {'help_text': 'Text content of the message.'},
             'audio_url': {'help_text': 'URL to an attached audio recording.'},
+            'audio_duration': {'help_text': 'Duration of the audio recording in seconds.'},
             'transcription': {'help_text': 'Transcription of the audio content.'},
             'image_url': {'help_text': 'URL to an attached image.'},
             'is_pinned': {'help_text': 'Whether this message is pinned.'},
             'is_liked': {'help_text': 'Whether the user liked this message.'},
             'reactions': {'help_text': 'Emoji reactions on this message.'},
+            'branch': {'help_text': 'Branch this message belongs to (null = main).'},
             'metadata': {'help_text': 'Additional metadata for the message.'},
             'created_at': {'help_text': 'Timestamp when the message was created.'},
         }
@@ -248,6 +250,81 @@ class ConversationTemplateSerializer(serializers.ModelSerializer):
         }
 
 
+class MessageSearchSerializer(serializers.ModelSerializer):
+    """Serializer for message search results with highlighted content excerpt."""
+
+    excerpt = serializers.SerializerMethodField(help_text='Content excerpt with search term highlighted in <mark> tags.')
+
+    class Meta:
+        model = Message
+        fields = ['id', 'role', 'content', 'excerpt', 'created_at']
+        read_only_fields = ['id', 'role', 'content', 'excerpt', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the message.'},
+            'role': {'help_text': 'Role of the message sender (user or assistant).'},
+            'content': {'help_text': 'Full text content of the message.'},
+            'created_at': {'help_text': 'Timestamp when the message was created.'},
+        }
+
+    def get_excerpt(self, obj):
+        """Return a short excerpt of the content with the search query highlighted."""
+        import re
+        query = self.context.get('search_query', '')
+        if not query:
+            return obj.content[:120]
+
+        content = obj.content
+        # Find the position of the match (case-insensitive)
+        match = re.search(re.escape(query), content, re.IGNORECASE)
+        if not match:
+            return content[:120]
+
+        start = match.start()
+        # Build excerpt window around the match
+        excerpt_start = max(0, start - 40)
+        excerpt_end = min(len(content), start + len(query) + 80)
+        excerpt = content[excerpt_start:excerpt_end]
+
+        if excerpt_start > 0:
+            excerpt = '...' + excerpt
+        if excerpt_end < len(content):
+            excerpt = excerpt + '...'
+
+        # Wrap matched text in <mark> tags (case-insensitive replace, first occurrence)
+        highlighted = re.sub(
+            '(' + re.escape(query) + ')',
+            r'<mark>\1</mark>',
+            excerpt,
+            count=0,
+            flags=re.IGNORECASE,
+        )
+        return highlighted
+
+
+class ConversationBranchSerializer(serializers.ModelSerializer):
+    """Serializer for ConversationBranch model."""
+
+    message_count = serializers.SerializerMethodField(help_text='Number of messages in this branch.')
+
+    class Meta:
+        model = ConversationBranch
+        fields = [
+            'id', 'conversation', 'parent_message', 'name',
+            'message_count', 'created_at'
+        ]
+        read_only_fields = ['id', 'conversation', 'created_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the branch.'},
+            'conversation': {'help_text': 'Conversation this branch belongs to.'},
+            'parent_message': {'help_text': 'Message from which this branch diverges.'},
+            'name': {'help_text': 'Optional label for this branch.'},
+            'created_at': {'help_text': 'Timestamp when the branch was created.'},
+        }
+
+    def get_message_count(self, obj) -> int:
+        return obj.messages.count()
+
+
 class CallHistorySerializer(serializers.ModelSerializer):
     """Serializer for call history entries."""
 
@@ -264,3 +341,26 @@ class CallHistorySerializer(serializers.ModelSerializer):
             'duration_seconds', 'created_at',
         ]
         read_only_fields = fields
+
+
+class ChatMemorySerializer(serializers.ModelSerializer):
+    """Serializer for ChatMemory model."""
+
+    class Meta:
+        model = ChatMemory
+        fields = [
+            'id', 'key', 'content', 'importance',
+            'source_conversation', 'is_active',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'source_conversation', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the memory.'},
+            'key': {'help_text': 'Memory category (preference, fact, goal_context, style).'},
+            'content': {'help_text': 'The remembered information.'},
+            'importance': {'help_text': 'Importance level from 1 (low) to 5 (critical).'},
+            'source_conversation': {'help_text': 'Conversation this memory was extracted from.'},
+            'is_active': {'help_text': 'Whether this memory is currently active.'},
+            'created_at': {'help_text': 'Timestamp when the memory was created.'},
+            'updated_at': {'help_text': 'Timestamp when the memory was last updated.'},
+        }

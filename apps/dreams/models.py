@@ -44,6 +44,14 @@ class Dream(models.Model):
     # Vision board
     vision_image_url = models.URLField(max_length=500, blank=True)
 
+    # Color for calendar/UI identification
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default='',
+        help_text='Hex color for calendar display (e.g. #8B5CF6). Auto-assigned if blank.'
+    )
+
     # Tracking
     progress_percentage = models.FloatField(default=0.0)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -411,6 +419,25 @@ class Task(models.Model):
     # 2-minute start flag
     is_two_minute_start = models.BooleanField(default=False)
 
+    # ── Chain (recurring task chains) ──
+    chain_next_delay_days = models.IntegerField(
+        null=True, blank=True,
+        help_text='Days after completion to schedule the next task in the chain'
+    )
+    chain_template_title = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Custom title for the next task in the chain (uses current title if blank)'
+    )
+    chain_parent = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='chain_children',
+        help_text='The previous task in this chain'
+    )
+    is_chain = models.BooleanField(
+        default=False,
+        help_text='Whether this task is part of a recurring chain'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -424,6 +451,7 @@ class Task(models.Model):
             models.Index(fields=['status', '-created_at']),
             models.Index(fields=['expected_date']),
             models.Index(fields=['deadline_date']),
+            models.Index(fields=['chain_parent']),
         ]
 
     def __str__(self):
@@ -464,6 +492,10 @@ class Task(models.Model):
         from apps.users.services import AchievementService
         AchievementService.check_achievements(self.goal.dream.user)
 
+        # ── Chain: auto-create next task if this is a chain task ──
+        if self.chain_next_delay_days is not None:
+            self._create_chain_next()
+
     def _update_streak(self):
         """Update user's streak based on consecutive day completions (atomic)."""
         from django.db.models import F
@@ -485,6 +517,72 @@ class Task(models.Model):
             User.objects.filter(id=user.id).update(streak_days=1)
 
         user.refresh_from_db(fields=['streak_days'])
+
+    def _create_chain_next(self):
+        """Auto-create the next task in a recurring chain."""
+        from datetime import timedelta
+
+        next_title = self.chain_template_title.strip() if self.chain_template_title else self.title
+        next_date = self.completed_at + timedelta(days=self.chain_next_delay_days)
+
+        # Determine next order
+        max_order = Task.objects.filter(goal=self.goal).count()
+
+        next_task = Task.objects.create(
+            goal=self.goal,
+            title=next_title,
+            description=self.description,
+            order=max_order + 1,
+            scheduled_date=next_date,
+            scheduled_time=self.scheduled_time,
+            duration_mins=self.duration_mins,
+            chain_next_delay_days=self.chain_next_delay_days,
+            chain_template_title=self.chain_template_title,
+            chain_parent=self,
+            is_chain=True,
+        )
+
+        # Create notification for the user
+        from apps.notifications.models import Notification
+        Notification.objects.create(
+            user=self.goal.dream.user,
+            notification_type='system',
+            title='Next task in chain created',
+            body='"{}" has been scheduled for {}.'.format(
+                next_task.title,
+                next_date.strftime('%b %d, %Y')
+            ),
+            scheduled_for=timezone.now(),
+            data={
+                'screen': 'dream',
+                'dreamId': str(self.goal.dream.id),
+                'goalId': str(self.goal.id),
+                'taskId': str(next_task.id),
+            },
+        )
+
+        return next_task
+
+    def get_chain_position(self):
+        """Return (position, total) for this task in its chain."""
+        if not self.is_chain and self.chain_next_delay_days is None:
+            return None, None
+
+        # Walk back to the chain root
+        root = self
+        position = 1
+        while root.chain_parent_id:
+            root = root.chain_parent
+            position += 1
+
+        # Count all tasks in the chain from root forward
+        total = position
+        current = self
+        while Task.objects.filter(chain_parent=current).exists():
+            current = Task.objects.filter(chain_parent=current).first()
+            total += 1
+
+        return position, total
 
 
 class Obstacle(models.Model):
@@ -618,7 +716,9 @@ class DreamTemplate(models.Model):
         ('finance', 'Finance & Savings'),
         ('creative', 'Creative & Arts'),
         ('personal', 'Personal Growth'),
+        ('hobbies', 'Hobbies & Skills'),
         ('social', 'Social & Relationships'),
+        ('relationships', 'Relationships'),
         ('travel', 'Travel & Adventure'),
     ]
 
@@ -638,6 +738,11 @@ class DreamTemplate(models.Model):
         default=90,
         help_text='Estimated number of days to complete this dream.',
     )
+    suggested_timeline = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Human-readable timeline, e.g. "3 months", "1 year"',
+    )
     difficulty = models.CharField(
         max_length=20,
         choices=[
@@ -648,6 +753,7 @@ class DreamTemplate(models.Model):
         default='intermediate',
     )
     icon = models.CharField(max_length=100, blank=True)
+    color = models.CharField(max_length=20, default='#8B5CF6', help_text='Accent color for template card display')
     is_featured = models.BooleanField(default=False, db_index=True)
     is_active = models.BooleanField(default=True)
     usage_count = models.IntegerField(default=0)
@@ -777,6 +883,105 @@ class DreamProgressSnapshot(models.Model):
             date=today,
             defaults={'progress_percentage': dream.progress_percentage},
         )
+
+
+class FocusSession(models.Model):
+    """Pomodoro-style focus session linked to a user and optionally a task."""
+
+    SESSION_TYPE_CHOICES = [
+        ('work', 'Work'),
+        ('break', 'Break'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'users.User', on_delete=models.CASCADE, related_name='focus_sessions'
+    )
+    task = models.ForeignKey(
+        'Task', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='focus_sessions'
+    )
+    duration_minutes = models.PositiveIntegerField(
+        help_text='Planned duration in minutes'
+    )
+    actual_minutes = models.PositiveIntegerField(
+        default=0, help_text='Actual time focused in minutes'
+    )
+    session_type = models.CharField(
+        max_length=20, choices=SESSION_TYPE_CHOICES, default='work'
+    )
+    completed = models.BooleanField(default=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'focus_sessions'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['user', '-started_at']),
+            models.Index(fields=['user', 'completed']),
+        ]
+
+    def __str__(self):
+        return f"FocusSession {self.session_type} ({self.duration_minutes}min) - {self.user.email}"
+
+
+class DreamJournal(models.Model):
+    """Journal/notes entry associated with a dream."""
+
+    MOOD_CHOICES = [
+        ('excited', 'Excited'),
+        ('happy', 'Happy'),
+        ('neutral', 'Neutral'),
+        ('frustrated', 'Frustrated'),
+        ('motivated', 'Motivated'),
+        ('reflective', 'Reflective'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='journal_entries')
+    title = models.CharField(max_length=200, blank=True)
+    content = models.TextField(help_text='Journal entry content stored as HTML or markdown')
+    mood = models.CharField(max_length=20, blank=True, choices=MOOD_CHOICES)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'dream_journal_entries'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['dream', '-created_at']),
+        ]
+
+    def __str__(self):
+        label = self.title or self.content[:50]
+        return f"Journal: {label} ({self.dream.title})"
+
+
+class ProgressPhoto(models.Model):
+    """Progress photo for visual tracking of dream progress via AI analysis."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='progress_photos')
+
+    image = models.ImageField(upload_to='progress_photos/')
+    caption = EncryptedTextField(blank=True, default='')
+    ai_analysis = EncryptedTextField(blank=True, default='')
+
+    taken_at = models.DateTimeField(help_text='When the progress photo was taken')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'progress_photos'
+        ordering = ['-taken_at']
+        indexes = [
+            models.Index(fields=['dream', '-taken_at']),
+        ]
+
+    def __str__(self):
+        return f"Progress photo for {self.dream.title} ({self.taken_at.strftime('%Y-%m-%d')})"
 
 
 class VisionBoardImage(models.Model):

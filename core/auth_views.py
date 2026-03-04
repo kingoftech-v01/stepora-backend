@@ -249,9 +249,13 @@ class TwoFactorChallengeView(APIView):
         refresh = RefreshToken.for_user(user)
         data = {
             'access': str(refresh.access_token),
-            'refresh': str(refresh),
             'user': {'id': str(user.id), 'email': user.email},
         }
+
+        # Native clients need the refresh token in the body (can't read httpOnly cookies).
+        # Web clients get it as an httpOnly cookie only — never in the body.
+        if _is_native_request(request):
+            data['refresh'] = str(refresh)
 
         response = Response(data, status=http_status.HTTP_200_OK)
 
@@ -269,6 +273,75 @@ class TwoFactorChallengeView(APIView):
         )
 
         return response
+
+
+class VerifyEmailView(APIView):
+    """
+    Verify an email confirmation key sent by allauth.
+
+    The frontend SPA receives the key from the confirmation URL
+    (e.g. /verify-email?key=abc123) and posts it here to confirm
+    the email address.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
+
+    def _verify_key(self, request, key):
+        """Core verification logic shared by GET and POST."""
+        if not key:
+            return Response(
+                {'detail': 'Confirmation key is required.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        from allauth.account.models import EmailConfirmationHMAC, EmailConfirmation
+
+        # Try HMAC-based key first (allauth >= 0.53)
+        emailconfirmation = EmailConfirmationHMAC.from_key(key)
+        if not emailconfirmation:
+            # Fallback to DB-based key
+            try:
+                emailconfirmation = EmailConfirmation.objects.get(key=key)
+            except EmailConfirmation.DoesNotExist:
+                return Response(
+                    {'detail': 'Invalid or expired confirmation link. Please request a new one.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Confirm the email (idempotent if already verified)
+        if not emailconfirmation.email_address.verified:
+            emailconfirmation.confirm(request)
+
+        return Response({'detail': 'Email verified successfully.'})
+
+    def post(self, request):
+        key = (request.data.get('key') or '').strip()
+        return self._verify_key(request, key)
+
+    def get(self, request):
+        """Support GET for convenience — direct clicks from email."""
+        key = request.query_params.get('key', '').strip()
+        return self._verify_key(request, key)
+
+
+class ResendVerificationView(APIView):
+    """
+    Resend email verification to the authenticated user's primary email.
+
+    No email parameter accepted — uses the email from the JWT token.
+    This prevents users from triggering resends for other accounts.
+    """
+    throttle_classes = [AuthRateThrottle]
+
+    def post(self, request):
+        from allauth.account.models import EmailAddress
+        ea = EmailAddress.objects.filter(
+            user=request.user, primary=True, verified=False,
+        ).first()
+        if ea:
+            ea.send_confirmation(request)
+        # Always return OK to avoid leaking whether the email exists
+        return Response({'detail': 'ok'})
 
 
 class NativeAwareRegisterView(RegisterView):

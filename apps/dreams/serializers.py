@@ -5,11 +5,15 @@ Serializers for Dreams app.
 from rest_framework import serializers
 from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, FocusSession, DreamJournal, ProgressPhoto
 
 
 class TaskSerializer(serializers.ModelSerializer):
     """Serializer for Task model."""
+
+    chain_position = serializers.SerializerMethodField(
+        help_text='Position of this task within its chain (e.g. {position: 3, total: 5}).'
+    )
 
     class Meta:
         model = Task
@@ -19,9 +23,11 @@ class TaskSerializer(serializers.ModelSerializer):
             'expected_date', 'deadline_date',
             'recurrence', 'status', 'completed_at',
             'is_two_minute_start',
+            'chain_next_delay_days', 'chain_template_title',
+            'chain_parent', 'is_chain', 'chain_position',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at', 'chain_position']
         extra_kwargs = {
             'id': {'help_text': 'Unique identifier for the task.'},
             'goal': {'help_text': 'The goal this task belongs to.'},
@@ -37,9 +43,21 @@ class TaskSerializer(serializers.ModelSerializer):
             'status': {'help_text': 'Current status of the task.'},
             'completed_at': {'help_text': 'Timestamp when the task was completed.'},
             'is_two_minute_start': {'help_text': 'Whether this is a two-minute quick-start task.'},
+            'chain_next_delay_days': {'help_text': 'Days after completion to auto-create next task.'},
+            'chain_template_title': {'help_text': 'Custom title for the next chained task.'},
+            'chain_parent': {'help_text': 'Previous task in this chain.'},
+            'is_chain': {'help_text': 'Whether this task is part of a recurring chain.'},
             'created_at': {'help_text': 'Timestamp when the task was created.'},
             'updated_at': {'help_text': 'Timestamp when the task was last updated.'},
         }
+
+    def get_chain_position(self, obj):
+        if not obj.is_chain and obj.chain_next_delay_days is None:
+            return None
+        position, total = obj.get_chain_position()
+        if position is None:
+            return None
+        return {'position': position, 'total': total}
 
 
 class GoalSerializer(serializers.ModelSerializer):
@@ -172,6 +190,7 @@ class DreamSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'title', 'description', 'category',
             'target_date', 'priority', 'status',
+            'color',
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'is_public', 'is_favorited', 'vision_image_url',
             'calibration_status',
@@ -189,6 +208,7 @@ class DreamSerializer(serializers.ModelSerializer):
             'target_date': {'help_text': 'Target date for achieving the dream.'},
             'priority': {'help_text': 'Priority level of the dream.'},
             'status': {'help_text': 'Current status of the dream.'},
+            'color': {'help_text': 'Hex color for calendar display.'},
             'progress_percentage': {'help_text': 'Overall completion percentage of the dream.'},
             'completed_at': {'help_text': 'Timestamp when the dream was completed.'},
             'has_two_minute_start': {'help_text': 'Whether a two-minute quick-start task exists.'},
@@ -269,6 +289,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'title', 'description', 'category',
             'target_date', 'priority', 'status',
+            'color',
             'ai_analysis', 'vision_image_url',
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'is_public',
@@ -290,6 +311,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             'target_date': {'help_text': 'Target date for achieving the dream.'},
             'priority': {'help_text': 'Priority level of the dream.'},
             'status': {'help_text': 'Current status of the dream.'},
+            'color': {'help_text': 'Hex color for calendar display.'},
             'ai_analysis': {'help_text': 'AI-generated analysis of the dream.'},
             'vision_image_url': {'help_text': 'URL of the vision board image.'},
             'progress_percentage': {'help_text': 'Overall completion percentage of the dream.'},
@@ -472,7 +494,7 @@ class DreamCreateSerializer(serializers.ModelSerializer):
         model = Dream
         fields = [
             'id', 'title', 'description', 'category',
-            'target_date', 'priority'
+            'target_date', 'priority', 'color'
         ]
         read_only_fields = ['id']
         extra_kwargs = {
@@ -540,7 +562,7 @@ class DreamUpdateSerializer(serializers.ModelSerializer):
         model = Dream
         fields = [
             'title', 'description', 'category',
-            'target_date', 'priority', 'status', 'is_public'
+            'target_date', 'priority', 'status', 'is_public', 'color'
         ]
         extra_kwargs = {
             'title': {'help_text': 'Updated title for the dream.'},
@@ -608,7 +630,8 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             'goal', 'title', 'description', 'order',
             'scheduled_date', 'scheduled_time', 'duration_mins',
             'expected_date', 'deadline_date',
-            'recurrence', 'is_two_minute_start'
+            'recurrence', 'is_two_minute_start',
+            'chain_next_delay_days', 'chain_template_title', 'is_chain'
         ]
         extra_kwargs = {
             'goal': {'help_text': 'The goal this task belongs to.'},
@@ -622,6 +645,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             'deadline_date': {'help_text': 'Hard deadline for this task.'},
             'recurrence': {'help_text': 'Recurrence pattern for the task.'},
             'is_two_minute_start': {'help_text': 'Whether this is a two-minute quick-start task.'},
+            'chain_next_delay_days': {'help_text': 'Days after completion to auto-create next task.', 'required': False},
+            'chain_template_title': {'help_text': 'Custom title for the next chained task.', 'required': False},
+            'is_chain': {'help_text': 'Whether this task is part of a recurring chain.', 'required': False},
         }
 
     def validate_title(self, value):
@@ -631,6 +657,12 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     def validate_description(self, value):
         """Sanitize description."""
         return sanitize_text(value)
+
+    def validate_chain_next_delay_days(self, value):
+        """Validate chain delay is a positive number."""
+        if value is not None and value < 1:
+            raise serializers.ValidationError("Chain delay must be at least 1 day.")
+        return value
 
 
 class DreamTagSerializer(serializers.ModelSerializer):
@@ -705,14 +737,16 @@ class DreamTemplateSerializer(serializers.ModelSerializer):
 
     category_display = serializers.CharField(source='get_category_display', read_only=True, help_text='Human-readable category name.')
     difficulty_display = serializers.CharField(source='get_difficulty_display', read_only=True, help_text='Human-readable difficulty level.')
+    goals_count = serializers.SerializerMethodField(help_text='Number of goals in the template.')
 
     class Meta:
         model = DreamTemplate
         fields = [
             'id', 'title', 'description', 'category', 'category_display',
-            'template_goals', 'estimated_duration_days',
+            'template_goals', 'estimated_duration_days', 'suggested_timeline',
             'difficulty', 'difficulty_display',
-            'icon', 'is_featured', 'usage_count',
+            'icon', 'color', 'is_featured', 'usage_count',
+            'goals_count',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'usage_count', 'created_at', 'updated_at']
@@ -723,13 +757,18 @@ class DreamTemplateSerializer(serializers.ModelSerializer):
             'category': {'help_text': 'Category of the template.'},
             'template_goals': {'help_text': 'Predefined goals included in the template.'},
             'estimated_duration_days': {'help_text': 'Estimated number of days to complete.'},
+            'suggested_timeline': {'help_text': 'Human-readable suggested timeline.'},
             'difficulty': {'help_text': 'Difficulty level of the template.'},
             'icon': {'help_text': 'Icon identifier for the template.'},
+            'color': {'help_text': 'Accent color for template display.'},
             'is_featured': {'help_text': 'Whether the template is featured.'},
             'usage_count': {'help_text': 'Number of times this template has been used.'},
             'created_at': {'help_text': 'Timestamp when the template was created.'},
             'updated_at': {'help_text': 'Timestamp when the template was last updated.'},
         }
+
+    def get_goals_count(self, obj) -> int:
+        return len(obj.template_goals) if obj.template_goals else 0
 
 
 class DreamCollaboratorSerializer(serializers.ModelSerializer):
@@ -790,6 +829,42 @@ class VisionBoardImageSerializer(serializers.ModelSerializer):
         }
 
 
+class ProgressPhotoSerializer(serializers.ModelSerializer):
+    """Serializer for ProgressPhoto model."""
+
+    ai_analysis_data = serializers.SerializerMethodField(
+        help_text='Parsed AI analysis data (JSON object or null).'
+    )
+
+    class Meta:
+        model = ProgressPhoto
+        fields = [
+            'id', 'dream', 'image', 'caption', 'ai_analysis',
+            'ai_analysis_data', 'taken_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'ai_analysis', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the progress photo.'},
+            'dream': {'help_text': 'The dream this progress photo belongs to.'},
+            'image': {'help_text': 'Uploaded progress photo file.'},
+            'caption': {'help_text': 'User caption for the progress photo.'},
+            'ai_analysis': {'help_text': 'Raw AI analysis text.'},
+            'taken_at': {'help_text': 'When the progress photo was taken.'},
+            'created_at': {'help_text': 'Timestamp when the photo was uploaded.'},
+            'updated_at': {'help_text': 'Timestamp when the photo was last updated.'},
+        }
+
+    def get_ai_analysis_data(self, obj):
+        """Parse the AI analysis JSON if available."""
+        if not obj.ai_analysis:
+            return None
+        try:
+            import json
+            return json.loads(obj.ai_analysis)
+        except (json.JSONDecodeError, TypeError):
+            return {'analysis': obj.ai_analysis}
+
+
 class GoalCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating goals with sanitization."""
 
@@ -822,4 +897,64 @@ class GoalCreateSerializer(serializers.ModelSerializer):
 
     def validate_description(self, value):
         """Sanitize description."""
+        return sanitize_text(value)
+
+
+class FocusSessionSerializer(serializers.ModelSerializer):
+    """Serializer for FocusSession model."""
+
+    task_title = serializers.CharField(source='task.title', read_only=True, default=None)
+
+    class Meta:
+        model = FocusSession
+        fields = [
+            'id', 'user', 'task', 'task_title',
+            'duration_minutes', 'actual_minutes',
+            'session_type', 'completed',
+            'started_at', 'ended_at',
+        ]
+        read_only_fields = ['id', 'user', 'started_at', 'ended_at', 'task_title']
+
+
+class FocusSessionStartSerializer(serializers.Serializer):
+    """Serializer for starting a focus session."""
+
+    task_id = serializers.UUIDField(required=False, allow_null=True, help_text='Optional task to associate with the session.')
+    duration_minutes = serializers.IntegerField(min_value=1, max_value=120, help_text='Planned duration in minutes.')
+    session_type = serializers.ChoiceField(choices=['work', 'break'], default='work')
+
+
+class FocusSessionCompleteSerializer(serializers.Serializer):
+    """Serializer for completing a focus session."""
+
+    session_id = serializers.UUIDField(help_text='ID of the session to complete.')
+    actual_minutes = serializers.IntegerField(min_value=0, help_text='Actual minutes focused.')
+
+
+class DreamJournalSerializer(serializers.ModelSerializer):
+    """Serializer for DreamJournal model."""
+
+    class Meta:
+        model = DreamJournal
+        fields = [
+            'id', 'dream', 'title', 'content', 'mood',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the journal entry.'},
+            'dream': {'help_text': 'The dream this journal entry belongs to.'},
+            'title': {'help_text': 'Optional title for the journal entry.'},
+            'content': {'help_text': 'Journal entry content (HTML or markdown).'},
+            'mood': {'help_text': 'Mood tag for the entry.'},
+            'created_at': {'help_text': 'Timestamp when the entry was created.'},
+            'updated_at': {'help_text': 'Timestamp when the entry was last updated.'},
+        }
+
+    def validate_title(self, value):
+        """Sanitize title."""
+        return sanitize_text(value)
+
+    def validate_content(self, value):
+        """Sanitize content."""
         return sanitize_text(value)

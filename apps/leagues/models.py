@@ -17,6 +17,7 @@ League Tiers (by XP):
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils import timezone as django_timezone
@@ -459,3 +460,207 @@ class RankSnapshot(models.Model):
             f"{self.user.display_name or self.user.email} - "
             f"Rank #{self.rank} on {self.snapshot_date}"
         )
+
+
+class LeagueSeason(models.Model):
+    """
+    Represents a themed competitive season with rewards.
+
+    League seasons provide time-bounded, themed competitive periods with
+    rank-based rewards. Each season has a visual theme (colors, name) and
+    a set of tiered rewards that participants earn based on their final rank.
+    Only one league season can be active at a time.
+    """
+
+    THEME_CHOICES = [
+        ('growth', 'Growth'),
+        ('fire', 'Fire'),
+        ('ocean', 'Ocean'),
+        ('cosmic', 'Cosmic'),
+        ('aurora', 'Aurora'),
+        ('crystal', 'Crystal'),
+        ('storm', 'Storm'),
+        ('bloom', 'Bloom'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this league season.'
+    )
+    name = models.CharField(
+        max_length=200,
+        help_text='Display name of the season (e.g., "Season of Growth - Spring 2026").'
+    )
+    theme = models.CharField(
+        max_length=50,
+        choices=THEME_CHOICES,
+        default='growth',
+        help_text='Visual theme for the season (growth, fire, ocean, cosmic, etc.).'
+    )
+    description = models.TextField(
+        blank=True,
+        help_text='Description of the season theme and what makes it special.'
+    )
+    start_date = models.DateField(
+        help_text='When this season starts.'
+    )
+    end_date = models.DateField(
+        help_text='When this season ends.'
+    )
+    is_active = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Whether this season is currently active. Only one should be active at a time.'
+    )
+    rewards = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            'Tiered reward definitions. Each entry: '
+            '{"rank_min": 1, "rank_max": 3, "reward_type": "badge", '
+            '"reward_id": "gold_crown", "title": "Gold Crown Badge"}.'
+        )
+    )
+    theme_colors = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Theme color palette: {"primary": "#hex", "secondary": "#hex", "accent": "#hex"}.'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'league_seasons'
+        ordering = ['-start_date']
+        verbose_name = 'League Season'
+        verbose_name_plural = 'League Seasons'
+        indexes = [
+            models.Index(fields=['is_active'], name='idx_lseason_active'),
+            models.Index(fields=['start_date', 'end_date'], name='idx_lseason_dates'),
+        ]
+
+    def __str__(self):
+        status = "Active" if self.is_active else "Inactive"
+        return f"{self.name} ({status})"
+
+    @property
+    def is_current(self):
+        """Check if today falls within this season's dates."""
+        today = django_timezone.now().date()
+        return self.start_date <= today <= self.end_date
+
+    @property
+    def has_ended(self):
+        """Check if this season has ended."""
+        return django_timezone.now().date() > self.end_date
+
+    @property
+    def days_remaining(self):
+        """Return the number of days remaining in this season."""
+        if self.has_ended:
+            return 0
+        delta = self.end_date - django_timezone.now().date()
+        return max(0, delta.days)
+
+    @classmethod
+    def get_active_league_season(cls):
+        """Return the currently active league season, or None."""
+        key = 'active_league_season'
+        season = cache.get(key)
+        if season is None:
+            season = cls.objects.filter(is_active=True).first()
+            if season:
+                cache.set(key, season, 3600)
+        return season
+
+    def get_reward_for_rank(self, rank):
+        """Return the reward definition matching a given rank, or None."""
+        for reward in (self.rewards or []):
+            rank_min = reward.get('rank_min', 0)
+            rank_max = reward.get('rank_max', 0)
+            if rank_min <= rank <= rank_max:
+                return reward
+        return None
+
+
+class SeasonParticipant(models.Model):
+    """
+    Tracks a user's participation in a themed league season.
+
+    Records XP earned, final rank, and whether rewards have been claimed.
+    Each user can only participate once per season.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this participant record.'
+    )
+    season = models.ForeignKey(
+        LeagueSeason,
+        on_delete=models.CASCADE,
+        related_name='participants',
+        help_text='The league season this participation belongs to.'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='season_participations',
+        help_text='The user participating in the season.'
+    )
+    xp_earned = models.PositiveIntegerField(
+        default=0,
+        help_text='Total XP earned during this season.'
+    )
+    rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Final rank in the season (computed from XP).'
+    )
+    rewards_claimed = models.BooleanField(
+        default=False,
+        help_text='Whether the user has claimed their end-of-season rewards.'
+    )
+    joined_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text='When the user joined this season.'
+    )
+
+    class Meta:
+        db_table = 'season_participants'
+        unique_together = ('season', 'user')
+        ordering = ['-xp_earned']
+        verbose_name = 'Season Participant'
+        verbose_name_plural = 'Season Participants'
+        indexes = [
+            models.Index(
+                fields=['season', '-xp_earned'],
+                name='idx_sparticipant_season_xp'
+            ),
+            models.Index(
+                fields=['season', 'rank'],
+                name='idx_sparticipant_season_rank'
+            ),
+            models.Index(
+                fields=['user', 'season'],
+                name='idx_sparticipant_user_season'
+            ),
+        ]
+
+    def __str__(self):
+        rank_str = f"Rank #{self.rank}" if self.rank else "Unranked"
+        return (
+            f"{self.user.display_name or self.user.email} - "
+            f"{self.season.name} - {rank_str} ({self.xp_earned} XP)"
+        )
+
+    def claim_rewards(self):
+        """Mark rewards as claimed if not already done."""
+        if not self.rewards_claimed:
+            self.rewards_claimed = True
+            self.save(update_fields=['rewards_claimed'])
+            return True
+        return False

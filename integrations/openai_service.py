@@ -454,6 +454,385 @@ IMPORTANT: Respond in the user's language.""",
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
+    # ── Buddy Compatibility Scoring ───────────────────────────────
+
+    @openai_retry
+    def score_buddy_compatibility(self, user1_profile, user2_profile):
+        """
+        Score the compatibility between two potential dream accountability buddies.
+
+        Args:
+            user1_profile: Dict with keys: name, dreams (list of titles),
+                           categories (list), activity_level (str), personality (str),
+                           level (int), streak (int), bio (str)
+            user2_profile: Same structure as user1_profile
+
+        Returns:
+            Dict with: compatibility_score (float 0-1), reasons (list of str),
+                       shared_interests (list of str), potential_challenges (list of str),
+                       suggested_icebreaker (str)
+        """
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "You are DreamPlanner's buddy-matching AI. "
+            "Score the compatibility between these two dream accountability buddies. "
+            "Consider dream alignment, activity levels, personality compatibility, "
+            "and how well they could motivate each other.\n\n"
+            "RULES:\n"
+            "- compatibility_score must be a float between 0.0 and 1.0.\n"
+            "- reasons: 2-4 short sentences explaining why they match well (or don't).\n"
+            "- shared_interests: list of interest areas they have in common.\n"
+            "- potential_challenges: 1-3 short sentences about possible friction.\n"
+            "- suggested_icebreaker: a friendly opening message one could send to the other.\n"
+            "- Return ONLY a valid JSON object, nothing else.\n\n"
+            "RESPONSE FORMAT:\n"
+            '{\n'
+            '  "compatibility_score": 0.82,\n'
+            '  "reasons": ["Both are focused on health and fitness goals", "Similar activity levels"],\n'
+            '  "shared_interests": ["health", "personal_growth"],\n'
+            '  "potential_challenges": ["Different experience levels might cause pacing issues"],\n'
+            '  "suggested_icebreaker": "Hey! I noticed we both have fitness goals — want to keep each other accountable?"\n'
+            '}\n'
+        )
+
+        user_message = (
+            f"USER 1:\n"
+            f"- Name: {user1_profile.get('name', 'Anonymous')}\n"
+            f"- Dreams: {', '.join(user1_profile.get('dreams', [])) or 'None listed'}\n"
+            f"- Categories: {', '.join(user1_profile.get('categories', [])) or 'None'}\n"
+            f"- Activity Level: {user1_profile.get('activity_level', 'unknown')}\n"
+            f"- Personality/Dreamer Type: {user1_profile.get('personality', 'unknown')}\n"
+            f"- Level: {user1_profile.get('level', 1)}\n"
+            f"- Streak: {user1_profile.get('streak', 0)} days\n"
+            f"- Bio: {user1_profile.get('bio', '')}\n\n"
+            f"USER 2:\n"
+            f"- Name: {user2_profile.get('name', 'Anonymous')}\n"
+            f"- Dreams: {', '.join(user2_profile.get('dreams', [])) or 'None listed'}\n"
+            f"- Categories: {', '.join(user2_profile.get('categories', [])) or 'None'}\n"
+            f"- Activity Level: {user2_profile.get('activity_level', 'unknown')}\n"
+            f"- Personality/Dreamer Type: {user2_profile.get('personality', 'unknown')}\n"
+            f"- Level: {user2_profile.get('level', 1)}\n"
+            f"- Streak: {user2_profile.get('streak', 0)} days\n"
+            f"- Bio: {user2_profile.get('bio', '')}\n"
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_message},
+                ],
+                temperature=0.4,
+                max_tokens=600,
+                timeout=self.timeout,
+            )
+
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith('```'):
+                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            result = json.loads(content)
+            if not isinstance(result, dict):
+                return self._default_compatibility_result()
+
+            # Validate and sanitize the response
+            score = result.get('compatibility_score', 0.5)
+            if not isinstance(score, (int, float)) or score < 0 or score > 1:
+                score = 0.5
+
+            reasons = result.get('reasons', [])
+            if not isinstance(reasons, list):
+                reasons = []
+            reasons = [str(r)[:300] for r in reasons if r][:5]
+
+            shared_interests = result.get('shared_interests', [])
+            if not isinstance(shared_interests, list):
+                shared_interests = []
+            shared_interests = [str(s)[:100] for s in shared_interests if s][:10]
+
+            potential_challenges = result.get('potential_challenges', [])
+            if not isinstance(potential_challenges, list):
+                potential_challenges = []
+            potential_challenges = [str(c)[:300] for c in potential_challenges if c][:5]
+
+            suggested_icebreaker = result.get('suggested_icebreaker', '')
+            if not isinstance(suggested_icebreaker, str) or len(suggested_icebreaker) > 500:
+                suggested_icebreaker = 'Hey! I think we have similar goals — want to be accountability buddies?'
+
+            return {
+                'compatibility_score': round(score, 2),
+                'reasons': reasons,
+                'shared_interests': shared_interests,
+                'potential_challenges': potential_challenges,
+                'suggested_icebreaker': suggested_icebreaker,
+            }
+
+        except (json.JSONDecodeError, KeyError):
+            logger.warning("Failed to parse buddy compatibility JSON, returning defaults")
+            return self._default_compatibility_result()
+        except openai.APIError as e:
+            raise OpenAIError(f"Buddy compatibility scoring failed: {str(e)}")
+
+    @staticmethod
+    def _default_compatibility_result():
+        """Return a safe default when AI scoring fails."""
+        return {
+            'compatibility_score': 0.5,
+            'reasons': ['Could not determine detailed compatibility at this time.'],
+            'shared_interests': [],
+            'potential_challenges': [],
+            'suggested_icebreaker': 'Hey! Want to be accountability buddies and help each other reach our goals?',
+        }
+
+    # ── Chat Memory Methods ────────────────────────────────────────
+
+    @openai_retry
+    def summarize_voice_note(self, transcript, conversation_context=''):
+        """
+        Summarize a voice note transcript with key points and action items.
+
+        Args:
+            transcript: The transcribed text from the voice message.
+            conversation_context: Optional recent conversation context for better summarization.
+
+        Returns:
+            Dict with 'summary', 'key_points', 'action_items', and 'mood'.
+        """
+        context_section = ''
+        if conversation_context:
+            context_section = (
+                f"\n\nCONVERSATION CONTEXT (for reference):\n{conversation_context}\n"
+            )
+
+        system_prompt = (
+            "Summarize this voice note concisely. Extract key points, action items, "
+            "and any decisions or commitments made.\n\n"
+            "RULES:\n"
+            "- The summary should be 1-3 sentences capturing the essence.\n"
+            "- Key points: list the most important ideas or statements (max 5).\n"
+            "- Action items: extract any tasks, to-dos, or commitments with priority "
+            "(high, medium, low). Only include real action items, not general statements.\n"
+            "- Mood: detect the overall emotional tone in one word (e.g., motivated, "
+            "anxious, excited, neutral, frustrated, hopeful).\n"
+            "- If the voice note is very short or trivial, still provide a brief summary.\n"
+            "- Return ONLY a valid JSON object.\n\n"
+            "RESPONSE FORMAT:\n"
+            '{\n'
+            '  "summary": "Brief summary of the voice note",\n'
+            '  "key_points": ["Point 1", "Point 2"],\n'
+            '  "action_items": [{"item": "Do something", "priority": "high"}],\n'
+            '  "mood": "motivated"\n'
+            '}\n'
+            f"{context_section}"
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': f"Summarize this voice note transcript:\n\n{transcript}"},
+                ],
+                temperature=0.3,
+                max_tokens=600,
+                timeout=self.timeout,
+            )
+
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith('```'):
+                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            result = json.loads(content)
+            if not isinstance(result, dict):
+                return {
+                    'summary': transcript[:200],
+                    'key_points': [],
+                    'action_items': [],
+                    'mood': 'neutral',
+                }
+
+            # Validate and sanitize the response
+            summary = result.get('summary', transcript[:200])
+            if not isinstance(summary, str) or len(summary) > 1000:
+                summary = transcript[:200]
+
+            key_points = result.get('key_points', [])
+            if not isinstance(key_points, list):
+                key_points = []
+            key_points = [str(p)[:300] for p in key_points if p][:5]
+
+            action_items = result.get('action_items', [])
+            if not isinstance(action_items, list):
+                action_items = []
+            valid_priorities = {'high', 'medium', 'low'}
+            validated_actions = []
+            for item in action_items[:10]:
+                if isinstance(item, dict) and item.get('item'):
+                    priority = item.get('priority', 'medium')
+                    if priority not in valid_priorities:
+                        priority = 'medium'
+                    validated_actions.append({
+                        'item': str(item['item'])[:300],
+                        'priority': priority,
+                    })
+            action_items = validated_actions
+
+            mood = result.get('mood', 'neutral')
+            if not isinstance(mood, str) or len(mood) > 30:
+                mood = 'neutral'
+
+            return {
+                'summary': summary,
+                'key_points': key_points,
+                'action_items': action_items,
+                'mood': mood,
+            }
+
+        except (json.JSONDecodeError, KeyError):
+            logger.warning("Failed to parse voice note summary JSON, returning basic summary")
+            return {
+                'summary': transcript[:200],
+                'key_points': [],
+                'action_items': [],
+                'mood': 'neutral',
+            }
+        except openai.APIError as e:
+            raise OpenAIError(f"Voice note summarization failed: {str(e)}")
+
+    def extract_memories(self, messages, existing_memories=None):
+        """
+        Extract key facts, preferences, and context from recent messages.
+
+        Args:
+            messages: List of recent message dicts with 'role' and 'content'
+            existing_memories: List of dicts with existing memory items to avoid duplicates
+
+        Returns:
+            List of dicts: [{'key': str, 'content': str, 'importance': int}]
+        """
+        existing_text = ""
+        if existing_memories:
+            existing_text = "\n".join(
+                f"- [{m['key']}] {m['content']}" for m in existing_memories
+            )
+
+        conversation_text = "\n".join(
+            f"{m['role']}: {m['content']}" for m in messages
+            if m['role'] in ('user', 'assistant')
+        )
+
+        system_prompt = (
+            "You are a memory extraction assistant. Analyze the conversation below and extract "
+            "key facts, preferences, and context the user shared that would be useful in future conversations.\n\n"
+            "RULES:\n"
+            "- Only extract information explicitly stated by the USER (not the assistant).\n"
+            "- Each memory must be a concise, standalone fact (1-2 sentences max).\n"
+            "- Categorize each memory as one of: preference, fact, goal_context, style.\n"
+            "  - preference: user preferences (likes, dislikes, how they want to be addressed)\n"
+            "  - fact: personal facts (name, job, timezone, family situation)\n"
+            "  - goal_context: context about their goals, dreams, obstacles, progress\n"
+            "  - style: communication style preferences (formal/casual, language, emoji usage)\n"
+            "- Rate importance 1-5 (1=nice-to-know, 3=useful, 5=critical for personalization).\n"
+            "- Do NOT extract trivial or transient information.\n"
+            "- Do NOT duplicate existing memories listed below.\n"
+            "- Return ONLY a valid JSON array. If nothing to extract, return [].\n\n"
+            "EXISTING MEMORIES (do not duplicate):\n"
+            f"{existing_text or '(none)'}\n\n"
+            "RESPONSE FORMAT:\n"
+            '[{"key": "fact", "content": "User is a software engineer", "importance": 3}]\n'
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': f"Extract memories from this conversation:\n\n{conversation_text}"},
+                ],
+                temperature=0.3,
+                max_tokens=800,
+                timeout=self.timeout,
+            )
+
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith('```'):
+                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            memories = json.loads(content)
+            if not isinstance(memories, list):
+                return []
+
+            # Validate and sanitize each memory
+            valid_keys = {'preference', 'fact', 'goal_context', 'style'}
+            validated = []
+            for m in memories:
+                if not isinstance(m, dict):
+                    continue
+                key = m.get('key', 'fact')
+                if key not in valid_keys:
+                    key = 'fact'
+                importance = m.get('importance', 3)
+                if not isinstance(importance, int) or importance < 1 or importance > 5:
+                    importance = 3
+                content_text = m.get('content', '').strip()
+                if content_text and len(content_text) <= 500:
+                    validated.append({
+                        'key': key,
+                        'content': content_text,
+                        'importance': importance,
+                    })
+
+            return validated
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            logger.warning(f"Memory extraction failed: {e}")
+            return []
+        except Exception as e:
+            logger.warning(f"Unexpected error in memory extraction: {e}")
+            return []
+
+    @staticmethod
+    def build_memory_context(user):
+        """
+        Build a context string from the user's active chat memories.
+
+        Args:
+            user: The User instance
+
+        Returns:
+            str: Formatted context string for inclusion in the system prompt,
+                 or empty string if no memories exist.
+        """
+        from apps.conversations.models import ChatMemory
+
+        memories = ChatMemory.objects.filter(
+            user=user, is_active=True
+        ).order_by('-importance', '-updated_at')[:30]
+
+        if not memories:
+            return ''
+
+        lines = []
+        category_labels = {
+            'preference': 'Preference',
+            'fact': 'Personal Fact',
+            'goal_context': 'Goal Context',
+            'style': 'Communication Style',
+        }
+        for m in memories:
+            label = category_labels.get(m.key, m.key.title())
+            lines.append(f"- [{label}] {m.content}")
+
+        return (
+            "USER MEMORY (things you remember about this user from previous conversations — "
+            "use these to personalize your responses, but do NOT repeat them back explicitly "
+            "unless relevant):\n" + "\n".join(lines)
+        )
+
     def generate_plan(self, dream_title, dream_description, user_context, target_date=None, progress_callback=None):
         """
         Generate a complete structured plan for a dream.
@@ -1077,6 +1456,180 @@ Required JSON format:
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Analysis failed: {str(e)}")
 
+    @openai_retry
+    def auto_categorize(self, dream_title, dream_description):
+        """
+        Analyze a dream and suggest the best category and relevant tags.
+
+        Args:
+            dream_title: Title of the dream/goal
+            dream_description: Detailed description of the dream
+
+        Returns:
+            Dict with category, confidence, tags (with relevance scores), and reasoning
+        """
+        valid_categories = ['health', 'career', 'finance', 'hobbies', 'personal', 'relationships']
+
+        prompt = f"""Analyze this dream/goal and suggest the best category and relevant tags.
+
+TITLE: {dream_title}
+DESCRIPTION: {dream_description}
+
+VALID CATEGORIES (pick exactly one): {', '.join(valid_categories)}
+
+Respond with this exact JSON format:
+{{
+  "category": "one of the valid categories listed above",
+  "confidence": 0.95,
+  "tags": [
+    {{"name": "tag-name-lowercase", "relevance": 0.9}},
+    {{"name": "another-tag", "relevance": 0.7}}
+  ],
+  "reasoning": "Brief explanation of why this category and these tags were chosen"
+}}
+
+RULES:
+- "category" MUST be one of: {', '.join(valid_categories)}
+- "confidence" is a float between 0.0 and 1.0 indicating how confident you are in the category choice
+- "tags" should be 3-6 relevant tags, lowercase, hyphenated (e.g. "weight-loss", "side-project")
+- Each tag's "relevance" is a float between 0.0 and 1.0
+- Tags should be specific and useful for filtering/grouping dreams
+- "reasoning" should be 1-2 sentences explaining the categorization"""
+
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You analyze dreams/goals and suggest categories and tags. Respond only in JSON.'},
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+        )
+
+        try:
+            result = json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Auto-categorize failed: {str(e)}")
+
+        # Validate and sanitize the response
+        category = result.get('category', '')
+        if category not in valid_categories:
+            # Fall back to closest match or 'personal'
+            category = 'personal'
+
+        confidence = result.get('confidence', 0.5)
+        if not isinstance(confidence, (int, float)):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, float(confidence)))
+
+        tags = result.get('tags', [])
+        sanitized_tags = []
+        for tag in tags[:6]:  # Max 6 tags
+            if isinstance(tag, dict) and 'name' in tag:
+                tag_name = str(tag['name']).lower().strip()[:50]
+                tag_relevance = tag.get('relevance', 0.5)
+                if not isinstance(tag_relevance, (int, float)):
+                    tag_relevance = 0.5
+                tag_relevance = max(0.0, min(1.0, float(tag_relevance)))
+                if tag_name:
+                    sanitized_tags.append({
+                        'name': tag_name,
+                        'relevance': tag_relevance,
+                    })
+
+        return {
+            'category': category,
+            'confidence': confidence,
+            'tags': sanitized_tags,
+            'reasoning': str(result.get('reasoning', ''))[:500],
+        }
+
+    @openai_retry
+    def smart_analysis(self, dreams_data):
+        """
+        Perform cross-dream pattern recognition across all of a user's dreams.
+
+        Args:
+            dreams_data: List of dicts with dream info (title, description,
+                         progress, category, goals, tasks).
+
+        Returns:
+            Dict with patterns, insights, synergies, and risk_areas.
+        """
+        dreams_summary = json.dumps(dreams_data, indent=2, default=str)
+
+        system_prompt = self.ETHICAL_PREAMBLE + """You are DreamPlanner's Smart Analysis engine. You analyze ALL of a user's dreams together to find cross-dream patterns, synergies, and risks.
+
+Your job is to look across the user's entire dream portfolio and identify:
+1. PATTERNS — recurring themes, behaviors, or tendencies across dreams
+2. INSIGHTS — non-obvious observations with actionable tips
+3. SYNERGIES — connections between dreams that could be leveraged
+4. RISK AREAS — dreams that may be at risk and how to mitigate
+
+Be specific, actionable, and reference actual dream titles. Do NOT be generic.
+Respond ONLY with valid JSON in the exact format specified."""
+
+        prompt = f"""Analyze these dreams together and find cross-dream patterns:
+
+{dreams_summary}
+
+Respond with this exact JSON structure:
+{{
+  "patterns": [
+    {{
+      "type": "theme|behavior|resource|timing",
+      "description": "Description of the pattern found",
+      "dreams_involved": ["Dream Title 1", "Dream Title 2"]
+    }}
+  ],
+  "insights": [
+    {{
+      "insight": "A non-obvious observation about the user's dream portfolio",
+      "actionable_tip": "Specific action the user can take based on this insight"
+    }}
+  ],
+  "synergies": [
+    {{
+      "dream1": "First Dream Title",
+      "dream2": "Second Dream Title",
+      "connection": "How these dreams are connected",
+      "suggestion": "How to leverage this connection"
+    }}
+  ],
+  "risk_areas": [
+    {{
+      "dream": "Dream Title",
+      "risk": "What the risk is",
+      "mitigation": "How to mitigate this risk"
+    }}
+  ]
+}}
+
+Rules:
+- Return 2-5 items per section (fewer if the user has few dreams)
+- Reference actual dream titles from the data
+- Be specific and actionable, not generic
+- If user has only 1 dream, focus on insights and risks (fewer synergies/patterns)"""
+
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.4,
+            max_tokens=2000,
+            response_format={"type": "json_object"},
+            timeout=60,
+        )
+
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Smart analysis failed: {str(e)}")
+
     def generate_motivational_message(self, user_name, goal_title, progress_percentage, streak_days):
         """Generate a short motivational message personalized for the user."""
         prompt = f"""User: {user_name}
@@ -1125,6 +1678,87 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
         except openai.APIError as e:
             # Fallback
             return "Take 2 minutes to write down 3 reasons why this goal is important to you"
+
+    @openai_retry
+    def generate_motivation(self, mood, dream_progress_summary, recent_completions, current_streak):
+        """
+        Generate a personalized motivational message based on the user's current mood
+        and dream progress.
+
+        Args:
+            mood: One of 'excited', 'motivated', 'neutral', 'tired', 'frustrated', 'anxious', 'sad'
+            dream_progress_summary: String summarising the user's active dreams and progress
+            recent_completions: String listing recently completed tasks/goals
+            current_streak: Integer streak day count
+
+        Returns:
+            Dict with 'message', 'affirmation', 'suggested_action', 'mood_emoji'
+        """
+        mood_emojis = {
+            'excited': '\U0001f929',
+            'motivated': '\U0001f4aa',
+            'neutral': '\U0001f610',
+            'tired': '\U0001f634',
+            'frustrated': '\U0001f624',
+            'anxious': '\U0001f630',
+            'sad': '\U0001f622',
+        }
+
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Generate a warm, personalized motivational message (2-3 sentences) "
+            "that acknowledges the user's current mood and connects to their specific "
+            "dreams and progress. Be genuine, not generic.\n\n"
+            "You MUST respond ONLY with valid JSON in this exact format:\n"
+            "{\n"
+            '  "message": "The motivational message (2-3 sentences)",\n'
+            '  "affirmation": "A short personal affirmation (1 sentence)",\n'
+            '  "suggested_action": "One concrete small action they can take right now",\n'
+            '  "mood_emoji": "A single emoji that matches their mood"\n'
+            "}\n\n"
+            "IMPORTANT: Always respond in the user's language if detectable from dream titles."
+        )
+
+        prompt = (
+            f"The user is currently feeling: {mood}\n\n"
+            f"Dream progress summary:\n{dream_progress_summary or 'No active dreams yet.'}\n\n"
+            f"Recent completions:\n{recent_completions or 'No recent completions.'}\n\n"
+            f"Current streak: {current_streak} day(s)\n\n"
+            "Generate a warm, personalized motivational response as JSON."
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.8,
+                max_tokens=400,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Ensure all expected keys are present with fallbacks
+            return {
+                'message': result.get('message', 'Keep going, you are doing great!'),
+                'affirmation': result.get('affirmation', 'You have the power to achieve your dreams.'),
+                'suggested_action': result.get('suggested_action', 'Take a moment to review your next task.'),
+                'mood_emoji': result.get('mood_emoji', mood_emojis.get(mood, '\U0001f31f')),
+            }
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            logger.warning(f"generate_motivation failed: {e}")
+            # Return a sensible fallback so the user still gets something
+            return {
+                'message': 'Every step forward counts, no matter how small. You are making progress!',
+                'affirmation': 'You are capable of amazing things.',
+                'suggested_action': 'Take 5 minutes to review your goals and celebrate how far you have come.',
+                'mood_emoji': mood_emojis.get(mood, '\U0001f31f'),
+            }
 
     def generate_rescue_message(self, user_name, days_inactive, last_goal_title):
         """Generate an empathetic rescue message for inactive users."""
@@ -1232,6 +1866,92 @@ Generate an empathetic message (2-3 sentences) that:
 
         except openai.APIError as e:
             raise OpenAIError(f"Image analysis failed: {str(e)}")
+
+    @openai_retry
+    def analyze_progress_image(self, image_url, dream_title, dream_description, previous_analyses=None):
+        """
+        Analyze a progress photo in the context of a user's dream using GPT-4 Vision.
+
+        Args:
+            image_url: URL or base64 data URI of the progress photo.
+            dream_title: Title of the dream for context.
+            dream_description: Description of the dream.
+            previous_analyses: Optional list of previous analysis strings for comparison.
+
+        Returns:
+            Dict with 'analysis', 'progress_indicators', 'comparison_to_previous', 'encouragement'.
+        """
+        try:
+            previous_context = ""
+            if previous_analyses and len(previous_analyses) > 0:
+                recent = previous_analyses[-3:]  # Last 3 analyses for context
+                previous_context = "\n\nPrevious progress analyses (most recent last):\n"
+                for i, analysis in enumerate(recent, 1):
+                    previous_context += f"{i}. {analysis}\n"
+
+            system_prompt = self.ETHICAL_PREAMBLE + (
+                "You are DreamPlanner's visual progress analyst. "
+                "Analyze this progress photo in the context of the user's dream. "
+                "Identify visible progress, improvements, or areas of concern. "
+                "Be encouraging but honest. Focus on concrete observations.\n\n"
+                "Respond ONLY with a JSON object in this exact format:\n"
+                "{\n"
+                '  "analysis": "Detailed analysis of visible progress in the photo",\n'
+                '  "progress_indicators": [\n'
+                '    {"indicator": "What you observe", "status": "improved|maintained|needs_attention"}\n'
+                "  ],\n"
+                '  "comparison_to_previous": "How this compares to previous photos (null if no previous)",\n'
+                '  "encouragement": "A motivational message based on the observed progress"\n'
+                "}"
+            )
+
+            user_prompt = (
+                f'Dream: "{dream_title}"\n'
+                f'Description: {dream_description}\n'
+                f'{previous_context}\n'
+                'Analyze this progress photo and provide your assessment.'
+            )
+
+            user_content = [
+                {'type': 'text', 'text': user_prompt},
+                {'type': 'image_url', 'image_url': {'url': image_url}},
+            ]
+
+            response = _client.chat.completions.create(
+                model='gpt-4o',
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_content},
+                ],
+                max_tokens=1000,
+                temperature=0.5,
+                response_format={"type": "json_object"},
+                timeout=60,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalize the response structure
+            return {
+                'analysis': result.get('analysis', ''),
+                'progress_indicators': result.get('progress_indicators', []),
+                'comparison_to_previous': result.get('comparison_to_previous'),
+                'encouragement': result.get('encouragement', ''),
+                'tokens_used': response.usage.total_tokens,
+            }
+
+        except json.JSONDecodeError:
+            # If JSON parsing fails, return raw content
+            raw = response.choices[0].message.content if response else ''
+            return {
+                'analysis': raw,
+                'progress_indicators': [],
+                'comparison_to_previous': None,
+                'encouragement': '',
+                'tokens_used': 0,
+            }
+        except openai.APIError as e:
+            raise OpenAIError(f"Progress image analysis failed: {str(e)}")
 
     @openai_retry
     def predict_obstacles(self, dream_title, dream_description):
@@ -1394,3 +2114,1549 @@ Cinematic photorealistic photograph, shot on a high-end DSLR camera with natural
 
         except openai.APIError as e:
             raise OpenAIError(f"Image generation failed: {str(e)}")
+
+    @openai_retry
+    def prioritize_tasks(self, tasks, energy_profile, time_of_day):
+        """
+        Analyze pending tasks and suggest the optimal order based on
+        energy levels, deadlines, task dependencies, and the Eisenhower matrix.
+
+        Args:
+            tasks: List of dicts with task_id, title, dream, deadline,
+                   estimated_duration, priority.
+            energy_profile: Dict with peak_hours, low_energy_hours,
+                            energy_pattern (morning_person|night_owl|steady).
+            time_of_day: Current hour (0-23) to contextualise suggestions.
+
+        Returns:
+            Dict with prioritized_tasks, focus_task, and quick_wins.
+        """
+        prompt = f"""Here are the user's pending tasks for today:
+{json.dumps(tasks, ensure_ascii=False, indent=2)}
+
+User's energy profile:
+{json.dumps(energy_profile or {}, ensure_ascii=False, indent=2)}
+
+Current time of day (24h): {time_of_day}
+
+Analyze these tasks and suggest the optimal order. Consider:
+1. The user's energy levels throughout the day (peak hours vs low-energy hours)
+2. Deadlines and urgency (Eisenhower matrix: urgent+important first)
+3. Task estimated durations (batch short tasks, protect deep-work blocks)
+4. The user's energy pattern (morning_person, night_owl, or steady)
+
+Respond ONLY with JSON in this exact format:
+{{
+  "prioritized_tasks": [
+    {{
+      "task_id": "uuid",
+      "rank": 1,
+      "reason": "Short explanation of why this rank",
+      "suggested_time": "HH:MM",
+      "energy_match": "high|medium|low"
+    }}
+  ],
+  "focus_task": {{
+    "task_id": "uuid of the single most important task to focus on",
+    "reason": "Why this is the #1 priority right now"
+  }},
+  "quick_wins": [
+    {{
+      "task_id": "uuid",
+      "reason": "Why this is a quick win (e.g. under 15 min, easy, momentum builder)"
+    }}
+  ]
+}}"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'You are a productivity coach. Analyze these tasks and suggest '
+                            'the optimal order based on energy levels, deadlines, task '
+                            'dependencies, and the Eisenhower matrix. Respond only in JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.4,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure top-level keys always present
+            if 'prioritized_tasks' not in result:
+                result['prioritized_tasks'] = []
+            if 'focus_task' not in result:
+                result['focus_task'] = None
+            if 'quick_wins' not in result:
+                result['quick_wins'] = []
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Task prioritization failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Task prioritization failed: {str(e)}")
+
+    GOAL_REFINE_SYSTEM_PROMPT = ETHICAL_PREAMBLE + """You are a goal-setting coach using the SMART framework. Ask one clarifying question at a time to help the user refine their goal. After enough information, propose a refined SMART goal with measurable milestones.
+
+SMART framework:
+- Specific: Clearly defined, not vague
+- Measurable: Has concrete metrics to track progress
+- Achievable: Realistic given the user's context
+- Relevant: Aligned with their dream/vision
+- Time-bound: Has a clear timeline and deadlines
+
+CONVERSATION FLOW:
+1. First message: Acknowledge the current goal, identify what's vague, ask ONE clarifying question
+2. Middle messages: Continue asking ONE question at a time about missing SMART criteria
+3. Final message: When you have enough info, propose the refined SMART goal
+
+RESPONSE FORMAT: You MUST respond with valid JSON in this exact format:
+{
+  "message": "Your conversational message to the user (acknowledgment, question, or proposal)",
+  "refined_goal": null,
+  "milestones": null,
+  "is_complete": false
+}
+
+When you have enough information to propose a refined goal, respond with:
+{
+  "message": "Here's your refined SMART goal based on our conversation...",
+  "refined_goal": {
+    "title": "Concise, specific goal title",
+    "description": "Detailed SMART goal description",
+    "measurable_target": "The specific metric to track (e.g., 'Run 5K in under 30 minutes')",
+    "timeline": "Specific timeline (e.g., '12 weeks from today')"
+  },
+  "milestones": [
+    {"title": "Milestone 1 title", "target_date": "2-4 weeks from start"},
+    {"title": "Milestone 2 title", "target_date": "4-8 weeks from start"},
+    {"title": "Milestone 3 title", "target_date": "8-12 weeks from start"}
+  ],
+  "is_complete": true
+}
+
+RULES:
+- Ask only ONE question per message
+- Be encouraging and conversational, not robotic
+- Always respond in the user's language
+- Suggest 3-5 milestones when proposing the refined goal
+- Make milestones progressive and achievable
+- ALWAYS respond with valid JSON — no text outside the JSON object"""
+
+    @openai_retry
+    def refine_goal(self, goal_title, goal_description, dream_context, conversation_history):
+        """
+        Multi-turn conversational goal refinement using the SMART framework.
+
+        Args:
+            goal_title: Current goal title
+            goal_description: Current goal description
+            dream_context: Dict with dream title, description, category
+            conversation_history: List of {role, content} message dicts
+
+        Returns:
+            Dict with message, refined_goal (or None), milestones (or None), is_complete
+        """
+        # Build the initial context message
+        context_parts = [f"GOAL TO REFINE:\nTitle: {goal_title}"]
+        if goal_description:
+            context_parts.append(f"Description: {goal_description}")
+        if dream_context:
+            context_parts.append(f"\nDREAM CONTEXT:")
+            if dream_context.get('title'):
+                context_parts.append(f"Dream: {dream_context['title']}")
+            if dream_context.get('description'):
+                context_parts.append(f"Dream description: {dream_context['description'][:300]}")
+            if dream_context.get('category'):
+                context_parts.append(f"Category: {dream_context['category']}")
+
+        context_message = "\n".join(context_parts)
+
+        # Build full messages list
+        messages = [
+            {'role': 'system', 'content': self.GOAL_REFINE_SYSTEM_PROMPT},
+            {'role': 'user', 'content': context_message},
+        ]
+
+        # Append conversation history (multi-turn)
+        if conversation_history:
+            for msg in conversation_history:
+                messages.append({
+                    'role': msg.get('role', 'user'),
+                    'content': msg.get('content', ''),
+                })
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise keys
+            if 'message' not in result:
+                result['message'] = result.get('response', 'I can help you refine this goal. Could you tell me more about what you want to achieve?')
+            if 'refined_goal' not in result:
+                result['refined_goal'] = None
+            if 'milestones' not in result:
+                result['milestones'] = None
+            if 'is_complete' not in result:
+                result['is_complete'] = False
+
+            result['tokens_used'] = response.usage.total_tokens
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Goal refinement failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Goal refinement failed: {str(e)}")
+
+    @openai_retry
+    def predict_obstacles(self, dream_info, goals_data, tasks_data, existing_obstacles, past_patterns):
+        """
+        Predict potential obstacles for a dream and suggest preventive measures.
+
+        Args:
+            dream_info: Dict with title, description, category, timeline
+            goals_data: List of goal dicts (title, description, status)
+            tasks_data: List of task dicts (title, status, duration)
+            existing_obstacles: List of existing obstacle dicts (title, description, status)
+            past_patterns: List of dicts describing the user's past obstacle patterns
+
+        Returns:
+            Dict with predictions list
+        """
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Analyze this dream/goal and predict likely obstacles the user may face. "
+            "For each obstacle, suggest preventive strategies. Consider common failure patterns. "
+            "Be specific and actionable — reference the user's actual dream, goals, and context. "
+            "Respond ONLY with valid JSON in the exact format specified."
+        )
+
+        prompt = f"""Predict potential obstacles for this dream and suggest preventive measures.
+
+DREAM INFO:
+- Title: {dream_info.get('title', 'N/A')}
+- Description: {dream_info.get('description', 'N/A')}
+- Category: {dream_info.get('category', 'N/A')}
+- Target Date: {dream_info.get('target_date', 'N/A')}
+- Progress: {dream_info.get('progress', 0)}%
+
+CURRENT GOALS ({len(goals_data)}):
+{json.dumps(goals_data, indent=2, default=str)}
+
+CURRENT TASKS (sample):
+{json.dumps(tasks_data[:20], indent=2, default=str)}
+
+EXISTING OBSTACLES ({len(existing_obstacles)}):
+{json.dumps(existing_obstacles, indent=2, default=str)}
+
+USER'S PAST OBSTACLE PATTERNS:
+{json.dumps(past_patterns, indent=2, default=str)}
+
+Respond with this exact JSON structure:
+{{
+  "predictions": [
+    {{
+      "obstacle": "Clear description of the predicted obstacle",
+      "likelihood": "high|medium|low",
+      "impact": "high|medium|low",
+      "prevention_strategies": [
+        "Specific, actionable strategy 1",
+        "Specific, actionable strategy 2"
+      ],
+      "early_warning_signs": [
+        "Sign that this obstacle is approaching 1",
+        "Sign that this obstacle is approaching 2"
+      ]
+    }}
+  ]
+}}
+
+Rules:
+- Predict 3-6 obstacles depending on dream complexity
+- Each obstacle must be specific to THIS dream (not generic)
+- Prevention strategies must be concrete and actionable
+- Early warning signs should help the user detect problems early
+- Consider the user's existing obstacles to avoid duplicates
+- Consider past obstacle patterns to identify recurring risks
+- Likelihood and impact must be one of: "high", "medium", "low"
+- Order predictions by likelihood (highest first)"""
+
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.4,
+            max_tokens=2000,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+        )
+
+        try:
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure predictions key exists
+            if 'predictions' not in result:
+                result['predictions'] = []
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Obstacle prediction failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Obstacle prediction failed: {str(e)}")
+
+    @openai_retry
+    def generate_weekly_report(self, weekly_stats, previous_week_stats=None):
+        """
+        Generate a comprehensive weekly progress report with AI-powered insights.
+
+        Args:
+            weekly_stats: Dict with current week data:
+                - tasks_completed (int)
+                - focus_minutes (int)
+                - streak_days (int)
+                - xp_earned (int)
+                - dreams_progressed (int)
+                - dreams_completed (int)
+                - goals_completed (int)
+                - active_days (int)
+            previous_week_stats: Optional dict with same shape for comparison.
+
+        Returns:
+            Dict with summary, achievements, trends, recommendations, score, encouragement.
+        """
+        comparison_section = ""
+        if previous_week_stats:
+            comparison_section = f"""
+PREVIOUS WEEK (for comparison):
+- Tasks completed: {previous_week_stats.get('tasks_completed', 0)}
+- Focus time: {previous_week_stats.get('focus_minutes', 0)} minutes
+- XP earned: {previous_week_stats.get('xp_earned', 0)}
+- Dreams progressed: {previous_week_stats.get('dreams_progressed', 0)}
+- Goals completed: {previous_week_stats.get('goals_completed', 0)}
+- Active days: {previous_week_stats.get('active_days', 0)}
+"""
+
+        prompt = f"""Analyze this user's weekly activity and generate a progress report.
+
+THIS WEEK'S STATS:
+- Tasks completed: {weekly_stats.get('tasks_completed', 0)}
+- Focus time: {weekly_stats.get('focus_minutes', 0)} minutes
+- Current streak: {weekly_stats.get('streak_days', 0)} days
+- XP earned: {weekly_stats.get('xp_earned', 0)}
+- Dreams that progressed: {weekly_stats.get('dreams_progressed', 0)}
+- Dreams completed: {weekly_stats.get('dreams_completed', 0)}
+- Goals completed: {weekly_stats.get('goals_completed', 0)}
+- Active days this week: {weekly_stats.get('active_days', 0)}
+{comparison_section}
+Generate a weekly progress report as JSON with these fields:
+{{
+  "summary": "A 2-3 sentence overview of the week's performance",
+  "achievements": ["Achievement 1", "Achievement 2", ...],
+  "trends": [
+    {{"metric": "metric name", "direction": "up|down|stable", "insight": "explanation"}}
+  ],
+  "recommendations": ["Specific actionable recommendation 1", "Recommendation 2", ...],
+  "score": <0-100 integer representing overall week performance>,
+  "encouragement": "A personalized motivational closing message (1-2 sentences)"
+}}
+
+Rules:
+- achievements: List 2-5 notable accomplishments. If the week was slow, acknowledge effort or consistency.
+- trends: Compare with previous week if available. Include 2-4 metrics (tasks, focus, consistency, progress).
+- recommendations: Provide 2-4 specific, actionable suggestions for the upcoming week.
+- score: 0 = no activity, 50 = moderate, 80 = great, 100 = exceptional. Be fair but encouraging.
+- encouragement: Personal, warm, and forward-looking. Reference specific achievements if possible.
+- If activity is low, be empathetic not critical. Suggest small wins."""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'You are DreamPlanner\'s weekly report analyst. '
+                            'Generate a weekly progress report with trends, achievements, '
+                            'areas for improvement, and specific recommendations for next week. '
+                            'Always be encouraging and constructive. Respond ONLY with valid JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.6,
+                max_tokens=1200,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Ensure all expected keys are present
+            if 'summary' not in result:
+                result['summary'] = 'Your week has been recorded. Keep building momentum!'
+            if 'achievements' not in result:
+                result['achievements'] = []
+            if 'trends' not in result:
+                result['trends'] = []
+            if 'recommendations' not in result:
+                result['recommendations'] = []
+            if 'score' not in result:
+                result['score'] = 50
+            if 'encouragement' not in result:
+                result['encouragement'] = 'Every step counts. Keep pushing forward!'
+
+            # Clamp score to 0-100
+            result['score'] = max(0, min(100, int(result['score'])))
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Weekly report generation failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Weekly report generation failed: {str(e)}")
+
+    @openai_retry
+    def generate_checkin(self, dream_progress, days_since_activity, pending_tasks,
+                         streak_data, display_name=''):
+        """
+        Generate a personalized accountability check-in prompt.
+
+        Args:
+            dream_progress: List of dicts with dream title, progress %, category.
+            days_since_activity: Number of days since the user was last active.
+            pending_tasks: List of dicts with task title, dream title, due date.
+            streak_data: Dict with current_streak, best_streak.
+            display_name: User's display name for personalisation.
+
+        Returns:
+            Dict with message, prompt_type, suggested_questions, quick_actions.
+        """
+        # Determine the expected prompt type hint for the AI
+        if days_since_activity >= 5:
+            type_hint = 're_engagement'
+        elif days_since_activity >= 2:
+            type_hint = 'gentle_nudge'
+        elif streak_data.get('current_streak', 0) >= 7:
+            type_hint = 'celebration'
+        else:
+            type_hint = 'progress_check'
+
+        dreams_text = '\n'.join([
+            f"- {d.get('title', 'Untitled')} ({d.get('progress', 0)}% complete, category: {d.get('category', 'general')})"
+            for d in (dream_progress or [])
+        ]) or '(No active dreams)'
+
+        tasks_text = '\n'.join([
+            f"- {t.get('title', 'Untitled')} (dream: {t.get('dream_title', '?')}, due: {t.get('due_date', 'unset')})"
+            for t in (pending_tasks or [])[:10]
+        ]) or '(No pending tasks)'
+
+        prompt = f"""Generate an accountability check-in prompt for this user.
+
+USER: {display_name or 'Dreamer'}
+DAYS SINCE LAST ACTIVITY: {days_since_activity}
+CURRENT STREAK: {streak_data.get('current_streak', 0)} days
+BEST STREAK: {streak_data.get('best_streak', 0)} days
+EXPECTED PROMPT TYPE: {type_hint}
+
+ACTIVE DREAMS:
+{dreams_text}
+
+PENDING TASKS (next 10):
+{tasks_text}
+
+TOTAL PENDING TASKS: {len(pending_tasks or [])}
+
+Generate a JSON response:
+{{
+  "message": "A friendly, personalized check-in message (2-4 sentences). Reference specific dreams or tasks by name. Use 1-2 emojis.",
+  "prompt_type": "gentle_nudge" | "progress_check" | "celebration" | "re_engagement",
+  "suggested_questions": ["Question the user might want to ask AI coach (3 items)"],
+  "quick_actions": [
+    {{"label": "Button label", "type": "complete_task|start_focus|update_dream|open_chat", "target_id": "uuid or null"}}
+  ]
+}}
+
+Rules:
+- prompt_type must match the user's situation: celebration for streaks>=7, re_engagement for 5+ days inactive, gentle_nudge for 2-4 days inactive, progress_check otherwise.
+- message: Be encouraging, not nagging. If inactive, show empathy. If on a streak, celebrate. Reference dreams/tasks by name.
+- suggested_questions: 3 questions the user could ask their AI coach, related to their specific dreams.
+- quick_actions: 2-4 actions. Include a task completion action if there are pending tasks, a focus session action, and optionally a dream update action. Use actual task/dream IDs from the context where possible."""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'Generate a friendly accountability check-in prompt. '
+                            'Be encouraging, not nagging. Ask about specific tasks or dreams. '
+                            'Always be warm, personal, and constructive. '
+                            'Respond ONLY with valid JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.8,
+                max_tokens=600,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Ensure all expected keys with sensible fallbacks
+            valid_types = {'gentle_nudge', 'progress_check', 'celebration', 're_engagement'}
+            if result.get('prompt_type') not in valid_types:
+                result['prompt_type'] = type_hint
+            if 'message' not in result:
+                result['message'] = 'Hey there! Just checking in on your progress. Every step counts!'
+            if 'suggested_questions' not in result or not isinstance(result['suggested_questions'], list):
+                result['suggested_questions'] = [
+                    'How can I stay motivated this week?',
+                    'What should I focus on next?',
+                    'Can you help me break down my next task?',
+                ]
+            if 'quick_actions' not in result or not isinstance(result['quick_actions'], list):
+                result['quick_actions'] = [
+                    {'label': 'Start a focus session', 'type': 'start_focus', 'target_id': None},
+                ]
+
+            return result
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            logger.warning(f"generate_checkin failed: {e}")
+            return {
+                'message': f'Hey {display_name or "there"}! Just checking in. Every step towards your dreams matters, no matter how small.',
+                'prompt_type': type_hint,
+                'suggested_questions': [
+                    'How can I stay motivated this week?',
+                    'What should I focus on next?',
+                    'Can you help me break down my next task?',
+                ],
+                'quick_actions': [
+                    {'label': 'Start a focus session', 'type': 'start_focus', 'target_id': None},
+                ],
+            }
+
+    @openai_retry
+    def estimate_durations(self, tasks, historical_data=None, skill_hints=None):
+        """
+        Estimate how long each task will take using AI, considering context and
+        the user's past completion patterns from focus sessions.
+
+        Args:
+            tasks: List of dicts with task_id, title, description, dream_title,
+                   dream_category, goal_title, current_duration_mins.
+            historical_data: Dict with avg_actual_minutes, completion_rate,
+                             avg_planned_vs_actual_ratio, total_sessions,
+                             category_averages (dict of category -> avg minutes).
+            skill_hints: Optional string describing the user's skill level or context.
+
+        Returns:
+            Dict with 'estimates' list containing per-task estimates.
+        """
+        history_section = ""
+        if historical_data:
+            history_section = f"""
+USER'S HISTORICAL COMPLETION DATA:
+- Average actual session duration: {historical_data.get('avg_actual_minutes', 'N/A')} minutes
+- Task completion rate: {historical_data.get('completion_rate', 'N/A')}%
+- Planned vs actual ratio: {historical_data.get('avg_planned_vs_actual_ratio', 'N/A')}x (>1 means tasks take longer than planned)
+- Total focus sessions completed: {historical_data.get('total_sessions', 0)}
+- Category averages: {json.dumps(historical_data.get('category_averages', {}), ensure_ascii=False)}
+"""
+
+        skill_section = ""
+        if skill_hints:
+            skill_section = f"\nUSER SKILL CONTEXT: {skill_hints}\n"
+
+        prompt = f"""Estimate the time needed for each of the following tasks in minutes.
+Consider the user's past completion patterns when available.
+
+{history_section}{skill_section}
+TASKS TO ESTIMATE:
+{json.dumps(tasks, ensure_ascii=False, indent=2)}
+
+For EACH task, provide:
+- optimistic_minutes: best-case scenario (things go smoothly)
+- realistic_minutes: most likely duration
+- pessimistic_minutes: worst-case scenario (interruptions, learning curve)
+- complexity: "simple" | "moderate" | "complex"
+- reasoning: brief explanation (1-2 sentences)
+
+Respond ONLY with JSON:
+{{
+  "estimates": [
+    {{
+      "task_id": "uuid",
+      "optimistic_minutes": 15,
+      "realistic_minutes": 25,
+      "pessimistic_minutes": 45,
+      "complexity": "moderate",
+      "reasoning": "Brief explanation of the estimate"
+    }}
+  ]
+}}"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'You are a productivity expert that estimates task durations. '
+                            'Estimate the time needed for each task in minutes. '
+                            'Consider the user\'s past completion patterns. '
+                            'Provide optimistic, realistic, and pessimistic estimates. '
+                            'Be practical and grounded — never underestimate complex tasks. '
+                            'Respond only in JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.3,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure estimates key exists
+            if 'estimates' not in result and isinstance(result, dict):
+                # Try to find the list in any key
+                for key, val in result.items():
+                    if isinstance(val, list):
+                        result = {'estimates': val}
+                        break
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Duration estimation failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Duration estimation failed: {str(e)}")
+
+    @openai_retry
+    def find_similar_dreams(self, source_dream, public_dreams, templates):
+        """
+        Find similar public dreams and related templates for inspiration.
+
+        Args:
+            source_dream: Dict with title, description, category, progress
+            public_dreams: List of dicts with id, title, category, progress
+            templates: List of dicts with id, title, description, category, difficulty
+
+        Returns:
+            Dict with similar_dreams, related_templates, and inspiration_tips
+        """
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Find the most similar/relevant dreams and templates from the provided lists. "
+            "Rank by relevance to the source dream. Consider category, theme, goals, and approach. "
+            "Also provide actionable inspiration tips based on what similar dreamers are doing. "
+            "Respond ONLY with valid JSON in the exact format specified."
+        )
+
+        prompt = f"""Find similar dreams and related templates for this dream.
+
+SOURCE DREAM:
+- Title: {source_dream.get('title', 'N/A')}
+- Description: {source_dream.get('description', 'N/A')}
+- Category: {source_dream.get('category', 'N/A')}
+- Progress: {source_dream.get('progress', 0)}%
+
+PUBLIC DREAMS FROM OTHER USERS ({len(public_dreams)}):
+{json.dumps(public_dreams, indent=2, default=str)}
+
+AVAILABLE TEMPLATES ({len(templates)}):
+{json.dumps(templates, indent=2, default=str)}
+
+Respond with this exact JSON structure:
+{{
+  "similar_dreams": [
+    {{
+      "dream_id": "uuid of the matching dream from the list",
+      "title": "title of the matching dream",
+      "similarity_score": 0.85,
+      "reason": "Brief explanation of why this dream is similar"
+    }}
+  ],
+  "related_templates": [
+    {{
+      "template_id": "uuid of the matching template from the list",
+      "title": "title of the matching template",
+      "relevance_score": 0.80,
+      "reason": "Brief explanation of why this template is relevant"
+    }}
+  ],
+  "inspiration_tips": [
+    "Actionable tip based on patterns from similar dreams"
+  ]
+}}
+
+Rules:
+- Return up to 5 similar dreams, ordered by similarity_score (highest first)
+- Return up to 3 related templates, ordered by relevance_score (highest first)
+- similarity_score and relevance_score must be between 0.0 and 1.0
+- Only include dreams/templates with a score of 0.3 or higher
+- Provide 3-5 inspiration tips that are specific and actionable
+- dream_id and template_id MUST exactly match IDs from the provided lists
+- Reasons should be concise (1-2 sentences)
+- Tips should reference patterns observed in similar dreams"""
+
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.4,
+            max_tokens=2000,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+        )
+
+        try:
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure required keys exist
+            if 'similar_dreams' not in result:
+                result['similar_dreams'] = []
+            if 'related_templates' not in result:
+                result['related_templates'] = []
+            if 'inspiration_tips' not in result:
+                result['inspiration_tips'] = []
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Dream similarity search failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Dream similarity search failed: {str(e)}")
+
+    @openai_retry
+    def generate_starters(self, dream_info):
+        """
+        Generate contextual conversation starters tailored to a dream's current status.
+
+        Args:
+            dream_info: Dict with title, description, progress, status, category,
+                        recent_tasks (list of dicts), obstacles (list of dicts)
+
+        Returns:
+            Dict with 'starters' list, each containing text, category, and icon.
+        """
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Generate 4-5 helpful conversation starters for an AI coach helping "
+            "with this dream. Make them specific to the current progress and situation. "
+            "Each starter should be a natural question or request the user might ask.\n\n"
+            "Categories:\n"
+            "- planning: For goal-setting, scheduling, and strategy\n"
+            "- motivation: For encouragement, mindset, and staying on track\n"
+            "- problem_solving: For overcoming obstacles and challenges\n"
+            "- reflection: For reviewing progress and learning from experience\n"
+            "- celebration: For acknowledging achievements and milestones\n\n"
+            "Icons (use these exact emoji strings):\n"
+            "- planning: '\U0001f4cb'\n"
+            "- motivation: '\U0001f525'\n"
+            "- problem_solving: '\U0001f9e9'\n"
+            "- reflection: '\U0001f4ad'\n"
+            "- celebration: '\U0001f389'\n\n"
+            "Respond ONLY with valid JSON in this exact format:\n"
+            "{\n"
+            '  "starters": [\n'
+            '    {"text": "...", "category": "planning|motivation|problem_solving|reflection|celebration", "icon": "emoji"}\n'
+            "  ]\n"
+            "}\n\n"
+            "IMPORTANT: Always respond in the user's language if detectable from dream title/description."
+        )
+
+        recent_tasks_str = ""
+        if dream_info.get('recent_tasks'):
+            recent_tasks_str = "\n".join(
+                f"  - {t.get('title', 'Untitled')} ({t.get('status', 'pending')})"
+                for t in dream_info['recent_tasks'][:5]
+            )
+
+        obstacles_str = ""
+        if dream_info.get('obstacles'):
+            obstacles_str = "\n".join(
+                f"  - {o.get('title', 'Unknown')}: {o.get('status', 'active')}"
+                for o in dream_info['obstacles'][:5]
+            )
+
+        prompt = f"""Generate conversation starters for this dream:
+
+DREAM INFO:
+- Title: {dream_info.get('title', 'N/A')}
+- Description: {dream_info.get('description', 'N/A')}
+- Category: {dream_info.get('category', 'N/A')}
+- Status: {dream_info.get('status', 'active')}
+- Progress: {dream_info.get('progress', 0)}%
+
+RECENT TASKS:
+{recent_tasks_str or '  (none yet)'}
+
+OBSTACLES:
+{obstacles_str or '  (none identified)'}
+
+Generate 4-5 conversation starters that are specific to THIS dream's current state.
+If progress is 0%, focus on planning and getting started.
+If progress is high (>75%), include celebration and reflection.
+If there are obstacles, include problem-solving starters.
+Make starters conversational and actionable."""
+
+        try:
+            response = _client.chat.completions.create(
+                model='gpt-3.5-turbo',  # Use cheaper model for short outputs
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.7,
+                max_tokens=600,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure starters key exists
+            if 'starters' not in result and isinstance(result, dict):
+                for key, val in result.items():
+                    if isinstance(val, list):
+                        result = {'starters': val}
+                        break
+
+            # Validate each starter has required fields
+            starters = result.get('starters', [])
+            valid_categories = {'planning', 'motivation', 'problem_solving', 'reflection', 'celebration'}
+            category_icons = {
+                'planning': '\U0001f4cb',
+                'motivation': '\U0001f525',
+                'problem_solving': '\U0001f9e9',
+                'reflection': '\U0001f4ad',
+                'celebration': '\U0001f389',
+            }
+            validated = []
+            for s in starters:
+                if not isinstance(s, dict) or not s.get('text'):
+                    continue
+                cat = s.get('category', 'planning')
+                if cat not in valid_categories:
+                    cat = 'planning'
+                validated.append({
+                    'text': s['text'],
+                    'category': cat,
+                    'icon': category_icons.get(cat, '\U0001f4cb'),
+                })
+
+            return {'starters': validated}
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Conversation starters generation failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Conversation starters generation failed: {str(e)}")
+
+    @openai_retry
+    def parse_natural_language_tasks(self, text, dreams_context=None):
+        """
+        Parse natural language input into structured tasks with AI.
+
+        Takes free-form text like "Call dentist tomorrow, study for 2 hours
+        (high priority), buy groceries" and returns structured task objects
+        with title, description, estimated duration, priority, and best-match
+        dream/goal IDs.
+
+        Args:
+            text: Free-form natural language describing one or more tasks.
+            dreams_context: List of dicts with dream/goal info for matching:
+                [{id, title, category, goals: [{id, title}]}]
+
+        Returns:
+            Dict with 'tasks' list of parsed task objects.
+        """
+        context_section = ""
+        if dreams_context:
+            context_section = f"""
+USER'S ACTIVE DREAMS AND GOALS (use these IDs for matching):
+{json.dumps(dreams_context, ensure_ascii=False, indent=2)}
+
+MATCHING RULES:
+- Match each task to the most relevant dream and goal based on content.
+- If no dream/goal is a good match, set matched_dream_id and matched_goal_id to null.
+- Prefer specific goal matches over vague ones.
+"""
+
+        from datetime import date
+        today = date.today()
+
+        prompt = f"""Parse the following natural language into structured tasks.
+Extract each distinct task the user wants to create.
+
+TODAY'S DATE: {today.isoformat()}
+
+{context_section}
+USER INPUT:
+\"\"\"{text}\"\"\"
+
+For EACH task found, extract:
+- title: Clear, concise task title (imperative form)
+- description: Any extra details or context from the input (empty string if none)
+- duration_mins: Estimated duration in minutes (use reasonable defaults: quick errand=15, phone call=15, study session=60, workout=45, shopping=30, meeting=60)
+- priority: 1-5 scale (1=lowest, 5=highest). Look for cues like "urgent", "important", "high priority", "ASAP"=5, "low priority"=1, default=3
+- matched_dream_id: UUID of best matching dream or null
+- matched_goal_id: UUID of best matching goal or null
+- deadline_hint: If user mentions a date/time (e.g. "tomorrow", "by Friday", "next week"), convert to YYYY-MM-DD format. null if no date mentioned.
+
+Respond ONLY with JSON:
+{{
+  "tasks": [
+    {{
+      "title": "Call the dentist",
+      "description": "Schedule annual checkup appointment",
+      "duration_mins": 15,
+      "priority": 3,
+      "matched_dream_id": null,
+      "matched_goal_id": null,
+      "deadline_hint": "{today.isoformat()}"
+    }}
+  ]
+}}"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'You are an intelligent task parser for DreamPlanner. '
+                            'Parse natural language into structured tasks. '
+                            'Extract every distinct task the user mentions. '
+                            'Be smart about interpreting durations, priorities, and deadlines from context clues. '
+                            'Match tasks to the user\'s existing dreams/goals when relevant. '
+                            'Always respond in the same language the user writes in. '
+                            'Respond only in JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.3,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise: ensure tasks key exists
+            if 'tasks' not in result and isinstance(result, dict):
+                for key, val in result.items():
+                    if isinstance(val, list):
+                        result = {'tasks': val}
+                        break
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Natural language task parsing failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Natural language task parsing failed: {str(e)}")
+
+    @openai_retry
+    def analyze_productivity(self, activity_data, focus_sessions, task_completion_rates):
+        """
+        Analyze a user's productivity data over the past 30 days and return
+        structured insights including trends, peak days, and patterns.
+
+        Args:
+            activity_data: List of dicts with daily activity stats
+                [{date, tasks_completed, xp_earned, minutes_active}, ...]
+            focus_sessions: List of dicts with focus session info
+                [{date, total_minutes, sessions_count, completed_count}, ...]
+            task_completion_rates: Dict with completion stats
+                {total_tasks, completed_tasks, completion_rate, by_day_of_week: [{day, completed, total}]}
+
+        Returns:
+            Dict with overall_score, trends, peak_days, productivity_patterns, monthly_comparison
+        """
+        system_prompt = (
+            "Analyze this user's productivity data over the past month. "
+            "Identify trends, patterns, peak performance days, and areas for improvement.\n\n"
+            "You MUST return ONLY a valid JSON object with this exact structure:\n"
+            "{\n"
+            '  "overall_score": <int 0-100>,\n'
+            '  "summary": "<1-2 sentence overview>",\n'
+            '  "trends": [\n'
+            '    {"metric": "<string>", "direction": "up"|"down"|"stable", "change_pct": <number>, "insight": "<string>"}\n'
+            "  ],\n"
+            '  "peak_days": [\n'
+            '    {"day_of_week": "<string>", "reason": "<string>"}\n'
+            "  ],\n"
+            '  "productivity_patterns": [\n'
+            '    {"pattern": "<string>", "description": "<string>", "recommendation": "<string>"}\n'
+            "  ],\n"
+            '  "monthly_comparison": {\n'
+            '    "improved": ["<metric>"],\n'
+            '    "declined": ["<metric>"],\n'
+            '    "stable": ["<metric>"]\n'
+            "  }\n"
+            "}\n\n"
+            "RULES:\n"
+            "- overall_score: 0-100 based on consistency, volume, and improvement trajectory.\n"
+            "- trends: identify 3-5 key metrics with their direction and percent change.\n"
+            "- peak_days: identify 1-3 best performing days of the week.\n"
+            "- productivity_patterns: identify 2-4 patterns with actionable recommendations.\n"
+            "- monthly_comparison: split first 15 days vs last 15 days to show improvement.\n"
+            "- Be encouraging but honest. Focus on actionable insights.\n"
+            "- Return ONLY valid JSON, no markdown fences, no extra text."
+        )
+
+        user_prompt = (
+            f"DAILY ACTIVITY (last 30 days):\n{json.dumps(activity_data, default=str)}\n\n"
+            f"FOCUS SESSIONS (last 30 days):\n{json.dumps(focus_sessions, default=str)}\n\n"
+            f"TASK COMPLETION RATES:\n{json.dumps(task_completion_rates, default=str)}"
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt},
+                ],
+                temperature=0.4,
+                max_tokens=1500,
+                timeout=self.timeout,
+            )
+
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith('```'):
+                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            result = json.loads(content)
+            if not isinstance(result, dict):
+                raise ValueError("Response is not a dict")
+
+            # Validate and sanitize
+            score = result.get('overall_score', 50)
+            if not isinstance(score, (int, float)) or score < 0 or score > 100:
+                score = 50
+
+            summary = result.get('summary', '')
+            if not isinstance(summary, str) or len(summary) > 500:
+                summary = 'Your productivity data has been analyzed.'
+
+            trends = result.get('trends', [])
+            if not isinstance(trends, list):
+                trends = []
+            valid_directions = {'up', 'down', 'stable'}
+            validated_trends = []
+            for t in trends[:5]:
+                if isinstance(t, dict) and t.get('metric'):
+                    direction = t.get('direction', 'stable')
+                    if direction not in valid_directions:
+                        direction = 'stable'
+                    validated_trends.append({
+                        'metric': str(t['metric'])[:100],
+                        'direction': direction,
+                        'change_pct': float(t.get('change_pct', 0)),
+                        'insight': str(t.get('insight', ''))[:300],
+                    })
+
+            peak_days = result.get('peak_days', [])
+            if not isinstance(peak_days, list):
+                peak_days = []
+            validated_peaks = []
+            for p in peak_days[:3]:
+                if isinstance(p, dict) and p.get('day_of_week'):
+                    validated_peaks.append({
+                        'day_of_week': str(p['day_of_week'])[:20],
+                        'reason': str(p.get('reason', ''))[:300],
+                    })
+
+            patterns = result.get('productivity_patterns', [])
+            if not isinstance(patterns, list):
+                patterns = []
+            validated_patterns = []
+            for p in patterns[:4]:
+                if isinstance(p, dict) and p.get('pattern'):
+                    validated_patterns.append({
+                        'pattern': str(p['pattern'])[:100],
+                        'description': str(p.get('description', ''))[:300],
+                        'recommendation': str(p.get('recommendation', ''))[:300],
+                    })
+
+            monthly_comparison = result.get('monthly_comparison', {})
+            if not isinstance(monthly_comparison, dict):
+                monthly_comparison = {}
+            validated_comparison = {
+                'improved': [str(x)[:100] for x in monthly_comparison.get('improved', []) if x][:5],
+                'declined': [str(x)[:100] for x in monthly_comparison.get('declined', []) if x][:5],
+                'stable': [str(x)[:100] for x in monthly_comparison.get('stable', []) if x][:5],
+            }
+
+            return {
+                'overall_score': int(score),
+                'summary': summary,
+                'trends': validated_trends,
+                'peak_days': validated_peaks,
+                'productivity_patterns': validated_patterns,
+                'monthly_comparison': validated_comparison,
+            }
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Productivity analysis JSON parse failed: {e}")
+            return {
+                'overall_score': 50,
+                'summary': 'Unable to generate detailed analysis at this time.',
+                'trends': [],
+                'peak_days': [],
+                'productivity_patterns': [],
+                'monthly_comparison': {'improved': [], 'declined': [], 'stable': []},
+            }
+        except openai.APIError as e:
+            raise OpenAIError(f"Productivity analysis failed: {str(e)}")
+
+    def generate_celebration(self, achievement_type, context_data):
+        """
+        Generate an enthusiastic, personalized celebration message for an achievement.
+
+        Args:
+            achievement_type: One of 'task_completed', 'goal_completed',
+                              'milestone_reached', 'dream_completed',
+                              'streak_milestone', 'level_up'
+            context_data: Dict with relevant context (title, streak_days, level, etc.)
+
+        Returns:
+            Dict with 'message', 'emoji', 'animation_type', 'share_text'
+        """
+        valid_types = [
+            'task_completed', 'goal_completed', 'milestone_reached',
+            'dream_completed', 'streak_milestone', 'level_up',
+        ]
+        if achievement_type not in valid_types:
+            achievement_type = 'task_completed'
+
+        # Map achievement types to suggested animation types
+        animation_map = {
+            'task_completed': 'stars',
+            'goal_completed': 'confetti',
+            'milestone_reached': 'fireworks',
+            'dream_completed': 'trophy',
+            'streak_milestone': 'fireworks',
+            'level_up': 'trophy',
+        }
+
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Generate an enthusiastic, personalized celebration message for this achievement. "
+            "Include a fun metaphor or analogy that relates to the user's accomplishment.\n\n"
+            "You MUST respond ONLY with valid JSON in this exact format:\n"
+            "{\n"
+            '  "message": "An enthusiastic celebration message (2-3 sentences with a fun metaphor or analogy)",\n'
+            '  "emoji": "A single celebratory emoji that best matches this achievement",\n'
+            '  "share_text": "A short, shareable text (1 sentence) the user can post about their achievement"\n'
+            "}\n\n"
+            "RULES:\n"
+            "- Make the message feel personal and specific to the achievement context.\n"
+            "- Use vivid, exciting language — this is a CELEBRATION!\n"
+            "- The metaphor should be creative and memorable.\n"
+            "- The share_text should be concise and inspirational.\n"
+            "- IMPORTANT: Always respond in the user's language if detectable from context."
+        )
+
+        context_lines = [f"Achievement type: {achievement_type.replace('_', ' ').title()}"]
+        if context_data:
+            for key, val in context_data.items():
+                context_lines.append(f"{key.replace('_', ' ').title()}: {val}")
+
+        prompt = (
+            "Generate a celebration message for this achievement:\n\n"
+            + "\n".join(context_lines)
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model='gpt-3.5-turbo',  # Use cheaper model for short messages
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.9,
+                max_tokens=300,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            return {
+                'message': result.get('message', 'Amazing work! You are crushing it!'),
+                'emoji': result.get('emoji', '\U0001f389'),
+                'animation_type': animation_map.get(achievement_type, 'confetti'),
+                'share_text': result.get('share_text', 'Just hit a new milestone on my journey!'),
+            }
+
+        except (json.JSONDecodeError, openai.APIError) as e:
+            logger.warning(f"generate_celebration failed: {e}")
+            # Return sensible fallback
+            fallback_messages = {
+                'task_completed': 'One more task down! You are building momentum like a snowball rolling downhill!',
+                'goal_completed': 'Goal achieved! You just planted another flag on your mountain of success!',
+                'milestone_reached': 'Milestone unlocked! You are writing your own success story, one chapter at a time!',
+                'dream_completed': 'DREAM COMPLETE! You turned your vision into reality — that is pure magic!',
+                'streak_milestone': 'Streak on fire! Your consistency is like a river carving through rock — unstoppable!',
+                'level_up': 'LEVEL UP! You just evolved into an even more powerful version of yourself!',
+            }
+            fallback_emojis = {
+                'task_completed': '\u2728',
+                'goal_completed': '\U0001f3af',
+                'milestone_reached': '\U0001f680',
+                'dream_completed': '\U0001f3c6',
+                'streak_milestone': '\U0001f525',
+                'level_up': '\U0001f31f',
+            }
+            return {
+                'message': fallback_messages.get(achievement_type, 'Great job! Keep it up!'),
+                'emoji': fallback_emojis.get(achievement_type, '\U0001f389'),
+                'animation_type': animation_map.get(achievement_type, 'confetti'),
+                'share_text': 'Just hit a new milestone on my journey! #DreamPlanner',
+            }
+
+    @openai_retry
+    def optimize_notification_timing(self, activity_patterns, notification_types, current_preferences):
+        """
+        Analyze user behavior patterns to determine optimal notification times.
+
+        Args:
+            activity_patterns: Dict with active_hours, response_times, daily_activity data.
+            notification_types: List of notification type strings the user receives.
+            current_preferences: Dict with current notification timing preferences (if any).
+
+        Returns:
+            Dict with optimal_times, quiet_hours, and engagement_score.
+        """
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + "Analyze the user's behavior patterns to determine optimal notification "
+            "times for maximum engagement. You are a notification timing optimizer.\n\n"
+            "RULES:\n"
+            "- Analyze the activity data to find when the user is most active and responsive.\n"
+            "- For each notification type, suggest the best hour (0-23) and best day pattern.\n"
+            "- Identify quiet hours when the user is typically inactive.\n"
+            "- Calculate an engagement score (0.0-1.0) based on data quality and patterns.\n"
+            "- best_day must be one of: 'weekday', 'weekend', 'daily', 'monday', 'tuesday', "
+            "'wednesday', 'thursday', 'friday', 'saturday', 'sunday'.\n"
+            "- Provide a short reason for each recommendation.\n"
+            "- If activity data is sparse, make reasonable defaults and lower the engagement score.\n"
+            "- Return ONLY a valid JSON object.\n\n"
+            "RESPONSE FORMAT:\n"
+            '{\n'
+            '  "optimal_times": [\n'
+            '    {\n'
+            '      "notification_type": "reminder",\n'
+            '      "best_hour": 9,\n'
+            '      "best_day": "weekday",\n'
+            '      "reason": "User is most active at 9am on weekdays"\n'
+            '    }\n'
+            '  ],\n'
+            '  "quiet_hours": {"start": 22, "end": 7},\n'
+            '  "engagement_score": 0.85\n'
+            '}\n'
+        )
+
+        user_prompt = (
+            "Optimize notification timing based on this user data:\n\n"
+            f"ACTIVITY PATTERNS:\n{json.dumps(activity_patterns, indent=2)}\n\n"
+            f"NOTIFICATION TYPES TO OPTIMIZE:\n{json.dumps(notification_types)}\n\n"
+            f"CURRENT PREFERENCES:\n{json.dumps(current_preferences, indent=2)}\n"
+        )
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1200,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith('```'):
+                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            result = json.loads(content)
+            if not isinstance(result, dict):
+                return self._notification_timing_fallback(notification_types)
+
+            # Validate optimal_times
+            optimal_times = result.get('optimal_times', [])
+            if not isinstance(optimal_times, list):
+                optimal_times = []
+            valid_days = {
+                'weekday', 'weekend', 'daily', 'monday', 'tuesday',
+                'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            }
+            validated_times = []
+            for item in optimal_times[:20]:
+                if not isinstance(item, dict):
+                    continue
+                ntype = str(item.get('notification_type', ''))[:30]
+                best_hour = item.get('best_hour', 9)
+                if not isinstance(best_hour, int) or best_hour < 0 or best_hour > 23:
+                    best_hour = 9
+                best_day = str(item.get('best_day', 'daily'))[:20]
+                if best_day not in valid_days:
+                    best_day = 'daily'
+                reason = str(item.get('reason', ''))[:300]
+                validated_times.append({
+                    'notification_type': ntype,
+                    'best_hour': best_hour,
+                    'best_day': best_day,
+                    'reason': reason,
+                })
+
+            # Validate quiet_hours
+            quiet_hours = result.get('quiet_hours', {})
+            if not isinstance(quiet_hours, dict):
+                quiet_hours = {'start': 22, 'end': 7}
+            qh_start = quiet_hours.get('start', 22)
+            qh_end = quiet_hours.get('end', 7)
+            if not isinstance(qh_start, int) or qh_start < 0 or qh_start > 23:
+                qh_start = 22
+            if not isinstance(qh_end, int) or qh_end < 0 or qh_end > 23:
+                qh_end = 7
+
+            # Validate engagement_score
+            engagement_score = result.get('engagement_score', 0.5)
+            if not isinstance(engagement_score, (int, float)):
+                engagement_score = 0.5
+            engagement_score = max(0.0, min(1.0, float(engagement_score)))
+
+            return {
+                'optimal_times': validated_times,
+                'quiet_hours': {'start': qh_start, 'end': qh_end},
+                'engagement_score': round(engagement_score, 2),
+            }
+
+        except (json.JSONDecodeError, KeyError):
+            logger.warning("Failed to parse notification timing JSON, returning fallback")
+            return self._notification_timing_fallback(notification_types)
+        except openai.APIError as e:
+            raise OpenAIError(f"Notification timing optimization failed: {str(e)}")
+
+    def _notification_timing_fallback(self, notification_types):
+        """Return sensible default notification timing when AI fails."""
+        default_hours = {
+            'reminder': 9,
+            'motivation': 8,
+            'progress': 18,
+            'achievement': 12,
+            'check_in': 10,
+            'rescue': 11,
+            'buddy': 14,
+            'system': 10,
+            'dream_completed': 12,
+            'weekly_report': 9,
+            'daily_summary': 7,
+            'missed_call': 10,
+        }
+        optimal_times = []
+        for ntype in notification_types:
+            optimal_times.append({
+                'notification_type': ntype,
+                'best_hour': default_hours.get(ntype, 9),
+                'best_day': 'daily',
+                'reason': 'Default recommendation (insufficient activity data).',
+            })
+        return {
+            'optimal_times': optimal_times,
+            'quiet_hours': {'start': 22, 'end': 7},
+            'engagement_score': 0.3,
+        }
+
+    @openai_retry
+    def calibrate_difficulty(self, completion_rate, avg_completion_time, streak_data, current_tasks):
+        """
+        Analyze user's task completion patterns and suggest difficulty calibration.
+
+        Args:
+            completion_rate: Float 0-1 representing task completion rate over last 30 days.
+            avg_completion_time: Average minutes to complete tasks.
+            streak_data: Dict with current_streak, longest_streak, days_active_last_30.
+            current_tasks: List of dicts with task_id, title, description,
+                           duration_mins, status, dream_title.
+
+        Returns:
+            Dict with difficulty_level, calibration_score, suggestions,
+            daily_target, and challenge.
+        """
+        prompt = f"""Here is the user's task performance data over the last 30 days:
+
+COMPLETION RATE: {completion_rate * 100:.1f}%
+AVERAGE COMPLETION TIME: {avg_completion_time:.0f} minutes per task
+STREAK DATA: {json.dumps(streak_data, ensure_ascii=False)}
+
+CURRENT PENDING TASKS:
+{json.dumps(current_tasks, ensure_ascii=False, indent=2)}
+
+Analyze this user's task completion patterns. Determine if tasks are too easy (>90% completion, very fast), too hard (<50% completion, frequently skipped), or well-calibrated. Suggest adjustments.
+
+Respond ONLY with JSON in this exact format:
+{{
+  "difficulty_level": "easy|moderate|challenging|expert",
+  "calibration_score": 0.0,
+  "analysis": "Brief analysis of the user's current performance pattern",
+  "suggestions": [
+    {{
+      "task_id": "uuid of an existing task to adjust",
+      "current_difficulty": "easy|moderate|challenging|expert",
+      "suggested_difficulty": "easy|moderate|challenging|expert",
+      "reason": "Why this task should be adjusted",
+      "modified_task": {{
+        "title": "Adjusted task title (more/less challenging)",
+        "description": "Adjusted task description with new expectations",
+        "duration_mins": 30
+      }}
+    }}
+  ],
+  "daily_target": {{
+    "tasks": 5,
+    "focus_minutes": 120,
+    "reason": "Why this target suits the user"
+  }},
+  "challenge": {{
+    "title": "A motivating challenge title",
+    "description": "Description of a stretch challenge based on the user's patterns",
+    "reward_xp": 100,
+    "deadline_days": 7
+  }}
+}}"""
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            self.ETHICAL_PREAMBLE
+                            + 'You are a performance calibration coach for DreamPlanner. '
+                            'Analyze the user\'s task completion patterns and suggest difficulty '
+                            'adjustments. The goal is to keep users in a state of "flow" — '
+                            'tasks should be challenging enough to be engaging but not so hard '
+                            'they cause frustration. Suggest concrete modifications to existing '
+                            'tasks and recommend a personalized daily target. Also propose one '
+                            'stretch challenge to push the user slightly beyond their comfort zone. '
+                            'Respond only in JSON.'
+                        ),
+                    },
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.4,
+                max_tokens=2500,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Validate and normalise
+            valid_levels = {'easy', 'moderate', 'challenging', 'expert'}
+            if result.get('difficulty_level') not in valid_levels:
+                result['difficulty_level'] = 'moderate'
+
+            score = result.get('calibration_score', 0.5)
+            if not isinstance(score, (int, float)) or score < 0 or score > 1:
+                score = 0.5
+            result['calibration_score'] = round(float(score), 2)
+
+            if not isinstance(result.get('analysis'), str):
+                result['analysis'] = ''
+
+            if not isinstance(result.get('suggestions'), list):
+                result['suggestions'] = []
+            validated_suggestions = []
+            for s in result['suggestions'][:10]:
+                if not isinstance(s, dict):
+                    continue
+                modified = s.get('modified_task', {})
+                if not isinstance(modified, dict):
+                    modified = {}
+                validated_suggestions.append({
+                    'task_id': str(s.get('task_id', '')),
+                    'current_difficulty': s.get('current_difficulty', 'moderate'),
+                    'suggested_difficulty': s.get('suggested_difficulty', 'moderate'),
+                    'reason': str(s.get('reason', ''))[:300],
+                    'modified_task': {
+                        'title': str(modified.get('title', ''))[:255],
+                        'description': str(modified.get('description', ''))[:2000],
+                        'duration_mins': int(modified.get('duration_mins', 30)) if modified.get('duration_mins') else 30,
+                    },
+                })
+            result['suggestions'] = validated_suggestions
+
+            daily = result.get('daily_target', {})
+            if not isinstance(daily, dict):
+                daily = {}
+            result['daily_target'] = {
+                'tasks': int(daily.get('tasks', 5)) if daily.get('tasks') else 5,
+                'focus_minutes': int(daily.get('focus_minutes', 60)) if daily.get('focus_minutes') else 60,
+                'reason': str(daily.get('reason', ''))[:300],
+            }
+
+            challenge = result.get('challenge', {})
+            if not isinstance(challenge, dict):
+                challenge = {}
+            result['challenge'] = {
+                'title': str(challenge.get('title', 'Push Your Limits'))[:255],
+                'description': str(challenge.get('description', ''))[:500],
+                'reward_xp': int(challenge.get('reward_xp', 50)) if challenge.get('reward_xp') else 50,
+                'deadline_days': int(challenge.get('deadline_days', 7)) if challenge.get('deadline_days') else 7,
+            }
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Difficulty calibration failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Difficulty calibration failed: {str(e)}")

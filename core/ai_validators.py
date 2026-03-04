@@ -532,6 +532,92 @@ class FunctionCallSchema(BaseModel):
 
 
 # ===================================================================
+# Smart analysis schemas (cross-dream pattern recognition)
+# ===================================================================
+
+VALID_PATTERN_TYPES = {"theme", "behavior", "resource", "timing"}
+
+
+class SmartAnalysisPatternSchema(BaseModel):
+    """A single pattern found across dreams."""
+    type: str = Field(default="theme", max_length=20)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    dreams_involved: list[str] = Field(default_factory=list)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def validate_type(cls, v):
+        v = _sanitize_str(v, 20).lower().strip()
+        return v if v in VALID_PATTERN_TYPES else "theme"
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def sanitize_description(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("dreams_involved", mode="before")
+    @classmethod
+    def sanitize_dreams(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [_sanitize_str(d, MAX_TITLE_LEN) for d in v if d]
+
+
+class SmartAnalysisInsightSchema(BaseModel):
+    """A single insight from cross-dream analysis."""
+    insight: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    actionable_tip: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("insight", "actionable_tip", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisSynergySchema(BaseModel):
+    """A synergy between two dreams."""
+    dream1: str = Field(default="", max_length=MAX_TITLE_LEN)
+    dream2: str = Field(default="", max_length=MAX_TITLE_LEN)
+    connection: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    suggestion: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("dream1", "dream2", mode="before")
+    @classmethod
+    def sanitize_titles(cls, v):
+        return _sanitize_str(v, MAX_TITLE_LEN)
+
+    @field_validator("connection", "suggestion", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisRiskSchema(BaseModel):
+    """A risk area for a specific dream."""
+    dream: str = Field(default="", max_length=MAX_TITLE_LEN)
+    risk: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    mitigation: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("dream", mode="before")
+    @classmethod
+    def sanitize_dream(cls, v):
+        return _sanitize_str(v, MAX_TITLE_LEN)
+
+    @field_validator("risk", "mitigation", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisResponseSchema(BaseModel):
+    """Full response from smart cross-dream analysis."""
+    patterns: list[SmartAnalysisPatternSchema] = Field(default_factory=list)
+    insights: list[SmartAnalysisInsightSchema] = Field(default_factory=list)
+    synergies: list[SmartAnalysisSynergySchema] = Field(default_factory=list)
+    risk_areas: list[SmartAnalysisRiskSchema] = Field(default_factory=list)
+
+
+# ===================================================================
 # Public validation functions — called from views / services
 # ===================================================================
 
@@ -602,6 +688,15 @@ def validate_function_call(raw: dict) -> FunctionCallSchema:
     except Exception as e:
         logger.error("Function call validation failed: %s", e)
         raise AIValidationError(f"AI generated an invalid function call: {e}") from e
+
+
+def validate_smart_analysis_response(raw: dict) -> SmartAnalysisResponseSchema:
+    """Validate and sanitize a smart analysis response from the AI."""
+    try:
+        return SmartAnalysisResponseSchema.model_validate(raw)
+    except Exception as e:
+        logger.error("Smart analysis validation failed: %s", e)
+        raise AIValidationError(f"AI generated an invalid smart analysis: {e}") from e
 
 
 def validate_ai_output_safety(content: str) -> tuple[bool, str]:

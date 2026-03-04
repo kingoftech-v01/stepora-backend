@@ -39,10 +39,10 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=8, minute=0),
     },
 
-    # Send weekly progress report on Sunday at 10 AM
-    'send-weekly-report': {
-        'task': 'apps.notifications.tasks.send_weekly_report',
-        'schedule': crontab(day_of_week=0, hour=10, minute=0),
+    # Send weekly progress digest on Monday at 9 AM (email + push)
+    'send-weekly-digest': {
+        'task': 'notifications.send_weekly_digests',
+        'schedule': crontab(day_of_week=1, hour=9, minute=0),
     },
 
     # Check for inactive users daily at 9 AM (Rescue Mode)
@@ -97,10 +97,22 @@ app.conf.beat_schedule = {
 
     # === Calendar Tasks ===
 
+    # Check and send calendar event reminders every minute
+    'check-and-send-reminders': {
+        'task': 'apps.calendar.tasks.check_and_send_reminders',
+        'schedule': 60.0,  # Every 60 seconds
+    },
+
     # Generate recurring event instances nightly at 1 AM
     'generate-recurring-events': {
         'task': 'apps.calendar.tasks.generate_recurring_events',
         'schedule': crontab(hour=1, minute=0),
+    },
+
+    # Send daily morning summary notifications at 7 AM UTC
+    'send-daily-summaries': {
+        'task': 'apps.calendar.tasks.send_daily_summaries',
+        'schedule': crontab(hour=7, minute=0),
     },
 
     # === Buddy Tasks ===
@@ -143,6 +155,18 @@ app.conf.beat_schedule = {
     'hard-delete-expired-accounts': {
         'task': 'apps.users.tasks.hard_delete_expired_accounts',
         'schedule': crontab(hour=3, minute=30),
+    },
+
+    # Generate weekly progress reports every Sunday at 6 PM UTC
+    'generate-weekly-reports': {
+        'task': 'apps.users.tasks.generate_weekly_reports',
+        'schedule': crontab(day_of_week=0, hour=18, minute=0),
+    },
+
+    # Send accountability check-in prompts daily at 10 AM
+    'send-accountability-checkins': {
+        'task': 'apps.users.tasks.send_accountability_checkins',
+        'schedule': crontab(hour=10, minute=0),
     },
 }
 

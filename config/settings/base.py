@@ -98,6 +98,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'core.middleware.EmailVerificationMiddleware',
     'core.middleware.LastActivityMiddleware',
 ]
 
@@ -257,6 +258,7 @@ REST_FRAMEWORK = {
         'auth': '5/minute',
         'search': '15/minute',
         'export': '1/day',
+        'ai_motivation': '5/day',
     },
 }
 
@@ -429,9 +431,10 @@ AI_QUOTAS = {
 # django-allauth Configuration
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'mandatory')
+ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'optional')
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_ADAPTER = 'core.adapters.DreamPlannerAccountAdapter'
 
 # dj-rest-auth Configuration (JWT mode)
 REST_AUTH = {

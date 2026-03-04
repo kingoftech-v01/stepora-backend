@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Weekly Progress Digest</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0F0F1A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #E2E2F0;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    .wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0;
+    }
+    .header {
+      background: linear-gradient(135deg, #6C63FF, #8B5CF6, #A855F7);
+      padding: 40px 32px 32px;
+      text-align: center;
+      border-radius: 0 0 24px 24px;
+    }
+    .header h1 {
+      color: #FFFFFF;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      line-height: 1.3;
+    }
+    .header .subtitle {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      margin: 0;
+    }
+    .body-content {
+      padding: 24px 24px 16px;
+    }
+    .greeting {
+      font-size: 16px;
+      color: #C4C4D4;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    /* Stat cards */
+    .stats-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      flex: 1 1 calc(50% - 6px);
+      min-width: 120px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 800;
+      margin: 0 0 4px;
+      line-height: 1;
+    }
+    .stat-value.purple { color: #8B5CF6; }
+    .stat-value.green { color: #10B981; }
+    .stat-value.amber { color: #F59E0B; }
+    .stat-value.blue { color: #3B82F6; }
+    .stat-label {
+      font-size: 12px;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin: 0;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 28px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #8B5CF6;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+    }
+
+    /* Dream progress rows */
+    .dream-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .dream-row:last-child { border-bottom: none; }
+    .dream-title {
+      flex: 1;
+      font-size: 14px;
+      color: #E2E2F0;
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .progress-bar-bg {
+      width: 100px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8B5CF6, #A855F7);
+      border-radius: 4px;
+    }
+    .progress-pct {
+      font-size: 13px;
+      font-weight: 600;
+      color: #A78BFA;
+      min-width: 40px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Upcoming tasks */
+    .task-item {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .task-item:last-child { border-bottom: none; }
+    .task-name {
+      font-size: 14px;
+      color: #E2E2F0;
+      margin: 0 0 3px;
+    }
+    .task-meta {
+      font-size: 12px;
+      color: #6B7280;
+      margin: 0;
+    }
+
+    /* Motivational box */
+    .motivation-box {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(99, 102, 241, 0.08));
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 16px;
+      padding: 20px 24px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .motivation-text {
+      font-size: 16px;
+      font-style: italic;
+      color: #C4B5FD;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* CTA button */
+    .cta-wrapper {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+      color: #FFFFFF;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 14px 40px;
+      border-radius: 12px;
+      letter-spacing: 0.3px;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 24px 32px;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .footer p {
+      font-size: 12px;
+      color: #6B7280;
+      margin: 4px 0;
+      line-height: 1.5;
+    }
+    .footer a {
+      color: #8B5CF6;
+      text-decoration: none;
+    }
+
+    /* Responsive */
+    @media only screen and (max-width: 480px) {
+      .stat-card { flex: 1 1 100%; }
+      .header { padding: 28px 20px 24px; }
+      .body-content { padding: 20px 16px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- Header -->
+    <div class="header">
+      <h1>Your Week in Review</h1>
+      <p class="subtitle">{{ week_start }} &mdash; {{ week_end }}</p>
+    </div>
+
+    <div class="body-content">
+      <!-- Greeting -->
+      <p class="greeting">
+        Hi {{ display_name }}, here is what you accomplished this week:
+      </p>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <p class="stat-value purple">{{ tasks_completed }}</p>
+          <p class="stat-label">Tasks Done</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-value green">{{ xp_earned }}</p>
+          <p class="stat-label">XP Earned</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-value amber">{{ streak_days }}</p>
+          <p class="stat-label">Day Streak</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-value blue">{{ total_minutes }}</p>
+          <p class="stat-label">Minutes Active</p>
+        </div>
+      </div>
+
+      {% if dreams_completed > 0 %}
+      <div class="section">
+        <p class="section-title">Dreams Achieved This Week</p>
+        <p style="font-size: 14px; color: #E2E2F0;">
+          You completed <strong>{{ dreams_completed }} dream{{ dreams_completed|pluralize }}</strong> this week. Congratulations!
+        </p>
+      </div>
+      {% endif %}
+
+      {% if top_dreams %}
+      <!-- Top Dreams -->
+      <div class="section">
+        <p class="section-title">Dream Progress</p>
+        {% for dream in top_dreams %}
+        <div class="dream-row">
+          <p class="dream-title">{{ dream.title }}</p>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: {{ dream.progress }}%;"></div>
+          </div>
+          <span class="progress-pct">{{ dream.progress }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if upcoming_tasks %}
+      <!-- Upcoming Tasks -->
+      <div class="section">
+        <p class="section-title">
+          Coming Up Next{% if upcoming_count > 5 %} ({{ upcoming_count }} total){% endif %}
+        </p>
+        {% for task in upcoming_tasks %}
+        <div class="task-item">
+          <p class="task-name">{{ task.title }}</p>
+          <p class="task-meta">{{ task.dream }} &middot; {{ task.date }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Motivational Message -->
+      <div class="motivation-box">
+        <p class="motivation-text">{{ motivational_msg }}</p>
+      </div>
+
+      <!-- CTA -->
+      <div class="cta-wrapper">
+        <a href="{{ app_url }}" class="cta-button">Open DreamPlanner</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>DreamPlanner &mdash; Turn your dreams into plans.</p>
+      <p>
+        You are receiving this because you have weekly digests enabled.
+        <a href="{{ app_url }}/settings/notifications">Manage preferences</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

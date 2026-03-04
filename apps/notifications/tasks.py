@@ -1,11 +1,22 @@
 """
 Celery tasks for notifications app.
+
+Includes:
+- Processing pending notifications via FCM
+- Sending reminder notifications
+- Daily motivational notifications
+- Weekly progress digest (email + push)
+- Inactive user rescue notifications
+- Cleanup of old notifications
+- Call expiry and due-task checks
 """
 
 from django.utils.translation import gettext as _
 from celery import shared_task
+from django.conf import settings
+from django.db.models import Q, Count, Prefetch, Sum
+from django.template.loader import render_to_string
 from django.utils import timezone
-from django.db.models import Q, Count, Prefetch
 from datetime import timedelta
 import logging
 
@@ -18,6 +29,98 @@ from core.sanitizers import sanitize_text
 from core.ai_usage import AIUsageTracker
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Weekly digest helpers
+# ---------------------------------------------------------------------------
+
+MOTIVATIONAL_MESSAGES = [
+    "Every step counts. You're building something amazing!",
+    "Progress, not perfection. Keep going!",
+    "Small daily improvements lead to stunning results.",
+    "You're closer to your dreams than you think!",
+    "Consistency is the key to unlocking your potential.",
+    "Believe in yourself -- you've already come this far!",
+    "Dream big, act small, start now.",
+    "Your future self will thank you for today's effort.",
+]
+
+
+def _pick_motivational_message(tasks_completed, streak_days):
+    """Pick a motivational message based on weekly performance."""
+    if tasks_completed == 0 and streak_days == 0:
+        return "A new week is a fresh start. Set one small goal today!"
+    if tasks_completed >= 20:
+        return "Incredible week! You're on fire -- keep that momentum going!"
+    if streak_days >= 7:
+        return f"Amazing {streak_days}-day streak! Consistency is your superpower."
+    # Deterministic but varied selection
+    idx = (tasks_completed + streak_days) % len(MOTIVATIONAL_MESSAGES)
+    return MOTIVATIONAL_MESSAGES[idx]
+
+
+def _send_digest_push(user, title, body, data):
+    """Send a push notification to all of the user's active FCM devices."""
+    from .models import UserDevice
+    from .fcm_service import FCMService
+
+    tokens = list(
+        UserDevice.objects.filter(user=user, is_active=True)
+        .values_list('fcm_token', flat=True)
+    )
+    if not tokens:
+        return
+
+    try:
+        fcm = FCMService()
+        result = fcm.send_multicast(tokens, title, body, data=data)
+
+        # Deactivate invalid tokens
+        if result.invalid_tokens:
+            UserDevice.objects.filter(
+                fcm_token__in=result.invalid_tokens,
+            ).update(is_active=False)
+            logger.info(
+                'Deactivated %d invalid FCM tokens for user %s.',
+                len(result.invalid_tokens), user.id,
+            )
+    except Exception as exc:
+        logger.warning('FCM push failed for weekly digest (user %s): %s', user.id, exc)
+
+
+def _send_digest_email(user, subject, context):
+    """Render the weekly digest HTML email and dispatch via the core email task."""
+    from core.tasks import send_rendered_email
+
+    try:
+        html_body = render_to_string('emails/weekly_digest.html', context)
+    except Exception as exc:
+        logger.error('Failed to render weekly digest email template: %s', exc)
+        return
+
+    # Plain-text fallback
+    plain = (
+        f"Hi {context['display_name']},\n\n"
+        f"Here's your weekly progress report "
+        f"({context['week_start']} - {context['week_end']}):\n\n"
+        f"- Tasks completed: {context['tasks_completed']}\n"
+        f"- XP earned: {context['xp_earned']}\n"
+        f"- Streak: {context['streak_days']} days\n"
+        f"- Active dreams: {context['dreams_count']}\n\n"
+        f"{context['motivational_msg']}\n\n"
+        f"Keep going!\nThe DreamPlanner Team"
+    )
+
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
+
+    send_rendered_email.delay(
+        subject=subject,
+        body=plain,
+        from_email=from_email,
+        to=[user.email],
+        alternatives=[(html_body, 'text/html')],
+    )
 
 
 @shared_task(bind=True, max_retries=3)
@@ -145,96 +248,217 @@ def generate_daily_motivation(self):
         raise self.retry(exc=e, countdown=300)
 
 
+@shared_task(name='notifications.send_weekly_digests')
+def send_weekly_digests():
+    """
+    Dispatch per-user weekly digest tasks for all active users.
+
+    Can be called directly or via the ``send_weekly_report`` alias that
+    the existing Celery Beat schedule references.
+    """
+    users = User.objects.filter(is_active=True)
+    dispatched = 0
+
+    for user in users.iterator():
+        # Respect notification preferences -- skip if weekly_report disabled
+        prefs = user.notification_prefs or {}
+        if not prefs.get('weekly_report', True):
+            continue
+
+        send_user_digest.delay(str(user.id))
+        dispatched += 1
+
+    logger.info('Weekly digest: dispatched %d user tasks.', dispatched)
+    return {'dispatched': dispatched}
+
+
+@shared_task(
+    name='notifications.send_user_digest',
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)
+def send_user_digest(self, user_id):
+    """
+    Generate and send the weekly progress digest for a single user.
+
+    Steps:
+    1. Gather stats for the past 7 days.
+    2. Create a Notification record (type='weekly_report').
+    3. Send a push notification via FCM.
+    4. Send an HTML email via the core email task.
+    """
+    from apps.users.models import DailyActivity
+
+    try:
+        user = User.objects.get(id=user_id, is_active=True)
+    except User.DoesNotExist:
+        logger.warning('send_user_digest: user %s not found or inactive.', user_id)
+        return {'sent': False, 'reason': 'user_not_found'}
+
+    now = timezone.now()
+    week_ago = now - timedelta(days=7)
+
+    # ---- Gather weekly stats ------------------------------------------------
+
+    # Tasks completed this week
+    tasks_completed_qs = Task.objects.filter(
+        goal__dream__user=user,
+        status='completed',
+        completed_at__gte=week_ago,
+        completed_at__lte=now,
+    )
+    tasks_completed = tasks_completed_qs.count()
+
+    # Total XP earned this week
+    weekly_activities = DailyActivity.objects.filter(
+        user=user,
+        date__gte=week_ago.date(),
+        date__lte=now.date(),
+    )
+    xp_earned = weekly_activities.aggregate(
+        total_xp=Sum('xp_earned'),
+    )['total_xp'] or 0
+    total_minutes = weekly_activities.aggregate(
+        total_mins=Sum('minutes_active'),
+    )['total_mins'] or 0
+
+    # Active dreams and their progress
+    active_dreams = Dream.objects.filter(user=user, status='active')
+    dreams_count = active_dreams.count()
+
+    # Top 3 dreams by progress
+    top_dreams = []
+    for dream in active_dreams.order_by('-progress_percentage')[:3]:
+        top_dreams.append({
+            'title': dream.title,
+            'progress': round(dream.progress_percentage, 1),
+            'id': str(dream.id),
+        })
+
+    # Dreams completed this week
+    dreams_completed = Dream.objects.filter(
+        user=user,
+        status='completed',
+        completed_at__gte=week_ago,
+        completed_at__lte=now,
+    ).count()
+
+    # Upcoming tasks for next week
+    next_week = now + timedelta(days=7)
+    upcoming_tasks_qs = Task.objects.filter(
+        goal__dream__user=user,
+        goal__dream__status='active',
+        status='pending',
+        scheduled_date__gte=now,
+        scheduled_date__lte=next_week,
+    ).select_related('goal', 'goal__dream').order_by('scheduled_date')
+    upcoming_tasks = [
+        {
+            'title': t.title,
+            'dream': t.goal.dream.title,
+            'date': t.scheduled_date.strftime('%a %b %d') if t.scheduled_date else '',
+        }
+        for t in upcoming_tasks_qs[:5]
+    ]
+    upcoming_count = upcoming_tasks_qs.count()
+
+    # Streak
+    streak_days = user.streak_days
+
+    # Motivational message
+    motivational_msg = _pick_motivational_message(tasks_completed, streak_days)
+
+    # ---- Build notification content -----------------------------------------
+
+    display_name = user.display_name or user.email.split('@')[0]
+
+    title = f"Your Week in Review, {display_name}"
+
+    # Build a concise text body (used for push + Notification.body)
+    body_parts = []
+    if tasks_completed > 0:
+        body_parts.append(f"{tasks_completed} task{'s' if tasks_completed != 1 else ''} completed")
+    if dreams_completed > 0:
+        body_parts.append(f"{dreams_completed} dream{'s' if dreams_completed != 1 else ''} achieved!")
+    if xp_earned > 0:
+        body_parts.append(f"{xp_earned} XP earned")
+    if streak_days > 0:
+        body_parts.append(f"{streak_days}-day streak")
+    if not body_parts:
+        body_parts.append("Check in to keep your momentum going")
+
+    body = " | ".join(body_parts) + f". {motivational_msg}"
+
+    # Data payload for deep-linking
+    data = {
+        'screen': 'WeeklyDigest',
+        'action': 'view_digest',
+        'tasks_completed': str(tasks_completed),
+        'xp_earned': str(xp_earned),
+        'streak_days': str(streak_days),
+        'dreams_count': str(dreams_count),
+    }
+
+    # ---- Create Notification record -----------------------------------------
+
+    notification = Notification.objects.create(
+        user=user,
+        notification_type='weekly_report',
+        title=title,
+        body=body,
+        scheduled_for=now,
+        status='sent',
+        sent_at=now,
+        data=data,
+    )
+
+    # ---- Send push notification via FCM -------------------------------------
+
+    _send_digest_push(user, title, body, data)
+
+    # ---- Send email ---------------------------------------------------------
+
+    email_context = {
+        'display_name': display_name,
+        'tasks_completed': tasks_completed,
+        'dreams_completed': dreams_completed,
+        'xp_earned': xp_earned,
+        'total_minutes': total_minutes,
+        'streak_days': streak_days,
+        'dreams_count': dreams_count,
+        'top_dreams': top_dreams,
+        'upcoming_tasks': upcoming_tasks,
+        'upcoming_count': upcoming_count,
+        'motivational_msg': motivational_msg,
+        'week_start': week_ago.strftime('%b %d'),
+        'week_end': now.strftime('%b %d, %Y'),
+        'app_url': getattr(settings, 'FRONTEND_URL', 'https://app.dreamplanner.app'),
+    }
+
+    _send_digest_email(user, title, email_context)
+
+    logger.info(
+        'Weekly digest sent to %s: tasks=%d xp=%d streak=%d.',
+        user.email, tasks_completed, xp_earned, streak_days,
+    )
+    return {
+        'sent': True,
+        'notification_id': str(notification.id),
+        'tasks_completed': tasks_completed,
+        'xp_earned': xp_earned,
+    }
+
+
 @shared_task(bind=True, max_retries=3)
 def send_weekly_report(self):
     """
-    Generate and send weekly progress reports to users.
-    Runs every Sunday at 10:00 AM (configured in Celery beat schedule).
+    Legacy entry point kept for the existing Celery Beat schedule.
+
+    Delegates to the new ``send_weekly_digests`` dispatcher which fans out
+    per-user digest tasks for better scalability and error isolation.
     """
-    try:
-        ai_service = OpenAIService()
-        week_ago = timezone.now() - timedelta(days=7)
-
-        # Get users with active dreams
-        users = User.objects.filter(
-            dreams__status='active',
-            notification_prefs__weekly_report=True,
-            is_active=True
-        ).distinct()
-
-        created_count = 0
-
-        tracker = AIUsageTracker()
-
-        for user in users:
-            try:
-                # Check AI background quota
-                allowed, _ = tracker.check_quota(user, 'ai_background')
-                if not allowed:
-                    logger.info(f"Skipping weekly report for user {user.id}: background quota reached")
-                    continue
-
-                # Calculate weekly stats
-                completed_tasks = Task.objects.filter(
-                    goal__dream__user=user,
-                    status='completed',
-                    completed_at__gte=week_ago
-                ).count()
-
-                total_tasks = Task.objects.filter(
-                    goal__dream__user=user,
-                    status__in=['pending', 'in_progress', 'completed']
-                ).count()
-
-                # Calculate XP gained this week
-                xp_gained = user.xp  # In production, you'd track weekly XP
-
-                # Generate personalized report with AI and sanitize
-                raw_report = ai_service.generate_weekly_report(
-                    user=user,
-                    completed_tasks=completed_tasks,
-                    total_tasks=total_tasks,
-                    xp_gained=xp_gained
-                )
-                report = sanitize_text(raw_report)[:2000]
-
-                # Increment usage counter
-                tracker.increment(user, 'ai_background')
-
-                # Create notification
-                Notification.objects.create(
-                    user=user,
-                    notification_type='weekly_report',
-                    title=_('Your weekly report'),
-                    body=report,
-                    scheduled_for=timezone.now(),
-                    data={
-                        'action': 'open_stats',
-                        'screen': 'WeeklyReport',
-                        'stats': {
-                            'completed_tasks': completed_tasks,
-                            'total_tasks': total_tasks,
-                            'xp_gained': xp_gained
-                        }
-                    }
-                )
-
-                created_count += 1
-
-            except OpenAIError as e:
-                logger.error(f"OpenAI error generating report for user {user.id}: {str(e)}")
-                continue
-
-            except Exception as e:
-                logger.error(f"Error generating report for user {user.id}: {str(e)}")
-                continue
-
-        logger.info(f"Generated {created_count} weekly reports")
-        return {'created': created_count}
-
-    except Exception as e:
-        logger.error(f"Error in send_weekly_report: {str(e)}")
-        raise self.retry(exc=e, countdown=300)
+    return send_weekly_digests()
 
 
 @shared_task(bind=True, max_retries=3)

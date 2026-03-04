@@ -5,6 +5,8 @@ import logging
 import uuid
 import requests as http_requests
 
+from django.db.models import Max
+
 logger = logging.getLogger(__name__)
 
 from rest_framework import viewsets, status, generics, views
@@ -24,7 +26,7 @@ from core.openapi_examples import (
     DREAM_CREATE_REQUEST, DREAM_LIST_RESPONSE, DREAM_ANALYZE_RESPONSE,
     GOAL_CREATE_REQUEST,
 )
-from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot, FocusSession, DreamJournal, ProgressPhoto
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
@@ -34,6 +36,9 @@ from .serializers import (
     DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
     VisionBoardImageSerializer,
+    FocusSessionSerializer, FocusSessionStartSerializer, FocusSessionCompleteSerializer,
+    DreamJournalSerializer,
+    ProgressPhotoSerializer,
 )
 from core.permissions import IsOwner, CanCreateDream, CanUseAI, CanUseVisionBoard
 from integrations.openai_service import OpenAIService
@@ -43,6 +48,7 @@ from core.ai_validators import (
     validate_analysis_response,
     validate_calibration_questions,
     validate_calibration_summary,
+    validate_smart_analysis_response,
     check_plan_calibration_coherence,
     AIValidationError,
 )
@@ -192,6 +198,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         ai_actions = [
             'analyze', 'start_calibration', 'answer_calibration',
             'generate_plan', 'generate_two_minute_start',
+            'predict_obstacles', 'similar', 'conversation_starters',
         ]
         vision_ai_actions = ['generate_vision']
         vision_free_actions = [
@@ -258,6 +265,369 @@ class DreamViewSet(viewsets.ModelViewSet):
                 {'error': _('AI produced an invalid analysis: %(msg)s') % {'msg': e.message}},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Predict obstacles",
+        description="Use AI to predict potential obstacles for a dream and suggest preventive measures",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='predict-obstacles', throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    def predict_obstacles(self, request, pk=None):
+        """Predict potential obstacles for a dream using AI."""
+        dream = self.get_object()
+        ai_service = OpenAIService()
+
+        try:
+            # Build dream info
+            dream_info = {
+                'title': dream.title,
+                'description': dream.description,
+                'category': dream.category,
+                'target_date': str(dream.target_date) if dream.target_date else None,
+                'progress': dream.progress_percentage,
+            }
+
+            # Gather goals data
+            goals_data = [
+                {
+                    'title': g.title,
+                    'description': g.description,
+                    'status': g.status,
+                    'progress': g.progress_percentage,
+                }
+                for g in dream.goals.all()
+            ]
+
+            # Gather tasks data
+            tasks_data = [
+                {
+                    'title': t.title,
+                    'status': t.status,
+                    'duration_mins': t.duration_mins,
+                }
+                for g in dream.goals.all()
+                for t in g.tasks.all()
+            ]
+
+            # Gather existing obstacles
+            existing_obstacles = [
+                {
+                    'title': ob.title,
+                    'description': ob.description,
+                    'status': ob.status,
+                    'type': ob.obstacle_type,
+                }
+                for ob in dream.obstacles.all()
+            ]
+
+            # Gather past obstacle patterns from user's other dreams
+            other_obstacles = Obstacle.objects.filter(
+                dream__user=request.user,
+            ).exclude(dream=dream).select_related('dream')[:30]
+            past_patterns = [
+                {
+                    'obstacle': ob.title,
+                    'dream_category': ob.dream.category,
+                    'was_resolved': ob.status == 'resolved',
+                }
+                for ob in other_obstacles
+            ]
+
+            # Call AI prediction
+            result = ai_service.predict_obstacles(
+                dream_info=dream_info,
+                goals_data=goals_data,
+                tasks_data=tasks_data,
+                existing_obstacles=existing_obstacles,
+                past_patterns=past_patterns,
+            )
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
+
+            return Response(result)
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Get conversation starters",
+        description="Generate contextual conversation starters tailored to a dream's current status using AI",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='conversation-starters', throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    def conversation_starters(self, request, pk=None):
+        """Generate contextual conversation starters for a dream."""
+        dream = self.get_object()
+        ai_service = OpenAIService()
+
+        try:
+            # Gather recent tasks (last 5 completed or in-progress)
+            recent_tasks = []
+            for goal in dream.goals.all()[:5]:
+                for task in goal.tasks.order_by('-updated_at')[:3]:
+                    recent_tasks.append({
+                        'title': task.title,
+                        'status': task.status,
+                    })
+            recent_tasks = recent_tasks[:5]
+
+            # Gather active obstacles
+            obstacle_data = [
+                {
+                    'title': ob.title,
+                    'status': ob.status,
+                }
+                for ob in dream.obstacles.filter(status='active')[:5]
+            ]
+
+            dream_info = {
+                'title': dream.title,
+                'description': dream.description,
+                'category': dream.category,
+                'status': dream.status,
+                'progress': dream.progress_percentage,
+                'recent_tasks': recent_tasks,
+                'obstacles': obstacle_data,
+            }
+
+            result = ai_service.generate_starters(dream_info)
+
+            # Track AI usage
+            AIUsageTracker().increment(request.user, 'ai_chat')
+
+            return Response(result)
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Find similar dreams and inspiration",
+        description="Find similar public dreams from other users and related templates using AI",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Dream not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='similar', throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    def similar(self, request, pk=None):
+        """Find similar public dreams and related templates for inspiration."""
+        dream = self.get_object()
+        ai_service = OpenAIService()
+
+        try:
+            # Build source dream info
+            source_dream = {
+                'title': dream.title,
+                'description': dream.description,
+                'category': dream.category,
+                'progress': dream.progress_percentage,
+            }
+
+            # Fetch public dreams from other users (limit 50 most recent)
+            public_dreams_qs = Dream.objects.filter(
+                is_public=True,
+            ).exclude(
+                user=request.user,
+            ).order_by('-created_at')[:50]
+
+            public_dreams = [
+                {
+                    'id': str(d.id),
+                    'title': d.title,
+                    'category': d.category,
+                    'progress': d.progress_percentage,
+                }
+                for d in public_dreams_qs
+            ]
+
+            # Fetch available templates
+            templates_qs = DreamTemplate.objects.filter(
+                is_active=True,
+            ).order_by('-is_featured', '-usage_count')[:30]
+
+            templates = [
+                {
+                    'id': str(t.id),
+                    'title': t.title,
+                    'description': t.description,
+                    'category': t.category,
+                    'difficulty': t.difficulty,
+                }
+                for t in templates_qs
+            ]
+
+            # Call AI for similarity matching
+            result = ai_service.find_similar_dreams(
+                source_dream=source_dream,
+                public_dreams=public_dreams,
+                templates=templates,
+            )
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
+
+            return Response(result)
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Smart cross-dream analysis",
+        description="Analyze all active dreams to find patterns, synergies, insights, and risks using AI",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='No active dreams to analyze.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='smart-analysis', throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    def smart_analysis(self, request):
+        """Perform AI-powered cross-dream pattern recognition across all user's active dreams."""
+        # Fetch all active dreams with related goals and tasks
+        dreams = Dream.objects.filter(
+            user=request.user,
+            status='active',
+        ).prefetch_related('goals', 'goals__tasks')
+
+        if not dreams.exists():
+            return Response(
+                {'error': _('You need at least one active dream for smart analysis.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Build dreams data payload for AI
+        dreams_data = []
+        for dream in dreams:
+            goals_data = []
+            for goal in dream.goals.all():
+                tasks_data = []
+                for task in goal.tasks.all():
+                    tasks_data.append({
+                        'title': task.title,
+                        'status': task.status,
+                        'order': task.order,
+                    })
+                goals_data.append({
+                    'title': goal.title,
+                    'description': goal.description,
+                    'status': goal.status,
+                    'progress': goal.progress_percentage,
+                    'tasks': tasks_data,
+                })
+            dreams_data.append({
+                'title': dream.title,
+                'description': dream.description,
+                'category': dream.category,
+                'progress': dream.progress_percentage,
+                'status': dream.status,
+                'goals': goals_data,
+            })
+
+        ai_service = OpenAIService()
+
+        try:
+            raw_result = ai_service.smart_analysis(dreams_data)
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
+
+            # Validate AI output
+            analysis = validate_smart_analysis_response(raw_result)
+            return Response(analysis.model_dump())
+
+        except AIValidationError as e:
+            return Response(
+                {'error': _('AI produced an invalid smart analysis: %(msg)s') % {'msg': e.message}},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Auto-categorize dream",
+        description="Use AI to suggest the best category and relevant tags for a dream based on title and description",
+        tags=["Dreams"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            500: OpenApiResponse(description='Internal server error.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='auto-categorize',
+            permission_classes=[IsAuthenticated, CanUseAI],
+            throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
+    def auto_categorize(self, request):
+        """Use AI to suggest category and tags for a dream."""
+        title = request.data.get('title', '').strip()
+        description = request.data.get('description', '').strip()
+
+        if not title or not description:
+            return Response(
+                {'error': _('Both title and description are required.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(description) < 10:
+            return Response(
+                {'error': _('Description must be at least 10 characters.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ai_service = OpenAIService()
+
+        try:
+            result = ai_service.auto_categorize(title, description)
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_plan')
+
+            return Response(result)
+
         except OpenAIError as e:
             return Response(
                 {'error': str(e)},
@@ -863,6 +1233,176 @@ class DreamViewSet(viewsets.ModelViewSet):
             return Response({'error': _('Image not found.')}, status=status.HTTP_404_NOT_FOUND)
         return Response({'message': _('Image removed.')})
 
+    # -- Progress Photos ---------------------------------------------------
+
+    @extend_schema(
+        summary='List progress photos',
+        description='List all progress photos for a dream with AI analyses',
+        tags=['Dreams'],
+        responses={
+            200: ProgressPhotoSerializer(many=True),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='progress-photos')
+    def progress_photos_list(self, request, pk=None):
+        """List all progress photos for a dream."""
+        dream = self.get_object()
+        photos = dream.progress_photos.all()
+        return Response({
+            'photos': ProgressPhotoSerializer(photos, many=True, context={'request': request}).data,
+        })
+
+    @extend_schema(
+        summary='Upload progress photo',
+        description='Upload a progress photo for visual tracking',
+        tags=['Dreams'],
+        responses={
+            201: ProgressPhotoSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='progress-photos/upload', parser_classes=[MultiPartParser, FormParser])
+    def progress_photos_upload(self, request, pk=None):
+        """Upload a progress photo for a dream."""
+        dream = self.get_object()
+
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response(
+                {'error': _('Image file is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate image file type and size
+        ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        content_type = getattr(image_file, 'content_type', '')
+        if content_type not in ALLOWED_IMAGE_TYPES:
+            return Response(
+                {'error': _('Unsupported image format. Allowed: JPEG, PNG, WebP, GIF.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if image_file.size > 10 * 1024 * 1024:
+            return Response(
+                {'error': _('Image file too large. Max 10MB.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate magic bytes
+        header = image_file.read(12)
+        image_file.seek(0)
+        valid_magic = (
+            header[:3] == b'ÿØÿ' or  # JPEG
+            header[:8] == b'PNG
+
+' or  # PNG
+            header[:4] == b'RIFF' and header[8:12] == b'WEBP' or  # WebP
+            header[:6] in (b'GIF87a', b'GIF89a')  # GIF
+        )
+        if not valid_magic:
+            return Response(
+                {'error': _('Invalid image file.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        caption = request.data.get('caption', '')
+        taken_at = request.data.get('taken_at', timezone.now())
+
+        photo = ProgressPhoto.objects.create(
+            dream=dream,
+            image=image_file,
+            caption=caption,
+            taken_at=taken_at,
+        )
+
+        return Response(
+            ProgressPhotoSerializer(photo, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary='Analyze progress photo',
+        description='Trigger AI vision analysis on a progress photo',
+        tags=['Dreams'],
+        responses={
+            200: dict,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Photo not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+        },
+    )
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'progress-photos/(?P<photo_id>[0-9a-f-]+)/analyze',
+        throttle_classes=[AIImageDailyThrottle],
+    )
+    def progress_photos_analyze(self, request, pk=None, photo_id=None):
+        """Analyze a progress photo with AI vision."""
+        dream = self.get_object()
+
+        try:
+            photo = ProgressPhoto.objects.get(id=photo_id, dream=dream)
+        except ProgressPhoto.DoesNotExist:
+            return Response(
+                {'error': _('Progress photo not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Build the image URL for the AI service
+        if photo.image:
+            image_url = request.build_absolute_uri(photo.image.url)
+        else:
+            return Response(
+                {'error': _('Photo has no image file.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Gather previous analyses for comparison context
+        import json as json_module
+        previous_photos = dream.progress_photos.filter(
+            ai_analysis__isnull=False,
+            taken_at__lt=photo.taken_at,
+        ).exclude(ai_analysis='').order_by('-taken_at')[:3]
+
+        previous_analyses = []
+        for prev in previous_photos:
+            try:
+                parsed = json_module.loads(prev.ai_analysis)
+                previous_analyses.append(parsed.get('analysis', prev.ai_analysis))
+            except (json_module.JSONDecodeError, TypeError):
+                previous_analyses.append(prev.ai_analysis)
+        previous_analyses.reverse()  # Chronological order
+
+        ai_service = OpenAIService()
+
+        try:
+            result = ai_service.analyze_progress_image(
+                image_url=image_url,
+                dream_title=dream.title,
+                dream_description=dream.description,
+                previous_analyses=previous_analyses if previous_analyses else None,
+            )
+
+            # Store the analysis as JSON string
+            photo.ai_analysis = json_module.dumps(result)
+            photo.save(update_fields=['ai_analysis', 'updated_at'])
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_image')
+
+            return Response({
+                'analysis': result,
+                'photo': ProgressPhotoSerializer(photo, context={'request': request}).data,
+            })
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @extend_schema(
         summary="Progress history",
         description="Get progress snapshot history for sparkline charts",
@@ -885,6 +1425,124 @@ class DreamViewSet(viewsets.ModelViewSet):
             for s in snapshots
         ]))
         return Response({'snapshots': data, 'current_progress': dream.progress_percentage})
+
+    @extend_schema(
+        summary="Dream analytics",
+        description="Get comprehensive analytics for a dream including progress history, task stats, weekly activity, category breakdown, and milestones.",
+        tags=["Dreams"],
+        parameters=[
+            OpenApiParameter(
+                name='range',
+                description='Time range filter: 1w, 1m, 3m, or all',
+                required=False,
+                type=str,
+            ),
+        ],
+        responses={
+            200: dict,
+            404: OpenApiResponse(description='Dream not found.'),
+        },
+    )
+    @action(detail=True, methods=['get'])
+    def analytics(self, request, pk=None):
+        """Get comprehensive analytics for a dream."""
+        from django.db.models import Count
+        from django.db.models.functions import TruncWeek
+        from collections import OrderedDict
+        import datetime
+
+        dream = self.get_object()
+
+        # Determine date range filter
+        range_param = request.query_params.get('range', 'all')
+        now = timezone.now()
+        range_start = None
+        if range_param == '1w':
+            range_start = now - datetime.timedelta(weeks=1)
+        elif range_param == '1m':
+            range_start = now - datetime.timedelta(days=30)
+        elif range_param == '3m':
+            range_start = now - datetime.timedelta(days=90)
+        # 'all' means no filter
+
+        # 1. Progress history from snapshots
+        snapshot_qs = DreamProgressSnapshot.objects.filter(dream=dream)
+        if range_start:
+            snapshot_qs = snapshot_qs.filter(date__gte=range_start.date())
+        snapshots = snapshot_qs.order_by('date')
+        progress_history = [
+            {'date': str(s.date), 'progress': round(s.progress_percentage, 1)}
+            for s in snapshots
+        ]
+
+        # 2. Task stats (across all goals in this dream)
+        all_tasks = Task.objects.filter(goal__dream=dream)
+        task_stats = {
+            'completed': all_tasks.filter(status='completed').count(),
+            'in_progress': all_tasks.filter(status='pending', goal__status='in_progress').count(),
+            'pending': all_tasks.filter(status='pending').exclude(goal__status='in_progress').count(),
+            'skipped': all_tasks.filter(status='skipped').count(),
+        }
+
+        # 3. Weekly activity (tasks completed per week)
+        completed_tasks_qs = all_tasks.filter(status='completed', completed_at__isnull=False)
+        if range_start:
+            completed_tasks_qs = completed_tasks_qs.filter(completed_at__gte=range_start)
+        weekly_data = (
+            completed_tasks_qs
+            .annotate(week=TruncWeek('completed_at'))
+            .values('week')
+            .annotate(tasks_completed=Count('id'))
+            .order_by('week')
+        )
+        weekly_activity = [
+            {
+                'week': entry['week'].strftime('%Y-W%W'),
+                'tasks_completed': entry['tasks_completed'],
+            }
+            for entry in weekly_data
+        ]
+
+        # 4. Category breakdown (percentage of dreams by category for this user)
+        user_dreams = Dream.objects.filter(user=request.user, status__in=['active', 'completed'])
+        total_user_dreams = user_dreams.count()
+        category_breakdown = {}
+        if total_user_dreams > 0:
+            cat_counts = (
+                user_dreams
+                .values('category')
+                .annotate(count=Count('id'))
+                .order_by('-count')
+            )
+            for entry in cat_counts:
+                cat_name = entry['category'] or 'uncategorized'
+                category_breakdown[cat_name] = round(
+                    (entry['count'] / total_user_dreams) * 100, 1
+                )
+
+        # 5. Milestones (progress milestones — when 25%, 50%, 75% were first reached)
+        milestones = []
+        thresholds = [25, 50, 75, 100]
+        for threshold in thresholds:
+            milestone_snapshot = (
+                DreamProgressSnapshot.objects
+                .filter(dream=dream, progress_percentage__gte=threshold)
+                .order_by('date')
+                .first()
+            )
+            if milestone_snapshot:
+                milestones.append({
+                    'label': str(threshold) + '%',
+                    'date': str(milestone_snapshot.date),
+                })
+
+        return Response({
+            'progress_history': progress_history,
+            'task_stats': task_stats,
+            'weekly_activity': weekly_activity,
+            'category_breakdown': category_breakdown,
+            'milestones': milestones,
+        })
 
     @extend_schema(
         summary="Complete dream",
@@ -1685,6 +2343,115 @@ class GoalViewSet(viewsets.ModelViewSet):
 
         return Response(GoalSerializer(goal).data)
 
+    @extend_schema(
+        summary="Refine goal with AI",
+        description="Interactive SMART goal refinement wizard powered by AI. Supports multi-turn conversation.",
+        tags=["Goals"],
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'goal_id': {'type': 'string', 'format': 'uuid', 'description': 'UUID of the goal to refine'},
+                    'message': {'type': 'string', 'description': 'User message in the refinement conversation'},
+                    'history': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'object',
+                            'properties': {
+                                'role': {'type': 'string', 'enum': ['user', 'assistant']},
+                                'content': {'type': 'string'},
+                            },
+                        },
+                        'description': 'Conversation history for multi-turn refinement',
+                    },
+                },
+                'required': ['goal_id', 'message'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(description='AI refinement response with optional refined goal and milestones.'),
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Goal not found.'),
+        },
+    )
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, CanUseAI],
+            url_path='refine', url_name='goal-refine')
+    def refine(self, request):
+        """Refine a goal into a SMART goal through AI conversation."""
+        goal_id = request.data.get('goal_id')
+        message = request.data.get('message', '')
+        history = request.data.get('history', [])
+
+        if not goal_id:
+            return Response(
+                {'error': _('goal_id is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not message.strip():
+            return Response(
+                {'error': _('message is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Fetch the goal (must belong to current user)
+        try:
+            goal = Goal.objects.select_related('dream').get(
+                id=goal_id,
+                dream__user=request.user,
+            )
+        except Goal.DoesNotExist:
+            return Response(
+                {'error': _('Goal not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check AI usage quota
+        tracker = AIUsageTracker()
+        allowed, info = tracker.check_quota(request.user, 'ai_chat')
+        if not allowed:
+            return Response(
+                {'error': _('Daily AI usage limit reached. Please try again tomorrow.'), 'quota': info},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Build dream context
+        dream = goal.dream
+        dream_context = {
+            'title': dream.title,
+            'description': dream.description,
+            'category': dream.category,
+        }
+
+        # Append the new user message to history
+        full_history = list(history) + [{'role': 'user', 'content': message}]
+
+        # Call AI service
+        try:
+            ai_service = OpenAIService()
+            result = ai_service.refine_goal(
+                goal_title=goal.title,
+                goal_description=goal.description,
+                dream_context=dream_context,
+                conversation_history=full_history,
+            )
+        except OpenAIError as e:
+            logger.error(f"Goal refinement AI error: {e}")
+            return Response(
+                {'error': _('AI service is temporarily unavailable. Please try again.')},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Track AI usage
+        tracker.increment(request.user, 'ai_chat')
+
+        return Response({
+            'message': result.get('message', ''),
+            'refined_goal': result.get('refined_goal'),
+            'milestones': result.get('milestones'),
+            'is_complete': result.get('is_complete', False),
+        })
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -1770,7 +2537,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Complete task",
-        description="Mark a task as completed and earn XP",
+        description="Mark a task as completed and earn XP. If the task has chain_next_delay_days set, a new task is auto-created.",
         tags=["Tasks"],
         responses={
             200: TaskSerializer,
@@ -1788,7 +2555,44 @@ class TaskViewSet(viewsets.ModelViewSet):
             )
         task.complete()
 
-        return Response(TaskSerializer(task).data)
+        data = TaskSerializer(task).data
+        # Include the newly created chain task in the response if one was created
+        chain_child = task.chain_children.first()
+        if chain_child:
+            data['chain_next_task'] = TaskSerializer(chain_child).data
+
+        return Response(data)
+
+    @extend_schema(
+        summary="Get task chain",
+        description="Get all tasks in a chain, ordered from root to latest.",
+        tags=["Tasks"],
+        responses={
+            200: TaskSerializer(many=True),
+            404: OpenApiResponse(description='Task not found.'),
+        },
+    )
+    @action(detail=True, methods=['get'])
+    def chain(self, request, pk=None):
+        """Get all tasks in this task's chain."""
+        task = self.get_object()
+
+        # Walk back to the chain root
+        root = task
+        while root.chain_parent_id:
+            root = root.chain_parent
+
+        # Walk forward collecting all chain tasks
+        chain_tasks = [root]
+        current = root
+        while True:
+            child = current.chain_children.first()
+            if not child:
+                break
+            chain_tasks.append(child)
+            current = child
+
+        return Response(TaskSerializer(chain_tasks, many=True).data)
 
     @extend_schema(
         summary="Skip task",
@@ -1807,6 +2611,742 @@ class TaskViewSet(viewsets.ModelViewSet):
         task.save()
 
         return Response(TaskSerializer(task).data)
+
+    @extend_schema(
+        summary="Quick create task",
+        description=(
+            "Create a task with minimal input. Optionally specify a dream_id; "
+            "if omitted the task is added to the first active dream's first goal."
+        ),
+        tags=["Tasks"],
+        responses={
+            201: TaskSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+    )
+    @action(detail=False, methods=['post'])
+    def quick_create(self, request):
+        """Quick-add a task with intelligent dream/goal assignment."""
+        title = (request.data.get('title') or '').strip()
+        if not title:
+            return Response(
+                {'error': _('Title is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        dream_id = request.data.get('dream_id')
+        user = request.user
+
+        # Resolve dream
+        dream = None
+        if dream_id:
+            try:
+                dream = Dream.objects.get(id=dream_id, user=user, status='active')
+            except Dream.DoesNotExist:
+                return Response(
+                    {'error': _('Dream not found or not active.')},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            dream = Dream.objects.filter(user=user, status='active').order_by('-updated_at').first()
+
+        if not dream:
+            return Response(
+                {'error': _('No active dreams found. Please create a dream first.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Resolve goal — pick the first non-completed goal, or create one
+        goal = dream.goals.exclude(status='completed').order_by('order').first()
+        if not goal:
+            goal = Goal.objects.create(
+                dream=dream,
+                title=_('Quick Tasks'),
+                description=_('Auto-created goal for quick-add tasks.'),
+                order=dream.goals.count() + 1,
+            )
+
+        # Determine next order
+        max_order = goal.tasks.aggregate(Max('order'))['order__max'] or 0
+
+        task = Task.objects.create(
+            goal=goal,
+            title=title,
+            order=max_order + 1,
+        )
+
+        return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Reorder tasks",
+        description="Reorder tasks within a goal. Body: { goal_id: uuid, task_ids: [ordered list of task UUIDs] }",
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description='Tasks reordered.'),
+            400: OpenApiResponse(description='Missing goal_id or task_ids.'),
+        },
+    )
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        """Reorder tasks within a goal. Body: { goal_id: str, task_ids: [ordered list] }"""
+        goal_id = request.data.get('goal_id')
+        task_ids = request.data.get('task_ids', [])
+        if not goal_id or not task_ids:
+            return Response(
+                {'error': _('goal_id and task_ids are required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Update order field for each task
+        for i, task_id in enumerate(task_ids):
+            Task.objects.filter(
+                id=task_id,
+                goal_id=goal_id,
+                goal__dream__user=request.user,
+            ).update(order=i)
+        return Response({'status': 'ok'})
+
+    @extend_schema(
+        summary="AI daily task priorities",
+        description=(
+            "Uses AI to analyze the user's pending tasks and suggest an optimal "
+            "order based on energy levels, deadlines, and the Eisenhower matrix."
+        ),
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description="Prioritized task list with focus task and quick wins."),
+            403: OpenApiResponse(description="AI features require a Premium or Pro subscription."),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='daily-priorities',
+            permission_classes=[IsAuthenticated, CanUseAI])
+    def daily_priorities(self, request):
+        """Return AI-prioritized task list for today."""
+        user = request.user
+        today = timezone.now().date()
+
+        # Gather pending tasks for this user
+        pending_tasks = Task.objects.filter(
+            goal__dream__user=user,
+            status='pending',
+        ).select_related('goal', 'goal__dream')
+
+        # Filter to tasks relevant for today:
+        # - scheduled today, or overdue, or no date set (backlog)
+        from django.db.models import Q
+        today_tasks = pending_tasks.filter(
+            Q(scheduled_date__date=today)
+            | Q(scheduled_date__date__lt=today)
+            | Q(scheduled_date__isnull=True, expected_date__lte=today)
+            | Q(scheduled_date__isnull=True, deadline_date__lte=today)
+            | Q(scheduled_date__isnull=True, expected_date__isnull=True, deadline_date__isnull=True)
+        )[:30]  # cap to avoid massive prompts
+
+        if not today_tasks:
+            return Response({
+                'prioritized_tasks': [],
+                'focus_task': None,
+                'quick_wins': [],
+                'message': 'No pending tasks found for today.',
+            })
+
+        # Build task payload for AI
+        task_payload = []
+        for t in today_tasks:
+            task_payload.append({
+                'task_id': str(t.id),
+                'title': t.title,
+                'dream': t.goal.dream.title,
+                'deadline': t.deadline_date.isoformat() if t.deadline_date else None,
+                'estimated_duration': t.duration_mins,
+                'priority': t.goal.dream.priority,
+            })
+
+        energy_profile = user.energy_profile or {}
+        current_hour = timezone.now().hour
+
+        # Call AI
+        try:
+            ai = OpenAIService()
+            result = ai.prioritize_tasks(task_payload, energy_profile, current_hour)
+        except OpenAIError as e:
+            logger.error("AI daily priorities failed: %s", e)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Track AI usage
+        tracker = AIUsageTracker()
+        tracker.increment(user, 'ai_plan')
+
+        # Enrich response with full task data so the frontend doesn't need extra calls
+        task_map = {str(t.id): t for t in today_tasks}
+        for pt in result.get('prioritized_tasks', []):
+            task_obj = task_map.get(pt.get('task_id'))
+            if task_obj:
+                pt['task_title'] = task_obj.title
+                pt['dream_title'] = task_obj.goal.dream.title
+                pt['dream_color'] = task_obj.goal.dream.color
+                pt['duration_mins'] = task_obj.duration_mins
+
+        focus = result.get('focus_task')
+        if focus and focus.get('task_id'):
+            fobj = task_map.get(focus['task_id'])
+            if fobj:
+                focus['task_title'] = fobj.title
+                focus['dream_title'] = fobj.goal.dream.title
+                focus['dream_color'] = fobj.goal.dream.color
+                focus['duration_mins'] = fobj.duration_mins
+
+        for qw in result.get('quick_wins', []):
+            qobj = task_map.get(qw.get('task_id'))
+            if qobj:
+                qw['task_title'] = qobj.title
+                qw['dream_title'] = qobj.goal.dream.title
+                qw['duration_mins'] = qobj.duration_mins
+
+        return Response(result)
+
+    @extend_schema(
+        summary="Estimate task durations",
+        description=(
+            "Uses AI to estimate how long each task will take based on context "
+            "and the user's historical focus session data. "
+            "Body: { task_ids: [uuid], apply: false, skill_hints: '' }"
+        ),
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description="Duration estimates for each task."),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="AI features require a Premium or Pro subscription."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='estimate-durations',
+            permission_classes=[IsAuthenticated, CanUseAI])
+    def estimate_durations(self, request):
+        """Estimate durations for a list of tasks using AI."""
+        from django.db.models import Avg, Count, Q, Sum
+
+        task_ids = request.data.get('task_ids', [])
+        apply_estimates = request.data.get('apply', False)
+        skill_hints = request.data.get('skill_hints', '')
+
+        if not task_ids or not isinstance(task_ids, list):
+            return Response(
+                {'error': _('task_ids is required and must be a non-empty list.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(task_ids) > 50:
+            return Response(
+                {'error': _('Maximum 50 tasks per request.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+
+        # Fetch tasks belonging to this user
+        tasks = Task.objects.filter(
+            id__in=task_ids,
+            goal__dream__user=user,
+        ).select_related('goal', 'goal__dream')
+
+        if not tasks.exists():
+            return Response(
+                {'error': _('No tasks found for the given IDs.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build task payload for AI
+        task_payload = []
+        for t in tasks:
+            task_payload.append({
+                'task_id': str(t.id),
+                'title': t.title,
+                'description': t.description or '',
+                'dream_title': t.goal.dream.title,
+                'dream_category': t.goal.dream.category or '',
+                'goal_title': t.goal.title,
+                'current_duration_mins': t.duration_mins,
+            })
+
+        # Gather historical focus session data for this user
+        historical_data = {}
+        completed_sessions = FocusSession.objects.filter(
+            user=user,
+            completed=True,
+            session_type='work',
+        )
+
+        total_sessions = completed_sessions.count()
+        if total_sessions > 0:
+            agg = completed_sessions.aggregate(
+                avg_actual=Avg('actual_minutes'),
+                avg_planned=Avg('duration_minutes'),
+            )
+            avg_actual = round(agg['avg_actual'] or 0, 1)
+            avg_planned = agg['avg_planned'] or 1
+
+            # Total completed tasks for user
+            total_user_tasks = Task.objects.filter(
+                goal__dream__user=user,
+            ).count()
+            completed_user_tasks = Task.objects.filter(
+                goal__dream__user=user,
+                status='completed',
+            ).count()
+            completion_rate = round(
+                (completed_user_tasks / total_user_tasks * 100) if total_user_tasks > 0 else 0, 1
+            )
+
+            # Planned vs actual ratio
+            ratio = round(avg_actual / avg_planned, 2) if avg_planned > 0 else 1.0
+
+            # Category averages: avg actual_minutes by dream category
+            cat_sessions = completed_sessions.filter(
+                task__isnull=False,
+            ).values(
+                'task__goal__dream__category',
+            ).annotate(
+                avg_mins=Avg('actual_minutes'),
+            )
+            category_averages = {}
+            for cs in cat_sessions:
+                cat = cs['task__goal__dream__category'] or 'uncategorized'
+                category_averages[cat] = round(cs['avg_mins'] or 0, 1)
+
+            historical_data = {
+                'avg_actual_minutes': avg_actual,
+                'completion_rate': completion_rate,
+                'avg_planned_vs_actual_ratio': ratio,
+                'total_sessions': total_sessions,
+                'category_averages': category_averages,
+            }
+
+        # Call AI estimation
+        try:
+            ai = OpenAIService()
+            result = ai.estimate_durations(
+                tasks=task_payload,
+                historical_data=historical_data if historical_data else None,
+                skill_hints=skill_hints or None,
+            )
+        except OpenAIError as e:
+            logger.error("AI duration estimation failed: %s", e)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Track AI usage
+        tracker = AIUsageTracker()
+        tracker.increment(user, 'ai_plan')
+
+        estimates = result.get('estimates', [])
+
+        # Optionally apply realistic estimates to tasks
+        if apply_estimates:
+            task_map = {str(t.id): t for t in tasks}
+            for est in estimates:
+                task_obj = task_map.get(est.get('task_id'))
+                if task_obj and est.get('realistic_minutes'):
+                    task_obj.duration_mins = est['realistic_minutes']
+                    task_obj.save(update_fields=['duration_mins'])
+
+        # Compute total estimated time
+        total_optimistic = sum(e.get('optimistic_minutes', 0) for e in estimates)
+        total_realistic = sum(e.get('realistic_minutes', 0) for e in estimates)
+        total_pessimistic = sum(e.get('pessimistic_minutes', 0) for e in estimates)
+
+        return Response({
+            'estimates': estimates,
+            'total_optimistic_minutes': total_optimistic,
+            'total_realistic_minutes': total_realistic,
+            'total_pessimistic_minutes': total_pessimistic,
+            'tasks_count': len(estimates),
+            'applied': apply_estimates,
+        })
+
+    @extend_schema(
+        summary="Parse natural language into tasks",
+        description=(
+            "Uses AI to parse free-form natural language text into structured "
+            "task objects. Returns parsed tasks for user confirmation before creation."
+        ),
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description="Parsed tasks from natural language input."),
+            400: OpenApiResponse(description="Validation error — text is required."),
+            403: OpenApiResponse(description="AI features require a Premium or Pro subscription."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='parse-natural',
+            permission_classes=[IsAuthenticated, CanUseAI])
+    def parse_natural(self, request):
+        """Parse natural language text into structured tasks using AI."""
+        text = (request.data.get('text') or '').strip()
+        if not text:
+            return Response(
+                {'error': _('Text is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(text) > 5000:
+            return Response(
+                {'error': _('Text must be 5000 characters or less.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+
+        # Build dreams/goals context for AI matching
+        active_dreams = Dream.objects.filter(
+            user=user, status='active'
+        ).prefetch_related('goals')
+
+        dreams_context = []
+        for dream in active_dreams:
+            goals_list = []
+            for goal in dream.goals.exclude(status='completed').order_by('order')[:10]:
+                goals_list.append({
+                    'id': str(goal.id),
+                    'title': goal.title,
+                })
+            dreams_context.append({
+                'id': str(dream.id),
+                'title': dream.title,
+                'category': dream.category,
+                'goals': goals_list,
+            })
+
+        # Call AI
+        try:
+            ai = OpenAIService()
+            result = ai.parse_natural_language_tasks(
+                text=text,
+                dreams_context=dreams_context if dreams_context else None,
+            )
+        except OpenAIError as e:
+            logger.error("AI natural language task parsing failed: %s", e)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Track AI usage
+        tracker = AIUsageTracker()
+        tracker.increment(user, 'ai_plan')
+
+        # Enrich parsed tasks with dream/goal titles for display
+        dream_map = {str(d.id): d for d in active_dreams}
+        goal_map = {}
+        for d in active_dreams:
+            for g in d.goals.all():
+                goal_map[str(g.id)] = g
+
+        parsed_tasks = result.get('tasks', [])
+        for task in parsed_tasks:
+            dream_id = task.get('matched_dream_id')
+            goal_id = task.get('matched_goal_id')
+            if dream_id and dream_id in dream_map:
+                task['matched_dream_title'] = dream_map[dream_id].title
+            else:
+                task['matched_dream_id'] = None
+                task['matched_dream_title'] = None
+            if goal_id and goal_id in goal_map:
+                task['matched_goal_title'] = goal_map[goal_id].title
+            else:
+                task['matched_goal_id'] = None
+                task['matched_goal_title'] = None
+
+        return Response({
+            'tasks': parsed_tasks,
+            'dreams': [{'id': str(d.id), 'title': d.title, 'category': d.category,
+                        'goals': [{'id': str(g.id), 'title': g.title}
+                                  for g in d.goals.exclude(status='completed').order_by('order')[:10]]}
+                       for d in active_dreams],
+        })
+
+    @extend_schema(
+        summary="Create tasks from parsed natural language",
+        description=(
+            "Creates tasks from the AI-parsed results after user confirmation. "
+            "Accepts a list of task objects with optional dream/goal assignments."
+        ),
+        tags=["Tasks"],
+        responses={
+            201: TaskSerializer(many=True),
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='create-from-parsed',
+            permission_classes=[IsAuthenticated])
+    def create_from_parsed(self, request):
+        """Create tasks from parsed natural language results."""
+        tasks_data = request.data.get('tasks', [])
+        if not tasks_data or not isinstance(tasks_data, list):
+            return Response(
+                {'error': _('A list of tasks is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        created_tasks = []
+
+        for task_data in tasks_data:
+            title = (task_data.get('title') or '').strip()
+            if not title:
+                continue
+
+            # Resolve dream and goal
+            dream = None
+            goal = None
+            dream_id = task_data.get('matched_dream_id') or task_data.get('dream_id')
+            goal_id = task_data.get('matched_goal_id') or task_data.get('goal_id')
+
+            if goal_id:
+                try:
+                    goal = Goal.objects.get(id=goal_id, dream__user=user)
+                    dream = goal.dream
+                except Goal.DoesNotExist:
+                    goal = None
+
+            if not goal and dream_id:
+                try:
+                    dream = Dream.objects.get(id=dream_id, user=user, status='active')
+                    goal = dream.goals.exclude(status='completed').order_by('order').first()
+                except Dream.DoesNotExist:
+                    dream = None
+
+            # Fallback: first active dream's first goal
+            if not goal:
+                dream = Dream.objects.filter(
+                    user=user, status='active'
+                ).order_by('-updated_at').first()
+                if dream:
+                    goal = dream.goals.exclude(status='completed').order_by('order').first()
+
+            if not dream:
+                continue  # Skip tasks if no dream exists
+
+            # Auto-create a goal if needed
+            if not goal:
+                goal = Goal.objects.create(
+                    dream=dream,
+                    title=_('Quick Tasks'),
+                    description=_('Auto-created goal for quick-add tasks.'),
+                    order=dream.goals.count() + 1,
+                )
+
+            # Determine next order
+            max_order = goal.tasks.aggregate(Max('order'))['order__max'] or 0
+
+            # Parse deadline
+            deadline = None
+            deadline_hint = task_data.get('deadline_hint')
+            if deadline_hint:
+                try:
+                    from datetime import date
+                    deadline = date.fromisoformat(str(deadline_hint)[:10])
+                except (ValueError, TypeError):
+                    deadline = None
+
+            task = Task.objects.create(
+                goal=goal,
+                title=title[:255],
+                description=(task_data.get('description') or '')[:5000],
+                order=max_order + 1,
+                duration_mins=task_data.get('duration_mins'),
+                deadline_date=deadline,
+            )
+
+            created_tasks.append(task)
+
+        if not created_tasks:
+            return Response(
+                {'error': _('No valid tasks could be created.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            TaskSerializer(created_tasks, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="Calibrate task difficulty",
+        description=(
+            "Uses AI to analyze the user's task completion patterns over the last "
+            "30 days and suggests difficulty adjustments, a daily target, and "
+            "a stretch challenge."
+        ),
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description="Difficulty calibration with suggestions."),
+            403: OpenApiResponse(description="AI features require a Premium or Pro subscription."),
+            503: OpenApiResponse(description="AI service error."),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='calibrate-difficulty',
+            permission_classes=[IsAuthenticated, CanUseAI])
+    def calibrate_difficulty(self, request):
+        """Return AI difficulty calibration based on user's recent performance."""
+        from django.db.models import Avg, Count, Q
+        from datetime import timedelta
+
+        user = request.user
+        today = timezone.now().date()
+        thirty_days_ago = today - timedelta(days=30)
+
+        # --- Gather completion patterns over the last 30 days ---
+        all_tasks_30d = Task.objects.filter(
+            goal__dream__user=user,
+            created_at__date__gte=thirty_days_ago,
+        )
+        total_tasks_30d = all_tasks_30d.count()
+        completed_tasks_30d = all_tasks_30d.filter(status='completed').count()
+        skipped_tasks_30d = all_tasks_30d.filter(status='skipped').count()
+
+        completion_rate = (completed_tasks_30d / total_tasks_30d) if total_tasks_30d > 0 else 0.0
+
+        # Average completion time from tasks with duration_mins
+        avg_completion_time = (
+            all_tasks_30d.filter(status='completed', duration_mins__isnull=False)
+            .aggregate(avg=Avg('duration_mins'))['avg']
+        ) or 0.0
+
+        # Streak data
+        streak_data = {
+            'current_streak': user.streak_days,
+            'days_active_last_30': (
+                user.daily_activities
+                .filter(date__gte=thirty_days_ago)
+                .values('date').distinct().count()
+            ),
+            'total_completed_30d': completed_tasks_30d,
+            'total_skipped_30d': skipped_tasks_30d,
+            'total_tasks_30d': total_tasks_30d,
+        }
+
+        # Current pending tasks (max 30)
+        pending_tasks = Task.objects.filter(
+            goal__dream__user=user,
+            status='pending',
+        ).select_related('goal', 'goal__dream')[:30]
+
+        current_tasks = []
+        for t in pending_tasks:
+            current_tasks.append({
+                'task_id': str(t.id),
+                'title': t.title,
+                'description': (t.description or '')[:200],
+                'duration_mins': t.duration_mins,
+                'dream_title': t.goal.dream.title,
+                'deadline': t.deadline_date.isoformat() if t.deadline_date else None,
+            })
+
+        if not current_tasks and total_tasks_30d == 0:
+            return Response({
+                'difficulty_level': 'moderate',
+                'calibration_score': 0.5,
+                'analysis': 'Not enough data to calibrate. Complete some tasks first!',
+                'suggestions': [],
+                'daily_target': {'tasks': 3, 'focus_minutes': 60, 'reason': 'Default target for new users.'},
+                'challenge': None,
+            })
+
+        # Call AI
+        try:
+            ai = OpenAIService()
+            result = ai.calibrate_difficulty(
+                completion_rate=completion_rate,
+                avg_completion_time=avg_completion_time,
+                streak_data=streak_data,
+                current_tasks=current_tasks,
+            )
+        except OpenAIError as e:
+            logger.error("AI difficulty calibration failed: %s", e)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Track AI usage
+        AIUsageTracker().increment(user, 'ai_plan')
+
+        # Enrich suggestions with full task data
+        task_map = {str(t.id): t for t in pending_tasks}
+        for s in result.get('suggestions', []):
+            task_obj = task_map.get(s.get('task_id'))
+            if task_obj:
+                s['task_title'] = task_obj.title
+                s['dream_title'] = task_obj.goal.dream.title
+                s['current_duration_mins'] = task_obj.duration_mins
+
+        return Response(result)
+
+    @extend_schema(
+        summary="Apply difficulty calibration",
+        description=(
+            "Applies AI-suggested difficulty modifications to tasks. "
+            "Body: { suggestions: [{task_id, modified_task: {title, description, duration_mins}}] }"
+        ),
+        tags=["Tasks"],
+        responses={
+            200: OpenApiResponse(description="Applied calibration results."),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="AI features require a Premium or Pro subscription."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='apply-calibration',
+            permission_classes=[IsAuthenticated, CanUseAI])
+    def apply_calibration(self, request):
+        """Apply AI-suggested difficulty modifications to tasks."""
+        suggestions = request.data.get('suggestions', [])
+        if not suggestions or not isinstance(suggestions, list):
+            return Response(
+                {'error': _('suggestions list is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        applied = []
+        errors = []
+
+        for s in suggestions[:20]:
+            task_id = s.get('task_id')
+            modified = s.get('modified_task', {})
+            if not task_id or not modified:
+                continue
+
+            try:
+                task = Task.objects.get(
+                    id=task_id,
+                    goal__dream__user=user,
+                )
+            except Task.DoesNotExist:
+                errors.append({'task_id': task_id, 'error': 'Task not found.'})
+                continue
+
+            # Apply modifications
+            if modified.get('title'):
+                task.title = str(modified['title'])[:255]
+            if modified.get('description'):
+                task.description = str(modified['description'])[:5000]
+            if modified.get('duration_mins') is not None:
+                try:
+                    task.duration_mins = int(modified['duration_mins'])
+                except (ValueError, TypeError):
+                    pass
+
+            task.save()
+            applied.append(TaskSerializer(task).data)
+
+        return Response({
+            'applied': applied,
+            'applied_count': len(applied),
+            'errors': errors,
+        })
 
 
 @extend_schema_view(
@@ -1899,3 +3439,243 @@ class ObstacleViewSet(viewsets.ModelViewSet):
         obstacle.save()
 
         return Response(ObstacleSerializer(obstacle).data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List journal entries",
+        description="Get all journal entries for a dream. Filter by dream using ?dream=<uuid>.",
+        tags=["Dream Journal"],
+        responses={200: DreamJournalSerializer(many=True)},
+    ),
+    create=extend_schema(
+        summary="Create journal entry",
+        description="Create a new journal entry for a dream",
+        tags=["Dream Journal"],
+        responses={201: DreamJournalSerializer},
+    ),
+    retrieve=extend_schema(
+        summary="Get journal entry",
+        description="Get a specific journal entry",
+        tags=["Dream Journal"],
+        responses={200: DreamJournalSerializer},
+    ),
+    update=extend_schema(
+        summary="Update journal entry",
+        description="Update a journal entry",
+        tags=["Dream Journal"],
+        responses={200: DreamJournalSerializer},
+    ),
+    partial_update=extend_schema(
+        summary="Partial update journal entry",
+        description="Partially update a journal entry",
+        tags=["Dream Journal"],
+        responses={200: DreamJournalSerializer},
+    ),
+    destroy=extend_schema(
+        summary="Delete journal entry",
+        description="Delete a journal entry",
+        tags=["Dream Journal"],
+        responses={204: OpenApiResponse(description='Journal entry deleted.')},
+    ),
+)
+class DreamJournalViewSet(viewsets.ModelViewSet):
+    """CRUD operations for dream journal entries."""
+
+    serializer_class = DreamJournalSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['dream', 'mood']
+    ordering_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """Return journal entries for dreams owned by the current user."""
+        if getattr(self, 'swagger_fake_view', False):
+            return DreamJournal.objects.none()
+        return DreamJournal.objects.filter(
+            dream__user=self.request.user
+        ).select_related('dream')
+
+    def perform_create(self, serializer):
+        """Ensure the dream belongs to the current user before creating."""
+        dream = serializer.validated_data.get('dream')
+        if dream.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(_('You can only add journal entries to your own dreams.'))
+        serializer.save()
+
+
+# ─── Focus Session Views ──────────────────────────────────────────────
+
+class FocusSessionStartView(views.APIView):
+    """Start a new Pomodoro focus session."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Start focus session",
+        description="Start a new Pomodoro focus session, optionally linked to a task.",
+        tags=["Focus"],
+        request=FocusSessionStartSerializer,
+        responses={
+            201: FocusSessionSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+        },
+    )
+    def post(self, request):
+        serializer = FocusSessionStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        task = None
+        task_id = serializer.validated_data.get('task_id')
+        if task_id:
+            try:
+                task = Task.objects.get(id=task_id, goal__dream__user=request.user)
+            except Task.DoesNotExist:
+                return Response(
+                    {'error': _('Task not found.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        session = FocusSession.objects.create(
+            user=request.user,
+            task=task,
+            duration_minutes=serializer.validated_data['duration_minutes'],
+            session_type=serializer.validated_data.get('session_type', 'work'),
+        )
+
+        return Response(
+            FocusSessionSerializer(session).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class FocusSessionCompleteView(views.APIView):
+    """Complete (or stop) an active focus session."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Complete focus session",
+        description="Mark a focus session as completed and record actual minutes.",
+        tags=["Focus"],
+        request=FocusSessionCompleteSerializer,
+        responses={
+            200: FocusSessionSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Session not found.'),
+        },
+    )
+    def post(self, request):
+        serializer = FocusSessionCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            session = FocusSession.objects.get(
+                id=serializer.validated_data['session_id'],
+                user=request.user,
+            )
+        except FocusSession.DoesNotExist:
+            return Response(
+                {'error': _('Session not found.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        session.actual_minutes = serializer.validated_data['actual_minutes']
+        session.completed = session.actual_minutes >= session.duration_minutes
+        session.ended_at = timezone.now()
+        session.save(update_fields=['actual_minutes', 'completed', 'ended_at'])
+
+        # Award XP for completed work sessions
+        if session.completed and session.session_type == 'work':
+            xp_amount = max(5, session.actual_minutes // 5)
+            request.user.add_xp(xp_amount)
+
+            # Record daily activity
+            from apps.users.models import DailyActivity
+            DailyActivity.record_task_completion(
+                user=request.user,
+                xp_earned=xp_amount,
+                duration_mins=session.actual_minutes,
+            )
+
+        return Response(FocusSessionSerializer(session).data)
+
+
+class FocusSessionHistoryView(generics.ListAPIView):
+    """List recent focus sessions for the current user."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = FocusSessionSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return FocusSession.objects.none()
+        return FocusSession.objects.filter(
+            user=self.request.user,
+        ).select_related('task')[:50]
+
+    @extend_schema(
+        summary="Focus session history",
+        description="Get recent focus sessions for the current user.",
+        tags=["Focus"],
+        responses={200: FocusSessionSerializer(many=True)},
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+
+class FocusSessionStatsView(views.APIView):
+    """Weekly focus stats: total minutes, sessions completed."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Focus stats",
+        description="Get weekly focus statistics: total minutes and sessions completed.",
+        tags=["Focus"],
+        responses={
+            200: OpenApiResponse(description='Focus statistics.'),
+        },
+    )
+    def get(self, request):
+        from django.db.models import Sum, Count, Q
+        from datetime import timedelta
+
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Weekly stats
+        weekly = FocusSession.objects.filter(
+            user=request.user,
+            started_at__gte=week_ago,
+            session_type='work',
+        ).aggregate(
+            total_minutes=Sum('actual_minutes'),
+            sessions_completed=Count('id', filter=Q(completed=True)),
+            total_sessions=Count('id'),
+        )
+
+        # Today stats
+        today = FocusSession.objects.filter(
+            user=request.user,
+            started_at__gte=today_start,
+            session_type='work',
+        ).aggregate(
+            total_minutes=Sum('actual_minutes'),
+            sessions_completed=Count('id', filter=Q(completed=True)),
+        )
+
+        return Response({
+            'weekly': {
+                'total_minutes': weekly['total_minutes'] or 0,
+                'sessions_completed': weekly['sessions_completed'] or 0,
+                'total_sessions': weekly['total_sessions'] or 0,
+            },
+            'today': {
+                'total_minutes': today['total_minutes'] or 0,
+                'sessions_completed': today['sessions_completed'] or 0,
+            },
+        })

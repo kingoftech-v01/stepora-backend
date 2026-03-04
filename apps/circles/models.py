@@ -8,6 +8,7 @@ maximum of 20 members and can be public or private.
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone as django_timezone
@@ -220,6 +221,8 @@ class CircleChallenge(models.Model):
 
     Challenges have a defined time period and can be joined by circle
     members. They provide structured goals and accountability.
+    Supports challenge types (tasks, streaks, focus minutes, dream progress)
+    with configurable target values for leaderboard tracking.
     """
 
     STATUS_CHOICES = [
@@ -227,6 +230,13 @@ class CircleChallenge(models.Model):
         ('active', 'Active'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+    ]
+
+    CHALLENGE_TYPE_CHOICES = [
+        ('tasks_completed', 'Complete Tasks'),
+        ('streak_days', 'Maintain Streak'),
+        ('focus_minutes', 'Focus Minutes'),
+        ('dreams_progress', 'Dream Progress'),
     ]
 
     id = models.UUIDField(
@@ -241,6 +251,14 @@ class CircleChallenge(models.Model):
         related_name='challenges',
         help_text='The circle this challenge belongs to.'
     )
+    creator = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='created_challenges',
+        null=True,
+        blank=True,
+        help_text='The user who created this challenge.'
+    )
     title = models.CharField(
         max_length=200,
         help_text='Title of the challenge.'
@@ -248,6 +266,16 @@ class CircleChallenge(models.Model):
     description = EncryptedTextField(
         blank=True,
         help_text='Detailed description of the challenge (encrypted at rest).'
+    )
+    challenge_type = models.CharField(
+        max_length=50,
+        choices=CHALLENGE_TYPE_CHOICES,
+        default='tasks_completed',
+        help_text='Type of challenge determining how progress is measured.'
+    )
+    target_value = models.PositiveIntegerField(
+        default=0,
+        help_text='Target value participants must reach to complete the challenge.'
     )
     start_date = models.DateTimeField(
         help_text='When this challenge starts.'
@@ -296,6 +324,11 @@ class CircleChallenge(models.Model):
     def participant_count(self):
         """Return the number of participants in this challenge."""
         return self.participants.count()
+
+    @property
+    def challenge_type_label(self):
+        """Return the human-readable label for the challenge type."""
+        return dict(self.CHALLENGE_TYPE_CHOICES).get(self.challenge_type, self.challenge_type)
 
 
 class PostReaction(models.Model):
@@ -580,3 +613,159 @@ class CircleCallParticipant(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} in call {self.call_id}"
+
+
+class CirclePoll(models.Model):
+    """
+    A poll attached to a circle post.
+
+    Each post can have at most one poll. The poll contains a question,
+    an ordered list of options, and optional settings like multiple-choice
+    voting and an end time.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this poll.'
+    )
+    post = models.OneToOneField(
+        CirclePost,
+        on_delete=models.CASCADE,
+        related_name='poll',
+        help_text='The circle post this poll belongs to.'
+    )
+    question = models.CharField(
+        max_length=300,
+        help_text='The poll question.'
+    )
+    allows_multiple = models.BooleanField(
+        default=False,
+        help_text='Whether users can vote for multiple options.'
+    )
+    ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When voting closes (null = no deadline).'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'circle_polls'
+        ordering = ['-created_at']
+        verbose_name = 'Circle Poll'
+        verbose_name_plural = 'Circle Polls'
+        indexes = [
+            models.Index(fields=['post'], name='idx_poll_post'),
+        ]
+
+    def __str__(self):
+        return f"Poll: {self.question[:60]}"
+
+    @property
+    def is_ended(self):
+        """Check if the poll has passed its end time."""
+        if self.ends_at is None:
+            return False
+        return django_timezone.now() > self.ends_at
+
+    @property
+    def total_votes(self):
+        """Return total number of unique votes across all options."""
+        return PollVote.objects.filter(option__poll=self).count()
+
+
+class PollOption(models.Model):
+    """
+    A single option within a circle poll.
+
+    Options are displayed in order and users can vote for one or more
+    depending on the poll's allows_multiple setting.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this option.'
+    )
+    poll = models.ForeignKey(
+        CirclePoll,
+        on_delete=models.CASCADE,
+        related_name='options',
+        help_text='The poll this option belongs to.'
+    )
+    text = models.CharField(
+        max_length=200,
+        help_text='The option text.'
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text='Display order (ascending).'
+    )
+
+    class Meta:
+        db_table = 'poll_options'
+        ordering = ['order']
+        verbose_name = 'Poll Option'
+        verbose_name_plural = 'Poll Options'
+        indexes = [
+            models.Index(fields=['poll', 'order'], name='idx_polloption_poll_order'),
+        ]
+
+    def __str__(self):
+        return f"Option: {self.text[:60]}"
+
+    @property
+    def vote_count(self):
+        """Return the number of votes for this option."""
+        return self.votes.count()
+
+
+class PollVote(models.Model):
+    """
+    Records a user's vote on a specific poll option.
+
+    Each user can only vote once per option (enforced by unique_together).
+    For single-choice polls, application logic ensures one vote per poll.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this vote.'
+    )
+    option = models.ForeignKey(
+        PollOption,
+        on_delete=models.CASCADE,
+        related_name='votes',
+        help_text='The option that was voted for.'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='poll_votes',
+        help_text='The user who cast this vote.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'poll_votes'
+        ordering = ['-created_at']
+        verbose_name = 'Poll Vote'
+        verbose_name_plural = 'Poll Votes'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['option', 'user'],
+                name='unique_poll_vote',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['option', 'user'], name='idx_pollvote_option_user'),
+            models.Index(fields=['user'], name='idx_pollvote_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} voted on {self.option.text[:30]}"

@@ -1,8 +1,8 @@
 """
 Celery tasks for the Conversations app.
 
-Handles async operations like voice message transcription
-and conversation summarization.
+Handles async operations like voice message transcription,
+conversation summarization, and chat memory extraction.
 """
 
 import logging
@@ -89,6 +89,36 @@ def transcribe_voice_message(self, message_id):
 
             logger.info(f"Transcribed message {message_id}: {len(result['text'])} chars")
 
+            # Auto-summarize after transcription if transcript is long enough
+            if len(result['text']) >= 50:
+                try:
+                    # Build conversation context from recent messages
+                    recent_msgs = list(
+                        message.conversation.messages
+                        .exclude(id=message.id)
+                        .order_by('-created_at')[:5]
+                    )
+                    recent_msgs.reverse()
+                    context = "\n".join(
+                        f"{m.role}: {m.content[:200]}" for m in recent_msgs
+                        if m.content and m.content != '[Voice message]'
+                    )
+
+                    summary_result = ai_service.summarize_voice_note(
+                        result['text'],
+                        conversation_context=context,
+                    )
+
+                    # Store summary in message metadata
+                    metadata = message.metadata or {}
+                    metadata['voice_summary'] = summary_result
+                    message.metadata = metadata
+                    message.save(update_fields=['metadata'])
+
+                    logger.info(f"Auto-summarized voice message {message_id}")
+                except Exception as e:
+                    logger.warning(f"Auto-summarization failed for {message_id}: {e}")
+
         finally:
             os.unlink(tmp_path)
 
@@ -172,4 +202,94 @@ def summarize_conversation(self, conversation_id):
         logger.error(f"Conversation {conversation_id} not found.")
     except OpenAIError as e:
         logger.error(f"Summarization error for {conversation_id}: {e}")
+        raise self.retry(exc=e, countdown=60)
+
+
+@shared_task(bind=True, max_retries=2)
+def extract_chat_memories(self, conversation_id):
+    """
+    Extract memorable facts and preferences from recent messages.
+
+    Triggered after every 5th user message. Uses the AI to identify
+    key information worth remembering across conversations.
+    """
+    from .models import Conversation, ChatMemory
+    from integrations.openai_service import OpenAIService
+    from core.exceptions import OpenAIError
+
+    try:
+        conversation = Conversation.objects.select_related('user').get(id=conversation_id)
+        user = conversation.user
+
+        # Check AI background quota
+        from core.ai_usage import AIUsageTracker
+        tracker = AIUsageTracker()
+        allowed, _ = tracker.check_quota(user, 'ai_background')
+        if not allowed:
+            logger.info(f"Skipping memory extraction for {conversation_id}: background quota reached")
+            return
+
+        # Get last 10 messages for extraction
+        recent_messages = list(
+            conversation.messages.order_by('-created_at')[:10]
+        )
+        if len(recent_messages) < 3:
+            return  # Not enough messages to extract from
+
+        recent_messages.reverse()  # Chronological order
+        messages_for_api = [
+            {'role': m.role, 'content': m.content}
+            for m in recent_messages
+        ]
+
+        # Get existing memories to avoid duplicates
+        existing_memories = list(
+            ChatMemory.objects.filter(user=user, is_active=True).values('key', 'content')
+        )
+
+        ai_service = OpenAIService()
+        new_memories = ai_service.extract_memories(messages_for_api, existing_memories)
+
+        if not new_memories:
+            logger.info(f"No new memories extracted from conversation {conversation_id}")
+            return
+
+        # Cap total memories per user at 50
+        current_count = ChatMemory.objects.filter(user=user, is_active=True).count()
+        max_memories = 50
+        if current_count >= max_memories:
+            # Deactivate oldest low-importance memories to make room
+            excess = current_count + len(new_memories) - max_memories
+            if excess > 0:
+                old_memories = ChatMemory.objects.filter(
+                    user=user, is_active=True
+                ).order_by('importance', 'updated_at')[:excess]
+                ChatMemory.objects.filter(
+                    id__in=[m.id for m in old_memories]
+                ).update(is_active=False)
+
+        # Create new memories
+        created = 0
+        for mem in new_memories:
+            ChatMemory.objects.create(
+                user=user,
+                key=mem['key'],
+                content=mem['content'],
+                importance=mem['importance'],
+                source_conversation=conversation,
+            )
+            created += 1
+
+        # Increment background usage counter
+        tracker.increment(user, 'ai_background')
+
+        logger.info(f"Extracted {created} memories from conversation {conversation_id}")
+
+    except Conversation.DoesNotExist:
+        logger.error(f"Conversation {conversation_id} not found for memory extraction.")
+    except OpenAIError as e:
+        logger.error(f"Memory extraction error for {conversation_id}: {e}")
+        raise self.retry(exc=e, countdown=60)
+    except Exception as e:
+        logger.error(f"Unexpected error extracting memories for {conversation_id}: {e}")
         raise self.retry(exc=e, countdown=60)

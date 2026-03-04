@@ -3,7 +3,7 @@ Django admin configuration for Calendar app.
 """
 
 from django.contrib import admin
-from .models import CalendarEvent, TimeBlock
+from .models import CalendarEvent, TimeBlock, TimeBlockTemplate, CalendarShare
 
 
 @admin.register(CalendarEvent)
@@ -21,7 +21,7 @@ class CalendarEventAdmin(admin.ModelAdmin):
             'fields': ('user', 'task', 'title', 'description')
         }),
         ('Timing', {
-            'fields': ('start_time', 'end_time', 'reminder_minutes_before')
+            'fields': ('start_time', 'end_time', 'reminder_minutes_before', 'reminders', 'reminders_sent')
         }),
         ('Details', {
             'fields': ('location', 'status')
@@ -46,3 +46,40 @@ class TimeBlockAdmin(admin.ModelAdmin):
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         return days[obj.day_of_week]
     day_name.short_description = 'Day'
+
+
+@admin.register(TimeBlockTemplate)
+class TimeBlockTemplateAdmin(admin.ModelAdmin):
+    """Admin interface for Time Block Templates."""
+
+    list_display = ['name', 'user', 'is_preset', 'block_count', 'created_at']
+    list_filter = ['is_preset', 'created_at']
+    search_fields = ['name', 'description', 'user__email']
+    ordering = ['-is_preset', '-created_at']
+    readonly_fields = ['created_at', 'updated_at']
+
+    def block_count(self, obj):
+        if isinstance(obj.blocks, list):
+            return len(obj.blocks)
+        return 0
+    block_count.short_description = 'Blocks'
+
+
+@admin.register(CalendarShare)
+class CalendarShareAdmin(admin.ModelAdmin):
+    """Admin interface for Calendar Shares."""
+
+    list_display = ['owner', 'shared_with', 'permission', 'is_active', 'created_at']
+    list_filter = ['permission', 'is_active', 'created_at']
+    search_fields = ['owner__email', 'shared_with__email', 'share_token']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'share_token', 'created_at']
+
+    fieldsets = (
+        ('Share Details', {
+            'fields': ('id', 'owner', 'shared_with', 'permission', 'share_token')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at')
+        }),
+    )

@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone as django_timezone
 
-from apps.leagues.models import League, Season
+from apps.leagues.models import League, Season, LeagueSeason
 
 
 # League seed data: tier, name, min_xp, max_xp, color_hex, description, rewards
@@ -179,9 +179,10 @@ class Command(BaseCommand):
 
         self._seed_leagues(force)
         self._seed_initial_season()
+        self._seed_league_season()
 
         self.stdout.write(
-            self.style.SUCCESS('Successfully seeded leagues and initial season.')
+            self.style.SUCCESS('Successfully seeded leagues, initial season, and league season.')
         )
 
     def _seed_leagues(self, force: bool) -> None:
@@ -288,6 +289,101 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f'Created initial season: "{season.name}" '
+                f'(ends {season.end_date.strftime("%Y-%m-%d")}).'
+            )
+        )
+
+    def _seed_league_season(self) -> None:
+        """Create an active themed league season if none exists."""
+        active_league_season = LeagueSeason.get_active_league_season()
+        if active_league_season:
+            self.stdout.write(
+                self.style.NOTICE(
+                    f'Active league season already exists: "{active_league_season.name}". '
+                    'Skipping league season creation.'
+                )
+            )
+            return
+
+        now = django_timezone.now()
+        season = LeagueSeason.objects.create(
+            name='Season of Growth - Spring 2026',
+            theme='growth',
+            description=(
+                'Spring has arrived, and with it comes the Season of Growth! '
+                'Nurture your dreams like seeds in fertile soil. The more you '
+                'tend to your goals, the higher you\'ll climb. Top performers '
+                'earn exclusive Growth-themed rewards.'
+            ),
+            start_date=now.date(),
+            end_date=(now + timedelta(days=90)).date(),
+            is_active=True,
+            rewards=[
+                {
+                    'rank_min': 1,
+                    'rank_max': 1,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_champion',
+                    'title': 'Growth Champion',
+                    'description': 'First place in the Season of Growth',
+                    'xp_bonus': 5000,
+                },
+                {
+                    'rank_min': 2,
+                    'rank_max': 3,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_elite',
+                    'title': 'Growth Elite',
+                    'description': 'Top 3 in the Season of Growth',
+                    'xp_bonus': 2500,
+                },
+                {
+                    'rank_min': 4,
+                    'rank_max': 10,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_master',
+                    'title': 'Growth Master',
+                    'description': 'Top 10 in the Season of Growth',
+                    'xp_bonus': 1000,
+                },
+                {
+                    'rank_min': 11,
+                    'rank_max': 25,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_adept',
+                    'title': 'Growth Adept',
+                    'description': 'Top 25 in the Season of Growth',
+                    'xp_bonus': 500,
+                },
+                {
+                    'rank_min': 26,
+                    'rank_max': 50,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_seeker',
+                    'title': 'Growth Seeker',
+                    'description': 'Top 50 in the Season of Growth',
+                    'xp_bonus': 250,
+                },
+                {
+                    'rank_min': 51,
+                    'rank_max': 9999,
+                    'reward_type': 'badge',
+                    'reward_id': 'growth_participant',
+                    'title': 'Growth Participant',
+                    'description': 'Participated in the Season of Growth',
+                    'xp_bonus': 100,
+                },
+            ],
+            theme_colors={
+                'primary': '#10B981',
+                'secondary': '#34D399',
+                'accent': '#6EE7B7',
+            },
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Created league season: "{season.name}" '
                 f'(ends {season.end_date.strftime("%Y-%m-%d")}).'
             )
         )

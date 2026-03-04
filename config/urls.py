@@ -19,7 +19,7 @@ from drf_spectacular.views import (
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.views import TokenRefreshView
 from core.social_auth import GoogleLoginView, AppleLoginView, AppleRedirectView
-from core.auth_views import NativeAwareLoginView, NativeAwareRegisterView, TwoFactorChallengeView
+from core.auth_views import NativeAwareLoginView, NativeAwareRegisterView, TwoFactorChallengeView, VerifyEmailView, ResendVerificationView
 from core.throttles import AuthRateThrottle
 from dj_rest_auth.views import PasswordResetView, PasswordResetConfirmView
 
@@ -29,11 +29,13 @@ api_v1_patterns = [
     path('auth/login/', NativeAwareLoginView.as_view(), name='rest_login'),
     path('auth/2fa-challenge/', TwoFactorChallengeView.as_view(), name='2fa_challenge'),
     path('auth/registration/', NativeAwareRegisterView.as_view(), name='rest_register'),
+    path('auth/verify-email/', VerifyEmailView.as_view(), name='verify_email'),
+    path('auth/resend-verification/', ResendVerificationView.as_view(), name='resend_verification'),
     # Explicit throttled password reset (before the catch-all dj-rest-auth include)
     path('auth/password/reset/', PasswordResetView.as_view(throttle_classes=[AuthRateThrottle]), name='rest_password_reset'),
     path('auth/password/reset/confirm/', PasswordResetConfirmView.as_view(throttle_classes=[AuthRateThrottle]), name='rest_password_reset_confirm'),
     path('auth/', include('dj_rest_auth.urls')),
-    path('auth/registration/', include('dj_rest_auth.registration.urls')),
+    # dj-rest-auth registration sub-routes (resend-email/ intentionally removed — use resend-verification/ instead)
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Social authentication (Google, Apple)
