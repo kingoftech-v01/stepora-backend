@@ -87,6 +87,7 @@ services:
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSLMODE=disable
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -100,6 +101,15 @@ services:
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
       - FIREBASE_CREDENTIALS_PATH=/app/firebase-service-account.json
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_ADMIN_EMAIL=${VAPID_ADMIN_EMAIL:-admin@dreamplanner.app}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}
     depends_on:
       db:
         condition: service_healthy
@@ -133,6 +143,7 @@ services:
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSLMODE=disable
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -142,6 +153,15 @@ services:
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
       - FIREBASE_CREDENTIALS_PATH=/app/firebase-service-account.json
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_ADMIN_EMAIL=${VAPID_ADMIN_EMAIL:-admin@dreamplanner.app}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,dp.jhpetitfrere.com,localhost,127.0.0.1
     depends_on:
@@ -175,6 +195,7 @@ services:
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSLMODE=disable
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -217,6 +238,7 @@ services:
       - DB_NAME=dreamplanner
       - DB_USER=dreamplanner
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSLMODE=disable
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - REDIS_HOST=redis
       - ALLOWED_HOSTS=dpapi.jhpetitfrere.com,dp.jhpetitfrere.com,localhost,127.0.0.1
@@ -224,6 +246,9 @@ services:
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_ADMIN_EMAIL=${VAPID_ADMIN_EMAIL:-admin@dreamplanner.app}
     depends_on:
       - db
       - redis
