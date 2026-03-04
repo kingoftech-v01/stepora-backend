@@ -1,23 +1,39 @@
-# Leagues App - TODO
+# Leagues App — TODO
 
-## Completed
+Feature ideas and improvements for leagues, seasons, leaderboards, and competitive features.
 
-- [x] **Promotion/demotion notifications** - Push notifications sent to users when they are promoted to a higher league or demoted to a lower one. Includes the old and new league names and any rewards unlocked (Celery task).
+---
 
-- [x] **Historical rank tracking** - Historical rank snapshots stored (RankSnapshot model + daily snapshots) so users can view their rank progression over time. API endpoint to retrieve rank history as a time series for charting in the mobile app.
+## Leagues
 
-- [x] **Season transition automation** - Automated season transitions via Celery beat (check_season_end task): detects when the active season's `end_date` has passed, calls `calculate_season_rewards()`, deactivates the old season, and activates the next season.
+- [ ] **League chat** — Dedicated chat channel for each league tier
+- [ ] **League challenges** — Weekly league-wide challenges with bonus XP for top performers
+- [ ] **League history** — Track user's league progression over time (promotions/demotions)
+- [ ] **Custom leagues** — Create private leagues for friends, coworkers, or communities
+- [ ] **League milestones** — Special badges for reaching each league tier for the first time
+- [ ] **Relegation protection** — Earn protection from demotion by completing bonus tasks
 
-- [x] **Seed data management command** - Django management command (`python manage.py seed_leagues`) to populate the 7 default leagues with their XP ranges, colors, and icons. Idempotent for safe re-runs.
+## Seasons
 
-- [x] **Dense ranking** - Dense ranking so users with the same XP share the same rank position rather than receiving arbitrarily ordered sequential ranks.
+- [ ] **Season themes** — Thematic seasons with unique challenges (e.g., "Summer Sprint", "New Year Reset")
+- [ ] **Season pass** — Premium season pass with exclusive rewards and challenges
+- [ ] **Mid-season events** — Special 1-week events within seasons with bonus rewards
+- [ ] **Season recap** — End-of-season summary showing stats, achievements, and rank progression
+- [ ] **Multi-season stats** — Aggregate stats across all seasons (total wins, best finishes)
 
-## Planned Improvements
+## Leaderboards
 
-- [ ] **League-specific rewards** - Define and distribute concrete rewards (store items, XP bonuses, badges) when users reach each league tier, beyond just the JSON `rewards` field.
+- [ ] **Category leaderboards** — Per-dream-category leaderboards (career, health, finance, etc.)
+- [ ] **Weekly leaderboard** — Reset-weekly leaderboard for short-term competition
+- [ ] **Circle leaderboards** — Internal leaderboard within each circle
+- [ ] **Country/region leaderboards** — Geographic leaderboards based on user location
+- [ ] **Rising stars** — Leaderboard for users with biggest rank improvement this week
+- [ ] **Leaderboard notifications** — Alert when someone overtakes your rank
 
-- [ ] **Rank caching** - Cache leaderboard results in Redis to reduce database load from frequent leaderboard queries. Invalidate on XP changes.
+## Rewards
 
-- [ ] **Leaderboard pagination** - Add pagination to leaderboard endpoints for leagues with many participants, rather than relying solely on the `limit` parameter.
-
-- [ ] **Season creation admin action** - Add a Django admin action to create a new season with sensible defaults and automatically link it as the next season after the current one ends.
+- [ ] **Dynamic rewards** — Season rewards scale with final ranking (not just tier)
+- [ ] **Exclusive store items** — Season-exclusive cosmetics only earnable through competition
+- [ ] **Title rewards** — Earnable display titles shown on profile (e.g., "Season 3 Champion")
+- [ ] **XP bonus zones** — League-tier-based permanent XP multiplier (e.g., Diamond league: 1.1x)
+- [ ] **Trophy room** — Display case for season trophies on user profile

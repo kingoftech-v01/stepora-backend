@@ -1,59 +1,42 @@
-# TODO - Conversations App
+# Conversations App — TODO
 
-## Completed
+Feature ideas and improvements for AI chat, voice transcription, and WebSocket communication.
 
-- [x] Models: Conversation, Message, ConversationSummary
-- [x] REST API endpoints
-- [x] WebSocket consumer with streaming
-- [x] GPT-4 integration
-- [x] Dynamic system prompts by type
-- [x] Rate limiting by tier
-- [x] Unit and WebSocket tests
-- [x] Conversation context management
+---
 
-## Recently Completed
+## AI Chat
 
-- [x] Add @extend_schema decorators for Swagger
-- [x] Implement WebSocket Token authentication
-- [x] XSS sanitization of message content
-- [x] **Automatic summarization** - Summarize long conversations (Celery task)
-- [x] **Export conversations** - Export as PDF/JSON
-- [x] **Conversation templates** - Pre-defined coaching templates (model + viewset)
-- [x] **Voice messages** - Audio support with Whisper (send-voice endpoint)
-- [x] **Image analysis** - Analyze images with GPT-4V (send-image endpoint)
-- [x] **Consumer refactor to AIChatConsumer** - Renamed ChatConsumer to AIChatConsumer for clarity; AI chat URL changed to `ws/ai-chat/` (old URL preserved as deprecated alias)
-- [x] **Shared mixins extraction** - Extracted `RateLimitMixin`, `AuthenticatedConsumerMixin`, `BlockingMixin`, `ModerationMixin` into `core/consumers.py` for reuse across all chat consumers
-- [x] **Buddy chat moved out** - BuddyChatConsumer moved to `apps/buddies/consumers.py` with its own routing module
+- [ ] **Conversation branching** — Fork a conversation to explore alternative approaches
+- [ ] **Message editing** — Edit sent messages and regenerate AI responses
+- [ ] **AI personality modes** — Switchable coaching styles (supportive, tough love, analytical, creative)
+- [ ] **Context window management** — Smart summarization beyond token limits
+- [ ] **Suggested prompts** — AI-generated follow-up prompt suggestions after each response
+- [ ] **Rich message formatting** — Markdown tables, code blocks, and checklists in AI responses
+- [ ] **Message reactions** — Emoji reactions beyond like (celebrate, insightful, question)
+- [ ] **Conversation folders** — Organize conversations into custom folders
+- [ ] **Search within conversation** — Full-text search within a conversation's messages
+- [ ] **Message bookmarks** — Bookmark important AI responses for quick reference
 
-## Planned - High Priority
+## Voice & Media
 
-- [ ] **Function calling** - Allow AI to create tasks directly
-- [ ] **Context window management** - Intelligent context management
-- [ ] **Retry logic** - OpenAI error handling with retry
+- [ ] **Voice playback speed** — 1x, 1.5x, 2x playback for voice messages
+- [ ] **Audio waveform visualization** — Waveform display during voice playback
+- [ ] **Voice-to-action** — Parse voice messages for actionable items and auto-create tasks
+- [ ] **Image annotation** — Annotate uploaded images before sending
+- [ ] **File attachments** — Support PDF, document uploads for AI analysis
+- [ ] **Voice conversation mode** — Full voice-in/voice-out conversation with AI
 
-## Planned - Low Priority
+## WebSocket
 
-- [ ] **Multi-language** - Dynamic multilingual support
-- [ ] **Sentiment analysis** - Detect user mood
-- [ ] **Proactive messaging** - AI initiates conversations
+- [ ] **Message delivery receipts** — Confirm delivery and read status
+- [ ] **Offline message queue** — Queue messages during disconnect, auto-send on reconnect
+- [ ] **Typing indicators for AI** — "AI is thinking..." with estimated response time
+- [ ] **Connection multiplexing** — Single WebSocket for multiple conversations
+- [ ] **Message compression** — Compress large messages before transmission
 
-## Known Bugs
+## Templates
 
-- [ ] WebSocket can lose connection without automatic reconnection
-- [ ] Streaming can stall on very long responses
-- [ ] Tokens are not counted precisely for rate limiting
-
-## Technical Debt
-
-- [ ] Refactor the consumer into smaller classes
-- [ ] Add type hints
-- [ ] Implement circuit breaker for OpenAI
-- [ ] Centralize prompt management
-- [ ] Add load tests for WebSocket
-
-## Performance Optimizations
-
-- [ ] Redis cache for system prompts
-- [ ] Message pagination (currently limited to 20)
-- [ ] Archive message compression
-- [ ] Connection pooling for WebSocket
+- [ ] **Dynamic templates** — Adapt initial prompt based on user context
+- [ ] **Template marketplace** — Community-created templates with ratings
+- [ ] **Template variables** — Auto-filled placeholders (dream name, deadline, etc.)
+- [ ] **Quick actions** — One-tap template triggers from dream detail page

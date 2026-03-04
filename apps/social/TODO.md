@@ -1,43 +1,44 @@
-# Social App - TODO
+# Social App — TODO
 
-## Completed
+Feature ideas and improvements for friends, follows, blocking, activity feed, and dream posts.
 
-- [x] **Unfollow endpoint** - POST/DELETE endpoint to unfollow a user.
+---
 
-- [x] **Unfriend endpoint** - POST/DELETE endpoint to remove an accepted friendship.
+## Feed & Content
 
-- [x] **Block user** - User blocking system with BlockedUser model and corresponding API endpoints. Blocked users cannot send friend requests, follow, or appear in search results.
+- [ ] **Algorithm tuning** — Configurable feed algorithm (chronological vs. engagement-based)
+- [ ] **Stories** — 24-hour expiring photo/video stories (dream progress updates)
+- [ ] **Polls** — Create polls in the social feed
+- [ ] **Link previews** — Rich link previews when sharing URLs in posts
+- [ ] **Video posts** — Support short video uploads in dream posts
+- [ ] **Post scheduling** — Schedule posts for future publication
+- [ ] **Content discovery** — "Explore" tab with trending posts, popular dreams, and suggested follows
+- [ ] **Hashtags** — Hashtag system for post discovery and trending topics
+- [ ] **Reels/Shorts** — Short-form video content for dream milestones
 
-- [x] **Followers/following counts** - API fields to retrieve a user's follower count and following count. Included in user profile and search result serializers.
+## Social Features
 
-- [x] **Feed filtering** - Query parameters on the activity feed endpoint for filtering by activity type and date range.
+- [ ] **Friend suggestions v2** — Suggest friends based on mutual friends, shared dream categories, and activity overlap
+- [ ] **User verification** — Verified badge for notable users or active community members
+- [ ] **Direct messages** — Private messaging between any two users (not just buddies)
+- [ ] **Group messages** — Group DM threads for small groups outside of circles
+- [ ] **User notes** — Private notes on other users' profiles (only visible to you)
+- [ ] **Close friends list** — Share certain posts only with close friends
+- [ ] **Mute** — Mute a user's posts without unfollowing or blocking
 
-- [x] **Sent friend requests endpoint** - GET endpoint to list friend requests sent by the current user that are still pending.
+## Engagement
 
-- [x] **Mutual friends** - Endpoint showing mutual friends between the current user and another user.
+- [ ] **Encouragement types v2** — More reaction types (clapping, hugging, high-five, mind-blown)
+- [ ] **Post analytics** — View count, reach, and engagement metrics for your posts
+- [ ] **Top fan badges** — Badge for users who most engage with your content
+- [ ] **Comment likes** — Like individual comments on posts
+- [ ] **Post pinning** — Pin important posts to top of your profile
+- [ ] **Share to external** — Share dream posts to Instagram, Twitter, Facebook with branded card
 
-- [x] **Follow suggestions** - Algorithm to suggest users to follow based on shared circles, mutual friends, similar goals, or activity levels.
+## Moderation
 
-- [x] **User reporting** - ReportedUser model with reporting endpoints.
-
-- [x] **Dream posts CRUD** - DreamPost model with encrypted content, image support, GoFundMe URL, and visibility controls (public/followers/private). Full CRUD via DreamPostViewSet.
-
-- [x] **Social feed** - Feed endpoint at `GET /posts/feed/` showing posts from followed users and public posts, excluding blocked users, with `has_liked`/`has_encouraged` annotations.
-
-- [x] **Like/unlike** - DreamPostLike model with toggle behavior. Denormalized `likes_count` on DreamPost updated on each like/unlike.
-
-- [x] **Threaded comments** - DreamPostComment model with self-referential `parent` FK for threading. Denormalized `comments_count` on DreamPost.
-
-- [x] **Encouragements (5 types)** - DreamEncouragement model with 5 typed reactions: `you_got_this`, `keep_going`, `inspired`, `proud`, `fire`. One per user per post.
-
-- [x] **Share/repost** - Share endpoint incrementing denormalized `shares_count`.
-
-- [x] **User posts endpoint** - `GET /posts/user/{user_id}/` to list all posts by a specific user.
-
-## Planned Improvements
-
-- [ ] **Friend request notifications** - Trigger push notifications when a user receives a friend request or when their request is accepted.
-
-- [ ] **Activity feed optimization** - Cache the friend/follow ID sets to avoid recomputing them on every feed request. Consider using Redis sorted sets for efficient feed assembly.
-
-- [ ] **Batch follow/friend operations** - Support following or sending friend requests to multiple users in a single API call for onboarding flows.
+- [ ] **Community guidelines** — In-app community guidelines with report categories
+- [ ] **Auto-moderation** — AI-powered content moderation for posts and comments
+- [ ] **Moderation queue** — Admin queue for reported content with bulk actions
+- [ ] **Shadow banning** — Reduce visibility of problematic users without blocking
+- [ ] **Appeal system** — Let users appeal moderation decisions

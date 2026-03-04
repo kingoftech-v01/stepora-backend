@@ -1,55 +1,44 @@
-# TODO - Calendar App
+# Calendar App — TODO
 
-## Completed
+Feature ideas and improvements for calendar events, scheduling, time blocks, and external sync.
 
-- [x] Models: CalendarEvent, TimeBlock
-- [x] Full REST API
-- [x] Filtering by date and range
-- [x] Today/week/overdue views
-- [x] Basic auto-scheduling
-- [x] Integration with Tasks
-- [x] Unit tests
+---
 
-## Recently Completed
+## Scheduling
 
-- [x] Add @extend_schema decorators for Swagger
-- [x] XSS sanitization for text fields
-- [x] **Conflict detection** - Detect overlapping events (in views)
-- [x] **Recurring events** - Native recurring events (recurrence_rule + Celery task)
-- [x] **Google Calendar sync** - Bidirectional synchronization (OAuth)
-- [x] **Apple Calendar sync** - iCal feed export
-- [x] **Event creation/editing/deletion from frontend**
-- [x] **Smart suggestions** - Optimal time slot suggestions (suggest-time-slots endpoint)
-- [x] **Drag & drop reschedule** - Reschedule API
+- [ ] **AI auto-scheduling** — Schedule unscheduled tasks into optimal slots based on priority and availability
+- [ ] **Buffer time** — Configurable buffer between events (5/10/15 min)
+- [ ] **Focus time blocks** — Dedicated "deep work" blocks with no notifications
+- [ ] **Time zone support** — Full multi-timezone support for traveling users
+- [ ] **Drag-and-drop rescheduling** — Drag events to new time slots on calendar
+- [ ] **Batch scheduling** — Schedule multiple tasks at once with AI distribution
 
-## Planned - Medium Priority
+## Views
 
-- [ ] **Time zone handling** - Better timezone management
-- [ ] **Buffer time** - Transition time between tasks
+- [ ] **Week view** — Detailed hour-by-hour timeline
+- [ ] **Agenda view** — Linear list of upcoming events across all dreams
+- [ ] **Mini calendar widget** — Small widget for home screen dashboard
+- [ ] **Color coding** — Events colored by dream category
+- [ ] **Calendar heatmap** — Productivity heatmap overlay
 
-## Planned - Low Priority
+## Recurring Events
 
-- [ ] **Calendar sharing** - Share your calendar
-- [ ] **Team calendars** - Team calendars
-- [ ] **Availability API** - API to find free time slots
+- [ ] **Custom recurrence** — "Every other week", "first Monday of month", "weekdays only"
+- [ ] **Recurrence exceptions** — Skip individual occurrences without affecting series
+- [ ] **Recurring task chains** — Auto-generate task chain from recurring template
 
-## Known Bugs
+## External Sync
 
-- [ ] Auto-schedule can create overlaps in certain cases
-- [ ] Events spanning midnight are not handled properly
-- [ ] Reschedule does not update the associated task
+- [ ] **Outlook Calendar** — Microsoft Graph API bidirectional sync
+- [ ] **Apple Calendar** — CalDAV-based bidirectional sync
+- [ ] **Google Tasks sync** — Sync DreamPlanner tasks with Google Tasks
+- [ ] **iCal import** — Import .ics files from external calendars
+- [ ] **Google Calendar webhooks** — Replace polling with push notifications
+- [ ] **Selective sync** — Choose which dreams sync to which external calendar
 
-## Technical Debt
+## Smart Features
 
-- [ ] Refactor the scheduling algorithm
-- [ ] Add type hints
-- [ ] Extract planning logic into a service
-- [ ] Add time range validation
-- [ ] Handle timezone edge cases
-
-## Performance Optimizations
-
-- [ ] Composite index on (user, start_time)
-- [ ] Cache TimeBlocks (rarely modified)
-- [ ] Pagination for long period views
-- [ ] Optimize availability queries
+- [ ] **Meeting detection** — Block synced meeting slots from task scheduling
+- [ ] **Travel time** — Add travel time before location-based events
+- [ ] **Energy-based scheduling** — Schedule demanding tasks during peak energy hours
+- [ ] **Schedule score** — Weekly score rating how well user followed planned schedule

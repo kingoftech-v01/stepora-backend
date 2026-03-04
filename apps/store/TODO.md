@@ -1,25 +1,41 @@
-# Store App - TODO
+# Store App — TODO
 
-## Completed
+Feature ideas and improvements for the in-app store, cosmetics, purchasing, and gifting.
 
-- [x] **Purchase history endpoint** - API endpoint for users to view their complete purchase history with timestamps, payment amounts, and items acquired. Includes pagination and date range filtering.
+---
 
-- [x] **Gifting system** - Users can purchase store items as gifts for other users. Gifting flow with Gift model, send/claim mechanism, and gift notification to the recipient.
+## Items & Content
 
-- [x] **XP-based purchasing** - Alternative purchase method using accumulated XP points instead of real money. XP-to-currency conversion rates per rarity tier with XP balance check before purchase.
+- [ ] **Animated items** — Animated badge frames, avatar decorations (sparkles, glow effects)
+- [ ] **Seasonal collections** — Limited-time seasonal items (holiday themes, special events)
+- [ ] **Theme unlocks** — Purchasable visual themes beyond the default 3 (neon, nature, ocean, etc.)
+- [ ] **Chat bubble packs** — Themed chat bubble style packs (gradient, metallic, neon)
+- [ ] **Sound packs** — Custom notification sounds and call ringtones
+- [ ] **Profile backgrounds** — Purchasable profile page background images
+- [ ] **Achievement frames** — Special frames that display around achievement badges
+- [ ] **Emoji packs** — Custom emoji sets for reactions and chat
 
-- [x] **Refund handling** - Refund support via RefundRequest model with admin approval workflow. Handles refund processing and item removal from user inventory.
+## Purchasing
 
-- [x] **Wishlist** - Users can save items to a wishlist for later purchase (Wishlist model + CRUD endpoints). Notifications when wishlisted items go on sale or are about to be removed.
+- [ ] **Bundle deals** — Discounted item bundles (e.g., "Starter Pack", "Collector's Bundle")
+- [ ] **Flash sales** — Time-limited discounts with countdown timer
+- [ ] **Loyalty points** — Earn points per purchase that can be redeemed for discounts
+- [ ] **Subscription perks** — Premium/Pro users get monthly store credits or exclusive items
+- [ ] **Apple/Google IAP** — In-app purchase integration for native mobile (App Store & Play Store)
+- [ ] **Daily deals** — Rotating daily discounted item
 
-- [x] **Limited-time badges** - Support for time-limited store items that are only available during specific date ranges (available_from/available_until on StoreItem). Automatic deactivation when the availability window closes.
+## Gifting
 
-## Planned Improvements
+- [ ] **Gift wrapping** — Animated gift wrapping styles for sent gifts
+- [ ] **Gift cards** — Purchase DreamPlanner gift cards with custom amounts
+- [ ] **Birthday gifts** — Auto-suggest gifting to friends on their birthday
+- [ ] **Gift history** — View complete sent/received gift history with messages
+- [ ] **Wishlist sharing** — Share wishlist with friends (hint for gifts)
 
-- [ ] **Bulk equip management** - Add an endpoint to view and manage all equipped items in a single request, allowing users to swap entire loadouts at once.
+## Social & Discovery
 
-- [ ] **Item previews** - Add a preview mechanism so users can see how cosmetic items look before purchasing (e.g., badge frame preview on their profile).
-
-- [ ] **Store analytics** - Track popular items, conversion rates, and revenue per category. Provide admin endpoints for store performance metrics.
-
-- [ ] **Discount/sale pricing** - Support temporary price reductions with original and sale prices displayed. Integrate with a scheduling system for automated sales events.
+- [ ] **Item rarity tiers** — Common, rare, epic, legendary item classifications
+- [ ] **User showcases** — Show equipped items on user profile (what they're wearing)
+- [ ] **Most popular items** — Trending items section based on recent purchases
+- [ ] **Item reviews** — User reviews and ratings for store items
+- [ ] **Creator marketplace** — Let users design and sell custom items (revenue share)

@@ -1,57 +1,37 @@
-# TODO - Notifications App
+# Notifications App — TODO
 
-## Completed
+Feature ideas and improvements for push notifications, email, and delivery management.
 
-- [x] Models: Notification, NotificationTemplate, NotificationBatch
-- [x] Template system with variables
-- [x] Do Not Disturb (DND) support
-- [x] Celery tasks for automatic sending
-- [x] Full REST API
-- [x] Retry logic on send failure
-- [x] Unit tests
+---
 
-## Recently Completed
+## Delivery & Channels
 
-- [x] Add @extend_schema decorators for Swagger
-- [x] XSS sanitization of notification content
-- [x] **Granular notification preferences** - Per notification type
-- [x] **In-app notifications** - Notification center in the app (mark-read, unread-count, grouped)
-- [x] **Analytics** - Open rate tracking (opened_at tracking)
-- [x] **Notification grouping** - Group similar notifications
-- [x] **FCM for buddy chat** - Push notifications to offline buddy chat partners via Firebase Cloud Messaging
-- [x] **FCM for circle calls** - Push notifications to circle members when a call starts
-- [x] **Dream post notifications** - `dream_post_like`, `dream_post_comment`, `dream_post_encouragement` notification types
+- [ ] **SMS notifications** — SMS channel for critical alerts (streak about to break, buddy message)
+- [ ] **Notification digest** — Batch notifications into hourly or daily summaries
+- [ ] **WhatsApp integration** — Send notifications via WhatsApp Business API
+- [ ] **Slack/Discord bot** — Push notifications to team collaboration tools
+- [ ] **Notification scheduling** — Optimal delivery time based on user activity patterns
 
-## Planned - High Priority
+## Smart Notifications
 
-- [ ] **Rich notifications** - Images and actions in notifications
-- [ ] **Notification channels** - Distinct Android channels
+- [ ] **AI-powered timing** — ML model to predict best delivery time per user per type
+- [ ] **Engagement-based frequency** — Auto-reduce frequency for unengaged users
+- [ ] **Contextual notifications** — Include relevant context in notification body
+- [ ] **Motivational notifications** — AI-generated messages timed to low-energy periods
+- [ ] **Location-based reminders** — Trigger reminders based on user location
+- [ ] **Smart DND** — Auto-detect sleep patterns and meetings to optimize DND
 
-## Planned - Medium Priority
+## Analytics
 
-- [ ] **Email fallback** - Email if push fails
-- [ ] **A/B testing** - Test different messages
+- [ ] **Notification dashboard** — Delivery rate, open rate, CTR per type and channel
+- [ ] **A/B testing** — Test different notification copy, timing, and channels
+- [ ] **Unsubscribe analytics** — Track which types cause the most unsubscribes
+- [ ] **Delivery failure alerts** — Alert admins when delivery rate drops
+- [ ] **Push token cleanup** — Periodic cleanup of expired FCM/VAPID tokens
 
-## Planned - Low Priority
+## Templates
 
-- [ ] **SMS notifications** - For critical reminders
-- [ ] **Webhook notifications** - For third-party integrations
-- [ ] **Notification scheduling UI** - Advanced admin interface
-
-## Known Bugs
-
-- [ ] Expired push tokens are not cleaned up automatically
-- [ ] DND can have issues during daylight saving time changes
-- [ ] Batches over 500 are not handled
-
-## Technical Debt
-
-- [ ] Add type hints
-- [ ] Add Prometheus metrics
-
-## Performance Optimizations
-
-- [ ] Batch processing for high volumes
-- [ ] Priority queue for urgent notifications
-- [ ] Cache frequently used templates
-- [ ] Index on scheduled_for for queries
+- [ ] **Dynamic variables** — User-specific variables in templates (name, streak, dream title)
+- [ ] **Multilingual templates** — Templates in all 16 supported languages
+- [ ] **Template preview** — Admin preview across all channels before sending
+- [ ] **Template analytics** — Track which templates have highest engagement

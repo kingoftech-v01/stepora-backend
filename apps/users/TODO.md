@@ -1,296 +1,48 @@
-# Users App - TODO
+# Users App — TODO
 
-## Current Status: Production Ready
-
-All core features are implemented and tested. This document tracks future enhancements and maintenance tasks.
+Feature ideas and improvements for user management, authentication, gamification, and achievements.
 
 ---
 
-## Completed
-
-### Core Features
-- [x] User model with django-allauth + Token authentication
-- [x] Profile management (CRUD)
-- [x] Subscription system (free/premium/pro)
-- [x] Work schedule configuration
-- [x] Notification preferences with DND
-
-### Gamification
-- [x] XP and leveling system
-- [x] Streak tracking
-- [x] Level-up detection
-- [x] GamificationProfile model
-- [x] Badge system
-- [x] Rank tiers
-
-### API
-- [x] User profile endpoints
-- [x] Preferences update
-- [x] Statistics endpoint
-- [x] IsOwner permission
-- [x] IsPremiumUser permission
-
-### Testing
-- [x] Model tests (100% coverage)
-- [x] Authentication tests
-- [x] ViewSet tests
-- [x] Permission tests
-- [x] Gamification tests
-
-### Security
-- [x] django-allauth authentication backend
-- [x] Token verification
-- [x] IsOwner permission on all endpoints
-- [x] Input validation
-- [x] Rate limiting
-
-### Documentation
-- [x] README.md
-- [x] API documentation
-- [x] Model documentation
-- [x] Admin interface
-
----
-
-## Recently Completed
-
-### Account Management
-- [x] Add DELETE /api/users/me/delete-account/ endpoint (account deletion with GDPR compliance)
-- [x] Add profile photo upload via media storage (POST /upload-avatar/)
-- [x] Add email change with verification flow
-- [x] Export user data (data export functionality)
-- [x] Notification preferences (granular per-type preferences)
-
-### Two-Factor Authentication (2FA)
-- [x] TOTP support
-- [x] Backup codes
-- [x] 2FA setup endpoint
-- [x] 2FA verification
-- [x] 2FA disable with password
-
-### Enhanced Profile
-- [x] Bio field
-- [x] Location field
-- [x] Social links (Twitter, LinkedIn, etc.)
-- [x] Avatar image support
-
-### Stats
-- [x] Stats endpoint (enhanced)
-
----
-
-## In Progress
-
-Currently, no tasks in progress. All features are complete.
-
----
-
-## Planned Features
-
-### High Priority
-
-#### Social Graph
-- [ ] Friend model (user-to-user relationships)
-- [ ] Friend request system
-- [ ] Accept/reject friend requests
-- [ ] Unfriend functionality
-- [ ] Friend list endpoint
-- [ ] Friend search
-- [ ] Tests for friend system
-
-**Estimated Effort**: 2-3 days
-
-#### Activity Feed
-- [ ] Activity model (user actions)
-- [ ] Activity types (dream created, task completed, etc.)
-- [ ] Feed generation algorithm
-- [ ] Feed endpoint (paginated)
-- [ ] Privacy controls (public/friends/private)
-- [ ] Tests for activity feed
-
-**Estimated Effort**: 2-3 days
-
-### Medium Priority
-
-#### Email Verification
-- [ ] Email verification token model
-- [ ] Send verification email (Celery task)
-- [ ] Verification endpoint
-- [ ] Resend verification email
-- [ ] Email templates
-- [ ] Tests
-
-**Estimated Effort**: 1-2 days
-
-#### User Blocking/Reporting
-- [ ] BlockedUser model
-- [ ] ReportedUser model
-- [ ] Block user endpoint
-- [ ] Unblock user endpoint
-- [ ] Report user endpoint
-- [ ] Admin review interface
-- [ ] Tests
-
-**Estimated Effort**: 2 days
-
-#### Account Deletion (Extended)
-- [x] Data export functionality (GDPR compliance)
-- [ ] Soft delete option
-- [ ] Hard delete with cascade
-- [ ] Anonymization option
-- [ ] Delete confirmation
-- [ ] Tests
-
-**Estimated Effort**: 2-3 days
-
-### Low Priority
-
-#### Enhanced Profile (Extended)
-- [ ] Profile visibility settings
-- [ ] Profile views counter
-- [ ] Tests
-
-**Estimated Effort**: 1 day
-
-#### Advanced Gamification
-- [ ] Skill trees
-- [ ] Achievement categories
-- [ ] Badge rarity (common, rare, epic, legendary)
-- [ ] Badge showcase (featured badges)
-- [ ] XP decay for inactivity
-- [ ] Seasonal challenges
-- [ ] Tests
-
-**Estimated Effort**: 3-5 days
-
-#### Password Management
-- [ ] Wire password change to dj-rest-auth endpoint in frontend
-
----
-
-## Bugs
-
-### Known Issues
-
-None currently reported.
-
-### To Investigate
-
-- [ ] Streak calculation edge case at timezone boundaries
-- [ ] Level-up animation trigger delay
-
----
-
-## Performance Optimizations
-
-### Database
-- [ ] Add composite index on (subscription, subscription_ends)
-- [ ] Optimize streak calculation query
-- [ ] Cache user statistics (Redis)
-
-### API
-- [ ] Implement ETag for profile endpoint
-- [ ] Add pagination to badges list
-- [ ] Reduce payload size for list endpoints
-
----
-
-## Technical Debt
-
-### Code Quality
-- [ ] Add type hints to all methods
-- [ ] Refactor `update_streak()` logic
-- [ ] Extract XP calculation to service class
-- [ ] Add docstrings to all public methods
-
-### Testing
-- [ ] Add integration tests for django-allauth auth flow
-- [ ] Add load testing for high XP users
-- [ ] Test timezone edge cases
-
-### Documentation
-- [ ] Add Swagger/OpenAPI schema
-- [ ] Create sequence diagrams for auth flow
-- [ ] Document XP formula in detail
-
----
-
-## Maintenance
-
-### Regular Tasks
-
-**Weekly**:
-- [ ] Review inactive users (>30 days)
-- [ ] Monitor subscription expiration
-
-**Monthly**:
-- [ ] Analyze XP distribution
-- [ ] Review badge earn rates
-- [ ] Check for data anomalies
-
-**Quarterly**:
-- [ ] Security audit
-- [ ] Performance review
-- [ ] Dependency updates
-
----
-
-## Ideas / Discussion
-
-### Potential Features
-
-**Referral System**:
-- Users can invite friends
-- Reward XP for successful referrals
-- Track referral tree
-
-**Premium Features**:
-- Custom themes
-- Advanced statistics
-- Priority support
-- Extended history
-
-**Achievements**:
-- Secret achievements
-- Time-limited achievements
-- Community achievements
-
-### Questions to Resolve
-
-1. Should we allow users to change their email?
-2. What happens to data when user downgrades subscription?
-3. Should streak reset immediately or have a "grace period"?
-4. How to handle timezone changes for streak calculation?
-
----
-
-## Dependencies
-
-### Required for Social Graph
-- [ ] Notification system update (friend request notifications)
-- [ ] Real-time events (friend came online)
-
-### Required for Activity Feed
-- [ ] Event tracking system across all apps
-- [ ] Feed generation service
-- [ ] Real-time updates via WebSocket
-
----
-
-## Breaking Changes
-
-No planned breaking changes.
-
----
-
-## Notes
-
-- Keep backward compatibility for mobile app versions
-- All new features must have tests before merge
-- Update API documentation with every change
-- Consider mobile bandwidth when adding new fields
-
----
-
-**Last Updated**: 2026-02-08
-**Next Review**: 2026-03-08
+## Authentication & Security
+
+- [ ] **Social account linking** — Allow users to link multiple social accounts (Google + Apple) to a single DreamPlanner account
+- [ ] **Account recovery** — Recovery flow using backup email or phone number when primary email is lost
+- [ ] **Password breach check** — Check passwords against HaveIBeenPwned API during registration and password change
+- [ ] **Email verification on register** — Require email verification before account activation (currently optional)
+- [ ] **Login notifications** — Notify user via email/push when login occurs from a new device or location
+
+## Profile & Personalization
+
+- [ ] **Profile themes** — Let users customize their public profile with colors, banners, and layout
+- [ ] **Profile badges showcase** — Drag-and-drop arrangement of badges on public profile
+- [ ] **Pronouns field** — Add preferred pronouns to user profile
+- [ ] **Cover photo** — Add cover/banner image to user profile (with upload validation)
+- [ ] **Profile completeness** — Gamified profile completion bar with XP rewards for filling out each section
+- [ ] **QR code profile sharing** — Generate QR code for sharing profile link
+
+## Gamification
+
+- [ ] **Daily challenges** — Auto-generated daily mini-challenges with bonus XP
+- [ ] **XP decay** — Gradual XP decay for inactive users to encourage consistent engagement
+- [ ] **Prestige system** — Reset to level 1 with a prestige badge after reaching max level (opt-in)
+- [ ] **XP multiplier events** — Time-limited global events with boosted XP
+- [ ] **Custom achievements** — Let users create personal achievements with custom conditions
+- [ ] **Achievement rarity** — Show percentage of users who have unlocked each achievement
+- [ ] **Streak recovery** — One-time streak recovery (purchasable with XP) if user misses a single day
+- [ ] **RPG attribute quests** — Specific quests per attribute category with targeted XP rewards
+- [ ] **Level-up rewards** — Unlock store items or features at specific levels
+
+## Data & Privacy
+
+- [ ] **Data portability** — Export user data in standard formats (JSON, CSV) with dream progress history
+- [ ] **Account pause** — Temporarily freeze account without deleting
+- [ ] **Activity heatmap** — GitHub-style contribution heatmap showing daily activity over the past year
+- [ ] **Login analytics** — Show user their login frequency, peak usage times, and device breakdown
+
+## Two-Factor Authentication
+
+- [ ] **SMS 2FA** — Add SMS-based 2FA as alternative to TOTP
+- [ ] **Hardware key support** — Support FIDO2/U2F hardware security keys for 2FA
+- [ ] **Trusted devices** — Remember trusted devices for 30 days (skip 2FA on recognized devices)
+- [ ] **2FA backup email** — Send backup codes via email as recovery option

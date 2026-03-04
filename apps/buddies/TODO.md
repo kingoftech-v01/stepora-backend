@@ -1,35 +1,39 @@
-# Buddies App - TODO
+# Buddies App — TODO
 
-## Completed
+Feature ideas and improvements for accountability buddy pairings and encouragement.
 
-- [x] **Buddy request acceptance flow** - Two-step pairing process: the initiator sends a buddy request (status: `pending`), and the partner must accept before the pairing becomes `active`. Accept/reject endpoints implemented.
+---
 
-- [x] **Buddy chat** - Real-time messaging channel between paired buddies (BuddyChatConsumer WebSocket). Integrated with existing WebSocket infrastructure.
+## Matching
 
-- [x] **Pairing history** - Endpoint to retrieve a user's past buddy pairings (completed and cancelled), including partner info, duration, compatibility score, and encouragement count.
+- [ ] **Advanced matching algorithm** — Match based on dream categories, timezone, language, and activity schedule
+- [ ] **Matching preferences** — Let users set preferences (timezone range, dream category, engagement level)
+- [ ] **Trial pairing** — 7-day trial period before committing to a full buddy pairing
+- [ ] **Buddy profiles** — Enhanced matching profiles showing goals, availability, and coaching style preference
+- [ ] **Re-match** — Easy re-matching if current buddy becomes inactive
 
-- [x] **Check-in reminders** - Automated reminder notifications to encourage buddies to check in with each other. Celery beat task schedules periodic reminders (e.g., every 3 days if no encouragement has been sent).
+## Communication
 
-- [x] **Encouragement streak tracking** - Tracks consecutive days where at least one encouragement was exchanged between buddies. Displays the current and best encouragement streak in the pairing detail response.
+- [ ] **Video check-ins** — Scheduled weekly video check-in calls between buddies
+- [ ] **Voice messages in chat** — Record and send voice messages in buddy chat
+- [ ] **Shared task board** — Collaborative task board where buddies can see each other's tasks
+- [ ] **Daily standup** — Structured daily standup format (yesterday, today, blockers)
+- [ ] **Celebration animations** — Special animations when buddy completes a task or dream
+- [ ] **Collaborative goals** — Shared goals that both buddies work toward together
 
-- [x] **Own consumer and routing** - BuddyChatConsumer moved from conversations app to `apps/buddies/consumers.py` with dedicated routing in `apps/buddies/routing.py`. URL parameter changed from `conversation_id` to `pairing_id`.
+## Accountability
 
-- [x] **FCM push notifications** - Firebase Cloud Messaging push to offline buddy partner when a message is sent via WebSocket.
+- [ ] **Accountability contracts** — Formal commitment with consequences for missing targets (e.g., donate to charity)
+- [ ] **Progress photos** — Share progress photos with buddy (fitness, project, etc.)
+- [ ] **Weekly reports** — Automated weekly comparison report sent to both buddies
+- [ ] **Buddy challenges** — 1v1 challenges between buddies (who completes more tasks this week)
+- [ ] **Accountability score** — Track how well each buddy follows through on commitments
+- [ ] **Nudge system** — Send gentle nudges when buddy has been inactive for 24+ hours
 
-- [x] **Block enforcement** - Bidirectional block check on connect and re-check on every message send via `BlockingMixin`.
+## Engagement
 
-- [x] **Mark read** - `mark_read` message type updates `MessageReadStatus` for read receipts.
-
-- [x] **Call broadcast** - `call_started` WebSocket event broadcast to `buddy_chat_{pairing_id}` group when a buddy call is initiated via REST.
-
-## Planned Improvements
-
-- [ ] **Improved matching algorithm** - Enhance compatibility scoring with additional signals: shared dream categories, similar goal timelines, timezone compatibility, and preferred check-in frequency.
-
-- [ ] **Buddy suggestions list** - Instead of returning a single best match, return a ranked list of top 3-5 matches so users can choose their preferred buddy partner.
-
-- [ ] **Mutual pairing completion** - Add a `completed` status transition that requires both users to agree the pairing was successful, rather than only allowing `cancelled` as the end state.
-
-- [ ] **Buddy activity feed** - Create a dedicated feed showing only the paired buddy's recent activity (tasks completed, dreams progressed, milestones reached) for easy at-a-glance accountability.
-
-- [ ] **Rate limiting on encouragements** - Add a cooldown period between encouragement messages to prevent spam (e.g., max 5 encouragements per day per pairing).
+- [ ] **Encouragement templates** — Pre-written encouragement messages for quick sending
+- [ ] **Encouragement reactions** — React to encouragements with emojis
+- [ ] **Buddy milestones** — Celebrate pairing anniversaries (1 week, 1 month, 3 months)
+- [ ] **Buddy referral** — Earn XP for referring friends who become active buddies
+- [ ] **Buddy leaderboard** — Leaderboard of most active buddy pairings

@@ -1,59 +1,50 @@
-# TODO - Dreams App
+# Dreams App — TODO
 
-## Completed
+Feature ideas and improvements for dreams, goals, tasks, obstacles, templates, and AI planning.
 
-- [x] Models: Dream, Goal, Task, Obstacle
-- [x] CRUD ViewSets for all models
-- [x] OpenAI integration for analysis and generation
-- [x] Plan generation with GPT-4
-- [x] Vision board generation with DALL-E 3
-- [x] 2-minute start system
-- [x] Automatic progress calculation
-- [x] Gamification integration (XP on completion)
-- [x] Unit and integration tests
-- [x] Serializers with validation
+---
 
-## Recently Completed
+## Dream Management
 
-- [x] Add @extend_schema decorators for Swagger
-- [x] XSS sanitization for text fields
-- [x] **Dream sharing** - Allow sharing between users (SharedDream model + endpoints)
-- [x] **Dream templates** - Pre-configured dreams by category (DreamTemplate model + viewset)
-- [x] **PDF export** - Export a dream with its complete plan
-- [x] **Milestone notifications** - Notifications at each important milestone
-- [x] **Collaborative dreams** - Multiple users on the same dream (DreamCollaborator model)
-- [x] **Custom tags** - Flexible tag system (DreamTag + M2M)
-- [x] **Smart archive** - Automatic archiving of inactive dreams (Celery task)
-- [x] **Dream duplication** - Copy an existing dream
+- [ ] **Dream categories v2** — User-defined custom categories beyond the 6 presets
+- [ ] **Dream dependencies** — Link dreams as prerequisites (e.g., "Learn Python" before "Build an App")
+- [ ] **Dream timeline view** — Gantt chart visualization showing dream phases, goals, and deadlines
+- [ ] **Dream journal** — Daily/weekly reflection entries attached to a dream
+- [ ] **Dream cloning from community** — Browse and clone public dream templates from other users
+- [ ] **Dream priority ranking** — Drag-and-drop priority ordering of active dreams
+- [ ] **Dream milestones v2** — Custom milestones beyond 25/50/75/100%
+- [ ] **Dream cost tracking** — Optional financial tracking for budget-related dreams
 
-## Planned - High Priority
+## Goals & Tasks
 
-- [ ] Add PUT /api/dreams/{id}/ usage in frontend (edit dream screen missing)
-- [ ] Add manual goal creation endpoint in frontend (currently AI-only)
-- [ ] Add manual task creation endpoint in frontend (currently AI-only)
+- [ ] **Recurring tasks** — Support daily, weekly, monthly recurring tasks with auto-generation
+- [ ] **Task dependencies** — Mark tasks as blocked by other tasks (prerequisite chain)
+- [ ] **Subtasks** — Nest tasks within tasks for complex task breakdown
+- [ ] **Task effort estimation** — AI-estimated effort with actual vs. estimated comparison
+- [ ] **Task delegation** — Assign tasks to collaborators on shared dreams
+- [ ] **Pomodoro integration** — Built-in pomodoro timer for focused task work sessions
+- [ ] **Task templates** — Save and reuse common task patterns
+- [ ] **Batch task operations** — Multi-select tasks for bulk complete, reschedule, or delete
 
-## Planned - Low Priority
+## AI Planning
 
-- [ ] **Advanced statistics** - Detailed progress charts
-- [ ] **External calendar integration** - Google/Apple Calendar sync
-- [ ] **Smart reminders** - AI to determine the best timing
+- [ ] **Plan revision** — Ask AI to revise specific parts without regenerating everything
+- [ ] **Calibration v2** — Adaptive calibration that learns from past dreams
+- [ ] **Progress-based plan adjustment** — AI suggests adjustments when user falls behind or gets ahead
+- [ ] **Obstacle prediction v2** — Proactive warnings based on behavioral patterns
+- [ ] **Dream feasibility score** — AI-assessed feasibility with improvement suggestions
+- [ ] **Weekly AI check-in** — Automated weekly progress review conversation
 
-## Known Bugs
+## Templates
 
-- [ ] Progress can become out of sync if a task is deleted
-- [ ] Streak may not update correctly on timezone change
+- [ ] **Community templates** — User-submitted templates with ratings and reviews
+- [ ] **Template versioning** — Update templates and notify users of newer versions
+- [ ] **Industry-specific templates** — Pre-built templates for specific industries
+- [ ] **Template difficulty levels** — Beginner/intermediate/advanced categorization
 
-## Technical Debt
+## Sharing & Collaboration
 
-- [ ] Refactor `update_progress()` into a dedicated service
-- [ ] Add type hints to all methods
-- [ ] Extract XP logic into a service
-- [ ] Add missing docstrings
-- [ ] Optimize N+1 queries in nested serializers
-
-## Performance Optimizations
-
-- [ ] Add Redis cache for progress statistics
-- [ ] Implement pagination on tasks
-- [ ] Add composite index for frequent queries
-- [ ] Use select_related/prefetch_related systematically
+- [ ] **Public dream profile** — Shareable URL for dream portfolios
+- [ ] **Dream comments** — Allow collaborators to leave comments on dreams
+- [ ] **Activity log** — Track all changes to a shared dream
+- [ ] **Real-time collaboration** — Live cursor and editing for shared dreams
