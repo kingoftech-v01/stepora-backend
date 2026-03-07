@@ -24,7 +24,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DreamViewSet, DreamMilestoneViewSet, GoalViewSet, TaskViewSet, ObstacleViewSet,
     SharedWithMeView, DreamTagListView, DreamTemplateViewSet,
-    DreamPDFExportView,
+    DreamPDFExportView, CheckInViewSet,
 )
 
 router = DefaultRouter()
@@ -34,6 +34,7 @@ router.register(r'goals', GoalViewSet, basename='goal')
 router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'obstacles', ObstacleViewSet, basename='obstacle')
 router.register(r'dreams/templates', DreamTemplateViewSet, basename='dream-template')
+router.register(r'checkins', CheckInViewSet, basename='checkin')
 
 urlpatterns = [
     path('dreams/shared-with-me/', SharedWithMeView.as_view(), name='shared-with-me'),

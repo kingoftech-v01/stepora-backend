@@ -40,7 +40,8 @@ def sanitize_text(text: Optional[str], strip: bool = True) -> str:
     if not isinstance(text, str):
         text = str(text)
 
-    return nh3.clean(text, tags=set())
+    import html
+    return html.unescape(nh3.clean(text, tags=set()))
 
 
 def sanitize_html(text: Optional[str], extra_tags: set = None) -> str:

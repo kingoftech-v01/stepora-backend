@@ -62,7 +62,7 @@ A personal AI assistant that:
 
 - **Freemium**:
   - Free: 3 active goals, basic notifications
-  - Premium ($14.99/month): Unlimited goals, advanced notifications, calendar export
+  - Premium ($19.99/month): Unlimited goals, advanced notifications, calendar export
   - Pro ($29.99/month): Advanced AI coaching, calendar integrations, detailed analytics
 
 ## Tech Stack

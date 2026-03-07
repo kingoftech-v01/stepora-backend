@@ -78,13 +78,22 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         """Get the current user's subscription."""
         subscription = Subscription.objects.filter(user=request.user).first()
         if not subscription:
-            return Response(
-                {
-                    'detail': _('No active subscription. You are on the free plan.'),
-                    'plan': 'free',
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            # Auto-create a free subscription for existing users who don't have one yet.
+            free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+            if free_plan:
+                subscription, _ = Subscription.objects.get_or_create(
+                    user=request.user,
+                    defaults={
+                        'plan': free_plan,
+                        'status': 'active',
+                        'stripe_subscription_id': '',
+                    },
+                )
+            else:
+                return Response(
+                    {'plan': 'free', 'status': 'active'},
+                    status=status.HTTP_200_OK,
+                )
         serializer = SubscriptionSerializer(subscription)
         return Response(serializer.data)
 

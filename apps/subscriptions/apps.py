@@ -2,7 +2,11 @@
 App configuration for the Subscriptions app.
 """
 
+import logging
+
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionsConfig(AppConfig):
@@ -13,5 +17,16 @@ class SubscriptionsConfig(AppConfig):
     verbose_name = 'Subscriptions'
 
     def ready(self):
-        """Import signals when the app is ready."""
+        """Import signals and register post_migrate hook for auto-seeding."""
         import apps.subscriptions.signals  # noqa: F401
+
+        from django.db.models.signals import post_migrate
+        post_migrate.connect(_seed_plans_after_migrate, sender=self)
+
+
+def _seed_plans_after_migrate(sender, **kwargs):
+    """Auto-seed default subscription plans on first run (after migrate)."""
+    from .models import SubscriptionPlan
+    if not SubscriptionPlan.objects.exists():
+        SubscriptionPlan.seed_plans()
+        logger.info('Auto-seeded default subscription plans (Free $0, Premium $19.99, Pro $29.99).')

@@ -109,8 +109,8 @@ Assuming tiered subscription model:
 |------|---------|-----------|-------------------|
 | Free | $0 | 40% | $0.00 |
 | Basic | $4.99 | 35% | $1.75 |
-| Pro | $9.99 | 20% | $2.00 |
-| Premium | $19.99 | 5% | $1.00 |
+| Premium | $19.99 | 20% | $4.00 |
+| Pro | $29.99 | 5% | $1.50 |
 | **Blended ARPU** | | | **$4.75** |
 
 ### Revenue vs AI Cost at Scale

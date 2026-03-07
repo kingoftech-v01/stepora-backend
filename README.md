@@ -59,7 +59,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Influence Score**: Weighted composite of XP, completed dreams, active buddies, circle memberships, and streaks
 
 ### Subscriptions and Monetization
-- **3 Tiers**: Free (3 dreams, no AI), Premium ($14.99/mo), Pro ($29.99/mo)
+- **3 Tiers**: Free (3 dreams, no AI), Premium ($19.99/mo), Pro ($29.99/mo)
 - **Stripe Integration**: Checkout sessions, webhooks, customer portal, invoices
 - **Trial Periods**: Configurable free trial for premium tiers
 - **Coupons**: Stripe coupon and promotion code support

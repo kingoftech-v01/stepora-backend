@@ -21,7 +21,7 @@ def send_payment_receipt_email(user_id: str, plan_name: str, amount: str, invoic
     Args:
         user_id: UUID of the user.
         plan_name: Name of the subscription plan.
-        amount: Amount charged (formatted string, e.g. "$9.99").
+        amount: Amount charged (formatted string, e.g. "$19.99").
         invoice_url: URL to the Stripe-hosted invoice.
     """
     from apps.users.models import User

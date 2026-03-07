@@ -427,6 +427,7 @@ AI_QUOTAS = {
 }
 
 # django-allauth Configuration
+ACCOUNT_ADAPTER = 'core.adapters.DreamPlannerAccountAdapter'
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'mandatory')
@@ -520,8 +521,8 @@ STRIPE_PRICES = {
 
 # Subscription pricing (for display and validation)
 SUBSCRIPTION_PRICES = {
-    'premium': {'monthly': 9.99, 'yearly': 99.99},
-    'pro': {'monthly': 19.99, 'yearly': 199.99},
+    'premium': {'monthly': 19.99, 'yearly': 199.99},
+    'pro': {'monthly': 29.99, 'yearly': 299.99},
 }
 
 # Free tier limits — free users only get basic todo list (dreams/goals/tasks)

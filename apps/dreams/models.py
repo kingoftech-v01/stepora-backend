@@ -18,6 +18,12 @@ class Dream(models.Model):
     title = EncryptedCharField(max_length=255)
     description = EncryptedTextField()
     category = models.CharField(max_length=50, blank=True, db_index=True)
+    language = models.CharField(
+        max_length=10,
+        blank=True,
+        default='',
+        help_text='Detected language code (fr, en, es, etc.) from dream title/description'
+    )
     target_date = models.DateTimeField(null=True, blank=True)
     priority = models.IntegerField(default=1)
 
@@ -74,6 +80,28 @@ class Dream(models.Model):
         ],
         default='pending',
         help_text='Status of the calibration questionnaire'
+    )
+
+    # Adaptive plan generation fields
+    plan_phase = models.CharField(
+        max_length=20,
+        choices=[
+            ('none', 'No Plan'),
+            ('skeleton', 'Skeleton Only'),
+            ('partial', 'Partial Tasks'),
+            ('full', 'Full Plan'),
+        ],
+        default='none',
+        db_index=True,
+    )
+    plan_skeleton = models.JSONField(null=True, blank=True)
+    tasks_generated_through_month = models.IntegerField(default=0)
+    last_checkin_at = models.DateTimeField(null=True, blank=True)
+    next_checkin_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    checkin_count = models.IntegerField(default=0)
+    checkin_interval_days = models.IntegerField(
+        default=14,
+        help_text='Days between check-ins (7 if behind, 14 normal, 21 if ahead)'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -203,6 +231,8 @@ class DreamMilestone(models.Model):
 
     # Progress
     progress_percentage = models.FloatField(default=0.0)
+
+    has_tasks = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -802,3 +832,82 @@ class VisionBoardImage(models.Model):
 
     def __str__(self):
         return f"Vision: {self.dream.title} #{self.order}"
+
+
+class PlanCheckIn(models.Model):
+    """Record of each AI check-in session for a dream (interactive or autonomous)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='checkins')
+    conversation = models.ForeignKey(
+        'conversations.Conversation', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='checkin_records',
+    )
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('questionnaire_generating', 'Generating Questionnaire'),
+        ('awaiting_user', 'Awaiting User Response'),
+        ('ai_processing', 'AI Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
+    ]
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending', db_index=True)
+
+    TRIGGERED_BY_CHOICES = [
+        ('schedule', 'Scheduled'),
+        ('manual', 'Manual'),
+        ('auto_expire', 'Auto Expired'),
+    ]
+    triggered_by = models.CharField(max_length=20, choices=TRIGGERED_BY_CHOICES, default='schedule')
+
+    # Interactive questionnaire
+    questionnaire = models.JSONField(
+        null=True, blank=True,
+        help_text='AI-generated questions: [{id, question_type, question, options, ...}]'
+    )
+    user_responses = models.JSONField(
+        null=True, blank=True,
+        help_text='User answers: {question_id: answer_value}'
+    )
+    questionnaire_expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='After this time, check-in runs autonomously if user has not responded'
+    )
+
+    # Pace analysis
+    PACE_CHOICES = [
+        ('significantly_behind', 'Significantly Behind'),
+        ('behind', 'Behind'),
+        ('on_track', 'On Track'),
+        ('ahead', 'Ahead'),
+        ('significantly_ahead', 'Significantly Ahead'),
+    ]
+    pace_status = models.CharField(max_length=25, choices=PACE_CHOICES, blank=True, default='')
+    next_checkin_interval_days = models.IntegerField(default=14)
+
+    # Progress snapshot
+    progress_at_checkin = models.FloatField(default=0.0)
+    tasks_completed_since_last = models.IntegerField(default=0)
+    tasks_overdue_at_checkin = models.IntegerField(default=0)
+
+    # AI results
+    ai_actions = models.JSONField(default=list)
+    tasks_created = models.IntegerField(default=0)
+    milestones_adjusted = models.IntegerField(default=0)
+    months_generated_through = models.IntegerField(default=0)
+    coaching_message = models.TextField(blank=True)
+    adjustment_summary = models.TextField(blank=True)
+
+    # Timestamps
+    scheduled_for = models.DateTimeField(db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'plan_checkins'
+        ordering = ['-scheduled_for']
+
+    def __str__(self):
+        return f"CheckIn for {self.dream_id} ({self.status})"

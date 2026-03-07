@@ -247,8 +247,8 @@ Assuming average 3 dreams per user with mixed durations:
 |-------------|----------------|-------------------|-----------|
 | Free tier (1 dream, no AI) | $0.00 | $0.00 | - |
 | Basic ($4.99/mo) | $4.99 | ~$0.10 | **98%** |
-| Pro ($9.99/mo) | $9.99 | ~$0.15 | **98.5%** |
-| Premium ($19.99/mo) | $19.99 | ~$0.25 | **98.7%** |
+| Premium ($19.99/mo) | $19.99 | ~$0.15 | **99.3%** |
+| Pro ($29.99/mo) | $29.99 | ~$0.25 | **99.2%** |
 
 AI costs are negligible relative to subscription revenue, even for power users.
 

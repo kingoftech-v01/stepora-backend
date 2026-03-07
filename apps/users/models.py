@@ -108,6 +108,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         help_text='App preferences: {theme: "", language: ""}'
     )
+    persona = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='User persona for AI calibration: {available_hours_per_week, preferred_schedule, '
+                  'budget_range, fitness_level, learning_style, typical_day, occupation, '
+                  'astrological_sign, global_motivation, global_constraints}'
+    )
 
     # Gamification
     xp = models.IntegerField(default=0)

@@ -22,7 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'display_name', 'avatar_url', 'avatar_image',
             'bio', 'location', 'social_links', 'profile_visibility',
             'timezone', 'subscription', 'subscription_ends',
-            'work_schedule', 'notification_prefs', 'app_prefs',
+            'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
             'xp', 'level', 'streak_days', 'last_activity',
             'can_create_dream', 'is_premium',
             'created_at', 'updated_at'

@@ -233,7 +233,7 @@ Token extracted from query string by `TokenWebSocketMiddleware` (`core/websocket
 
 ### Tier Comparison
 
-| Feature | Free | Premium ($14.99/mo) | Pro ($29.99/mo) |
+| Feature | Free | Premium ($19.99/mo) | Pro ($29.99/mo) |
 | --- | --- | --- | --- |
 | Active dreams | 3 max | 10 max | Unlimited |
 | AI coaching & chat | No | Yes | Yes |
@@ -468,7 +468,7 @@ All chat consumers use shared mixins from `core/consumers.py`: `RateLimitMixin`,
 | `seed_notification_templates` | notifications | 6 notification templates (motivation, streak, reminder, report, achievement, buddy) |
 | `seed_leagues` | leagues | 7 league tiers (Bronze→Legend) + initial season |
 | `seed_store` | store | 5 categories + 15+ cosmetic items with pricing/rarity |
-| `seed_subscription_plans` | subscriptions | 3 plans (Free, Premium $14.99, Pro $29.99) |
+| `seed_subscription_plans` | subscriptions | 3 plans (Free, Premium $19.99, Pro $29.99) |
 
 **Run all seed commands**:
 

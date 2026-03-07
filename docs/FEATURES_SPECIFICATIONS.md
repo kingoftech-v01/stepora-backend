@@ -495,7 +495,7 @@ The notification system takes into account:
 | Advanced AI coaching | ❌ | ❌ | ✅ |
 | Notion/Todoist integration | ❌ | ❌ | ✅ |
 | Priority support | ❌ | ❌ | ✅ |
-| Price | Free | $14.99/month | $29.99/month |
+| Price | Free | $19.99/month | $29.99/month |
 
 ### 7.2 Upgrade Screen
 
@@ -517,12 +517,12 @@ The notification system takes into account:
 │                                        │
 │ ┌──────────────────────────────────┐  │
 │ │ Monthly                         │  │
-│ │ $14.99/month                     │  │
+│ │ $19.99/month                     │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 │ ┌──────────────────────────────────┐  │
-│ │ Annual (Save 33%)        ⭐     │  │
-│ │ $119.99/year ($10.00/month)     │  │
+│ │ Annual (Save 17%)        ⭐     │  │
+│ │ $199.99/year ($16.67/month)     │  │
 │ └──────────────────────────────────┘  │
 │                                        │
 │ 7-day free trial                       │

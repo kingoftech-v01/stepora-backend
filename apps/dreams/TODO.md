@@ -29,11 +29,11 @@ Feature ideas and improvements for dreams, goals, tasks, obstacles, templates, a
 ## AI Planning
 
 - [ ] **Plan revision** — Ask AI to revise specific parts without regenerating everything
-- [ ] **Calibration v2** — Adaptive calibration that learns from past dreams
-- [ ] **Progress-based plan adjustment** — AI suggests adjustments when user falls behind or gets ahead
+- [x] **Calibration v2** — Adaptive calibration that learns from past dreams (persona system + context injection)
+- [x] **Progress-based plan adjustment** — AI suggests adjustments when user falls behind or gets ahead (adaptive check-in system)
 - [ ] **Obstacle prediction v2** — Proactive warnings based on behavioral patterns
 - [ ] **Dream feasibility score** — AI-assessed feasibility with improvement suggestions
-- [ ] **Weekly AI check-in** — Automated weekly progress review conversation
+- [x] **Weekly AI check-in** — Automated weekly progress review conversation (interactive check-in wizard with questionnaire + AI adaptation)
 
 ## Templates
 

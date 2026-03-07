@@ -76,6 +76,16 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
                 'has_ads',
             ),
         }),
+        ('AI Daily Limits', {
+            'fields': (
+                'ai_chat_daily_limit',
+                'ai_plan_daily_limit',
+                'ai_image_daily_limit',
+                'ai_voice_daily_limit',
+                'ai_background_daily_limit',
+            ),
+            'classes': ('collapse',),
+        }),
         ('Display', {
             'fields': ('features',),
             'classes': ('collapse',),

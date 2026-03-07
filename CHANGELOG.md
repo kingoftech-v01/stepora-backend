@@ -91,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Added caching (5 min) to leaderboard, store items, and dream templates endpoints
 - All documentation translated from French to English
-- Unified pricing to USD ($14.99 Premium / $29.99 Pro)
+- Unified pricing to USD ($19.99 Premium / $29.99 Pro)
 - Unified coverage target to 84%
 - Updated OpenAI SDK syntax in docs
 - Replaced all "DreamBuddy" references with "BuddyPairing"

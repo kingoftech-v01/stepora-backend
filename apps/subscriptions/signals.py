@@ -39,6 +39,28 @@ def create_stripe_customer_on_user_creation(sender, instance, created, **kwargs)
     if not created:
         return
 
+    # Create a free-tier Subscription so every user has one from day one.
+    try:
+        from .models import SubscriptionPlan, Subscription
+        free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+        if free_plan:
+            Subscription.objects.get_or_create(
+                user=instance,
+                defaults={
+                    'plan': free_plan,
+                    'status': 'active',
+                    'stripe_subscription_id': '',
+                },
+            )
+            logger.info(
+                "Free subscription created for new user %s", instance.email
+            )
+    except Exception:
+        logger.exception(
+            "Failed to create free subscription for user %s.",
+            instance.email,
+        )
+
     try:
         from .services import StripeService
         StripeService.create_customer(instance)

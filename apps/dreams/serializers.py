@@ -5,7 +5,7 @@ Serializers for Dreams app.
 from rest_framework import serializers
 from django.utils.translation import gettext as _
 from core.sanitizers import sanitize_text
-from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, PlanCheckIn
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -130,7 +130,7 @@ class DreamMilestoneSerializer(serializers.ModelSerializer):
             'id', 'dream', 'title', 'description', 'order',
             'target_date', 'expected_date', 'deadline_date',
             'status', 'completed_at',
-            'progress_percentage',
+            'progress_percentage', 'has_tasks',
             'goals', 'obstacles',
             'goals_count', 'completed_goals_count',
             'created_at', 'updated_at'
@@ -170,11 +170,13 @@ class DreamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dream
         fields = [
-            'id', 'user', 'title', 'description', 'category',
+            'id', 'user', 'title', 'description', 'category', 'language',
             'target_date', 'priority', 'status',
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'is_public', 'is_favorited', 'vision_image_url',
             'calibration_status',
+            'plan_phase', 'tasks_generated_through_month',
+            'next_checkin_at', 'checkin_count', 'checkin_interval_days',
             'goals_count', 'tasks_count', 'tags',
             'sparkline_data',
             'created_at', 'updated_at'
@@ -267,12 +269,14 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dream
         fields = [
-            'id', 'user', 'title', 'description', 'category',
+            'id', 'user', 'title', 'description', 'category', 'language',
             'target_date', 'priority', 'status',
             'ai_analysis', 'vision_image_url',
             'progress_percentage', 'completed_at',
             'has_two_minute_start', 'is_public',
             'calibration_status', 'calibration_responses',
+            'plan_phase', 'tasks_generated_through_month',
+            'next_checkin_at', 'checkin_count', 'checkin_interval_days',
             'milestones', 'goals', 'obstacles',
             'milestones_count', 'completed_milestones_count',
             'goals_count', 'completed_goal_count',
@@ -518,8 +522,8 @@ class DreamCreateSerializer(serializers.ModelSerializer):
     def validate_description(self, value):
         """Validate, sanitize, and moderate dream description."""
         value = sanitize_text(value)
-        if len(value) < 10:
-            raise serializers.ValidationError(_("Description must be at least 10 characters long"))
+        if len(value) < 20:
+            raise serializers.ValidationError(_("Description must be at least 20 characters long for better AI understanding"))
 
         from core.moderation import ContentModerationService
         result = ContentModerationService().moderate_text(value, context='dream_description')
@@ -788,6 +792,46 @@ class VisionBoardImageSerializer(serializers.ModelSerializer):
             'order': {'help_text': 'Display order of the image on the vision board.'},
             'created_at': {'help_text': 'Timestamp when the image was added.'},
         }
+
+
+# ===================================================================
+# Check-in serializers
+# ===================================================================
+
+class PlanCheckInSerializer(serializers.ModelSerializer):
+    """Serializer for PlanCheckIn list view."""
+
+    class Meta:
+        model = PlanCheckIn
+        fields = [
+            'id', 'dream', 'status', 'pace_status', 'triggered_by',
+            'progress_at_checkin', 'tasks_completed_since_last', 'tasks_overdue_at_checkin',
+            'coaching_message', 'adjustment_summary',
+            'tasks_created', 'milestones_adjusted', 'months_generated_through',
+            'next_checkin_interval_days',
+            'scheduled_for', 'started_at', 'completed_at', 'questionnaire_expires_at',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class PlanCheckInDetailSerializer(PlanCheckInSerializer):
+    """Detailed serializer with questionnaire and responses."""
+
+    class Meta(PlanCheckInSerializer.Meta):
+        fields = PlanCheckInSerializer.Meta.fields + [
+            'questionnaire', 'user_responses', 'ai_actions', 'error_message',
+        ]
+        read_only_fields = fields
+
+
+class CheckInResponseSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting questionnaire responses."""
+
+    responses = serializers.DictField(
+        child=serializers.JSONField(),
+        help_text='Map of question_id to answer value (int for slider, str for text/choice)',
+    )
 
 
 class GoalCreateSerializer(serializers.ModelSerializer):

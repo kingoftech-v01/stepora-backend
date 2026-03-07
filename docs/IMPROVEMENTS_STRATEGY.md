@@ -463,7 +463,7 @@
 | Tier | Price | Features |
 |------|-------|----------|
 | **Free** | $0 | 1 goal, basic community, 1 buddy |
-| **Dreamer** | $14.99/month | 5 goals, AI coach, Dream Circles |
+| **Dreamer** | $19.99/month | 5 goals, AI coach, Dream Circles |
 | **Achiever** | $29.99/month | Unlimited, AI Vision Board, Advanced analytics |
 | **Lifetime** | $149 one-time | Everything for life (limited launch offer) |
 

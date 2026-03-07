@@ -65,7 +65,7 @@ Defines available subscription plans with feature flags and resource limits.
 | Plan | Price | Dreams | AI | Buddy | Circles | Vision | League | Ads |
 |------|-------|--------|-----|-------|---------|--------|--------|-----|
 | Free | $0/mo | 3 | No | No | No | No | No | Yes |
-| Premium | $14.99/mo | 10 | Yes | Yes | No | No | Yes | No |
+| Premium | $19.99/mo | 10 | Yes | Yes | No | No | Yes | No |
 | Pro | $29.99/mo | Unlimited | Yes | Yes | Yes | Yes | Yes | No |
 
 ### Subscription

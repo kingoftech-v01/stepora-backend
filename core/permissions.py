@@ -56,6 +56,9 @@ class IsPremiumUser(permissions.BasePermission):
     """Permission to only allow premium or pro users."""
 
     message = 'This feature requires a Premium or Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Premium Features'
 
     def has_permission(self, request, view):
         """Check if user has premium or pro subscription."""
@@ -70,6 +73,9 @@ class IsProUser(permissions.BasePermission):
     """Permission to only allow pro tier users."""
 
     message = 'This feature requires a Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'pro'
+    feature_name = 'Pro Features'
 
     def has_permission(self, request, view):
         """Check if user has pro subscription."""
@@ -107,6 +113,9 @@ class CanUseAI(permissions.BasePermission):
     """
 
     message = 'AI features require a Premium or Pro subscription. Upgrade to unlock AI-powered dream planning.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'AI Coaching'
 
     def has_permission(self, request, view):
         """Check if user can access AI features."""
@@ -121,6 +130,9 @@ class CanUseBuddy(permissions.BasePermission):
     """Permission to restrict buddy matching to premium and pro users."""
 
     message = 'Dream Buddy matching requires a Premium or Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Dream Buddy'
 
     def has_permission(self, request, view):
         """Check if user can access buddy features."""
@@ -138,7 +150,10 @@ class CanUseCircles(permissions.BasePermission):
     Creating circles requires pro subscription.
     """
 
-    message = 'Creating circles requires a Pro subscription.'
+    message = 'Dream Circles require a paid subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Dream Circles'
 
     def has_permission(self, request, view):
         """Check if user can create circles (pro) or join (premium+)."""
@@ -160,6 +175,9 @@ class CanUseVisionBoard(permissions.BasePermission):
     """Permission to restrict vision board generation to pro users."""
 
     message = 'Vision board generation requires a Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'pro'
+    feature_name = 'Vision Board'
 
     def has_permission(self, request, view):
         """Check if user can generate vision boards."""
@@ -174,6 +192,9 @@ class CanUseLeague(permissions.BasePermission):
     """Permission to restrict league features to premium and pro users."""
 
     message = 'League features require a Premium or Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Leagues'
 
     def has_permission(self, request, view):
         """Check if user can access league features."""
@@ -192,6 +213,9 @@ class CanUseStore(permissions.BasePermission):
     """
 
     message = 'Store purchases require a Premium or Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Store Purchases'
 
     def has_permission(self, request, view):
         """Check if user can make store purchases."""
@@ -209,6 +233,9 @@ class CanUseSocialFeed(permissions.BasePermission):
     """
 
     message = 'The full activity feed requires a Premium or Pro subscription.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Activity Feed'
 
     def has_permission(self, request, view):
         """Check if user can access the full social feed."""

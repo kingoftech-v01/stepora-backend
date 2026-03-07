@@ -684,6 +684,64 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(UserSerializer(user).data)
 
+    # ── Persona ─────────────────────────────────────────────────────
+
+    @extend_schema(
+        summary="Get or update user persona",
+        description="Get or update the user's persona profile used to personalize AI dream plans.",
+        responses={200: UserSerializer},
+        tags=["Users"],
+    )
+    @action(detail=False, methods=['get', 'put'], url_path='persona')
+    def persona(self, request):
+        """Get or update user persona for AI personalization."""
+        user = request.user
+
+        if request.method == 'GET':
+            return Response({'persona': user.persona or {}})
+
+        data = request.data
+        if not isinstance(data, dict):
+            return Response(
+                {'error': _('Expected a JSON object.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        allowed_keys = {
+            'available_hours_per_week',  # number
+            'preferred_schedule',        # morning/afternoon/evening/flexible
+            'budget_range',              # none/low/medium/high
+            'fitness_level',             # beginner/intermediate/advanced
+            'learning_style',            # visual/reading/hands-on/audio
+            'typical_day',               # free text description
+            'occupation',                # free text
+            'astrological_sign',         # optional, zodiac sign
+            'global_motivation',         # free text - why they use DreamPlanner
+            'global_constraints',        # free text - general life constraints
+            'preferred_language',        # fr/en/es etc
+        }
+
+        validated = {}
+        for key, value in data.items():
+            if key not in allowed_keys:
+                continue
+            if key == 'available_hours_per_week':
+                try:
+                    validated[key] = max(0, min(168, int(value)))
+                except (ValueError, TypeError):
+                    continue
+            elif isinstance(value, str):
+                validated[key] = value[:500]  # cap text length
+            else:
+                validated[key] = value
+
+        existing = user.persona or {}
+        existing.update(validated)
+        user.persona = existing
+        user.save(update_fields=['persona'])
+
+        return Response({'persona': user.persona})
+
     # ── Two-Factor Authentication ────────────────────────────────────
 
     @extend_schema(

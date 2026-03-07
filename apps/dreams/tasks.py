@@ -10,7 +10,7 @@ from datetime import timedelta, datetime, time
 import json
 import logging
 
-from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, PlanCheckIn
 from apps.users.models import User
 from apps.notifications.models import Notification
 from integrations.openai_service import OpenAIService
@@ -41,6 +41,17 @@ def get_plan_status(dream_id):
     return None
 
 
+def _parse_date(date_str):
+    """Parse a date string (YYYY-MM-DD) into a date object."""
+    from datetime import date as date_type
+    if not date_str:
+        return None
+    try:
+        return date_type.fromisoformat(str(date_str).strip()[:10])
+    except (ValueError, TypeError):
+        return None
+
+
 @shared_task(bind=True, max_retries=1, soft_time_limit=900, time_limit=960)
 def generate_dream_plan_task(self, dream_id, user_id):
     """
@@ -69,9 +80,17 @@ def generate_dream_plan_task(self, dream_id, user_id):
         user = User.objects.get(id=user_id)
         ai_service = OpenAIService()
 
+        # Get category from AI analysis or dream field
+        category = ''
+        if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+            category = dream.ai_analysis.get('category', '')
+
         user_context = {
             'timezone': dream.user.timezone,
             'work_schedule': dream.user.work_schedule or {},
+            'category': category,
+            'language': dream.language or '',
+            'persona': dream.user.persona or {},
         }
 
         # Build calibration context
@@ -97,6 +116,17 @@ def generate_dream_plan_task(self, dream_id, user_id):
                     user_context['plan_recommendations'] = summary.plan_recommendations.model_dump()
                     if summary.enriched_description:
                         user_context['enriched_description'] = summary.enriched_description
+
+                    # Re-detect category using enriched description + calibration context
+                    from integrations.plan_processors import detect_category_from_text
+                    enriched_text = summary.enriched_description or dream.description
+                    qa_text = ' '.join(f"{q['answer']}" for q in qa_pairs if q.get('answer'))
+                    refined_category = detect_category_from_text(
+                        dream.title, f"{enriched_text} {qa_text}"
+                    )
+                    if refined_category and refined_category != 'other':
+                        user_context['category'] = refined_category
+                        logger.info(f"generate_dream_plan_task: refined category to '{refined_category}'")
                 except (OpenAIError, AIValidationError):
                     pass
 
@@ -249,6 +279,28 @@ def generate_dream_plan_task(self, dream_id, user_id):
                         milestones=milestones_count,
                         goals=goals_count,
                         tasks=tasks_count)
+
+        # Send notification to user that plan is ready
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=user,
+                notification_type='dream_completed',
+                title=_('Your plan is ready!'),
+                body=_('Your personalized plan for "%(title)s" has been generated with %(goals)s goals and %(tasks)s tasks.') % {
+                    'title': dream.title[:50],
+                    'goals': goals_count,
+                    'tasks': tasks_count,
+                },
+                scheduled_for=timezone.now(),
+                data={
+                    'screen': 'dream',
+                    'dreamId': str(dream_id),
+                    'action': 'plan_ready',
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create plan-ready notification: {e}")
 
         logger.info(f"generate_dream_plan_task: DONE dream={dream_id} "
                      f"milestones={milestones_count} goals={goals_count} tasks={tasks_count}")
@@ -874,3 +926,866 @@ def _check_milestone(dream, old_progress, new_progress):
                 dream.id,
                 threshold,
             )
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=300, time_limit=360)
+def generate_dream_skeleton_task(self, dream_id, user_id):
+    """
+    Phase 1: Generate skeleton plan (milestones + goals, no tasks).
+    After success, automatically chains to generate_initial_tasks_task.
+    """
+    from core.ai_validators import validate_skeleton_response, AIValidationError
+    from core.ai_usage import AIUsageTracker
+
+    try:
+        set_plan_status(dream_id, 'generating', message='Designing your roadmap...')
+
+        dream = Dream.objects.get(id=dream_id)
+        user = User.objects.get(id=user_id)
+        ai_service = OpenAIService()
+
+        category = ''
+        if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+            category = dream.ai_analysis.get('category', '')
+
+        user_context = {
+            'timezone': dream.user.timezone,
+            'work_schedule': dream.user.work_schedule or {},
+            'category': category,
+            'language': dream.language or '',
+            'persona': dream.user.persona or {},
+        }
+
+        # Build calibration context (same pattern as generate_dream_plan_task)
+        if dream.calibration_status == 'completed':
+            from core.ai_validators import validate_calibration_summary
+            qa_pairs = [
+                {'question': r.question, 'answer': r.answer}
+                for r in CalibrationResponse.objects.filter(dream=dream).order_by('question_number')
+                if r.answer and r.answer.strip()
+            ]
+            if qa_pairs:
+                set_plan_status(dream_id, 'generating', message='Analyzing your calibration answers...')
+                try:
+                    raw_summary = ai_service.generate_calibration_summary(
+                        dream.title, dream.description, qa_pairs
+                    )
+                    summary = validate_calibration_summary(raw_summary)
+                    user_context['calibration_profile'] = summary.user_profile.model_dump()
+                    user_context['plan_recommendations'] = summary.plan_recommendations.model_dump()
+                    if summary.enriched_description:
+                        user_context['enriched_description'] = summary.enriched_description
+                except Exception:
+                    pass
+
+        def _progress(msg):
+            set_plan_status(dream_id, 'generating', message=msg)
+
+        _target = str(dream.target_date) if dream.target_date else None
+        raw_skeleton = ai_service.generate_skeleton(
+            dream.title, dream.description, user_context,
+            target_date=_target, progress_callback=_progress,
+        )
+
+        skeleton = validate_skeleton_response(raw_skeleton)
+        logger.info(f"generate_dream_skeleton_task: validated {len(skeleton.milestones)} milestones")
+
+        set_plan_status(dream_id, 'generating', message='Saving your roadmap...')
+
+        # Clear existing plan data
+        Task.objects.filter(goal__dream=dream).delete()
+        Goal.objects.filter(dream=dream).delete()
+        Obstacle.objects.filter(dream=dream).delete()
+        DreamMilestone.objects.filter(dream=dream).delete()
+
+        AIUsageTracker().increment(user, 'ai_plan')
+
+        # Save skeleton to dream
+        skeleton_dict = skeleton.model_dump()
+        dream.plan_skeleton = skeleton_dict
+        dream.ai_analysis = skeleton_dict
+        dream.plan_phase = 'skeleton'
+        dream.save(update_fields=['plan_skeleton', 'ai_analysis', 'plan_phase'])
+
+        plan_start = dream.created_at or timezone.now()
+
+        # Create milestones and goals (NO tasks)
+        for ms_data in skeleton.milestones:
+            db_milestone = DreamMilestone.objects.create(
+                dream=dream,
+                title=ms_data.title,
+                description=ms_data.description,
+                order=ms_data.order,
+                target_date=(plan_start + timedelta(days=ms_data.target_day)) if ms_data.target_day else None,
+                expected_date=_parse_date(ms_data.expected_date),
+                deadline_date=_parse_date(ms_data.deadline_date),
+                has_tasks=False,
+            )
+
+            for goal_data in ms_data.goals:
+                Goal.objects.create(
+                    dream=dream,
+                    milestone=db_milestone,
+                    title=goal_data.title,
+                    description=goal_data.description,
+                    order=goal_data.order,
+                    estimated_minutes=goal_data.estimated_minutes,
+                    expected_date=_parse_date(goal_data.expected_date),
+                    deadline_date=_parse_date(goal_data.deadline_date),
+                )
+
+            # Create obstacles for this milestone
+            for obs in ms_data.obstacles:
+                Obstacle.objects.create(
+                    dream=dream,
+                    milestone=db_milestone,
+                    title=obs.title,
+                    description=obs.description,
+                    solution=obs.solution,
+                    obstacle_type='predicted',
+                )
+
+        # Create top-level obstacles
+        for obs in skeleton.potential_obstacles:
+            Obstacle.objects.create(
+                dream=dream,
+                title=obs.title,
+                description=obs.description,
+                solution=obs.solution,
+                obstacle_type='predicted',
+            )
+
+        set_plan_status(dream_id, 'generating', message='Generating your first tasks...')
+
+        # Chain to task generation (use apply_async to ensure correct queue)
+        generate_initial_tasks_task.apply_async(args=[dream_id, user_id], queue='celery')
+
+        logger.info(f"generate_dream_skeleton_task: DONE dream={dream_id}")
+        return {'status': 'skeleton_complete', 'milestones': len(skeleton.milestones)}
+
+    except Dream.DoesNotExist:
+        set_plan_status(dream_id, 'failed', error='Dream not found')
+        return {'status': 'failed', 'error': 'dream_not_found'}
+
+    except AIValidationError as e:
+        set_plan_status(dream_id, 'failed', error=f'AI produced invalid skeleton: {e.message}')
+        logger.error(f"generate_dream_skeleton_task: validation error for dream {dream_id}: {e.message}")
+        return {'status': 'failed', 'error': str(e)}
+
+    except OpenAIError as e:
+        set_plan_status(dream_id, 'failed', error=str(e))
+        logger.error(f"generate_dream_skeleton_task: OpenAI error for dream {dream_id}: {e}")
+        raise self.retry(exc=e, countdown=30)
+
+    except Exception as e:
+        set_plan_status(dream_id, 'failed', error=str(e))
+        logger.error(f"generate_dream_skeleton_task: unexpected error for dream {dream_id}: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=600, time_limit=660)
+def generate_initial_tasks_task(self, dream_id, user_id):
+    """
+    Phase 2: Generate detailed tasks for months 1-4 of the skeleton.
+    Called automatically after skeleton generation.
+    """
+    from core.ai_validators import validate_task_patches, AIValidationError
+
+    try:
+        dream = Dream.objects.get(id=dream_id)
+        user = User.objects.get(id=user_id)
+
+        if not dream.plan_skeleton or dream.plan_phase not in ('skeleton', 'partial'):
+            logger.warning(f"generate_initial_tasks_task: dream {dream_id} not in skeleton phase")
+            return {'status': 'skipped', 'reason': 'wrong_phase'}
+
+        ai_service = OpenAIService()
+
+        category = ''
+        if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+            category = dream.ai_analysis.get('category', '')
+
+        user_context = {
+            'timezone': dream.user.timezone,
+            'work_schedule': dream.user.work_schedule or {},
+            'category': category,
+            'language': dream.language or '',
+            'persona': dream.user.persona or {},
+        }
+
+        # Add calibration profile if available
+        if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+            cal_profile = dream.ai_analysis.get('calibration_summary', {}).get('user_profile')
+            if cal_profile:
+                user_context['calibration_profile'] = cal_profile
+
+        _target = str(dream.target_date) if dream.target_date else None
+
+        # Calculate total months
+        from datetime import date as date_type
+        total_months = 12
+        if dream.target_date:
+            today = date_type.today()
+            target = dream.target_date.date() if hasattr(dream.target_date, 'date') else dream.target_date
+            total_days = max(1, (target - today).days)
+            total_months = max(1, total_days // 30)
+
+        months_to_generate = min(4, total_months)
+
+        def _progress(msg):
+            set_plan_status(dream_id, 'generating', message=msg)
+
+        set_plan_status(dream_id, 'generating', message=f'Generating tasks for months 1-{months_to_generate}...')
+
+        raw_patches = ai_service.generate_tasks_for_months(
+            dream.title, dream.description, dream.plan_skeleton, user_context,
+            1, months_to_generate, target_date=_target, progress_callback=_progress,
+        )
+
+        patches = validate_task_patches(raw_patches)
+        logger.info(f"generate_initial_tasks_task: {len(patches)} task patches validated")
+
+        plan_start = dream.created_at or timezone.now()
+        tasks_created_count = 0
+        milestones_with_tasks = set()
+
+        for patch in patches:
+            milestone = DreamMilestone.objects.filter(
+                dream=dream, order=patch.milestone_order
+            ).first()
+            if not milestone:
+                logger.warning(f"Milestone order {patch.milestone_order} not found for dream {dream_id}")
+                continue
+
+            goal = Goal.objects.filter(
+                milestone=milestone, order=patch.goal_order
+            ).first()
+            if not goal:
+                logger.warning(f"Goal order {patch.goal_order} in milestone {patch.milestone_order} not found")
+                continue
+
+            for task_data in patch.tasks:
+                scheduled = None
+                if task_data.day_number:
+                    scheduled = plan_start + timedelta(days=task_data.day_number - 1)
+
+                Task.objects.create(
+                    goal=goal,
+                    title=task_data.title,
+                    description=task_data.description,
+                    order=task_data.order,
+                    duration_mins=task_data.duration_mins,
+                    scheduled_date=scheduled,
+                    expected_date=_parse_date(task_data.expected_date),
+                    deadline_date=_parse_date(task_data.deadline_date),
+                )
+                tasks_created_count += 1
+
+            milestones_with_tasks.add(milestone.id)
+
+        # Mark milestones as having tasks
+        DreamMilestone.objects.filter(id__in=milestones_with_tasks).update(has_tasks=True)
+
+        # Update dream
+        dream.tasks_generated_through_month = months_to_generate
+        dream.plan_phase = 'partial' if months_to_generate < total_months else 'full'
+        dream.next_checkin_at = timezone.now() + timedelta(days=14)
+        dream.save(update_fields=['tasks_generated_through_month', 'plan_phase', 'next_checkin_at'])
+
+        milestones_count = DreamMilestone.objects.filter(dream=dream).count()
+        goals_count = Goal.objects.filter(dream=dream).count()
+
+        set_plan_status(dream_id, 'completed',
+                        message='Plan generated successfully!',
+                        milestones=milestones_count,
+                        goals=goals_count,
+                        tasks=tasks_created_count)
+
+        # Send notification
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=user,
+                notification_type='dream_completed',
+                title='Your plan is ready!',
+                body=f'Your personalized plan for "{dream.title[:50]}" has been generated with {goals_count} goals and {tasks_created_count} tasks.',
+                scheduled_for=timezone.now(),
+                data={
+                    'screen': 'dream',
+                    'dreamId': str(dream_id),
+                    'action': 'plan_ready',
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create plan-ready notification: {e}")
+
+        logger.info(f"generate_initial_tasks_task: DONE dream={dream_id} tasks={tasks_created_count}")
+        return {'status': 'completed', 'tasks': tasks_created_count}
+
+    except Dream.DoesNotExist:
+        set_plan_status(dream_id, 'failed', error='Dream not found')
+        return {'status': 'failed', 'error': 'dream_not_found'}
+
+    except AIValidationError as e:
+        set_plan_status(dream_id, 'failed', error=f'AI produced invalid tasks: {e.message}')
+        logger.error(f"generate_initial_tasks_task: validation error for dream {dream_id}: {e.message}")
+        return {'status': 'failed', 'error': str(e)}
+
+    except OpenAIError as e:
+        set_plan_status(dream_id, 'failed', error=str(e))
+        logger.error(f"generate_initial_tasks_task: OpenAI error for dream {dream_id}: {e}")
+        raise self.retry(exc=e, countdown=30)
+
+    except Exception as e:
+        set_plan_status(dream_id, 'failed', error=str(e))
+        logger.error(f"generate_initial_tasks_task: unexpected error for dream {dream_id}: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=0)
+def run_biweekly_checkins(self):
+    """
+    Beat task: Find all dreams due for a check-in and fan out interactive questionnaires.
+    Runs daily at 6 AM, processes dreams where next_checkin_at <= now.
+    """
+    try:
+        now = timezone.now()
+        due_dreams = Dream.objects.filter(
+            status='active',
+            plan_phase__in=['partial', 'full'],
+            next_checkin_at__lte=now,
+        ).select_related('user')
+
+        checkin_count = 0
+        for dream in due_dreams:
+            # Skip if there's already an active check-in for this dream
+            active_exists = PlanCheckIn.objects.filter(
+                dream=dream,
+                status__in=['pending', 'questionnaire_generating', 'awaiting_user', 'ai_processing'],
+            ).exists()
+            if active_exists:
+                continue
+
+            checkin = PlanCheckIn.objects.create(
+                dream=dream,
+                status='pending',
+                scheduled_for=now,
+                triggered_by='schedule',
+            )
+            # Dispatch interactive questionnaire generation
+            generate_checkin_questionnaire_task.apply_async(args=[str(checkin.id)], queue='celery')
+            checkin_count += 1
+
+        logger.info(f"run_biweekly_checkins: dispatched {checkin_count} interactive check-ins")
+        return {'dispatched': checkin_count}
+
+    except Exception as e:
+        logger.error(f"run_biweekly_checkins error: {e}", exc_info=True)
+        return {'dispatched': 0, 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=300, time_limit=360)
+def run_single_checkin_task(self, checkin_id):
+    """
+    Run AI check-in for a single dream.
+    The AI agent assesses progress, creates/adjusts tasks, and sends coaching.
+    """
+    try:
+        checkin = PlanCheckIn.objects.select_related('dream', 'dream__user').get(id=checkin_id)
+        dream = checkin.dream
+        user = dream.user
+
+        checkin.status = 'ai_processing'
+        checkin.started_at = timezone.now()
+        checkin.progress_at_checkin = dream.progress_percentage
+        checkin.save(update_fields=['status', 'started_at', 'progress_at_checkin'])
+
+        # Count tasks since last check-in
+        since = dream.last_checkin_at or (timezone.now() - timedelta(days=14))
+        checkin.tasks_completed_since_last = Task.objects.filter(
+            goal__dream=dream, status='completed', completed_at__gte=since
+        ).count()
+        checkin.tasks_overdue_at_checkin = Task.objects.filter(
+            goal__dream=dream, status='pending', deadline_date__lt=timezone.now().date()
+        ).count()
+        checkin.save(update_fields=['tasks_completed_since_last', 'tasks_overdue_at_checkin'])
+
+        ai_service = OpenAIService()
+        result = ai_service.run_checkin_agent(dream, user)
+
+        # Update check-in record
+        checkin.coaching_message = result.get('coaching_message', '')
+        checkin.adjustment_summary = result.get('adjustment_summary', '')
+        checkin.ai_actions = result.get('actions_taken', [])
+        checkin.months_generated_through = max(
+            dream.tasks_generated_through_month,
+            result.get('months_generated_through', dream.tasks_generated_through_month),
+        )
+        checkin.pace_status = result.get('pace_status', 'on_track')
+        checkin.next_checkin_interval_days = result.get('next_checkin_days', 14)
+
+        # Count specific action types
+        actions = result.get('actions_taken', [])
+        checkin.tasks_created = sum(1 for a in actions if a.get('tool') in ('create_tasks', 'generate_extension_tasks'))
+        checkin.milestones_adjusted = sum(1 for a in actions if a.get('tool') in (
+            'update_milestone', 'create_new_goal', 'add_milestone', 'remove_milestone',
+            'reorder_milestone', 'shift_milestone_dates',
+        ))
+
+        checkin.status = 'completed'
+        checkin.completed_at = timezone.now()
+        checkin.save()
+
+        # Update dream — use _update_dream_after_checkin for consistency
+        _update_dream_after_checkin(dream, checkin, result)
+
+        # Send notification with coaching message
+        if result.get('coaching_message'):
+            try:
+                from apps.notifications.models import Notification
+                Notification.objects.create(
+                    user=user,
+                    notification_type='check_in',
+                    title='Your bi-weekly check-in is ready!',
+                    body=result['coaching_message'][:500],
+                    scheduled_for=timezone.now(),
+                    data={
+                        'screen': 'dream',
+                        'dreamId': str(dream.id),
+                        'action': 'checkin_complete',
+                        'checkin_id': str(checkin.id),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create check-in notification: {e}")
+
+        logger.info(f"run_single_checkin_task: DONE checkin={checkin_id} dream={dream.id}")
+        return {'status': 'completed', 'coaching_message': result.get('coaching_message', '')}
+
+    except PlanCheckIn.DoesNotExist:
+        logger.error(f"PlanCheckIn {checkin_id} not found")
+        return {'status': 'failed', 'error': 'checkin_not_found'}
+
+    except OpenAIError as e:
+        logger.error(f"run_single_checkin_task: OpenAI error for checkin {checkin_id}: {e}")
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'failed'
+            checkin.error_message = str(e)
+            checkin.save(update_fields=['status', 'error_message'])
+        except Exception:
+            pass
+        raise self.retry(exc=e, countdown=60)
+
+    except Exception as e:
+        logger.error(f"run_single_checkin_task: error for checkin {checkin_id}: {e}", exc_info=True)
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'failed'
+            checkin.error_message = str(e)
+            checkin.save(update_fields=['status', 'error_message'])
+        except Exception:
+            pass
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=300, time_limit=360)
+def generate_tasks_for_milestone_task(self, dream_id, user_id, milestone_order):
+    """
+    On-demand task generation for a specific milestone.
+    Called when user views a future milestone and wants tasks generated.
+    """
+    from core.ai_validators import validate_task_patches, AIValidationError
+
+    try:
+        dream = Dream.objects.get(id=dream_id)
+        user = User.objects.get(id=user_id)
+
+        if not dream.plan_skeleton:
+            return {'status': 'failed', 'error': 'no_skeleton'}
+
+        milestone = DreamMilestone.objects.filter(dream=dream, order=milestone_order).first()
+        if not milestone:
+            return {'status': 'failed', 'error': 'milestone_not_found'}
+
+        if milestone.has_tasks:
+            return {'status': 'skipped', 'reason': 'already_has_tasks'}
+
+        ai_service = OpenAIService()
+
+        category = ''
+        if dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+            category = dream.ai_analysis.get('category', '')
+
+        user_context = {
+            'timezone': dream.user.timezone,
+            'work_schedule': dream.user.work_schedule or {},
+            'category': category,
+            'language': dream.language or '',
+            'persona': dream.user.persona or {},
+        }
+
+        _target = str(dream.target_date) if dream.target_date else None
+
+        raw_patches = ai_service.generate_tasks_for_months(
+            dream.title, dream.description, dream.plan_skeleton, user_context,
+            milestone_order, milestone_order, target_date=_target,
+        )
+
+        patches = validate_task_patches(raw_patches)
+
+        plan_start = dream.created_at or timezone.now()
+        tasks_created_count = 0
+
+        for patch in patches:
+            goal = Goal.objects.filter(
+                milestone=milestone, order=patch.goal_order
+            ).first()
+            if not goal:
+                continue
+
+            for task_data in patch.tasks:
+                scheduled = None
+                if task_data.day_number:
+                    scheduled = plan_start + timedelta(days=task_data.day_number - 1)
+
+                Task.objects.create(
+                    goal=goal,
+                    title=task_data.title,
+                    description=task_data.description,
+                    order=task_data.order,
+                    duration_mins=task_data.duration_mins,
+                    scheduled_date=scheduled,
+                    expected_date=_parse_date(task_data.expected_date),
+                    deadline_date=_parse_date(task_data.deadline_date),
+                )
+                tasks_created_count += 1
+
+        milestone.has_tasks = True
+        milestone.save(update_fields=['has_tasks'])
+
+        # Update tasks_generated_through_month if this is further out
+        if milestone_order > dream.tasks_generated_through_month:
+            dream.tasks_generated_through_month = milestone_order
+            dream.save(update_fields=['tasks_generated_through_month'])
+
+        logger.info(f"generate_tasks_for_milestone_task: DONE dream={dream_id} milestone={milestone_order} tasks={tasks_created_count}")
+        return {'status': 'completed', 'tasks': tasks_created_count}
+
+    except Dream.DoesNotExist:
+        return {'status': 'failed', 'error': 'dream_not_found'}
+
+    except AIValidationError as e:
+        logger.error(f"generate_tasks_for_milestone_task: validation error: {e.message}")
+        return {'status': 'failed', 'error': str(e)}
+
+    except OpenAIError as e:
+        logger.error(f"generate_tasks_for_milestone_task: OpenAI error: {e}")
+        raise self.retry(exc=e, countdown=30)
+
+    except Exception as e:
+        logger.error(f"generate_tasks_for_milestone_task: error: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+# ===================================================================
+# Interactive check-in system
+# ===================================================================
+
+def _calculate_pace(dream):
+    """
+    Calculate pace status for a dream based on expected vs actual progress.
+    Returns dict with pace_status, expected_pct, actual_pct, days_behind, next_checkin_days.
+    """
+    from datetime import date as date_type
+
+    if not dream.target_date:
+        return {
+            'pace_status': 'on_track',
+            'expected_pct': 0,
+            'actual_pct': round(dream.progress_percentage, 1),
+            'days_behind': 0,
+            'next_checkin_days': 14,
+        }
+
+    today = date_type.today()
+    start = dream.created_at.date() if dream.created_at else today
+    target = dream.target_date.date() if hasattr(dream.target_date, 'date') else dream.target_date
+
+    total_days = max(1, (target - start).days)
+    elapsed_days = max(0, (today - start).days)
+    expected_pct = min(100, round((elapsed_days / total_days) * 100, 1))
+    actual_pct = round(dream.progress_percentage, 1)
+
+    diff = actual_pct - expected_pct
+
+    if diff >= 15:
+        pace_status = 'significantly_ahead'
+        next_checkin_days = 21
+    elif diff >= 5:
+        pace_status = 'ahead'
+        next_checkin_days = 21
+    elif diff >= -10:
+        pace_status = 'on_track'
+        next_checkin_days = 14
+    elif diff >= -25:
+        pace_status = 'behind'
+        next_checkin_days = 7
+    else:
+        pace_status = 'significantly_behind'
+        next_checkin_days = 7
+
+    # Calculate days behind
+    if actual_pct > 0 and expected_pct > actual_pct:
+        pct_per_day = expected_pct / max(1, elapsed_days)
+        days_behind = round((expected_pct - actual_pct) / max(0.01, pct_per_day))
+    else:
+        days_behind = 0
+
+    return {
+        'pace_status': pace_status,
+        'expected_pct': expected_pct,
+        'actual_pct': actual_pct,
+        'days_behind': max(0, days_behind),
+        'next_checkin_days': next_checkin_days,
+    }
+
+
+def _update_dream_after_checkin(dream, checkin, result):
+    """Update dream fields after a check-in completes."""
+    interval = result.get('next_checkin_days', 14)
+    # Never regress months coverage — AI might return a lower value
+    ai_months = result.get('months_generated_through', dream.tasks_generated_through_month)
+    dream.tasks_generated_through_month = max(dream.tasks_generated_through_month, ai_months)
+    dream.last_checkin_at = timezone.now()
+    dream.next_checkin_at = timezone.now() + timedelta(days=interval)
+    dream.checkin_count = (dream.checkin_count or 0) + 1
+    dream.checkin_interval_days = interval
+    dream.save(update_fields=[
+        'tasks_generated_through_month', 'last_checkin_at',
+        'next_checkin_at', 'checkin_count', 'checkin_interval_days',
+    ])
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=120, time_limit=150)
+def generate_checkin_questionnaire_task(self, checkin_id):
+    """
+    Phase 1 of interactive check-in: Generate personalized questionnaire.
+    On success, sends notification to user and waits for response.
+    On failure, falls back to autonomous check-in.
+    """
+    from core.ai_validators import validate_checkin_questionnaire, AIValidationError
+
+    try:
+        checkin = PlanCheckIn.objects.select_related('dream', 'dream__user').get(id=checkin_id)
+        dream = checkin.dream
+        user = dream.user
+
+        checkin.status = 'questionnaire_generating'
+        checkin.started_at = timezone.now()
+        checkin.progress_at_checkin = dream.progress_percentage
+        checkin.save(update_fields=['status', 'started_at', 'progress_at_checkin'])
+
+        # Snapshot progress data
+        since = dream.last_checkin_at or (timezone.now() - timedelta(days=14))
+        checkin.tasks_completed_since_last = Task.objects.filter(
+            goal__dream=dream, status='completed', completed_at__gte=since
+        ).count()
+        checkin.tasks_overdue_at_checkin = Task.objects.filter(
+            goal__dream=dream, status='pending', deadline_date__lt=timezone.now().date()
+        ).count()
+        checkin.save(update_fields=['tasks_completed_since_last', 'tasks_overdue_at_checkin'])
+
+        # Calculate pace
+        pace_analysis = _calculate_pace(dream)
+        checkin.pace_status = pace_analysis['pace_status']
+
+        # Generate questionnaire via AI
+        ai_service = OpenAIService()
+        raw_result = ai_service.generate_checkin_questionnaire(dream, user, pace_analysis)
+
+        # Validate
+        validated = validate_checkin_questionnaire(raw_result)
+
+        # Save questionnaire
+        checkin.questionnaire = [q.model_dump() for q in validated.questions]
+        checkin.status = 'awaiting_user'
+        checkin.questionnaire_expires_at = timezone.now() + timedelta(hours=48)
+        checkin.save(update_fields=[
+            'questionnaire', 'status', 'pace_status', 'questionnaire_expires_at',
+        ])
+
+        # Send notification
+        opening = validated.opening_message or 'Time for your check-in!'
+        try:
+            Notification.objects.create(
+                user=user,
+                notification_type='check_in',
+                title='Check-in time!',
+                body=opening[:500],
+                scheduled_for=timezone.now(),
+                data={
+                    'screen': 'checkin',
+                    'checkinId': str(checkin.id),
+                    'dreamId': str(dream.id),
+                    'action': 'checkin_questionnaire',
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create check-in notification: {e}")
+
+        logger.info(f"generate_checkin_questionnaire_task: DONE checkin={checkin_id} questions={len(validated.questions)}")
+        return {'status': 'awaiting_user', 'questions': len(validated.questions)}
+
+    except PlanCheckIn.DoesNotExist:
+        logger.error(f"PlanCheckIn {checkin_id} not found")
+        return {'status': 'failed', 'error': 'checkin_not_found'}
+
+    except (AIValidationError, OpenAIError) as e:
+        logger.warning(f"Questionnaire generation failed for checkin {checkin_id}, falling back to autonomous: {e}")
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'ai_processing'
+            checkin.save(update_fields=['status'])
+            # Fall back to autonomous check-in
+            run_single_checkin_task.apply_async(args=[str(checkin_id)], queue='celery')
+        except Exception:
+            pass
+        return {'status': 'fallback_autonomous'}
+
+    except Exception as e:
+        logger.error(f"generate_checkin_questionnaire_task error: {e}", exc_info=True)
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'failed'
+            checkin.error_message = str(e)
+            checkin.save(update_fields=['status', 'error_message'])
+        except Exception:
+            pass
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=360, time_limit=420)
+def process_checkin_responses_task(self, checkin_id):
+    """
+    Phase 2 of interactive check-in: Process user responses and adapt the plan.
+    Called after user submits questionnaire answers OR after expiry (empty responses).
+    """
+    try:
+        checkin = PlanCheckIn.objects.select_related('dream', 'dream__user').get(id=checkin_id)
+        dream = checkin.dream
+        user = dream.user
+
+        if checkin.status != 'ai_processing':
+            logger.warning(f"process_checkin_responses_task: checkin {checkin_id} not in ai_processing state (is {checkin.status})")
+            return {'status': 'skipped', 'reason': 'wrong_state'}
+
+        ai_service = OpenAIService()
+        result = ai_service.run_interactive_checkin_agent(
+            dream, user,
+            checkin.questionnaire or [],
+            checkin.user_responses or {},
+        )
+
+        # Update check-in record
+        checkin.coaching_message = result.get('coaching_message', '')
+        checkin.adjustment_summary = result.get('adjustment_summary', '')
+        checkin.ai_actions = result.get('actions_taken', [])
+        checkin.months_generated_through = max(
+            dream.tasks_generated_through_month,
+            result.get('months_generated_through', dream.tasks_generated_through_month),
+        )
+        checkin.pace_status = result.get('pace_status', checkin.pace_status or 'on_track')
+        checkin.next_checkin_interval_days = result.get('next_checkin_days', 14)
+
+        # Count action types
+        actions = result.get('actions_taken', [])
+        checkin.tasks_created = sum(1 for a in actions if a.get('tool') in ('create_tasks', 'generate_extension_tasks'))
+        checkin.milestones_adjusted = sum(1 for a in actions if a.get('tool') in (
+            'update_milestone', 'create_new_goal', 'add_milestone', 'remove_milestone',
+            'reorder_milestone', 'shift_milestone_dates',
+        ))
+
+        checkin.status = 'completed'
+        checkin.completed_at = timezone.now()
+        checkin.save()
+
+        # Update dream
+        _update_dream_after_checkin(dream, checkin, result)
+
+        # Send coaching notification
+        if result.get('coaching_message'):
+            try:
+                Notification.objects.create(
+                    user=user,
+                    notification_type='check_in',
+                    title='Your check-in results are ready!',
+                    body=result['coaching_message'][:500],
+                    scheduled_for=timezone.now(),
+                    data={
+                        'screen': 'checkin',
+                        'checkinId': str(checkin.id),
+                        'dreamId': str(dream.id),
+                        'action': 'checkin_complete',
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create coaching notification: {e}")
+
+        logger.info(f"process_checkin_responses_task: DONE checkin={checkin_id} dream={dream.id}")
+        return {'status': 'completed', 'pace_status': result.get('pace_status')}
+
+    except PlanCheckIn.DoesNotExist:
+        logger.error(f"PlanCheckIn {checkin_id} not found")
+        return {'status': 'failed', 'error': 'checkin_not_found'}
+
+    except OpenAIError as e:
+        logger.error(f"process_checkin_responses_task: OpenAI error for checkin {checkin_id}: {e}")
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'failed'
+            checkin.error_message = str(e)
+            checkin.save(update_fields=['status', 'error_message'])
+        except Exception:
+            pass
+        raise self.retry(exc=e, countdown=60)
+
+    except Exception as e:
+        logger.error(f"process_checkin_responses_task: error for checkin {checkin_id}: {e}", exc_info=True)
+        try:
+            checkin = PlanCheckIn.objects.get(id=checkin_id)
+            checkin.status = 'failed'
+            checkin.error_message = str(e)
+            checkin.save(update_fields=['status', 'error_message'])
+        except Exception:
+            pass
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(bind=True, max_retries=0)
+def expire_stale_checkins(self):
+    """
+    Expire unanswered interactive check-ins (48h passed).
+    Runs them as autonomous check-ins with empty responses.
+    """
+    try:
+        stale = PlanCheckIn.objects.filter(
+            status='awaiting_user',
+            questionnaire_expires_at__lte=timezone.now(),
+        )
+
+        count = 0
+        for checkin in stale:
+            checkin.status = 'ai_processing'
+            checkin.user_responses = {}
+            checkin.save(update_fields=['status', 'user_responses'])
+            process_checkin_responses_task.apply_async(args=[str(checkin.id)], queue='celery')
+            count += 1
+
+        if count:
+            logger.info(f"expire_stale_checkins: expired {count} check-ins")
+        return {'expired': count}
+
+    except Exception as e:
+        logger.error(f"expire_stale_checkins error: {e}", exc_info=True)
+        return {'expired': 0, 'error': str(e)}

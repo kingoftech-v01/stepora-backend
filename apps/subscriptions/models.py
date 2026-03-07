@@ -224,7 +224,7 @@ class SubscriptionPlan(models.Model):
                 'defaults': {
                     'name': 'Premium',
                     'stripe_price_id': '',
-                    'price_monthly': 14.99,
+                    'price_monthly': 19.99,
                     'dream_limit': 10,
                     'has_ai': True,
                     'has_buddy': True,
@@ -324,9 +324,10 @@ class Subscription(models.Model):
     )
     stripe_subscription_id = models.CharField(
         max_length=255,
-        unique=True,
+        blank=True,
+        default='',
         db_index=True,
-        help_text='Stripe Subscription ID (sub_xxxxx)',
+        help_text='Stripe Subscription ID (sub_xxxxx). Empty for free-tier subscriptions.',
     )
     status = models.CharField(
         max_length=30,

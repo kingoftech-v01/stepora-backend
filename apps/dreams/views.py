@@ -24,7 +24,7 @@ from core.openapi_examples import (
     DREAM_CREATE_REQUEST, DREAM_LIST_RESPONSE, DREAM_ANALYZE_RESPONSE,
     GOAL_CREATE_REQUEST,
 )
-from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot
+from .models import Dream, Goal, Task, Obstacle, DreamMilestone, CalibrationResponse, DreamTag, DreamTagging, SharedDream, DreamTemplate, DreamCollaborator, VisionBoardImage, DreamProgressSnapshot, PlanCheckIn
 from .serializers import (
     DreamSerializer, DreamDetailSerializer, DreamCreateSerializer, DreamUpdateSerializer,
     GoalSerializer, GoalCreateSerializer,
@@ -34,9 +34,11 @@ from .serializers import (
     DreamTagSerializer, SharedDreamSerializer, ShareDreamRequestSerializer, AddTagSerializer,
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
     VisionBoardImageSerializer,
+    PlanCheckInSerializer, PlanCheckInDetailSerializer, CheckInResponseSubmitSerializer,
 )
 from core.permissions import IsOwner, CanCreateDream, CanUseAI, CanUseVisionBoard
 from integrations.openai_service import OpenAIService
+from integrations.plan_processors import detect_category_with_ambiguity
 from core.exceptions import OpenAIError
 from core.ai_validators import (
     validate_plan_response,
@@ -247,9 +249,17 @@ class DreamViewSet(viewsets.ModelViewSet):
             analysis = validate_analysis_response(raw_analysis)
             analysis_dict = analysis.model_dump()
 
-            # Save validated analysis
+            # Save validated analysis and update category from AI
             dream.ai_analysis = analysis_dict
-            dream.save(update_fields=['ai_analysis'])
+            update_fields = ['ai_analysis']
+            if analysis_dict.get('category') and not dream.category:
+                dream.category = analysis_dict['category']
+                update_fields.append('category')
+            # Store AI-detected language
+            if not dream.language and analysis_dict.get('detected_language'):
+                dream.language = analysis_dict['detected_language']
+                update_fields.append('language')
+            dream.save(update_fields=update_fields)
 
             return Response(analysis_dict)
 
@@ -293,12 +303,29 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         try:
             # Generate initial batch of 7 questions
+            # Get category from dream field or AI analysis
+            cat = dream.category
+            if not cat and dream.ai_analysis and isinstance(dream.ai_analysis, dict):
+                cat = dream.ai_analysis.get('category', '')
+
+            # Check for category ambiguity and generate disambiguation question
+            disambiguation_q = None
+            if not cat or cat == 'other':
+                ambiguity = detect_category_with_ambiguity(dream.title, dream.description)
+                cat = ambiguity['category']
+                if ambiguity['is_ambiguous']:
+                    disambiguation_q = ai_service.generate_disambiguation_question(
+                        dream.title, dream.description, ambiguity['candidates']
+                    )
+
+            persona = dream.user.persona or {}
             raw_result = ai_service.generate_calibration_questions(
                 dream.title,
                 dream.description,
-                batch_size=7,
+                batch_size=7 if not disambiguation_q else 6,
                 target_date=str(dream.target_date) if dream.target_date else None,
-                category=dream.category,
+                category=cat,
+                persona=persona,
             )
 
             # Validate AI output
@@ -309,14 +336,28 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Save validated questions to database
             questions_created = []
-            for i, q in enumerate(result.questions, start=1):
+            q_number = 1
+
+            # Insert disambiguation question first if needed
+            if disambiguation_q:
+                cr = CalibrationResponse.objects.create(
+                    dream=dream,
+                    question=disambiguation_q,
+                    question_number=q_number,
+                    category='specifics',
+                )
+                questions_created.append(cr)
+                q_number += 1
+
+            for q in result.questions:
                 cr = CalibrationResponse.objects.create(
                     dream=dream,
                     question=q.question,
-                    question_number=i,
+                    question_number=q_number,
                     category=q.category,
                 )
                 questions_created.append(cr)
+                q_number += 1
 
             # Update dream calibration status
             dream.calibration_status = 'in_progress'
@@ -448,6 +489,18 @@ class DreamViewSet(viewsets.ModelViewSet):
                 'message': _('Calibration complete. Ready to generate your personalized plan.'),
             })
 
+        # Server-side guard: force completion after 10+ answered questions
+        if answered_count >= 10:
+            dream.calibration_status = 'completed'
+            dream.save(update_fields=['calibration_status'])
+            return Response({
+                'status': 'completed',
+                'total_questions': total_questions,
+                'answered': answered_count,
+                'confidence_score': min(1.0, answered_count / 10),
+                'message': _('Calibration complete. Ready to generate your personalized plan.'),
+            })
+
         # Ask AI if we have enough info or need more questions
         ai_service = OpenAIService()
 
@@ -549,8 +602,8 @@ class DreamViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['post'], throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle])
     def generate_plan(self, request, pk=None):
-        """Dispatch plan generation as a Celery background task."""
-        from .tasks import generate_dream_plan_task, set_plan_status
+        """Dispatch adaptive plan generation (skeleton + initial tasks) as Celery background tasks."""
+        from .tasks import generate_dream_skeleton_task, set_plan_status
 
         dream = self.get_object()
 
@@ -563,11 +616,13 @@ class DreamViewSet(viewsets.ModelViewSet):
                 'message': current.get('message', _('Plan is being generated...')),
             }, status=status.HTTP_202_ACCEPTED)
 
-        # Dispatch Celery task
+        # Dispatch skeleton generation (chains to initial tasks automatically)
         set_plan_status(str(dream.id), 'generating', message='Starting plan generation...')
-        generate_dream_plan_task.delay(str(dream.id), str(request.user.id))
+        generate_dream_skeleton_task.apply_async(
+            args=[str(dream.id), str(request.user.id)], queue='celery'
+        )
 
-        logger.info(f"generate_plan: dispatched Celery task for dream={dream.id}")
+        logger.info(f"generate_plan: dispatched skeleton task for dream={dream.id}")
         return Response({
             'status': 'generating',
             'message': _('Plan generation started. This may take a few minutes.'),
@@ -1239,6 +1294,147 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         return Response({'message': _('Collaborator removed.')})
+
+    # --- Check-in actions ---
+
+    @extend_schema(
+        summary="List check-ins",
+        description="Get check-in history for a dream.",
+        tags=["Check-ins"],
+        responses={200: PlanCheckInSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'], url_path='checkins')
+    def list_checkins(self, request, pk=None):
+        """List past check-ins for this dream."""
+        dream = self.get_object()
+        qs = PlanCheckIn.objects.filter(dream=dream).order_by('-scheduled_for')[:20]
+        return Response(PlanCheckInSerializer(qs, many=True).data)
+
+    @extend_schema(
+        summary="Trigger check-in",
+        description="Manually trigger an interactive check-in for a dream.",
+        tags=["Check-ins"],
+        responses={202: dict},
+    )
+    @action(detail=True, methods=['post'], url_path='trigger-checkin')
+    def trigger_checkin(self, request, pk=None):
+        """Manually trigger an interactive check-in."""
+        from .tasks import generate_checkin_questionnaire_task
+
+        dream = self.get_object()
+
+        if dream.plan_phase not in ('partial', 'full'):
+            return Response(
+                {'error': _('Dream must have a plan before check-ins can be triggered.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guard: no active check-in already in progress
+        active = PlanCheckIn.objects.filter(
+            dream=dream,
+            status__in=['pending', 'questionnaire_generating', 'awaiting_user', 'ai_processing'],
+        ).first()
+        if active:
+            return Response({
+                'status': active.status,
+                'checkin_id': str(active.id),
+            }, status=status.HTTP_202_ACCEPTED)
+
+        checkin = PlanCheckIn.objects.create(
+            dream=dream,
+            status='pending',
+            scheduled_for=timezone.now(),
+            triggered_by='manual',
+        )
+        generate_checkin_questionnaire_task.apply_async(
+            args=[str(checkin.id)], queue='celery'
+        )
+
+        return Response({
+            'status': 'pending',
+            'checkin_id': str(checkin.id),
+        }, status=status.HTTP_202_ACCEPTED)
+
+
+class CheckInViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for check-in detail, response submission, and status polling."""
+
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['dream', 'status']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PlanCheckIn.objects.none()
+        return PlanCheckIn.objects.filter(
+            dream__user=self.request.user
+        ).select_related('dream').order_by('-scheduled_for')
+
+    def get_serializer_class(self):
+        if self.action in ('retrieve', 'status'):
+            return PlanCheckInDetailSerializer
+        return PlanCheckInSerializer
+
+    @extend_schema(
+        summary="Submit check-in responses",
+        description="Submit questionnaire responses for a check-in awaiting user input.",
+        tags=["Check-ins"],
+        request=CheckInResponseSubmitSerializer,
+        responses={202: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def respond(self, request, pk=None):
+        """Submit questionnaire responses."""
+        checkin = self.get_object()
+
+        if checkin.status != 'awaiting_user':
+            return Response(
+                {'error': _('Check-in is not awaiting response.'), 'status': checkin.status},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CheckInResponseSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        responses = serializer.validated_data['responses']
+
+        # Validate required questions
+        if checkin.questionnaire:
+            required_ids = {
+                q['id'] for q in checkin.questionnaire
+                if q.get('is_required', True)
+            }
+            missing = required_ids - set(responses.keys())
+            if missing:
+                return Response(
+                    {'error': f'Missing answers for: {sorted(missing)}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        checkin.user_responses = responses
+        checkin.status = 'ai_processing'
+        checkin.save(update_fields=['user_responses', 'status'])
+
+        from apps.dreams.tasks import process_checkin_responses_task
+        process_checkin_responses_task.apply_async(
+            args=[str(checkin.id)], queue='celery'
+        )
+
+        return Response({
+            'status': 'processing',
+            'checkin_id': str(checkin.id),
+        }, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(
+        summary="Check-in processing status",
+        description="Poll for the status of a check-in being processed.",
+        tags=["Check-ins"],
+        responses={200: PlanCheckInDetailSerializer},
+    )
+    @action(detail=True, methods=['get'])
+    def status(self, request, pk=None):
+        """Poll check-in processing status."""
+        checkin = self.get_object()
+        return Response(PlanCheckInDetailSerializer(checkin).data)
 
 
 class SharedWithMeView(generics.ListAPIView):

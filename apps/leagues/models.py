@@ -126,6 +126,28 @@ class League(models.Model):
             return xp >= self.min_xp
         return self.min_xp <= xp <= self.max_xp
 
+    @classmethod
+    def seed_defaults(cls):
+        """Create default league tiers if none exist. Safe to call repeatedly."""
+        if cls.objects.exists():
+            return cls.objects.all()
+
+        leagues = [
+            {'tier': 'bronze',   'defaults': {'name': 'Bronze League',   'min_xp': 0,     'max_xp': 499,   'color_hex': '#CD7F32', 'description': 'Every dreamer starts here.'}},
+            {'tier': 'silver',   'defaults': {'name': 'Silver League',   'min_xp': 500,   'max_xp': 1499,  'color_hex': '#C0C0C0', 'description': 'Building momentum.'}},
+            {'tier': 'gold',     'defaults': {'name': 'Gold League',     'min_xp': 1500,  'max_xp': 3499,  'color_hex': '#FFD700', 'description': 'Consistent progress.'}},
+            {'tier': 'platinum', 'defaults': {'name': 'Platinum League', 'min_xp': 3500,  'max_xp': 6999,  'color_hex': '#E5E4E2', 'description': 'Dedicated achiever.'}},
+            {'tier': 'diamond',  'defaults': {'name': 'Diamond League',  'min_xp': 7000,  'max_xp': 11999, 'color_hex': '#B9F2FF', 'description': 'Elite dreamer.'}},
+            {'tier': 'master',   'defaults': {'name': 'Master League',   'min_xp': 12000, 'max_xp': 19999, 'color_hex': '#9B59B6', 'description': 'Dream master.'}},
+            {'tier': 'legend',   'defaults': {'name': 'Legend League',   'min_xp': 20000, 'max_xp': None,  'color_hex': '#FF4500', 'description': 'Living legend.'}},
+        ]
+
+        created = []
+        for data in leagues:
+            obj, _ = cls.objects.update_or_create(tier=data['tier'], defaults=data['defaults'])
+            created.append(obj)
+        return created
+
 
 class Season(models.Model):
     """

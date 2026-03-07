@@ -61,3 +61,6 @@ db.sqlite3
 *.tmp
 *.temp
 .cache/
+
+# Database backups
+backups/

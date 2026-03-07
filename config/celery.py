@@ -95,6 +95,18 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=4, minute=0),
     },
 
+    # AI check-ins for adaptive plans (runs daily, fans out as needed)
+    'run-biweekly-checkins': {
+        'task': 'apps.dreams.tasks.run_biweekly_checkins',
+        'schedule': crontab(hour=6, minute=0),
+    },
+
+    # Expire unanswered interactive check-ins and run autonomously
+    'expire-stale-checkins': {
+        'task': 'apps.dreams.tasks.expire_stale_checkins',
+        'schedule': crontab(hour='*/4', minute=15),
+    },
+
     # === Calendar Tasks ===
 
     # Generate recurring event instances nightly at 1 AM
