@@ -17,29 +17,11 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework_simplejwt.views import TokenRefreshView
-from core.social_auth import GoogleLoginView, AppleLoginView, AppleRedirectView
-from core.auth_views import NativeAwareLoginView, NativeAwareRegisterView, TwoFactorChallengeView
-from core.throttles import AuthRateThrottle
-from dj_rest_auth.views import PasswordResetView, PasswordResetConfirmView
 
 # Versioned API endpoints (v1)
 api_v1_patterns = [
-    # Authentication (dj-rest-auth) — custom login/register for native app support
-    path('auth/login/', NativeAwareLoginView.as_view(), name='rest_login'),
-    path('auth/2fa-challenge/', TwoFactorChallengeView.as_view(), name='2fa_challenge'),
-    path('auth/registration/', NativeAwareRegisterView.as_view(), name='rest_register'),
-    # Explicit throttled password reset (before the catch-all dj-rest-auth include)
-    path('auth/password/reset/', PasswordResetView.as_view(throttle_classes=[AuthRateThrottle]), name='rest_password_reset'),
-    path('auth/password/reset/confirm/', PasswordResetConfirmView.as_view(throttle_classes=[AuthRateThrottle]), name='rest_password_reset_confirm'),
-    path('auth/', include('dj_rest_auth.urls')),
-    path('auth/registration/', include('dj_rest_auth.registration.urls')),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
-    # Social authentication (Google, Apple)
-    path('auth/google/', GoogleLoginView.as_view(), name='google_login'),
-    path('auth/apple/', AppleLoginView.as_view(), name='apple_login'),
-    path('auth/apple/redirect/', AppleRedirectView.as_view(), name='apple_redirect'),
+    # Authentication (custom — replaces dj-rest-auth + allauth)
+    path('auth/', include('core.auth.urls')),
 
     # API endpoints
     path('users/', include('apps.users.urls')),
@@ -56,6 +38,9 @@ api_v1_patterns = [
 
     # Search (Elasticsearch)
     path('search/', include('apps.search.urls')),
+
+    # App Updates (OTA live updates)
+    path('updates/', include('apps.updates.urls')),
 ]
 
 urlpatterns = [

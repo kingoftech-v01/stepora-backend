@@ -52,7 +52,7 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 # JWT refresh cookie must be Secure in production
-REST_AUTH['JWT_AUTH_SECURE'] = True
+DP_AUTH['JWT_AUTH_SECURE'] = True
 
 # CORS - Strict in production (frontend and backend on separate servers)
 CORS_ALLOW_ALL_ORIGINS = False
@@ -82,6 +82,9 @@ if AWS_STORAGE_BUCKET_NAME:
         },
     }
 
+# OTA code signing — path to RSA public key for signature verification
+OTA_PUBLIC_KEY_PATH = os.getenv('OTA_PUBLIC_KEY_PATH', '')
+
 # Sentry error tracking
 if _has_sentry and os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
@@ -110,7 +113,7 @@ if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
 else:
     # SMTP not configured — use console backend to prevent crashes
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    ACCOUNT_EMAIL_VERIFICATION = 'none'
+    DP_AUTH['EMAIL_VERIFICATION'] = 'none'
     import warnings
     warnings.warn(
         'EMAIL_HOST_USER / EMAIL_HOST_PASSWORD not set. '

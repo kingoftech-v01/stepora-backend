@@ -67,9 +67,8 @@ def response_contains_xss(response_data):
 class TestAuthenticationSecurity:
     """Test authentication endpoints and token security."""
 
-    @pytest.mark.xfail(reason='Python 3.14 template context copy bug in allauth email')
-    @patch('allauth.account.adapter.DefaultAccountAdapter.send_mail')
-    def test_register_new_user(self, mock_send_mail, api_client):
+    @patch('core.auth.tasks.send_verification_email.delay')
+    def test_register_new_user(self, mock_send, api_client):
         response = api_client.post('/api/auth/registration/', {
             'email': 'newuser@example.com',
             'password1': 'StrongPass123!',
@@ -77,9 +76,8 @@ class TestAuthenticationSecurity:
         })
         assert response.status_code in (status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_204_NO_CONTENT)
 
-    @pytest.mark.xfail(reason='Python 3.14 template context copy bug in allauth email')
-    @patch('allauth.account.adapter.DefaultAccountAdapter.send_mail')
-    def test_register_duplicate_email(self, mock_send_mail, api_client, user):
+    @patch('core.auth.tasks.send_verification_email.delay')
+    def test_register_duplicate_email(self, mock_send, api_client, user):
         response = api_client.post('/api/auth/registration/', {
             'email': user.email,
             'password1': 'StrongPass123!',

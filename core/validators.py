@@ -72,14 +72,25 @@ def validate_search_query(query):
     return query
 
 
-def validate_display_name(value):
-    """Validate display name against allowed characters."""
+def validate_display_name(value, exclude_user_id=None):
+    """Validate display name against allowed characters and uniqueness."""
     value = sanitize_text(value)
     if value and not DISPLAY_NAME_PATTERN.match(value):
         raise ValidationError(
             'Display name contains invalid characters. '
             'Only letters, numbers, spaces, hyphens, apostrophes, and periods are allowed.'
         )
+    if value:
+        from apps.users.models import User
+        # EncryptedCharField doesn't support __iexact lookups, so we
+        # fetch all non-blank display names and compare in Python.
+        qs = User.objects.exclude(display_name='')
+        if exclude_user_id:
+            qs = qs.exclude(pk=exclude_user_id)
+        lower_value = value.lower()
+        for u in qs.only('pk', 'display_name').iterator():
+            if u.display_name and u.display_name.lower() == lower_value:
+                raise ValidationError('This display name is already taken.')
     return value
 
 

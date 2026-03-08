@@ -38,9 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Sites framework (required by allauth)
-    'django.contrib.sites',
-
     # Third party apps
     'rest_framework',
     'rest_framework.authtoken',
@@ -50,18 +47,12 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'drf_spectacular',
 
-    # Authentication
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
-    'allauth.socialaccount.providers.apple',
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
-
     # JWT
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+
+    # Custom authentication
+    'core.auth.apps.DPAuthConfig',
 
     # Encryption
     'encrypted_model_fields',
@@ -82,6 +73,7 @@ INSTALLED_APPS = [
     'apps.circles',
     'apps.social',
     'apps.buddies',
+    'apps.updates',
     'core',
 ]
 
@@ -97,7 +89,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
     'core.middleware.LastActivityMiddleware',
 ]
 
@@ -137,13 +128,9 @@ DATABASES = {
 # Custom user model
 AUTH_USER_MODEL = 'users.User'
 
-# Sites framework
-SITE_ID = 1
-
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    'core.auth.backends.EmailAuthBackend',
 ]
 
 # Password validation
@@ -426,26 +413,17 @@ AI_QUOTAS = {
     },
 }
 
-# django-allauth Configuration
-ACCOUNT_ADAPTER = 'core.adapters.DreamPlannerAccountAdapter'
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-ACCOUNT_EMAIL_VERIFICATION = os.getenv('EMAIL_VERIFICATION', 'mandatory')
-ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-
-# dj-rest-auth Configuration (JWT mode)
-REST_AUTH = {
-    'USE_JWT': True,
-    'JWT_AUTH_HTTPONLY': True,
-    'JWT_AUTH_COOKIE': 'dp-refresh',
+# DreamPlanner custom auth configuration
+DP_AUTH = {
     'JWT_AUTH_REFRESH_COOKIE': 'dp-refresh',
     'JWT_AUTH_SAMESITE': 'Lax',
     'JWT_AUTH_SECURE': not DEBUG,
     'JWT_AUTH_COOKIE_PATH': '/api/auth/token/refresh/',
-    'TOKEN_MODEL': None,
-    'USER_DETAILS_SERIALIZER': 'apps.users.serializers.UserSerializer',
-    'REGISTER_SERIALIZER': 'core.serializers.RegisterSerializer',
+    'EMAIL_VERIFICATION': os.getenv('EMAIL_VERIFICATION', 'mandatory'),
+    'VERIFICATION_KEY_MAX_AGE': 60 * 60 * 24 * 3,  # 3 days
+    'PASSWORD_RESET_MAX_AGE': 60 * 60,  # 1 hour
+    'GOOGLE_CLIENT_ID': os.getenv('GOOGLE_CLIENT_ID', ''),
+    'APPLE_CLIENT_ID': os.getenv('APPLE_CLIENT_ID', ''),
 }
 
 # SimpleJWT Configuration
@@ -458,27 +436,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
 }
 
-# Social Account Providers
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'APP': {
-            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
-            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
-        },
-        'SCOPE': ['profile', 'email'],
-        'AUTH_PARAMS': {'access_type': 'online'},
-    },
-    'apple': {
-        'APP': {
-            'client_id': os.getenv('APPLE_CLIENT_ID', ''),
-            'secret': os.getenv('APPLE_CLIENT_SECRET', ''),
-            'key': os.getenv('APPLE_KEY_ID', ''),
-        },
-        'SCOPE': ['email', 'name'],
-    },
-}
-SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
-SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 # CORS Configuration
 _cors_raw = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
@@ -504,6 +461,7 @@ CORS_ALLOWED_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-client-platform',
 ]
 
 # Stripe Configuration

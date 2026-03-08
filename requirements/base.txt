@@ -22,9 +22,9 @@ celery==5.4.0
 celery[redis]==5.4.0
 django-celery-beat==2.6.0
 
-# Authentication
-django-allauth>=65.14.0
-dj-rest-auth[with-social]==7.0.2
+# Authentication (OAuth token verification)
+google-auth[requests]>=2.22.0
+PyJWT[crypto]>=2.8.0
 
 # Encryption
 django-encrypted-model-fields>=0.6.5

@@ -16,7 +16,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import SubscriptionPlan, Subscription
+from .models import SubscriptionPlan, Subscription, Referral
 from .serializers import (
     SubscriptionPlanSerializer,
     SubscriptionSerializer,
@@ -46,7 +46,9 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     """Public read-only viewset for subscription plans."""
 
     permission_classes = [AllowAny]
-    throttle_classes = [SearchRateThrottle]
+    # No custom throttle — uses global defaults (anon: 20/min, user: 100/min).
+    # Plans are a public read-only list; no need for per-user search throttle.
+    throttle_classes = []
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.filter(is_active=True)
     lookup_field = 'slug'
@@ -78,22 +80,15 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         """Get the current user's subscription."""
         subscription = Subscription.objects.filter(user=request.user).first()
         if not subscription:
-            # Auto-create a free subscription for existing users who don't have one yet.
-            free_plan = SubscriptionPlan.objects.filter(slug='free').first()
-            if free_plan:
-                subscription, _ = Subscription.objects.get_or_create(
-                    user=request.user,
-                    defaults={
-                        'plan': free_plan,
-                        'status': 'active',
-                        'stripe_subscription_id': '',
-                    },
-                )
-            else:
-                return Response(
-                    {'plan': 'free', 'status': 'active'},
-                    status=status.HTTP_200_OK,
-                )
+            logger.error(
+                "User %s has no subscription record. This should never happen — "
+                "the post_save signal must create one at registration.",
+                request.user.id,
+            )
+            return Response(
+                {'detail': 'No subscription found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         serializer = SubscriptionSerializer(subscription)
         return Response(serializer.data)
 
@@ -392,6 +387,73 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         """Get subscription analytics (admin only)."""
         analytics = StripeService.get_analytics()
         return Response(analytics)
+
+
+class ReferralView(views.APIView):
+    """Referral program: refer 3 friends who subscribe → 1 free month."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [SearchRateThrottle]
+
+    @extend_schema(
+        summary="Get referral info",
+        description="Get your referral code and stats.",
+        tags=["Referrals"],
+    )
+    def get(self, request):
+        user = request.user
+        code = Referral.get_referral_code(user)
+        stats = Referral.get_referrer_stats(user)
+        return Response({
+            "referral_code": code,
+            **stats,
+        })
+
+    @extend_schema(
+        summary="Apply referral code",
+        description="Apply a referral code during signup. Links the current user to the referrer.",
+        tags=["Referrals"],
+    )
+    def post(self, request):
+        code = (request.data.get("referral_code") or "").strip().upper()
+        if not code:
+            return Response(
+                {"error": _("Referral code required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if user already has a referrer
+        if Referral.objects.filter(referred=request.user).exists():
+            return Response(
+                {"error": _("You already used a referral code.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Can't refer yourself
+        own_code = Referral.get_referral_code(request.user)
+        if code == own_code:
+            return Response(
+                {"error": _("You cannot refer yourself.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Resolve referrer from code: DP-REF-<8 hex chars from user UUID>
+        referrer = Referral.resolve_referrer(code)
+        if not referrer:
+            return Response(
+                {"error": _("Invalid referral code.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Referral.objects.create(
+            referrer=referrer,
+            referred=request.user,
+            referral_code=code,
+        )
+        return Response({
+            "message": _("Referral code applied!"),
+            "referrer_name": referrer.display_name or referrer.email.split("@")[0],
+        })
 
 
 class StripeWebhookView(views.APIView):

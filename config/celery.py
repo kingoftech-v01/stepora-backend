@@ -160,6 +160,7 @@ app.conf.beat_schedule = {
 
 # Task configuration
 app.conf.task_routes = {
+    'core.auth.tasks.*': {'queue': 'notifications'},
     'apps.notifications.tasks.*': {'queue': 'notifications'},
     'apps.dreams.tasks.*': {'queue': 'dreams'},
     'apps.social.tasks.*': {'queue': 'social'},

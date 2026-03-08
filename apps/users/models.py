@@ -163,21 +163,55 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.email} ({self.display_name or 'No name'})"
 
+    def get_active_plan(self):
+        """
+        Get the user's active SubscriptionPlan from the database.
+
+        Returns the plan from the active/trialing Subscription, or None if
+        no subscription exists. Result is cached on the instance so multiple
+        permission checks in a single request only hit the DB once.
+        """
+        if hasattr(self, '_cached_plan'):
+            return self._cached_plan
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            from apps.subscriptions.models import Subscription
+            sub = Subscription.objects.select_related('plan').filter(
+                user=self,
+                status__in=('active', 'trialing'),
+            ).first()
+            if sub:
+                self._cached_plan = sub.plan
+            else:
+                logger.error(
+                    "User %s has no active subscription — blocking all features. "
+                    "This should never happen; check the registration signal.",
+                    self.id,
+                )
+                self._cached_plan = None
+        except Exception as exc:
+            logger.error(
+                "Database error fetching plan for user %s: %s", self.id, exc,
+            )
+            self._cached_plan = None
+        return self._cached_plan
+
     def is_premium(self):
-        """Check if user has premium or pro subscription."""
-        return self.subscription in ['premium', 'pro']
+        """Check if user has premium or pro subscription (from DB)."""
+        plan = self.get_active_plan()
+        return plan is not None and plan.slug in ('premium', 'pro')
 
     def can_create_dream(self):
-        """Check if user can create another dream based on subscription."""
+        """Check if user can create another dream based on plan's dream_limit."""
+        plan = self.get_active_plan()
+        if not plan:
+            return False
+        if plan.dream_limit == -1:
+            return True
         from apps.dreams.models import Dream
         active_dreams = Dream.objects.filter(user=self, status='active').count()
-
-        limits = {
-            'free': 3,
-            'premium': 10,
-            'pro': float('inf'),
-        }
-        return active_dreams < limits.get(self.subscription, 3)
+        return active_dreams < plan.dream_limit
 
     def update_activity(self):
         """Update last activity timestamp."""

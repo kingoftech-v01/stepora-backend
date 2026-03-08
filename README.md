@@ -2,7 +2,7 @@
 
 DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
-**Backend**: Django 5.0.1 with 12 apps, 170+ API endpoints, 28 Celery tasks, 4 WebSocket consumers
+**Backend**: Django 5.0.1 with 13 apps, 170+ API endpoints, 28 Celery tasks, 4 WebSocket consumers
 
 ---
 
@@ -64,7 +64,8 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Trial Periods**: Configurable free trial for premium tiers
 - **Coupons**: Stripe coupon and promotion code support
 - **Subscription Analytics**: Tracking of MRR, churn, and conversion metrics
-- **Feature Gating**: 9 permission classes enforce tier limits across all endpoints
+- **Feature Gating**: 10 DB-driven permission classes read from SubscriptionPlan fields — all feature access is configurable without code changes
+- **Status Code Semantics**: 403 for subscription feature walls (triggers upgrade modal), 429 with `daily_quota_exceeded` for exhausted daily limits (shows reset time), 429 for burst rate limits
 - **Payment Receipts**: Automatic email receipts on successful payment via Celery
 
 ### In-App Store
@@ -137,13 +138,23 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **Web Push Subscriptions**: Register/manage browser push subscriptions via VAPID
 
 ### Authentication and Security
-- **django-allauth + dj-rest-auth**: JWT authentication (short-lived access tokens, httpOnly refresh cookies)
-- **Social Auth**: Google Sign-In and Apple Sign-In via allauth social providers
+- **Custom Auth (`core.auth`)**: JWT authentication via SimpleJWT (short-lived access tokens, httpOnly refresh cookies on web, body tokens on native via `X-Client-Platform: native`)
+- **Social Auth**: Google Sign-In and Apple Sign-In via direct token verification (no allauth)
 - **Two-Factor Authentication (TOTP)**: Setup, verify, disable, status check, backup code regeneration. Login with 2FA uses challenge token flow — no JWT tokens issued until OTP is verified.
 - **Account lockout**: 5 failed login attempts locks IP + email for 15 minutes via Redis
 - **Rate limiting**: `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
 - **Email Change Verification**: Secure email change with verification link (24-hour expiry)
 - **Password Management**: Change password, forgot password flow
+
+### OTA Live Updates (Mobile)
+- **Self-Hosted OTA**: Push web bundle updates to Android/iOS without going through app stores
+- **RSA Code Signing**: Bundles signed with RSA-2048 private key, verified server-side and client-side
+- **Triple Verification**: Deploy script signs → Django verifies → Capacitor plugin re-verifies
+- **Two Strategies**: `silent` (apply on next restart) or `notify` (prompt user to restart)
+- **Dedicated S3 Storage**: Separate `dreamplanner-releases` bucket for bundles, backups, and native builds
+- **One-Command Deploy**: `./scripts/deploy-ota.sh notify` (build + zip + sign + upload)
+- **Rollback Safety**: Plugin auto-reverts to previous bundle if new one crashes within 10s
+- **Admin Panel**: Manage bundles, deactivate bad releases, change strategies via Django Admin
 
 ### GDPR Compliance
 - **Account Deletion**: Soft-delete with data anonymization, automatic GDPR hard-delete after 30-day grace period
@@ -156,7 +167,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 
 ```
 dreamplanner/
-+-- apps/                        # 12 Django applications
++-- apps/                        # 13 Django applications
 |   +-- users/                   # User management, gamification, 2FA, GDPR
 |   +-- dreams/                  # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
 |   +-- conversations/           # AI chat (AIChatConsumer WebSocket), templates, voice transcription
@@ -168,6 +179,7 @@ dreamplanner/
 |   +-- circles/                 # Circles, posts, reactions, challenges, invitations, group chat, Agora calls
 |   +-- social/                  # Friends, follows, blocking, reporting, activity feed, dream posts
 |   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders, chat, calls
+|   +-- updates/                 # OTA live updates — signed web bundles via S3 (RSA code signing)
 +-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware, consumer mixins
 +-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
 +-- config/                      # Django settings, Celery, ASGI/WSGI
@@ -819,13 +831,13 @@ docker compose exec web python manage.py seed_store
 ## Security
 
 ### Authentication & Authorization
-- **JWT auth** — django-allauth + dj-rest-auth with short-lived access tokens and httpOnly refresh cookies
+- **JWT auth** — Custom auth system (`core.auth`) with short-lived access tokens and httpOnly refresh cookies
 - **2FA enforcement at login** — Challenge token flow: credentials validated → signed challenge token issued (5min TTL) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification.
 - **Account lockout** — 5 failed login attempts locks IP + email for 15 minutes via Redis
 - **Rate limiting** — `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
-- **Social auth** — Google Sign-In and Apple Sign-In via allauth providers
+- **Social auth** — Google Sign-In and Apple Sign-In via direct ID token verification (no allauth)
 - **Two-Factor (TOTP)** — Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with PBKDF2 (100k iterations).
-- **9 permission classes** — Enforce subscription tier limits across all endpoints
+- **10 DB-driven permission classes** — All feature access reads from `SubscriptionPlan` model fields (`has_ai`, `has_buddy`, `has_circles`, `has_circle_create`, `has_vision_board`, `has_league`, `has_store`, `has_social_feed`). Plans can be reconfigured via admin without code changes. `User.get_active_plan()` caches per-request for performance.
 
 ### Infrastructure Security
 - **UFW firewall** — Only ports 22 (SSH), 80 (HTTP/certbot), 443 (HTTPS) open
@@ -859,7 +871,7 @@ All security headers are set by the Docker-internal nginx (`docker/nginx.conf`).
 - **DB SSL** — `sslmode=require` default in production
 - **WebSocket auth** — Token in message body (not URL), JWT signature + expiry validated
 - **Error redaction** — 5xx responses return generic message in production, full error logged server-side
-- **DRF throttling** — Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min
+- **DRF throttling** — Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min. Daily AI quotas via Redis counters return 429 with `daily_quota_exceeded` code, usage info, and reset time. Burst rate limits return generic 429 (no timing hints).
 - **Input validation** — DRF Serializers + custom validation (avatar magic bytes, notification schema whitelist, channel name regex, message length limits)
 
 ### Secrets Management

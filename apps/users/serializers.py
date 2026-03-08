@@ -15,6 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     can_create_dream = serializers.BooleanField(read_only=True, help_text='Whether user can create more dreams.')
     is_premium = serializers.SerializerMethodField(help_text='Whether user has premium subscription.')
+    email_verified = serializers.SerializerMethodField(help_text='Whether user email is verified.')
 
     class Meta:
         model = User
@@ -24,10 +25,11 @@ class UserSerializer(serializers.ModelSerializer):
             'timezone', 'subscription', 'subscription_ends',
             'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
             'xp', 'level', 'streak_days', 'last_activity',
-            'can_create_dream', 'is_premium',
+            'can_create_dream', 'is_premium', 'email_verified',
+            'onboarding_completed',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'email', 'subscription', 'subscription_ends', 'xp', 'level', 'streak_days', 'last_activity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'email', 'subscription', 'subscription_ends', 'xp', 'level', 'streak_days', 'last_activity', 'email_verified', 'onboarding_completed', 'created_at', 'updated_at']
         extra_kwargs = {
             'id': {'help_text': 'Unique user identifier.'},
             'email': {'help_text': 'User email address.'},
@@ -54,6 +56,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_is_premium(self, obj) -> bool:
         return obj.is_premium()
+
+    def get_email_verified(self, obj) -> bool:
+        from core.auth.models import EmailAddress
+        return EmailAddress.objects.filter(user=obj, verified=True).exists()
+
+    def validate_display_name(self, value):
+        """Validate display name uniqueness."""
+        user_id = self.instance.pk if self.instance else None
+        return validate_display_name(value, exclude_user_id=user_id)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -193,8 +204,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         }
 
     def validate_display_name(self, value):
-        """Sanitize and validate display name."""
-        return validate_display_name(value)
+        """Sanitize and validate display name (must be unique)."""
+        user_id = self.instance.pk if self.instance else None
+        return validate_display_name(value, exclude_user_id=user_id)
 
     def validate_avatar_url(self, value):
         """Sanitize avatar URL to prevent XSS."""

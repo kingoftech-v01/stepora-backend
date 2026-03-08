@@ -8,7 +8,7 @@ endpoints under a single router.
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import SubscriptionPlanViewSet, SubscriptionViewSet, StripeWebhookView
+from .views import SubscriptionPlanViewSet, SubscriptionViewSet, StripeWebhookView, ReferralView
 
 router = DefaultRouter()
 router.register(r'plans', SubscriptionPlanViewSet, basename='subscription-plan')
@@ -16,5 +16,6 @@ router.register(r'subscription', SubscriptionViewSet, basename='subscription')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('referral/', ReferralView.as_view(), name='referral'),
     path('webhook/stripe/', StripeWebhookView.as_view(), name='stripe-webhook'),
 ]

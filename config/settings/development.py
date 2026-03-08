@@ -80,7 +80,7 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
 
 # --- Email: print to console ---
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-ACCOUNT_EMAIL_VERIFICATION = 'optional'
+DP_AUTH['EMAIL_VERIFICATION'] = 'optional'
 
 # --- Security: disabled for local dev ---
 SECURE_SSL_REDIRECT = False

@@ -1,10 +1,8 @@
 """
 Signals for the Subscriptions app.
 
-Automatically creates a Stripe customer record when a new User is saved
-for the first time. This ensures every user in the system has a
-corresponding Stripe customer, which simplifies checkout and billing
-operations later.
+- Creates a free Subscription + Stripe customer when a new User is registered.
+- Keeps User.subscription CharField in sync whenever a Subscription is saved.
 """
 
 import logging
@@ -14,6 +12,27 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(post_save, sender='subscriptions.Subscription')
+def sync_user_subscription_field(sender, instance, **kwargs):
+    """
+    Keep User.subscription CharField in sync with the Subscription model.
+
+    This fires whenever a Subscription row is saved (webhook, admin, code).
+    The CharField is a denormalized cache used by permission classes for
+    fast reads — the Subscription model remains the source of truth.
+    """
+    try:
+        user = instance.user
+        new_slug = instance.plan.slug if instance.plan else 'free'
+        if getattr(user, 'subscription', None) != new_slug:
+            type(user).objects.filter(pk=user.pk).update(subscription=new_slug)
+    except Exception:
+        logger.exception(
+            "Failed to sync User.subscription for subscription %s",
+            instance.pk,
+        )
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)

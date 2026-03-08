@@ -82,13 +82,33 @@ def custom_exception_handler(exc, context):
 
         # Enrich subscription-related 403s with tier and feature info
         if error_code == 'subscription_required' and response.status_code == 403:
-            view = context.get('view')
-            if view:
-                for perm in view.get_permissions():
-                    if getattr(perm, 'code', None) == 'subscription_required':
-                        response.data['required_tier'] = getattr(perm, 'required_tier', 'premium')
-                        response.data['feature_name'] = getattr(perm, 'feature_name', '')
-                        break
+            # Check the exception itself first (e.g. from DailyAIQuotaThrottle)
+            if hasattr(exc, 'required_tier'):
+                response.data['required_tier'] = exc.required_tier
+                response.data['feature_name'] = getattr(exc, 'feature_name', '')
+            else:
+                # Fall back to permission class attributes
+                view = context.get('view')
+                if view:
+                    for perm in view.get_permissions():
+                        if getattr(perm, 'code', None) == 'subscription_required':
+                            response.data['required_tier'] = getattr(perm, 'required_tier', 'premium')
+                            response.data['feature_name'] = getattr(perm, 'feature_name', '')
+                            break
+
+        # Enrich daily quota 429s with usage info and reset time
+        if response.status_code == 429 and getattr(exc, 'default_code', '') == 'daily_quota_exceeded':
+            response.data['code'] = 'daily_quota_exceeded'
+            usage_info = getattr(exc, 'usage_info', {})
+            response.data['category'] = getattr(exc, 'category', '')
+            response.data['limit'] = usage_info.get('limit', 0)
+            response.data['used'] = usage_info.get('used', 0)
+            response.data['remaining'] = usage_info.get('remaining', 0)
+            try:
+                from core.ai_usage import AIUsageTracker
+                response.data['reset_at'] = AIUsageTracker.get_reset_time().isoformat()
+            except Exception:
+                pass
 
     return response
 

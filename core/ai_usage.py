@@ -37,45 +37,51 @@ class AIUsageTracker:
         today = date.today().isoformat()
         return f"{self.prefix}:{user_id}:{category}:{today}"
 
+    # Zero limits — used when no subscription exists or DB is unreachable.
+    _BLOCKED_LIMITS = {
+        'ai_chat': 0, 'ai_plan': 0, 'ai_calibration': 0,
+        'ai_image': 0, 'ai_voice': 0, 'ai_background': 0,
+    }
+
     def get_limits(self, user):
         """
-        Get daily limits for a user based on their subscription plan.
+        Get daily limits for a user from their Subscription plan.
 
-        Checks SubscriptionPlan model first, falls back to settings defaults.
+        The Subscription model is the single source of truth.
+        If no subscription exists or the DB is unreachable, the user is
+        blocked (all limits = 0) and the error is logged.
         """
-        subscription_tier = getattr(user, 'subscription', 'free')
-        default_limits = self.config.get('DEFAULT_LIMITS', {})
-        tier_defaults = default_limits.get(subscription_tier, default_limits.get('free', {}))
-
-        # Try to get limits from SubscriptionPlan model
         try:
             from apps.subscriptions.models import Subscription
             sub = Subscription.objects.select_related('plan').filter(
                 user=user,
                 status__in=('active', 'trialing'),
             ).first()
-            if sub and sub.plan:
-                plan = sub.plan
-                return {
-                    'ai_chat': plan.ai_chat_daily_limit,
-                    'ai_plan': plan.ai_plan_daily_limit,
-                    'ai_calibration': getattr(plan, 'ai_calibration_daily_limit', 50),
-                    'ai_image': plan.ai_image_daily_limit,
-                    'ai_voice': plan.ai_voice_daily_limit,
-                    'ai_background': plan.ai_background_daily_limit,
-                }
-        except Exception:
-            pass
+        except Exception as exc:
+            # Real infrastructure error (DB down, etc.) — block and log
+            logger.error(
+                "Database error fetching subscription for user %s: %s",
+                user.id, exc,
+            )
+            return dict(self._BLOCKED_LIMITS)
 
-        # Return all categories from tier defaults (includes ai_calibration etc.)
-        result = {}
-        for key in tier_defaults:
-            result[key] = tier_defaults.get(key, 0)
-        # Ensure standard categories always present
-        for key in ('ai_chat', 'ai_plan', 'ai_calibration', 'ai_image', 'ai_voice', 'ai_background'):
-            if key not in result:
-                result[key] = 0
-        return result
+        if not sub or not sub.plan:
+            logger.error(
+                "User %s has no active subscription — blocking AI access. "
+                "This should never happen; check the registration signal.",
+                user.id,
+            )
+            return dict(self._BLOCKED_LIMITS)
+
+        plan = sub.plan
+        return {
+            'ai_chat': plan.ai_chat_daily_limit,
+            'ai_plan': plan.ai_plan_daily_limit,
+            'ai_calibration': plan.ai_calibration_daily_limit,
+            'ai_image': plan.ai_image_daily_limit,
+            'ai_voice': plan.ai_voice_daily_limit,
+            'ai_background': plan.ai_background_daily_limit,
+        }
 
     def check_quota(self, user, category):
         """

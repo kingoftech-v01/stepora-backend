@@ -10,6 +10,7 @@ Provides rate limiting for sensitive operations:
 
 from datetime import datetime, timezone
 
+from rest_framework.exceptions import PermissionDenied, Throttled
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle, BaseThrottle
 
 from core.ai_usage import AIUsageTracker
@@ -65,6 +66,10 @@ class DailyAIQuotaThrottle(BaseThrottle):
 
     Subclasses set `category` to one of: ai_chat, ai_plan, ai_image, ai_voice.
     The daily limit is determined by the user's subscription plan.
+
+    When limit == 0 (no access on current plan), raises 403 PermissionDenied
+    with subscription_required code so the frontend shows the upgrade modal.
+    When limit > 0 but exceeded, returns 429 (standard throttle behavior).
     """
     category = None
 
@@ -75,6 +80,31 @@ class DailyAIQuotaThrottle(BaseThrottle):
         tracker = AIUsageTracker()
         allowed, info = tracker.check_quota(request.user, self.category)
         self.usage_info = info
+
+        if not allowed:
+            limit = info.get('limit', 0)
+
+            # limit == 0 means the plan doesn't include this feature at all.
+            # This is an access control issue (403), not a rate limit (429).
+            if limit == 0:
+                exc = PermissionDenied(
+                    detail="This feature is not available on your current plan.",
+                    code='subscription_required',
+                )
+                exc.required_tier = 'premium'
+                exc.feature_name = self.category
+                raise exc
+
+            # limit > 0 but exhausted: daily quota exceeded (429).
+            # Raise Throttled with enriched info. DRF's exception_handler
+            # reads exc.wait to set the Retry-After header, and our
+            # custom_exception_handler reads the extra attrs.
+            exc = Throttled(wait=self.wait())
+            exc.default_code = 'daily_quota_exceeded'
+            exc.usage_info = info
+            exc.category = self.category
+            raise exc
+
         return allowed
 
     def wait(self):

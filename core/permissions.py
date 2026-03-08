@@ -1,10 +1,14 @@
 """
 Custom DRF permissions for DreamPlanner.
 
-Implements subscription-based access control for all features:
-- Free: Limited dreams, no AI, no buddy, no circles, no vision, has ads
-- Premium: Unlimited dreams, AI chat, plan generation, buddy, league, no ads
-- Pro: Everything + vision boards, circles creation, advanced analytics
+All subscription-based permissions read from the user's active SubscriptionPlan
+in the database (via User.get_active_plan()). This ensures feature access is
+always driven by the plan configuration and can be changed without code deploys.
+
+Status code semantics:
+- 403 with code='subscription_required': user's plan doesn't include this feature
+- 403 without special code: object-level ownership/role check failed
+- 429: user has access but exceeded their usage quota (handled by throttles)
 """
 
 from rest_framework import permissions
@@ -14,7 +18,6 @@ class IsOwner(permissions.BasePermission):
     """Permission to only allow owners of an object to access it."""
 
     def has_object_permission(self, request, view, obj):
-        """Check if user is the owner of the object."""
         if hasattr(obj, 'user'):
             return obj.user == request.user
         if hasattr(obj, 'user1'):
@@ -28,10 +31,8 @@ class IsOwnerOrSharedWith(permissions.BasePermission):
     message = 'You do not have permission to access this resource.'
 
     def has_object_permission(self, request, view, obj):
-        """Check if user is owner, shared-with, or collaborator."""
         if hasattr(obj, 'user') and obj.user == request.user:
             return True
-        # Check SharedDream access
         try:
             from apps.dreams.models import SharedDream
             if SharedDream.objects.filter(
@@ -40,7 +41,6 @@ class IsOwnerOrSharedWith(permissions.BasePermission):
                 return True
         except Exception:
             pass
-        # Check collaborator access
         try:
             from apps.dreams.models import DreamCollaborator
             if DreamCollaborator.objects.filter(
@@ -52,195 +52,194 @@ class IsOwnerOrSharedWith(permissions.BasePermission):
         return False
 
 
+# ---------------------------------------------------------------------------
+# Subscription-gated permissions
+#
+# Each permission reads its corresponding boolean field from SubscriptionPlan.
+# The `required_tier` is a UI hint for the upgrade modal — it does NOT control
+# access (the DB plan field does). It can be set dynamically in has_permission.
+# ---------------------------------------------------------------------------
+
 class IsPremiumUser(permissions.BasePermission):
     """Permission to only allow premium or pro users."""
 
-    message = 'This feature requires a Premium or Pro subscription.'
+    message = 'This feature requires a higher-tier plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Premium Features'
 
     def has_permission(self, request, view):
-        """Check if user has premium or pro subscription."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_premium()
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.slug in ('premium', 'pro')
 
 
 class IsProUser(permissions.BasePermission):
     """Permission to only allow pro tier users."""
 
-    message = 'This feature requires a Pro subscription.'
+    message = 'This feature requires a higher-tier plan.'
     code = 'subscription_required'
     required_tier = 'pro'
     feature_name = 'Pro Features'
 
     def has_permission(self, request, view):
-        """Check if user has pro subscription."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription == 'pro'
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.slug == 'pro'
 
 
 class CanCreateDream(permissions.BasePermission):
-    """Permission to check if user can create another dream based on subscription."""
+    """Permission to check if user can create another dream based on plan."""
 
-    message = 'You have reached the maximum number of active dreams for your subscription.'
+    message = 'You have reached the maximum number of active dreams for your plan. Upgrade to create more.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Dream Creation'
 
     def has_permission(self, request, view):
-        """Check dream creation limit based on subscription tier."""
         if request.method != 'POST':
             return True
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.can_create_dream()
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        if not plan:
+            return False
+        if plan.dream_limit == -1:
+            return True
+        from apps.dreams.models import Dream
+        active_dreams = Dream.objects.filter(
+            user=request.user, status='active'
+        ).count()
+        if active_dreams < plan.dream_limit:
+            return True
+        # Set required_tier dynamically based on current plan
+        if plan.slug == 'premium':
+            self.required_tier = 'pro'
+        else:
+            self.required_tier = 'premium'
+        return False
 
 
 class CanUseAI(permissions.BasePermission):
-    """Permission to restrict AI features to premium and pro users.
+    """Permission to restrict AI features based on plan's has_ai flag."""
 
-    Free users cannot use:
-    - AI chat conversations
-    - Dream plan generation
-    - AI dream analysis
-    - Motivational AI messages
-    """
-
-    message = 'AI features require a Premium or Pro subscription. Upgrade to unlock AI-powered dream planning.'
+    message = 'AI features are not available on your current plan. Upgrade to unlock AI-powered dream planning.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'AI Coaching'
 
     def has_permission(self, request, view):
-        """Check if user can access AI features."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_ai
 
 
 class CanUseBuddy(permissions.BasePermission):
-    """Permission to restrict buddy matching to premium and pro users."""
+    """Permission to restrict buddy matching based on plan's has_buddy flag."""
 
-    message = 'Dream Buddy matching requires a Premium or Pro subscription.'
+    message = 'Dream Buddy matching is not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Dream Buddy'
 
     def has_permission(self, request, view):
-        """Check if user can access buddy features."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_buddy
 
 
 class CanUseCircles(permissions.BasePermission):
-    """Permission to restrict circle creation to pro users.
+    """Permission to restrict circles based on plan flags.
 
-    Joining existing circles is allowed for premium users.
-    Creating circles requires pro subscription.
+    Creating circles: requires has_circle_create (pro).
+    Joining/reading: requires has_circles (premium+).
     """
 
-    message = 'Dream Circles require a paid subscription.'
+    message = 'Dream Circles are not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Dream Circles'
 
     def has_permission(self, request, view):
-        """Check if user can create circles (pro) or join (premium+)."""
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        if not plan:
+            return False
         if request.method == 'POST':
-            return (
-                request.user
-                and request.user.is_authenticated
-                and request.user.subscription == 'pro'
-            )
-        # Reading/joining circles allowed for premium+
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+            if not plan.has_circle_create:
+                self.required_tier = 'pro'
+                self.message = 'Creating circles is not available on your current plan.'
+                return False
+            return True
+        if not plan.has_circles:
+            self.required_tier = 'premium'
+            return False
+        return True
 
 
 class CanUseVisionBoard(permissions.BasePermission):
-    """Permission to restrict vision board generation to pro users."""
+    """Permission to restrict vision board based on plan's has_vision_board flag."""
 
-    message = 'Vision board generation requires a Pro subscription.'
+    message = 'Vision board generation is not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'pro'
     feature_name = 'Vision Board'
 
     def has_permission(self, request, view):
-        """Check if user can generate vision boards."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription == 'pro'
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_vision_board
 
 
 class CanUseLeague(permissions.BasePermission):
-    """Permission to restrict league features to premium and pro users."""
+    """Permission to restrict league features based on plan's has_league flag."""
 
-    message = 'League features require a Premium or Pro subscription.'
+    message = 'League features are not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Leagues'
 
     def has_permission(self, request, view):
-        """Check if user can access league features."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_league
 
 
 class CanUseStore(permissions.BasePermission):
-    """Permission to restrict store purchases to premium and pro users.
+    """Permission to restrict store purchases based on plan's has_store flag.
 
     Browsing the store catalog is allowed for everyone (AllowAny on those views).
-    Purchasing items (via Stripe, XP, or gifting) requires a paid subscription.
     """
 
-    message = 'Store purchases require a Premium or Pro subscription.'
+    message = 'Store purchases are not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Store Purchases'
 
     def has_permission(self, request, view):
-        """Check if user can make store purchases."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_store
 
 
 class CanUseSocialFeed(permissions.BasePermission):
-    """Permission to restrict the social activity feed to premium and pro users.
+    """Permission to restrict the social activity feed based on plan's has_social_feed flag."""
 
-    Free users can only see encouragements received. Full feed requires premium+.
-    """
-
-    message = 'The full activity feed requires a Premium or Pro subscription.'
+    message = 'The full activity feed is not available on your current plan.'
     code = 'subscription_required'
     required_tier = 'premium'
     feature_name = 'Activity Feed'
 
     def has_permission(self, request, view):
-        """Check if user can access the full social feed."""
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.subscription in ('premium', 'pro')
-        )
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_social_feed

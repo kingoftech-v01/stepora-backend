@@ -117,6 +117,18 @@ class SubscriptionPlan(models.Model):
         default=False,
         help_text='Access to competitive leagues',
     )
+    has_store = models.BooleanField(
+        default=False,
+        help_text='Access to store purchases',
+    )
+    has_social_feed = models.BooleanField(
+        default=False,
+        help_text='Access to the social activity feed',
+    )
+    has_circle_create = models.BooleanField(
+        default=False,
+        help_text='Can create new circles (separate from joining)',
+    )
     has_ads = models.BooleanField(
         default=True,
         help_text='Whether ads are shown to users on this plan',
@@ -142,6 +154,10 @@ class SubscriptionPlan(models.Model):
     ai_background_daily_limit = models.IntegerField(
         default=3,
         help_text='Daily background AI tasks limit (motivation, reports).',
+    )
+    ai_calibration_daily_limit = models.IntegerField(
+        default=0,
+        help_text='Daily calibration questions limit. 0=no access.',
     )
 
     trial_period_days = models.IntegerField(
@@ -200,11 +216,15 @@ class SubscriptionPlan(models.Model):
                     'has_ai': False,
                     'has_buddy': False,
                     'has_circles': False,
+                    'has_circle_create': False,
                     'has_vision_board': False,
                     'has_league': False,
+                    'has_store': False,
+                    'has_social_feed': False,
                     'has_ads': True,
                     'ai_chat_daily_limit': 0,
                     'ai_plan_daily_limit': 0,
+                    'ai_calibration_daily_limit': 0,
                     'ai_image_daily_limit': 0,
                     'ai_voice_daily_limit': 0,
                     'ai_background_daily_limit': 0,
@@ -228,12 +248,16 @@ class SubscriptionPlan(models.Model):
                     'dream_limit': 10,
                     'has_ai': True,
                     'has_buddy': True,
-                    'has_circles': False,
+                    'has_circles': True,
+                    'has_circle_create': False,
                     'has_vision_board': False,
                     'has_league': True,
+                    'has_store': True,
+                    'has_social_feed': True,
                     'has_ads': False,
                     'ai_chat_daily_limit': 50,
                     'ai_plan_daily_limit': 10,
+                    'ai_calibration_daily_limit': 50,
                     'ai_image_daily_limit': 0,
                     'ai_voice_daily_limit': 10,
                     'ai_background_daily_limit': 3,
@@ -241,7 +265,7 @@ class SubscriptionPlan(models.Model):
                         'dreams': '10 active dreams',
                         'ai_coaching': True,
                         'buddy_matching': True,
-                        'circles': False,
+                        'circles': 'Join only',
                         'vision_board': False,
                         'league': True,
                         'ads': False,
@@ -258,11 +282,15 @@ class SubscriptionPlan(models.Model):
                     'has_ai': True,
                     'has_buddy': True,
                     'has_circles': True,
+                    'has_circle_create': True,
                     'has_vision_board': True,
                     'has_league': True,
+                    'has_store': True,
+                    'has_social_feed': True,
                     'has_ads': False,
                     'ai_chat_daily_limit': 150,
                     'ai_plan_daily_limit': 25,
+                    'ai_calibration_daily_limit': 50,
                     'ai_image_daily_limit': 3,
                     'ai_voice_daily_limit': 20,
                     'ai_background_daily_limit': 3,
@@ -395,6 +423,107 @@ class Subscription(models.Model):
     def is_active(self):
         """Check if the subscription is currently active or trialing."""
         return self.status in ('active', 'trialing')
+
+
+class Referral(models.Model):
+    """
+    Tracks user referrals for the "Refer 3 paid friends → 1 free month" program.
+
+    When a referred user subscribes to a paid plan, the referrer's
+    paid_referral_count increments. At every 3 paid referrals, the referrer
+    gets 1 month free Premium.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referrals_made",
+        help_text="User who shared the referral link",
+    )
+    referred = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referred_by",
+        help_text="User who signed up via the referral",
+    )
+    referral_code = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="The code used for this referral",
+    )
+    referred_has_paid = models.BooleanField(
+        default=False,
+        help_text="Whether the referred user has subscribed to a paid plan",
+    )
+    reward_granted = models.BooleanField(
+        default=False,
+        help_text="Whether a free month was granted for this batch of 3",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the referred user first subscribed to a paid plan",
+    )
+
+    class Meta:
+        db_table = "referrals"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        status = "paid" if self.referred_has_paid else "pending"
+        return f"{self.referrer.email} → {self.referred.email} ({status})"
+
+    @classmethod
+    def get_referral_code(cls, user):
+        """Generate a deterministic referral code for a user."""
+        short = str(user.id).replace("-", "")[:8].upper()
+        return f"DP-REF-{short}"
+
+    @classmethod
+    def resolve_referrer(cls, code):
+        """
+        Resolve a referral code to its owner via indexed UUID range query.
+
+        Code format: DP-REF-<first 8 hex chars of user UUID>.
+        We reverse the code into a UUID range and query with __gte/__lte
+        which hits the primary key index → O(1).
+        """
+        import uuid as _uuid
+        if not code or not code.startswith("DP-REF-") or len(code) != 15:
+            return None
+        hex_prefix = code[7:].lower()
+        # Validate hex
+        try:
+            int(hex_prefix, 16)
+        except ValueError:
+            return None
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            min_id = _uuid.UUID(hex_prefix + '0' * 24)
+            max_id = _uuid.UUID(hex_prefix + 'f' * 24)
+        except ValueError:
+            return None
+        return User.objects.filter(
+            is_active=True, id__gte=min_id, id__lte=max_id,
+        ).only('id', 'email', 'display_name').first()
+
+    @classmethod
+    def get_referrer_stats(cls, user):
+        """Get referral stats for a user."""
+        total = cls.objects.filter(referrer=user).count()
+        paid = cls.objects.filter(referrer=user, referred_has_paid=True).count()
+        free_months_earned = paid // 3
+        progress_to_next = paid % 3
+        return {
+            "total_referrals": total,
+            "paid_referrals": paid,
+            "free_months_earned": free_months_earned,
+            "referrals_until_next_reward": 3 - progress_to_next if progress_to_next > 0 else 3,
+            "progress_to_next": progress_to_next,
+        }
 
 
 class StripeWebhookEvent(models.Model):
