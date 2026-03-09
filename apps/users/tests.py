@@ -38,12 +38,21 @@ class TestUserModel:
         assert not user.is_premium()
         assert premium_user.is_premium()
 
-    def test_is_premium_expired(self, user):
-        """Test is_premium does not check subscription_ends expiry"""
-        user.subscription = 'premium'
+    def test_is_premium_expired(self, user, db):
+        """Test is_premium checks the Subscription table plan, not expiry."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+        premium_plan = SubscriptionPlan.objects.filter(slug='premium').first()
+        if not premium_plan:
+            pytest.skip('No premium plan in DB')
+        sub, _ = Subscription.objects.get_or_create(user=user, defaults={'plan': premium_plan, 'status': 'active'})
+        sub.plan = premium_plan
+        sub.status = 'active'
+        sub.save()
         user.subscription_ends = timezone.now() - timedelta(days=1)
-        user.save()
-        # is_premium() only checks subscription field, not expiry date
+        user.save(update_fields=['subscription_ends'])
+        if hasattr(user, '_cached_plan'):
+            del user._cached_plan
+        # is_premium() reads from Subscription table, not User.subscription
         assert user.is_premium()
 
     def test_update_activity(self, user):

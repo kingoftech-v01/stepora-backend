@@ -39,10 +39,18 @@ def _create_user(email=None, display_name='Test User', subscription='pro'):
         password='testpass123',
         display_name=display_name,
     )
-    # Set subscription for permission checks
+    # Set subscription via Subscription table (source of truth)
     if subscription:
-        user.subscription = subscription
-        user.save(update_fields=['subscription'])
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+        plan = SubscriptionPlan.objects.filter(slug=subscription).first()
+        if plan:
+            sub, _ = Subscription.objects.get_or_create(
+                user=user, defaults={'plan': plan, 'status': 'active'},
+            )
+            if sub.plan_id != plan.pk:
+                sub.plan = plan
+                sub.status = 'active'
+                sub.save(update_fields=['plan', 'status'])
     token = Token.objects.create(user=user)
     return user, token.key
 

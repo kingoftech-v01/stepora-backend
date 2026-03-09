@@ -13,6 +13,23 @@ from .models import Dream, Goal, Task, Obstacle
 from apps.users.models import User
 
 
+def _set_user_plan(user, slug):
+    """Upgrade a user via the Subscription table (source of truth)."""
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
+    plan = SubscriptionPlan.objects.filter(slug=slug).first()
+    if not plan:
+        return
+    sub, _ = Subscription.objects.get_or_create(
+        user=user, defaults={'plan': plan, 'status': 'active'},
+    )
+    if sub.plan_id != plan.pk or sub.status != 'active':
+        sub.plan = plan
+        sub.status = 'active'
+        sub.save(update_fields=['plan', 'status'])
+    if hasattr(user, '_cached_plan'):
+        del user._cached_plan
+
+
 class TestDreamModel:
     """Test Dream model"""
 
@@ -292,8 +309,7 @@ class TestDreamViewSet:
     def test_analyze_dream(self, authenticated_client, dream):
         """Test POST /api/dreams/dreams/{id}/analyze/"""
         # Upgrade user to pro so AI permission gate is satisfied
-        dream.user.subscription = 'pro'
-        dream.user.save(update_fields=['subscription'])
+        _set_user_plan(dream.user, 'pro')
 
         mock_analysis = {
             'category': 'education',
@@ -320,8 +336,7 @@ class TestDreamViewSet:
     def test_generate_plan(self, authenticated_client, dream):
         """Test POST /api/dreams/dreams/{id}/generate_plan/"""
         # Upgrade user to pro so AI permission gate is satisfied
-        dream.user.subscription = 'pro'
-        dream.user.save(update_fields=['subscription'])
+        _set_user_plan(dream.user, 'pro')
 
         mock_plan_raw = {
             'analysis': 'Test analysis',
@@ -386,8 +401,7 @@ class TestDreamViewSet:
         (not via Celery), creates a Task and updates the dream.
         """
         # Upgrade user to pro so AI permission gate is satisfied
-        dream.user.subscription = 'pro'
-        dream.user.save(update_fields=['subscription'])
+        _set_user_plan(dream.user, 'pro')
 
         with patch('apps.dreams.views.OpenAIService') as mock_service_cls:
             mock_service_cls.return_value.generate_two_minute_start.return_value = 'Open Django tutorial'
@@ -404,8 +418,7 @@ class TestDreamViewSet:
     def test_generate_two_minute_start_already_exists(self, authenticated_client, dream):
         """Test that generating a 2-minute start when one already exists returns 400."""
         # Upgrade user to pro so AI permission gate is satisfied
-        dream.user.subscription = 'pro'
-        dream.user.save(update_fields=['subscription'])
+        _set_user_plan(dream.user, 'pro')
 
         dream.has_two_minute_start = True
         dream.save(update_fields=['has_two_minute_start'])
@@ -423,8 +436,7 @@ class TestDreamViewSet:
         (not via Celery), saves the image URL and returns it.
         """
         # Upgrade user to pro so vision board permission gate is satisfied
-        dream.user.subscription = 'pro'
-        dream.user.save(update_fields=['subscription'])
+        _set_user_plan(dream.user, 'pro')
 
         with patch('apps.dreams.views.OpenAIService') as mock_service_cls:
             mock_service_cls.return_value.generate_vision_image.return_value = \

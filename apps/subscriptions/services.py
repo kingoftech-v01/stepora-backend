@@ -869,14 +869,15 @@ class StripeService:
             )
             return
 
+        # Revert to free plan via Subscription table (signal syncs User.subscription)
+        free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+        subscription.plan = free_plan
         subscription.status = 'canceled'
-        subscription.save(update_fields=['status', 'updated_at'])
+        subscription.save(update_fields=['plan', 'status', 'updated_at'])
 
-        # Revert user to free tier
         user = subscription.user
-        user.subscription = 'free'
         user.subscription_ends = None
-        user.save(update_fields=['subscription', 'subscription_ends', 'updated_at'])
+        user.save(update_fields=['subscription_ends', 'updated_at'])
 
         logger.info(
             "Subscription %s deleted, user %s reverted to free tier",
@@ -1019,12 +1020,13 @@ class StripeService:
                 "Subscription %s not found in Stripe, marking as canceled",
                 subscription.stripe_subscription_id,
             )
+            free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+            subscription.plan = free_plan
             subscription.status = 'canceled'
-            subscription.save(update_fields=['status', 'updated_at'])
+            subscription.save(update_fields=['plan', 'status', 'updated_at'])
 
-            user.subscription = 'free'
             user.subscription_ends = None
-            user.save(update_fields=['subscription', 'subscription_ends', 'updated_at'])
+            user.save(update_fields=['subscription_ends', 'updated_at'])
             return subscription
 
         except stripe.error.StripeError:
@@ -1094,9 +1096,9 @@ def _sync_user_subscription(
         plan: The plan to sync to.
         period_end: The end of the current billing period.
     """
-    user.subscription = plan.slug
+    # Update subscription_ends on User (subscription CharField is synced by signal)
     user.subscription_ends = period_end
-    user.save(update_fields=['subscription', 'subscription_ends', 'updated_at'])
+    user.save(update_fields=['subscription_ends', 'updated_at'])
 
     # Revoke features if downgrading
     _revoke_downgraded_features(user, plan)
