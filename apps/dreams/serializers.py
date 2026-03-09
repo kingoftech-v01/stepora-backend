@@ -469,6 +469,39 @@ class PublicDreamDetailSerializer(serializers.ModelSerializer):
         return obj.user.display_name or ''
 
 
+class PublicDreamListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for explore/discover public dream cards."""
+
+    owner_name = serializers.SerializerMethodField()
+    owner_avatar = serializers.SerializerMethodField()
+    goals_count = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Dream
+        fields = [
+            'id', 'user', 'title', 'description', 'category',
+            'progress_percentage', 'status', 'is_public',
+            'owner_name', 'owner_avatar', 'goals_count', 'tags',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_owner_name(self, obj) -> str:
+        return obj.user.display_name or ''
+
+    def get_owner_avatar(self, obj) -> str:
+        return obj.user.avatar_url or ''
+
+    def get_goals_count(self, obj) -> int:
+        if hasattr(obj, '_goals_count'):
+            return obj._goals_count
+        return obj.goals.count()
+
+    def get_tags(self, obj) -> list:
+        return list(obj.taggings.values_list('tag__name', flat=True))
+
+
 class DreamCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating dreams."""
 

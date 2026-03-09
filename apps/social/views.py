@@ -833,6 +833,30 @@ class ActivityFeedView(generics.ListAPIView):
             user_id__in=all_ids
         ).select_related('user').order_by('-created_at')
 
+        # Exclude activity items that reference private dreams from other users
+        dream_types = {'task_completed', 'dream_completed', 'milestone_reached'}
+        from apps.dreams.models import Dream
+        private_dream_ids = set(
+            Dream.objects.filter(
+                is_public=False,
+                user_id__in=all_ids,
+            ).exclude(
+                user=user,
+            ).values_list('id', flat=True)
+        )
+        if private_dream_ids:
+            from django.db.models import Q as ActivityQ
+            # Exclude items from other users whose content references a private dream
+            private_id_strs = {str(did) for did in private_dream_ids}
+            # Filter in Python for JSON content — can't do JSON lookup efficiently in all DBs
+            qs_ids_to_exclude = []
+            for item in qs.filter(activity_type__in=dream_types).exclude(user=user).only('id', 'content', 'data'):
+                dream_id_str = (item.content or {}).get('dream_id') or (item.data or {}).get('dream_id', '')
+                if dream_id_str and str(dream_id_str) in private_id_strs:
+                    qs_ids_to_exclude.append(item.id)
+            if qs_ids_to_exclude:
+                qs = qs.exclude(id__in=qs_ids_to_exclude)
+
         # Apply optional filters
         activity_type = self.request.query_params.get('activity_type')
         if activity_type:
@@ -1422,7 +1446,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        # Validate dream ownership if provided
+        # Validate dream ownership and public status if provided
         dream = None
         dream_id = data.get('dream_id')
         if dream_id:
@@ -1433,6 +1457,12 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 return Response(
                     {'error': _('Dream not found.')},
                     status=status.HTTP_404_NOT_FOUND,
+                )
+            if not dream.is_public:
+                return Response(
+                    {'error': _('Dream must be public to be shared in a post.'),
+                     'code': 'dream_not_public'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Validate linked achievement items

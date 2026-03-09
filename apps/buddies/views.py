@@ -404,6 +404,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             ).count()
             partner_tasks_week = Task.objects.filter(
                 dream__user=partner,
+                dream__is_public=True,
                 completed_at__gte=week_ago,
                 status='completed'
             ).count()

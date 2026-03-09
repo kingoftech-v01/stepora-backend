@@ -114,6 +114,7 @@ class Dream(models.Model):
             models.Index(fields=['user', 'status']),
             models.Index(fields=['category']),
             models.Index(fields=['target_date']),
+            models.Index(fields=['is_public', 'status']),
         ]
 
     def __str__(self):

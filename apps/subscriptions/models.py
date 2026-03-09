@@ -129,6 +129,10 @@ class SubscriptionPlan(models.Model):
         default=False,
         help_text='Can create new circles (separate from joining)',
     )
+    has_public_dreams = models.BooleanField(
+        default=False,
+        help_text='Can make dreams publicly visible to other users',
+    )
     has_ads = models.BooleanField(
         default=True,
         help_text='Whether ads are shown to users on this plan',
@@ -221,6 +225,7 @@ class SubscriptionPlan(models.Model):
                     'has_league': False,
                     'has_store': False,
                     'has_social_feed': False,
+                    'has_public_dreams': False,
                     'has_ads': True,
                     'ai_chat_daily_limit': 0,
                     'ai_plan_daily_limit': 0,
@@ -254,6 +259,7 @@ class SubscriptionPlan(models.Model):
                     'has_league': True,
                     'has_store': True,
                     'has_social_feed': True,
+                    'has_public_dreams': True,
                     'has_ads': False,
                     'ai_chat_daily_limit': 50,
                     'ai_plan_daily_limit': 10,
@@ -287,6 +293,7 @@ class SubscriptionPlan(models.Model):
                     'has_league': True,
                     'has_store': True,
                     'has_social_feed': True,
+                    'has_public_dreams': True,
                     'has_ads': False,
                     'ai_chat_daily_limit': 150,
                     'ai_plan_daily_limit': 25,

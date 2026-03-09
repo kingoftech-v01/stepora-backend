@@ -24,7 +24,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DreamViewSet, DreamMilestoneViewSet, GoalViewSet, TaskViewSet, ObstacleViewSet,
     SharedWithMeView, DreamTagListView, DreamTemplateViewSet,
-    DreamPDFExportView, CheckInViewSet,
+    DreamPDFExportView, CheckInViewSet, ExploreView,
 )
 
 router = DefaultRouter()
@@ -37,6 +37,7 @@ router.register(r'dreams/templates', DreamTemplateViewSet, basename='dream-templ
 router.register(r'checkins', CheckInViewSet, basename='checkin')
 
 urlpatterns = [
+    path('dreams/explore/', ExploreView.as_view(), name='dreams-explore'),
     path('dreams/shared-with-me/', SharedWithMeView.as_view(), name='shared-with-me'),
     path('dreams/tags/', DreamTagListView.as_view(), name='dream-tags'),
     path('dreams/<uuid:dream_id>/export-pdf/', DreamPDFExportView.as_view(), name='dream-export-pdf'),

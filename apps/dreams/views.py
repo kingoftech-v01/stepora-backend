@@ -35,8 +35,9 @@ from .serializers import (
     DreamTemplateSerializer, DreamCollaboratorSerializer, AddCollaboratorSerializer,
     VisionBoardImageSerializer,
     PlanCheckInSerializer, PlanCheckInDetailSerializer, CheckInResponseSubmitSerializer,
+    PublicDreamListSerializer,
 )
-from core.permissions import IsOwner, CanCreateDream, CanUseAI, CanUseVisionBoard
+from core.permissions import IsOwner, CanCreateDream, CanUseAI, CanUseVisionBoard, CanMakePublicDream
 from integrations.openai_service import OpenAIService
 from integrations.plan_processors import detect_category_with_ambiguity
 from core.exceptions import OpenAIError
@@ -114,7 +115,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated, IsOwner]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['status', 'category']
+    filterset_fields = ['status', 'category', 'is_public']
     ordering_fields = ['created_at', 'target_date', 'priority']
     ordering = ['-created_at']
 
@@ -210,6 +211,11 @@ class DreamViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             # Allow any authenticated user to retrieve — queryset handles access
             return [IsAuthenticated()]
+        if self.action in ['update', 'partial_update']:
+            # Gate making dreams public — only premium/pro
+            is_public_val = self.request.data.get('is_public')
+            if is_public_val is True or is_public_val == 'true':
+                return [IsAuthenticated(), IsOwner(), CanMakePublicDream()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -2095,3 +2101,53 @@ class ObstacleViewSet(viewsets.ModelViewSet):
         obstacle.save()
 
         return Response(ObstacleSerializer(obstacle).data)
+
+
+# ---------------------------------------------------------------------------
+# Explore public dreams
+# ---------------------------------------------------------------------------
+
+class ExploreView(generics.ListAPIView):
+    """Browse public dreams from other users.
+
+    Supports filtering by category and ordering by created_at or progress.
+    Excludes the current user's own dreams and blocked users.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicDreamListSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['category']
+    ordering_fields = ['created_at', 'progress_percentage']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Dream.objects.none()
+
+        user = self.request.user
+
+        # Exclude blocked users (both directions)
+        from apps.social.models import BlockedUser
+        blocked_ids = set(
+            BlockedUser.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        ) | set(
+            BlockedUser.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        )
+
+        from django.db.models import Count
+
+        qs = Dream.objects.filter(
+            is_public=True,
+            status='active',
+        ).exclude(
+            user=user,
+        ).exclude(
+            user_id__in=blocked_ids,
+        ).select_related('user').prefetch_related(
+            'taggings__tag', 'goals',
+        ).annotate(
+            _goals_count=Count('goals', distinct=True),
+        ).order_by('-created_at')
+
+        return qs

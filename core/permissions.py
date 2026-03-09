@@ -243,3 +243,18 @@ class CanUseSocialFeed(permissions.BasePermission):
             return False
         plan = request.user.get_active_plan()
         return plan is not None and plan.has_social_feed
+
+
+class CanMakePublicDream(permissions.BasePermission):
+    """Permission to restrict making dreams public based on plan's has_public_dreams flag."""
+
+    message = 'Making dreams public requires a Premium or Pro plan.'
+    code = 'subscription_required'
+    required_tier = 'premium'
+    feature_name = 'Public Dreams'
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        plan = request.user.get_active_plan()
+        return plan is not None and plan.has_public_dreams

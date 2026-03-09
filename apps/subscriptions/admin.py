@@ -46,6 +46,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
         'has_social_feed',
         'has_vision_board',
         'has_league',
+        'has_public_dreams',
         'has_ads',
         'is_active',
     ]
@@ -59,6 +60,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
         'has_social_feed',
         'has_vision_board',
         'has_league',
+        'has_public_dreams',
         'has_ads',
     ]
     search_fields = ['name', 'slug', 'stripe_price_id']
@@ -82,6 +84,7 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
                 'has_social_feed',
                 'has_vision_board',
                 'has_league',
+                'has_public_dreams',
                 'has_ads',
             ),
         }),
