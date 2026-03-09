@@ -135,13 +135,14 @@ class StripeService:
         # Ensure user has a Stripe customer
         stripe_customer = StripeService.create_customer(user)
 
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8100')
         default_success = os.getenv(
             'STRIPE_SUCCESS_URL',
-            'https://app.dreamplanner.com/subscription/success?session_id={CHECKOUT_SESSION_ID}',
+            f'{frontend_url}/#/subscription?session_id={{CHECKOUT_SESSION_ID}}&status=success',
         )
         default_cancel = os.getenv(
             'STRIPE_CANCEL_URL',
-            'https://app.dreamplanner.com/subscription/cancel',
+            f'{frontend_url}/#/subscription?status=cancelled',
         )
 
         # Build subscription_data with optional trial period
@@ -227,9 +228,10 @@ class StripeService:
                 "They must subscribe before accessing the billing portal."
             )
 
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8100')
         default_return = os.getenv(
             'STRIPE_PORTAL_RETURN_URL',
-            'https://app.dreamplanner.com/settings/subscription',
+            f'{frontend_url}/#/subscription',
         )
 
         try:
@@ -292,6 +294,17 @@ class StripeService:
             subscription.canceled_at = timezone.now()
             subscription.save(update_fields=['cancel_at_period_end', 'canceled_at', 'updated_at'])
 
+            # Send cancellation scheduled notification
+            try:
+                from apps.subscriptions.tasks import send_subscription_cancel_scheduled_email
+                send_subscription_cancel_scheduled_email.delay(
+                    str(user.id),
+                    subscription.plan.name,
+                    subscription.current_period_end.isoformat() if subscription.current_period_end else '',
+                )
+            except Exception:
+                logger.exception("Failed to queue cancel email for user %s", user.email)
+
             logger.info(
                 "Subscription %s set to cancel at period end for user %s",
                 subscription.stripe_subscription_id,
@@ -338,6 +351,8 @@ class StripeService:
         # Downgrade to free → delegate to cancel
         if new_plan.is_free:
             cancelled = StripeService.cancel_subscription(user)
+            if cancelled is None:
+                raise ValueError("No active subscription to downgrade.")
             return {'action': 'downgrade_scheduled', 'subscription': cancelled}
 
         # Retrieve Stripe subscription to get item ID
@@ -374,6 +389,13 @@ class StripeService:
             ])
 
             _sync_user_subscription(user, new_plan, subscription.current_period_end)
+
+            # Send upgrade notification email
+            try:
+                from apps.subscriptions.tasks import send_subscription_upgraded_email
+                send_subscription_upgraded_email.delay(str(user.id), new_plan.name)
+            except Exception:
+                logger.exception("Failed to queue upgrade email for user %s", user.email)
 
             logger.info(
                 "Upgraded subscription %s to %s for user %s",
@@ -427,6 +449,16 @@ class StripeService:
                 'pending_plan', 'pending_plan_effective_date',
                 'stripe_schedule_id', 'updated_at',
             ])
+
+            # Send downgrade scheduled notification email
+            try:
+                from apps.subscriptions.tasks import send_subscription_downgrade_scheduled_email
+                send_subscription_downgrade_scheduled_email.delay(
+                    str(user.id), new_plan.name,
+                    subscription.current_period_end.isoformat() if subscription.current_period_end else '',
+                )
+            except Exception:
+                logger.exception("Failed to queue downgrade email for user %s", user.email)
 
             logger.info(
                 "Scheduled downgrade of subscription %s to %s at %s for user %s",
@@ -524,6 +556,15 @@ class StripeService:
             subscription.canceled_at = None
             subscription.save(update_fields=['cancel_at_period_end', 'canceled_at', 'updated_at'])
 
+            # Send reactivation notification
+            try:
+                from apps.subscriptions.tasks import send_subscription_reactivated_email
+                send_subscription_reactivated_email.delay(
+                    str(user.id), subscription.plan.name,
+                )
+            except Exception:
+                logger.exception("Failed to queue reactivation email for user %s", user.email)
+
             logger.info(
                 "Subscription %s reactivated for user %s",
                 subscription.stripe_subscription_id,
@@ -536,6 +577,48 @@ class StripeService:
                 "Failed to reactivate subscription for user %s", user.email
             )
             raise
+
+    # -----------------------------------------------------------------
+    # Coupon
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def apply_coupon(user: User, coupon_code: str) -> Subscription:
+        """
+        Apply a Stripe coupon/promotion code to the user's active subscription.
+
+        Args:
+            user: The user requesting the coupon.
+            coupon_code: The Stripe coupon ID to apply.
+
+        Returns:
+            The updated Subscription instance.
+
+        Raises:
+            ValueError: If no active paid subscription or invalid coupon.
+            stripe.error.StripeError: If the Stripe API call fails.
+        """
+        subscription = Subscription.objects.filter(
+            user=user,
+            status__in=('active', 'trialing'),
+        ).select_related('plan').first()
+
+        if not subscription or not subscription.stripe_subscription_id:
+            raise ValueError("No active paid subscription to apply a coupon to.")
+
+        try:
+            stripe.Subscription.modify(
+                subscription.stripe_subscription_id,
+                coupon=coupon_code,
+            )
+        except stripe.error.InvalidRequestError as e:
+            raise ValueError(f"Invalid coupon code: {e.user_message or str(e)}")
+
+        logger.info(
+            "Applied coupon '%s' to subscription %s for user %s",
+            coupon_code, subscription.stripe_subscription_id, user.email,
+        )
+        return subscription
 
     # -----------------------------------------------------------------
     # Webhook handling
@@ -853,14 +936,14 @@ class StripeService:
         Handle customer.subscription.deleted event.
 
         Fires when a subscription is fully canceled (not just scheduled to
-        cancel). We mark the local record as canceled and revert the user
-        to the free tier.
+        cancel). We revert the user to the free tier while keeping the
+        Subscription row active so get_active_plan() continues to work.
         """
         stripe_subscription_id = stripe_sub.get('id')
 
         subscription = Subscription.objects.filter(
             stripe_subscription_id=stripe_subscription_id,
-        ).select_related('user').first()
+        ).select_related('user', 'plan').first()
 
         if not subscription:
             logger.warning(
@@ -869,15 +952,42 @@ class StripeService:
             )
             return
 
-        # Revert to free plan via Subscription table (signal syncs User.subscription)
+        old_plan = subscription.plan
+
+        # Revert to free plan — keep status='active' so get_active_plan()
+        # still finds this row. Cancel = downgrade to free, not a lockout.
         free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+        if not free_plan:
+            logger.error("Free plan not found — cannot revert subscription %s", stripe_subscription_id)
+            return
         subscription.plan = free_plan
-        subscription.status = 'canceled'
-        subscription.save(update_fields=['plan', 'status', 'updated_at'])
+        subscription.status = 'active'
+        subscription.stripe_subscription_id = ''
+        subscription.cancel_at_period_end = False
+        subscription.canceled_at = None
+        subscription.current_period_start = None
+        subscription.current_period_end = None
+        subscription.pending_plan = None
+        subscription.pending_plan_effective_date = None
+        subscription.stripe_schedule_id = ''
+        subscription.save()
 
         user = subscription.user
         user.subscription_ends = None
         user.save(update_fields=['subscription_ends', 'updated_at'])
+
+        # Revoke features the user no longer has access to
+        _revoke_downgraded_features(user, free_plan)
+
+        # Send notification email
+        try:
+            from apps.subscriptions.tasks import send_subscription_cancelled_email
+            send_subscription_cancelled_email.delay(
+                str(user.id),
+                old_plan.name if old_plan else 'Premium',
+            )
+        except Exception:
+            logger.exception("Failed to queue cancellation email for user %s", user.email)
 
         logger.info(
             "Subscription %s deleted, user %s reverted to free tier",
@@ -1010,23 +1120,40 @@ class StripeService:
         if not subscription:
             return None
 
+        # Free-tier subscriptions have no Stripe ID — nothing to sync
+        if not subscription.stripe_subscription_id:
+            return subscription
+
         try:
             stripe_sub = stripe.Subscription.retrieve(
                 subscription.stripe_subscription_id,
             )
         except stripe.error.InvalidRequestError:
-            # Subscription no longer exists in Stripe
+            # Subscription no longer exists in Stripe — revert to free
             logger.warning(
-                "Subscription %s not found in Stripe, marking as canceled",
+                "Subscription %s not found in Stripe, reverting to free tier",
                 subscription.stripe_subscription_id,
             )
             free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+            if not free_plan:
+                logger.error("Free plan not found — cannot revert subscription for user %s", user.email)
+                return subscription
             subscription.plan = free_plan
-            subscription.status = 'canceled'
-            subscription.save(update_fields=['plan', 'status', 'updated_at'])
+            subscription.status = 'active'
+            subscription.stripe_subscription_id = ''
+            subscription.cancel_at_period_end = False
+            subscription.canceled_at = None
+            subscription.current_period_start = None
+            subscription.current_period_end = None
+            subscription.pending_plan = None
+            subscription.pending_plan_effective_date = None
+            subscription.stripe_schedule_id = ''
+            subscription.save()
 
             user.subscription_ends = None
             user.save(update_fields=['subscription_ends', 'updated_at'])
+
+            _revoke_downgraded_features(user, free_plan)
             return subscription
 
         except stripe.error.StripeError:

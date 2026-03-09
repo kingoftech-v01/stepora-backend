@@ -374,7 +374,64 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             )
 
         serializer = InvoiceSerializer(invoices, many=True)
-        return Response({'invoices': serializer.data})
+        # Return in paginated format compatible with useInfiniteList
+        return Response({
+            'results': serializer.data,
+            'count': len(serializer.data),
+            'next': None,
+            'previous': None,
+        })
+
+    @extend_schema(
+        summary="Apply coupon code",
+        description="Apply a Stripe coupon/promotion code to the current subscription.",
+        tags=["Subscriptions"],
+        request={"application/json": {"type": "object", "properties": {"coupon_code": {"type": "string"}}}},
+        responses={
+            200: OpenApiResponse(description="Coupon applied successfully"),
+            400: OpenApiResponse(description="Invalid coupon or no active subscription"),
+            502: OpenApiResponse(description="Payment service error"),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='current/apply-coupon')
+    def apply_coupon(self, request):
+        """Apply a coupon code to the current subscription."""
+        from core.validators import validate_coupon_code
+
+        coupon_code = (request.data.get('coupon_code') or '').strip()
+        if not coupon_code:
+            return Response(
+                {'detail': _('Coupon code is required.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            coupon_code = validate_coupon_code(coupon_code)
+        except Exception as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            subscription = StripeService.apply_coupon(request.user, coupon_code)
+        except ValueError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except stripe.error.StripeError:
+            logger.exception("Stripe error applying coupon")
+            return Response(
+                {'detail': _('Payment service error. Please try again later.')},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        serializer = SubscriptionSerializer(subscription)
+        return Response({
+            'message': _('Coupon applied successfully!'),
+            'subscription': serializer.data,
+        })
 
     @extend_schema(
         summary="Subscription analytics",
