@@ -40,6 +40,7 @@ from core.auth.serializers import (
 )
 from core.auth.social import verify_google_token, verify_apple_token
 from core.auth.models import EmailAddress, SocialAccount
+from core.auth.tasks import send_password_changed_email, send_login_notification_email
 from core.throttles import AuthRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -219,6 +220,13 @@ class LoginView(APIView):
                 'challengeToken': challenge_token,
             }, status=http_status.HTTP_200_OK)
 
+        # Send login notification
+        send_login_notification_email.delay(
+            str(user.id),
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+
         return _issue_jwt_response(user, request)
 
 
@@ -283,6 +291,13 @@ class TwoFactorChallengeView(APIView):
                 {'error': 'Invalid verification code.'},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
+
+        # Send login notification
+        send_login_notification_email.delay(
+            str(user.id),
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
 
         return _issue_jwt_response(user, request)
 
@@ -387,7 +402,8 @@ class PasswordResetConfirmView(APIView):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
-        serializer.save()
+        user = serializer.save()
+        send_password_changed_email.delay(str(user.id))
         return Response(
             {'detail': 'Password has been reset successfully.'},
             status=http_status.HTTP_200_OK,
@@ -405,6 +421,7 @@ class PasswordChangeView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
         serializer.save()
+        send_password_changed_email.delay(str(request.user.id))
         return Response(
             {'detail': 'Password has been changed successfully.'},
             status=http_status.HTTP_200_OK,
@@ -583,6 +600,11 @@ class GoogleLoginView(APIView):
         uid, email, name, picture = verify_google_token(id_token_str)
 
         user = self._get_or_create_user(uid, email, name, picture)
+        send_login_notification_email.delay(
+            str(user.id),
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
         return _issue_jwt_response(user, request)
 
     def _get_or_create_user(self, uid, email, name, picture):
@@ -644,6 +666,11 @@ class AppleLoginView(APIView):
         name = request.data.get('name', '')
 
         user = self._get_or_create_user(uid, email, name)
+        send_login_notification_email.delay(
+            str(user.id),
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
         return _issue_jwt_response(user, request)
 
     def _get_or_create_user(self, uid, email, name):

@@ -21,7 +21,7 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements/ requirements/
 ARG REQUIREMENTS_FILE=requirements/production.txt
-RUN pip install -r ${REQUIREMENTS_FILE}
+RUN pip install --upgrade pip && pip install -r ${REQUIREMENTS_FILE}
 
 
 # Stage 2: Runtime

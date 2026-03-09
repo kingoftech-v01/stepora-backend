@@ -119,3 +119,72 @@ def send_welcome_email(user_id):
         recipient_list=[user.email],
         fail_silently=True,
     )
+
+
+@shared_task(name='core.auth.tasks.send_password_changed_email')
+def send_password_changed_email(user_id):
+    """Notify user that their password was changed."""
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    name = user.display_name or 'there'
+
+    send_mail(
+        subject='DreamPlanner — Your password was changed',
+        message=(
+            f'Hi {name},\n\n'
+            f'Your DreamPlanner password was just changed.\n\n'
+            f'If you made this change, no action is needed.\n\n'
+            f'If you did not change your password, please reset it immediately '
+            f'at {settings.FRONTEND_URL}/#/forgot-password or contact support.\n\n'
+            f'— The DreamPlanner Team'
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=True,
+    )
+    logger.info('Password changed notification sent to %s', user.email)
+
+
+@shared_task(name='core.auth.tasks.send_login_notification_email')
+def send_login_notification_email(user_id, ip_address='', user_agent=''):
+    """Notify user of a new login to their account."""
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return
+
+    name = user.display_name or 'there'
+
+    details = ''
+    if ip_address:
+        details += f'IP address: {ip_address}\n'
+    if user_agent:
+        details += f'Device: {user_agent}\n'
+
+    send_mail(
+        subject='DreamPlanner — New login to your account',
+        message=(
+            f'Hi {name},\n\n'
+            f'A new login to your DreamPlanner account was detected.\n\n'
+            f'{details}\n'
+            f'If this was you, no action is needed.\n\n'
+            f'If you did not log in, please change your password immediately '
+            f'and consider enabling two-factor authentication.\n\n'
+            f'— The DreamPlanner Team'
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=True,
+    )
+    logger.info('Login notification sent to %s', user.email)

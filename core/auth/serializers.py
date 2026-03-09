@@ -148,6 +148,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self):
         self._user.set_password(self.validated_data['new_password1'])
         self._user.save(update_fields=['password'])
+        return self._user
 
 
 class PasswordChangeSerializer(serializers.Serializer):
