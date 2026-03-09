@@ -214,7 +214,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update']:
             # Gate making dreams public — only premium/pro
             is_public_val = self.request.data.get('is_public')
-            if is_public_val is True or is_public_val == 'true':
+            if is_public_val in (True, 1, 'true', 'True', '1'):
                 return [IsAuthenticated(), IsOwner(), CanMakePublicDream()]
         return super().get_permissions()
 

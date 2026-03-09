@@ -1433,6 +1433,9 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             Q(visibility='followers', user_id__in=followed_ids)
         ).exclude(
             user_id__in=blocked_ids,
+        ).exclude(
+            # Hide posts linked to dreams that are no longer public
+            Q(dream__isnull=False) & Q(dream__is_public=False) & ~Q(user=user)
         ).select_related('user', 'dream').order_by('-created_at')
 
     def get_serializer_class(self):

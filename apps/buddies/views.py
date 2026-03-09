@@ -118,6 +118,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             from apps.dreams.models import Task
             recent_tasks = Task.objects.filter(
                 dream__user=partner,
+                dream__is_public=True,
                 completed_at__gte=week_ago,
                 status='completed'
             ).count()
