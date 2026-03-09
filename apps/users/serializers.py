@@ -16,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
     can_create_dream = serializers.BooleanField(read_only=True, help_text='Whether user can create more dreams.')
     is_premium = serializers.SerializerMethodField(help_text='Whether user has premium subscription.')
     email_verified = serializers.SerializerMethodField(help_text='Whether user email is verified.')
+    plan_features = serializers.SerializerMethodField(help_text='Feature flags from the active subscription plan.')
 
     class Meta:
         model = User
@@ -25,7 +26,7 @@ class UserSerializer(serializers.ModelSerializer):
             'timezone', 'subscription', 'subscription_ends',
             'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
             'xp', 'level', 'streak_days', 'last_activity',
-            'can_create_dream', 'is_premium', 'email_verified',
+            'can_create_dream', 'is_premium', 'email_verified', 'plan_features',
             'onboarding_completed',
             'created_at', 'updated_at'
         ]
@@ -60,6 +61,24 @@ class UserSerializer(serializers.ModelSerializer):
     def get_email_verified(self, obj) -> bool:
         from core.auth.models import EmailAddress
         return EmailAddress.objects.filter(user=obj, verified=True).exists()
+
+    def get_plan_features(self, obj) -> dict:
+        plan = obj.get_active_plan()
+        if not plan:
+            return {
+                'has_ai': False, 'has_buddy': False, 'has_circles': False,
+                'has_circle_create': False, 'has_vision_board': False,
+                'has_league': False, 'has_store': False, 'has_social_feed': False,
+                'dream_limit': 1, 'plan_name': 'Free', 'plan_slug': 'free',
+            }
+        return {
+            'has_ai': plan.has_ai, 'has_buddy': plan.has_buddy,
+            'has_circles': plan.has_circles, 'has_circle_create': plan.has_circle_create,
+            'has_vision_board': plan.has_vision_board, 'has_league': plan.has_league,
+            'has_store': plan.has_store, 'has_social_feed': plan.has_social_feed,
+            'dream_limit': plan.dream_limit, 'plan_name': plan.name,
+            'plan_slug': plan.slug,
+        }
 
     def validate_display_name(self, value):
         """Validate display name uniqueness."""
