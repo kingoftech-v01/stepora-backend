@@ -71,6 +71,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Detailed user profile serializer."""
 
     is_premium = serializers.SerializerMethodField(help_text='Whether user has premium subscription.')
+    email_verified = serializers.SerializerMethodField(help_text='Whether user email is verified.')
+    can_create_dream = serializers.BooleanField(read_only=True, help_text='Whether user can create more dreams.')
     active_dreams_count = serializers.SerializerMethodField(help_text='Number of currently active dreams.')
     completed_dreams_count = serializers.SerializerMethodField(help_text='Number of completed dreams.')
     achievements_summary = serializers.SerializerMethodField(help_text='Summary of unlocked achievements.')
@@ -84,8 +86,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'bio', 'location', 'social_links', 'profile_visibility',
             'timezone', 'subscription', 'subscription_ends',
             'xp', 'level', 'streak_days',
-            'is_premium', 'active_dreams_count', 'completed_dreams_count',
+            'is_premium', 'email_verified', 'can_create_dream',
+            'onboarding_completed',
+            'active_dreams_count', 'completed_dreams_count',
             'achievements_summary', 'equipped_items', 'rank',
+            'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
             'created_at'
         ]
         read_only_fields = fields
@@ -110,6 +115,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_is_premium(self, obj) -> bool:
         return obj.is_premium()
+
+    def get_email_verified(self, obj) -> bool:
+        from core.auth.models import EmailAddress
+        return EmailAddress.objects.filter(user=obj, verified=True).exists()
 
     def get_active_dreams_count(self, obj) -> int:
         return obj.dreams.filter(status='active').count()
