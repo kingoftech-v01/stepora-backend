@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-03-09
+
+### Fixed
+- **Auth refresh cookie destroyed by legacy cleanup** — `_clear_legacy_cookie()` overwrote the real `dp-refresh` JWT cookie because Python's `SimpleCookie` only stores one entry per cookie name. Every login response sent `Set-Cookie: dp-refresh=""; Max-Age=0` instead of the actual token, causing page refresh to always redirect to login.
+
+### Removed
+- `_clear_legacy_cookie()` function and all calls (login, logout, token refresh)
+- `_OLD_COOKIE_PATH` constant
+- `_get_all_cookie_values()` multi-cookie migration helper in `TokenRefreshView`
+- Redundant `delete_cookie()` call in `LogoutView` (was overwritten by subsequent `set_cookie`)
+
+### Changed
+- `TokenRefreshView.post()` simplified to use `request.COOKIES.get()` directly
+- Updated `JWT_AUTH_COOKIE_DOMAIN` comment to reflect same-origin proxy architecture
+
 ## [1.4.0] - 2026-03-03
 
 ### Security

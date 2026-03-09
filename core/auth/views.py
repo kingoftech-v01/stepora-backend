@@ -60,7 +60,10 @@ _TFA_CHALLENGE_SALT = 'dreamplanner-2fa-challenge'
 _NATIVE_PLATFORMS = frozenset(('native', 'ios', 'android', 'capacitor'))
 
 _COOKIE_NAME = _DP_AUTH.get('JWT_AUTH_REFRESH_COOKIE', 'dp-refresh')
-
+_COOKIE_DOMAIN = _DP_AUTH.get('JWT_AUTH_COOKIE_DOMAIN')  # None = host-only (same-origin)
+_COOKIE_PATH = _DP_AUTH.get('JWT_AUTH_COOKIE_PATH', '/api/auth/')
+_COOKIE_SAMESITE = _DP_AUTH.get('JWT_AUTH_SAMESITE', 'Lax')
+_COOKIE_SECURE = _DP_AUTH.get('JWT_AUTH_SECURE', not settings.DEBUG)
 
 # ── Helper functions ──────────────────────────────────────────────────
 
@@ -132,9 +135,10 @@ def _issue_jwt_response(user, request):
         str(refresh),
         max_age=cookie_max_age,
         httponly=True,
-        samesite=_DP_AUTH.get('JWT_AUTH_SAMESITE', 'Lax'),
-        secure=_DP_AUTH.get('JWT_AUTH_SECURE', not settings.DEBUG),
-        path=_DP_AUTH.get('JWT_AUTH_COOKIE_PATH', '/api/auth/token/refresh/'),
+        samesite=_COOKIE_SAMESITE,
+        secure=_COOKIE_SECURE,
+        path=_COOKIE_PATH,
+        domain=_COOKIE_DOMAIN,
     )
 
     # For native clients, also inject refresh token into body
@@ -339,10 +343,16 @@ class LogoutView(APIView):
                 pass  # Token already expired or blacklisted
 
         response = Response({'detail': 'Successfully logged out.'}, status=http_status.HTTP_200_OK)
-        response.delete_cookie(
+        # Delete refresh cookie with exact same attributes it was created with
+        response.set_cookie(
             _COOKIE_NAME,
-            path=_DP_AUTH.get('JWT_AUTH_COOKIE_PATH', '/api/auth/token/refresh/'),
-            samesite=_DP_AUTH.get('JWT_AUTH_SAMESITE', 'Lax'),
+            '',
+            max_age=0,
+            httponly=True,
+            secure=_COOKIE_SECURE,
+            samesite=_COOKIE_SAMESITE,
+            path=_COOKIE_PATH,
+            domain=_COOKIE_DOMAIN,
         )
         return response
 
@@ -473,9 +483,10 @@ class TokenRefreshView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Get refresh token from body or cookie
+        # Native clients send refresh token in body
         refresh_str = request.data.get('refresh', '')
         if not refresh_str:
+            # Web clients: refresh token is in httpOnly cookie
             refresh_str = request.COOKIES.get(_COOKIE_NAME, '')
 
         if not refresh_str:
@@ -485,12 +496,15 @@ class TokenRefreshView(APIView):
             )
 
         try:
-            old_refresh = RefreshToken(refresh_str)
+            return self._do_refresh(request, refresh_str)
         except TokenError:
             return Response(
                 {'detail': 'Token is invalid or expired.'},
                 status=http_status.HTTP_401_UNAUTHORIZED,
             )
+
+    def _do_refresh(self, request, refresh_str):
+        old_refresh = RefreshToken(refresh_str)  # raises TokenError if invalid
 
         # Get new access token
         data = {
@@ -520,9 +534,10 @@ class TokenRefreshView(APIView):
                 str(new_refresh),
                 max_age=cookie_max_age,
                 httponly=True,
-                samesite=_DP_AUTH.get('JWT_AUTH_SAMESITE', 'Lax'),
-                secure=_DP_AUTH.get('JWT_AUTH_SECURE', not settings.DEBUG),
-                path=_DP_AUTH.get('JWT_AUTH_COOKIE_PATH', '/api/auth/token/refresh/'),
+                samesite=_COOKIE_SAMESITE,
+                secure=_COOKIE_SECURE,
+                path=_COOKIE_PATH,
+                domain=_COOKIE_DOMAIN,
             )
 
             if _is_native_request(request):
@@ -539,9 +554,10 @@ class TokenRefreshView(APIView):
                 refresh_str,
                 max_age=cookie_max_age,
                 httponly=True,
-                samesite=_DP_AUTH.get('JWT_AUTH_SAMESITE', 'Lax'),
-                secure=_DP_AUTH.get('JWT_AUTH_SECURE', not settings.DEBUG),
-                path=_DP_AUTH.get('JWT_AUTH_COOKIE_PATH', '/api/auth/token/refresh/'),
+                samesite=_COOKIE_SAMESITE,
+                secure=_COOKIE_SECURE,
+                path=_COOKIE_PATH,
+                domain=_COOKIE_DOMAIN,
             )
 
         return response

@@ -418,7 +418,8 @@ DP_AUTH = {
     'JWT_AUTH_REFRESH_COOKIE': 'dp-refresh',
     'JWT_AUTH_SAMESITE': 'Lax',
     'JWT_AUTH_SECURE': not DEBUG,
-    'JWT_AUTH_COOKIE_PATH': '/api/auth/token/refresh/',
+    'JWT_AUTH_COOKIE_PATH': '/api/auth/',
+    'JWT_AUTH_COOKIE_DOMAIN': os.getenv('JWT_AUTH_COOKIE_DOMAIN'),  # None = host-only (same-origin proxy)
     'EMAIL_VERIFICATION': os.getenv('EMAIL_VERIFICATION', 'mandatory'),
     'VERIFICATION_KEY_MAX_AGE': 60 * 60 * 24 * 3,  # 3 days
     'PASSWORD_RESET_MAX_AGE': 60 * 60,  # 1 hour
