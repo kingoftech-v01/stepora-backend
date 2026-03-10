@@ -94,53 +94,56 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Register new task definition and update service
+      - name: Deploy all backend services (web + celery + celery-beat)
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           ECR_REPO: ${{ secrets.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ github.sha }}
           ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
         run: |
           FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
 
-          # Get the current task definition from the running service
-          CURRENT_TD=$(aws ecs describe-services \
-            --cluster "${ECS_CLUSTER}" \
-            --services "${ECS_SERVICE}" \
-            --query 'services[0].taskDefinition' \
-            --output text)
+          # Update each service that uses the backend image
+          for SERVICE_NAME in stepora-backend stepora-celery stepora-celery-beat; do
+            echo "=== Deploying ${SERVICE_NAME} ==="
 
-          # Fetch it, swap the image, strip read-only fields, write to file
-          aws ecs describe-task-definition \
-            --task-definition "${CURRENT_TD}" \
-            --query 'taskDefinition' \
-            | jq --arg IMG "${FULL_IMAGE}" \
-              '.containerDefinitions[0].image = $IMG
-               | del(.taskDefinitionArn, .revision, .status,
-                     .requiresAttributes, .compatibilities,
-                     .registeredAt, .registeredBy)' \
-            > /tmp/new-task-def.json
+            # Get current task definition from running service
+            CURRENT_TD=$(aws ecs describe-services \
+              --cluster "${ECS_CLUSTER}" \
+              --services "${SERVICE_NAME}" \
+              --query 'services[0].taskDefinition' \
+              --output text)
 
-          # Register new revision
-          NEW_TD_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file:///tmp/new-task-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+            # Swap image, strip read-only fields
+            aws ecs describe-task-definition \
+              --task-definition "${CURRENT_TD}" \
+              --query 'taskDefinition' \
+              | jq --arg IMG "${FULL_IMAGE}" \
+                '.containerDefinitions[0].image = $IMG
+                 | del(.taskDefinitionArn, .revision, .status,
+                       .requiresAttributes, .compatibilities,
+                       .registeredAt, .registeredBy)' \
+              > /tmp/new-task-def.json
 
-          echo "New task definition: ${NEW_TD_ARN}"
+            # Register new revision
+            NEW_TD_ARN=$(aws ecs register-task-definition \
+              --cli-input-json file:///tmp/new-task-def.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)
+            echo "New task definition: ${NEW_TD_ARN}"
 
-          # Update the service with the new revision
-          aws ecs update-service \
-            --cluster "${ECS_CLUSTER}" \
-            --service "${ECS_SERVICE}" \
-            --task-definition "${NEW_TD_ARN}" \
-            --force-new-deployment
+            # Update the service
+            aws ecs update-service \
+              --cluster "${ECS_CLUSTER}" \
+              --service "${SERVICE_NAME}" \
+              --task-definition "${NEW_TD_ARN}" \
+              --force-new-deployment
+          done
 
-          # Wait for rolling deployment to stabilize
-          echo "Waiting for service stability..."
+          # Wait for all services to stabilize
+          echo "Waiting for all services to stabilize..."
           aws ecs wait services-stable \
             --cluster "${ECS_CLUSTER}" \
-            --services "${ECS_SERVICE}"
+            --services stepora-backend stepora-celery stepora-celery-beat
 
-          echo "Deployment complete"
+          echo "All services deployed successfully"
