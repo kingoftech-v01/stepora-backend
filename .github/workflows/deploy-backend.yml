@@ -26,18 +26,21 @@ jobs:
           cache-dependency-path: requirements/base.txt
 
       - name: Install dependencies
-        run: pip install -r requirements/testing.txt
+        run: pip install -r requirements/base.txt
 
       - name: Compile check (syntax errors)
         run: python -m py_compile manage.py
 
       - name: Django system check
         env:
-          DJANGO_SETTINGS_MODULE: config.settings.testing
+          DJANGO_SETTINGS_MODULE: config.settings.development
           DJANGO_SECRET_KEY: ci-test-key-not-for-production
           ALLOWED_HOSTS: localhost
           FIELD_ENCRYPTION_KEY: ci-placeholder-key-not-for-prod
-        run: python manage.py check
+          DB_NAME: ":memory:"
+        run: |
+          mkdir -p logs
+          python manage.py check
 
   # ------------------------------------------------------------------
   # 2. Build Docker image and push to ECR

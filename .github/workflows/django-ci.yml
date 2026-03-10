@@ -65,8 +65,11 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
+          FIELD_ENCRYPTION_KEY: ci-placeholder-key-not-for-prod
           DEBUG: 'True'
-        run: python manage.py migrate
+        run: |
+          mkdir -p logs
+          python manage.py migrate
 
       - name: Run tests with coverage
         env:
@@ -77,6 +80,7 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
+          FIELD_ENCRYPTION_KEY: ci-placeholder-key-not-for-prod
           DEBUG: 'True'
         run: pytest --cov=. --cov-report=xml --cov-report=html
 
@@ -133,7 +137,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t stepora:${{ github.sha }} .
+          docker build --build-arg FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production" -t stepora:${{ github.sha }} .
 
       - name: Save Docker image
         run: |
