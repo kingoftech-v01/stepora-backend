@@ -22,9 +22,9 @@
           ┌───────────────┼───────────────┐
           ▼               ▼               ▼
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   Auth      │   │  Django API │   │  WebSocket  │
-│  Service    │   │   (REST)    │   │  (Channels) │
-│(dj-rest-auth│   │  Gunicorn   │   │   Daphne    │
+│ core.auth   │   │  Django API │   │  WebSocket  │
+│  (SimpleJWT)│   │   (REST)    │   │  (Channels) │
+│             │   │  Gunicorn   │   │   Daphne    │
 └─────────────┘   └──────┬──────┘   └──────┬──────┘
                          │                  │
         ┌────────────────┼──────────────────┘
@@ -54,7 +54,7 @@
   "api": "Django REST Framework 3.14.0",
   "orm": "Django ORM",
   "validation": "DRF Serializers",
-  "authentication": "dj-rest-auth + django-allauth (Token auth)",
+  "authentication": "Custom core.auth + SimpleJWT (JWT auth)",
   "websocket": "Django Channels 4.0.0",
   "background_jobs": "Celery 5.3.4",
   "broker": "Redis",
@@ -88,7 +88,7 @@
 | Storage | AWS S3 | Vision boards, media |
 | CDN | CloudFront | Static assets |
 | Load Balancer | AWS ALB | Traffic distribution |
-| Authentication | dj-rest-auth + allauth | Authentication |
+| Authentication | Custom core.auth + SimpleJWT | JWT Authentication |
 | AI | OpenAI GPT-4 + DALL-E 3 | Conversational AI |
 | Real-Time Communication | Agora.io RTM + RTC | Buddy/circle chat (RTM) + circle voice/video calls (RTC). Requires Signaling enabled in Agora Console — see `DEPLOYMENT.md` |
 | Push Notifications | Firebase Cloud Messaging | Buddy chat + circle call push |
@@ -109,7 +109,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     avatar_url = models.URLField(max_length=500, blank=True)
     timezone = models.CharField(max_length=50, default='Europe/Paris')
 
-    # Subscription
+    # Subscription (legacy CharField — real subscription logic uses
+    # get_active_plan() which reads from SubscriptionPlan via Subscription FK)
     subscription = models.CharField(max_length=20, choices=SUBSCRIPTION_CHOICES, default='free')
     subscription_ends = models.DateTimeField(null=True, blank=True)
 
@@ -345,7 +346,7 @@ class DreamEncouragement(models.Model):
 - **Development**: `http://localhost:8000/api`
 - **Production**: `https://api.dreamplanner.app/api`
 
-### 4.1 Authentication (dj-rest-auth)
+### 4.1 Authentication (core.auth + SimpleJWT)
 ```
 All API requests require a JWT access token in the header:
 Authorization: Bearer <access_token>
@@ -923,7 +924,7 @@ dreamplanner/
 
 ### 10.2 Security
 
-- ✅ **Token Authentication**: dj-rest-auth tokens verified server-side
+- ✅ **JWT Authentication**: Custom core.auth with SimpleJWT tokens verified server-side
 - ✅ **HTTPS Only**: TLS 1.2+ in production
 - ✅ **CORS**: Whitelisted allowed origins
 - ✅ **SQL Injection**: Protection via Django ORM

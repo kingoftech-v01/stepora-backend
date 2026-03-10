@@ -36,7 +36,7 @@
 - [ ] Configure Django ORM with PostgreSQL
 - [ ] Setup Redis for cache
 - [ ] Create the database schema
-- [ ] Configure authentication (dj-rest-auth)
+- [x] Configure authentication (custom core.auth + SimpleJWT)
 - [ ] Setup CI/CD (GitHub Actions)
 - [ ] Deploy staging environment
 

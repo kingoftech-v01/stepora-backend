@@ -52,7 +52,7 @@ The following vulnerabilities are within our scope:
 - **2FA enforcement at login** — Challenge token flow: credentials validated → signed challenge token issued (5min TTL, Django `signing.dumps`) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification.
 - **Account lockout** — 5 failed login attempts locks IP + email for 15 minutes via Redis
 - **Rate limiting** — `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm endpoints
-- **Social auth** — Google Sign-In and Apple Sign-In via django-allauth providers
+- **Social auth** — Google Sign-In and Apple Sign-In via direct ID token verification (`core.auth.social`)
 
 ### Authorization
 

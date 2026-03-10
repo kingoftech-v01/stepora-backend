@@ -51,8 +51,9 @@ Custom user model using email for authentication (extends `AbstractBaseUser`, `P
 
 **Methods:**
 
-- `is_premium()` - Returns True if subscription is `premium` or `pro`
-- `can_create_dream()` - Check dream creation limit (free: 3, premium: 10, pro: unlimited)
+- `get_active_plan()` - Returns the `SubscriptionPlan` from the user's active/trialing `Subscription` (cached per-request on `_cached_plan`)
+- `is_premium()` - Returns True if active plan slug is `premium` or `pro` (reads from DB via `get_active_plan()`)
+- `can_create_dream()` - Check dream creation limit from active plan's `dream_limit` field (reads from DB)
 - `update_activity()` - Update `last_activity` to now
 - `add_xp(amount)` - Add XP and auto-level (100 XP per level)
 
@@ -201,22 +202,28 @@ Tracks which achievements a user has unlocked.
 
 ## Authentication
 
-Uses django-allauth + Token authentication via dj-rest-auth.
+Uses the custom `core.auth` package with SimpleJWT for JWT-based authentication.
 
 **Flow:**
 
-1. Register or login via dj-rest-auth endpoints (email/password)
-2. Server returns a DRF Token
-3. Client sends Token in header: `Authorization: Token <key>` or `Authorization: Bearer <key>`
+1. Register or login via `core.auth` endpoints (email/password)
+2. Server returns JWT tokens (short-lived access token + httpOnly refresh cookie on web, or body tokens on native via `X-Client-Platform: native`)
+3. Client sends access token in header: `Authorization: Bearer <access_token>`
+4. If 2FA is enabled, login returns a challenge token instead of JWT. Client verifies OTP via `POST /api/auth/2fa-challenge/` to receive JWT.
 
-**Auth endpoints** (provided by dj-rest-auth):
+**Auth endpoints** (provided by `core.auth`):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/auth/registration/` | Register (email + password) |
-| POST | `/api/auth/login/` | Login (returns Token) |
-| POST | `/api/auth/logout/` | Logout (invalidates Token) |
-| POST | `/api/auth/password/reset/` | Password reset via email |
+| POST | `/api/auth/registration/` | Register (email + password), returns JWT |
+| POST | `/api/auth/login/` | Login (returns JWT or 2FA challenge token) |
+| POST | `/api/auth/logout/` | Logout (clears refresh cookie) |
+| POST | `/api/auth/token/refresh/` | Refresh access token using httpOnly cookie |
+| POST | `/api/auth/password/reset/` | Password reset via email (async Celery task) |
+| POST | `/api/auth/password/reset/confirm/` | Confirm password reset with token |
+| POST | `/api/auth/2fa-challenge/` | Verify OTP for 2FA login |
+| POST | `/api/auth/google/` | Google Sign-In (ID token verification) |
+| POST | `/api/auth/apple/` | Apple Sign-In (ID token verification) |
 
 ## Serializers
 
@@ -307,14 +314,17 @@ pytest apps/users/tests.py -v
 ## Configuration
 
 ```python
-# django-allauth settings
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_EMAIL_VERIFICATION = 'optional'
+# Custom auth settings (in DP_AUTH dict)
+DP_AUTH = {
+    'EMAIL_VERIFICATION': True,
+    'LOGIN_METHODS': ['email'],
+    # ... see config/settings/base.py for full config
+}
 
-# DRF Token Authentication
+# SimpleJWT authentication
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
 }
 
@@ -324,7 +334,6 @@ XP_PER_LEVEL = 100
 
 ## Dependencies
 
-- `django-allauth` - Authentication and account management
-- `dj-rest-auth` - REST API auth endpoints
+- `djangorestframework-simplejwt` - JWT authentication (access + refresh tokens)
 - `django-encrypted-model-fields` - PII encryption at rest (bio, location)
 - `pyotp` - TOTP-based 2FA

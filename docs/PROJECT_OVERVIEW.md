@@ -74,7 +74,7 @@ A personal AI assistant that:
 - **WebSocket**: Django Channels (Daphne)
 - **Asynchronous Tasks**: Celery
 - **Notifications**: Celery + WebSocket
-- **Auth**: dj-rest-auth + django-allauth
+- **Auth**: Custom `core.auth` package + SimpleJWT (JWT authentication)
 
 ## Estimated Timeline
 

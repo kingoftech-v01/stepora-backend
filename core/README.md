@@ -10,7 +10,8 @@ The `core` module provides cross-cutting infrastructure including authentication
 
 | File | Description |
 |------|-------------|
-| `authentication.py` | Token authentication backend (24h expiry) and CSRF exemption middleware |
+| `auth/` | Custom auth package: JWT via SimpleJWT, social login (Google/Apple ID token verification), email verification, password reset, 2FA challenge, async email tasks. Settings in `DP_AUTH` dict. |
+| `authentication.py` | BearerTokenAuthentication (accepts Token/Bearer prefix) and CSRF exemption middleware |
 | `permissions.py` | 11 subscription-based permission classes for feature gating |
 | `pagination.py` | Custom DRF pagination classes |
 | `sanitizers.py` | XSS sanitization utilities for user-generated content |
@@ -48,16 +49,16 @@ Django middleware that skips CSRF checks for all `/api/` routes. The admin panel
 
 ### Social Authentication Views
 
-`views.py`
+`core/auth/social.py` and `core/auth/views.py`
 
-Social login endpoints powered by dj-rest-auth `SocialLoginView` and django-allauth social account adapters.
+Social login endpoints verify ID tokens directly against Google/Apple servers. No allauth adapters are used.
 
 | View | Provider | Description |
 |------|----------|-------------|
-| `GoogleLoginView` | Google | Accepts Google OAuth2 access token, creates/links account via allauth `GoogleOAuth2Adapter` |
-| `AppleLoginView` | Apple | Accepts Apple Sign-In token, creates/links account via allauth `AppleOAuth2Adapter` |
+| `GoogleLoginView` | Google | Verifies Google ID token directly, creates/links `SocialAccount`, returns JWT |
+| `AppleLoginView` | Apple | Verifies Apple ID token directly, creates/links `SocialAccount`, returns JWT |
 
-Both views return a DRF Token on successful authentication, following the same token format as email/password login.
+Both views return JWT tokens (access + refresh) on successful authentication, following the same token format as email/password login. The `core.auth.social` module handles token verification logic.
 
 ## Celery Tasks
 
@@ -70,13 +71,13 @@ Both views return a DRF Token on successful authentication, following the same t
 
 `permissions.py`
 
-Subscription-based access control. Each permission class checks the user's `subscription` field on the User model.
+DB-driven subscription-based access control. Each permission class reads from the user's active `SubscriptionPlan` model fields via `user.get_active_plan()` (cached per-request on `_cached_plan`). Plans are configured via Django admin without code changes.
 
 | Permission Class | Tier Required | Description |
 |-----------------|--------------|-------------|
 | `IsOwner` | Any authenticated | Checks `obj.user == request.user` (or `obj.user1`/`obj.user2` for pairings) |
 | `IsPremiumUser` | Premium or Pro | Calls `user.is_premium()` |
-| `IsProUser` | Pro only | Checks `user.subscription == 'pro'` |
+| `IsProUser` | Pro only | Checks `user.get_active_plan().tier == 'pro'` |
 | `CanCreateDream` | Any (limit-based) | Calls `user.can_create_dream()` on POST requests only |
 | `CanUseAI` | Premium or Pro | Gates AI chat, plan generation, dream analysis, motivational AI |
 | `CanUseBuddy` | Premium or Pro | Gates Dream Buddy matching |

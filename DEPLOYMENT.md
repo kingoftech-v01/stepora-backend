@@ -10,6 +10,7 @@ This guide covers deploying DreamPlanner to production environments.
 - [Post-Deployment](#post-deployment)
 - [Monitoring](#monitoring)
 - [Troubleshooting](#troubleshooting)
+- [Frontend Deployment (React + Capacitor)](#frontend-deployment-react--capacitor)
 
 ## Architecture Overview
 
@@ -464,6 +465,54 @@ psql -h $DB_HOST -U $DB_USER $DB_NAME < backup_20240101.sql
 # Daily backup at 2 AM
 0 2 * * * pg_dump -h $DB_HOST -U $DB_USER $DB_NAME | gzip > /backups/db_$(date +\%Y\%m\%d).sql.gz
 ```
+
+## Frontend Deployment (React + Capacitor)
+
+The frontend is a separate project at `/root/dreamplanner-frontend` (React + Vite + Capacitor for Android).
+
+### Web Build
+
+```bash
+cd /root/dreamplanner-frontend
+
+# Build production bundle
+npm run build
+
+# Output in dist/ — serve via nginx or upload to CDN
+```
+
+### Environment Variables (Frontend)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_API_BASE` | API base URL (empty for same-origin proxy, or `https://dpapi.jhpetitfrere.com` for direct) |
+
+### Same-Origin Proxy Setup
+
+External nginx on `dp.jhpetitfrere.com` proxies `/api/` and `/ws/` to the backend at `127.0.0.1:8085`. The frontend uses relative URLs (`VITE_API_BASE=`), so cookies are host-only on `dp.jhpetitfrere.com`.
+
+### Android (Capacitor)
+
+```bash
+# Sync web assets to native project
+npx cap sync android
+
+# Build APK (Android Studio or CLI)
+cd android && ./gradlew assembleRelease
+```
+
+### OTA Live Updates
+
+Push web bundle updates to mobile apps without app store review:
+
+```bash
+# Build, sign, and deploy OTA update
+./scripts/deploy-ota.sh notify   # or "silent" for background updates
+```
+
+- **RSA Code Signing**: Bundles signed with RSA-2048, verified server-side and client-side
+- **Rollback Safety**: Auto-reverts to previous bundle if new one crashes within 10s
+- **Admin Panel**: Manage bundles, deactivate bad releases via Django Admin
 
 ## Support
 

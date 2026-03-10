@@ -183,7 +183,7 @@ dreamplanner/
 
 ## Authentication & Authorization
 
-### Token Auth Flow
+### JWT Auth Flow
 
 ```
 1. POST /api/auth/registration/     → Creates user, returns JWT (access + refresh)
@@ -195,19 +195,27 @@ dreamplanner/
    Authorization: Bearer <access_token>
 
 3. Access token is short-lived; refresh token is set as httpOnly cookie on web.
+   Native clients send X-Client-Platform: native to receive tokens in response body.
    Silent refresh on page load via POST /api/auth/token/refresh/.
 ```
 
-**Implementation**: `core/auth_views.py` → `NativeAwareLoginView`, `TwoFactorChallengeView`
+**Implementation**: `core/auth/views.py` → `NativeAwareLoginView`, `TwoFactorChallengeView`
+
+**Settings**: `DP_AUTH` dict in `config/settings/base.py` (NOT `REST_AUTH`)
 
 ### Social Auth
 
 ```
-POST /api/auth/google/    → Google OAuth2 access token → DRF token
-POST /api/auth/apple/     → Apple Sign-In token → DRF token
+POST /api/auth/google/    → Google ID token verified directly → JWT tokens
+POST /api/auth/apple/     → Apple ID token verified directly → JWT tokens
 ```
 
-**Implementation**: `core/views.py` → `GoogleLoginView`, `AppleLoginView`
+**Implementation**: `core/auth/views.py` → `GoogleLoginView`, `AppleLoginView`
+**Token verification**: `core/auth/social.py` (verifies tokens directly, no allauth adapters)
+
+### Auth Emails
+
+All auth-related emails (verification, password reset, welcome, login notification, password changed) are sent asynchronously via Celery tasks defined in `core/auth/tasks.py`.
 
 ### Two-Factor Authentication (TOTP)
 
@@ -265,7 +273,7 @@ Token extracted from query string by `TokenWebSocketMiddleware` (`core/websocket
 | --- | --- | --- |
 | `IsOwner` | `obj.user == request.user` | All apps (object-level) |
 | `IsPremiumUser` | `user.is_premium()` | General premium check |
-| `IsProUser` | `user.subscription == 'pro'` | General pro check |
+| `IsProUser` | `user.get_active_plan().tier == 'pro'` | General pro check |
 | `CanCreateDream` | `user.can_create_dream()` (limit check) | Dreams (POST only) |
 | `CanUseAI` | Premium or Pro | Conversations, Dreams AI endpoints |
 | `CanUseBuddy` | Premium or Pro | Buddies |

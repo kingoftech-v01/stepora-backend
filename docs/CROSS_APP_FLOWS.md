@@ -232,8 +232,8 @@ DreamViewSet.skip_calibration()                      apps/dreams/views.py
 POST /api/auth/registration/
   │  body: { email, password1, password2 }
   ▼
-dj-rest-auth RegisterView
-  ├─ RegisterSerializer (core/serializers.py)
+core.auth RegisterView                                core/auth/views.py
+  ├─ RegisterSerializer (core/auth/serializers.py)
   │    Email-only auth (no username field)
   │    Validates email + password
   ▼
@@ -385,18 +385,18 @@ _handle_checkout_completed(session)                  apps/subscriptions/services
 
 ### What Changes After Upgrade
 
-Once `user.subscription` is updated, all permission checks immediately reflect the new tier:
+Once the `Subscription` record is updated, all permission checks immediately reflect the new tier via `user.get_active_plan()`:
 
-| Permission Class | What It Checks | Effect |
+| Permission Class | What It Checks (via `SubscriptionPlan` fields) | Effect |
 | --- | --- | --- |
-| `CanCreateDream` | `user.can_create_dream()` → plan.dream_limit | Can create more dreams |
-| `CanUseAI` | `user.subscription in ('premium', 'pro')` | AI chat/plan unlocked |
-| `CanUseBuddy` | `user.subscription in ('premium', 'pro')` | Buddy matching unlocked |
-| `CanUseCircles` | `user.subscription == 'pro'` (create) | Circle creation unlocked |
-| `CanUseVisionBoard` | `user.subscription == 'pro'` | Vision board unlocked |
-| `CanUseLeague` | `user.subscription in ('premium', 'pro')` | Leagues unlocked |
-| `CanUseStore` | `user.subscription in ('premium', 'pro')` | Store purchasing unlocked |
-| `CanUseSocialFeed` | `user.subscription in ('premium', 'pro')` | Full social feed unlocked |
+| `CanCreateDream` | `user.can_create_dream()` → `plan.dream_limit` | Can create more dreams |
+| `CanUseAI` | `plan.has_ai` | AI chat/plan unlocked |
+| `CanUseBuddy` | `plan.has_buddy` | Buddy matching unlocked |
+| `CanUseCircles` | `plan.has_circles` (join), `plan.has_circle_create` (create) | Circle access unlocked |
+| `CanUseVisionBoard` | `plan.has_vision_board` | Vision board unlocked |
+| `CanUseLeague` | `plan.has_league` | Leagues unlocked |
+| `CanUseStore` | `plan.has_store` | Store purchasing unlocked |
+| `CanUseSocialFeed` | `plan.has_social_feed` | Full social feed unlocked |
 
 AI daily quotas also change — `AIUsageTracker.get_limits()` reads limits from the user's subscription plan.
 
@@ -1275,12 +1275,13 @@ UserViewSet.generate_backup_codes(request)           apps/users/views.py
 POST /api/auth/login/
   │  body: { email, password }
   ▼
-dj-rest-auth LoginView
+core.auth LoginView                                    core/auth/views.py
   ├─ If user.totp_enabled:
-  │    Requires additional 'code' field
+  │    Returns challenge token (signed, 5min TTL)
+  │    Client must call POST /api/auth/2fa-challenge/ with OTP
   │    pyotp.TOTP(user.totp_secret).verify(code)
-  │    Or: check code against backup_codes (sha256 hash match)
-  └─ Returns auth token on success
+  │    Or: check code against backup_codes (PBKDF2 hash match)
+  └─ Returns JWT tokens (access + refresh) on success
 ```
 
 ### Disable 2FA
@@ -1312,7 +1313,7 @@ UserViewSet.disable_2fa(request)                     apps/users/views.py
 
 ## Flow 15: Password Reset & Email Change
 
-**Entry**: `POST /api/auth/password/reset/` (dj-rest-auth) or `POST /api/users/change-email/`
+**Entry**: `POST /api/auth/password/reset/` (core.auth) or `POST /api/users/change-email/`
 **Apps touched**: users
 
 ### Password Reset
@@ -1321,16 +1322,16 @@ UserViewSet.disable_2fa(request)                     apps/users/views.py
 POST /api/auth/password/reset/
   │  body: { email }
   ▼
-dj-rest-auth PasswordResetView
-  ├─ Generates password reset token (Django's default token generator)
-  ├─ Sends email with reset link containing uid + token
-  └─ Email template: password_reset_email.html
+core.auth PasswordResetView                            core/auth/views.py
+  ├─ Generates HMAC password reset token (core/auth/tokens.py)
+  ├─ Sends email asynchronously via Celery task (core/auth/tasks.py)
+  └─ Email contains reset link with uid + token
 
 POST /api/auth/password/reset/confirm/
   │  body: { uid, token, new_password1, new_password2 }
   ▼
-dj-rest-auth PasswordResetConfirmView
-  ├─ Validates: token is valid and not expired
+core.auth PasswordResetConfirmView                     core/auth/views.py
+  ├─ Validates: HMAC token is valid and not expired
   ├─ Validates: new password meets strength requirements
   └─ user.set_password(new_password)
      user.save()

@@ -108,51 +108,48 @@
 ```text
 dreamplanner/
 ├── apps/
-│   ├── users/              # User management
-│   │   ├── models.py       # User, Profile
-│   │   ├── views.py        # ViewSets
-│   │   ├── serializers.py  # DRF serializers
-│   │   └── urls.py         # URL routing
-│   │
-│   ├── dreams/             # Core domain
-│   │   ├── models.py       # Dream, Goal, Task, Obstacle
-│   │   ├── views.py        # CRUD + AI features
-│   │   ├── services.py     # Business logic
-│   │   └── signals.py      # Post-save hooks
-│   │
-│   ├── conversations/      # AI Chat
-│   │   ├── models.py       # Conversation, Message
-│   │   ├── consumers.py    # WebSocket consumers
-│   │   └── routing.py      # WebSocket routing
-│   │
-│   ├── calendar/           # Calendar features
-│   │   ├── views.py        # Date range views
-│   │   └── utils.py        # Date calculations
-│   │
-│   └── notifications/      # Multi-channel notifications
-│       ├── models.py       # Notification, WebPushSubscription, NotificationBatch
-│       ├── consumers.py    # WebSocket consumer (real-time delivery)
-│       ├── services.py     # NotificationDeliveryService (WebSocket + Email + Web Push)
-│       └── tasks.py        # Celery tasks (scheduling, cleanup)
+│   ├── users/              # User management, gamification, achievements, 2FA, GDPR
+│   ├── dreams/             # Dreams, Goals, Tasks, Obstacles, Templates, Tags, Vision Board, PDF
+│   ├── conversations/      # AI Chat (AIChatConsumer WebSocket), templates, voice transcription
+│   ├── calendar/           # Events, recurring events, time blocks, Google Calendar sync, iCal feed
+│   ├── notifications/      # Multi-channel delivery (WebSocket + Email + Web Push), templates, preferences
+│   ├── subscriptions/      # Stripe plans (SubscriptionPlan + Subscription models), webhooks, invoices
+│   ├── store/              # Items, categories, XP/Stripe purchases, wishlists, gifting, refunds
+│   ├── leagues/            # Leagues, seasons, leaderboards, rank snapshots, rewards
+│   ├── circles/            # Circles, posts, reactions, challenges, invitations, group chat, Agora calls
+│   ├── social/             # Friends, follows, blocking, reporting, feed, dream posts, encouragements
+│   ├── buddies/            # Buddy pairing, encouragement, streaks, chat (BuddyChatConsumer), calls
+│   ├── search/             # Unified search across dreams, users, circles
+│   └── updates/            # OTA live update management for Capacitor mobile apps
 │
 ├── core/                   # Shared functionality
-│   ├── authentication.py   # Token auth
-│   ├── permissions.py      # DRF permissions
-│   ├── pagination.py       # Cursor pagination
-│   └── exceptions.py       # Custom exceptions
+│   ├── auth/               # Custom auth package (JWT via SimpleJWT, social login, email verify,
+│   │                       #   password reset, 2FA challenge — settings in DP_AUTH dict)
+│   ├── permissions.py      # 10 DB-driven permission classes (read from SubscriptionPlan fields)
+│   ├── authentication.py   # BearerTokenAuthentication, CsrfExemptAPIMiddleware
+│   ├── ai_usage.py         # Redis-backed daily AI quota tracking
+│   ├── ai_validators.py    # Pydantic schemas for AI output validation
+│   ├── moderation.py       # 4-tier content moderation (patterns + OpenAI API)
+│   ├── sanitizers.py       # XSS sanitization (nh3-based)
+│   ├── consumers.py        # Shared WebSocket consumer mixins
+│   ├── middleware.py        # Security headers, last-activity tracking
+│   ├── audit.py            # Structured security audit logging
+│   ├── pagination.py       # Standard + large result set pagination
+│   └── exceptions.py       # Custom DRF exception handler
 │
 ├── integrations/           # External services
-│   ├── openai_service.py   # GPT-4 + DALL-E + Whisper
+│   ├── openai_service.py   # GPT-4 + DALL-E 3 + Whisper + GPT-4V
+│   ├── checkin_tools.py    # AI check-in function calling tools
 │   └── google_calendar.py  # Google Calendar sync
 │
 └── config/                 # Configuration
     ├── settings/
-    │   ├── base.py         # Common settings
+    │   ├── base.py         # Common settings (DP_AUTH config dict)
     │   ├── development.py  # Dev settings
     │   └── production.py   # Prod settings
-    ├── celery.py           # Celery config
-    ├── asgi.py             # ASGI config
-    └── urls.py             # Root URLs
+    ├── celery.py           # Celery config + beat schedule
+    ├── asgi.py             # ASGI config (HTTP + WebSocket routing)
+    └── urls.py             # Root URLs (/api/v1/ canonical + /api/ backward-compat)
 ```
 
 ## Data Flow
@@ -272,42 +269,53 @@ Trigger Event (API call, schedule)
 
 ```text
 ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│   Mobile    │         │   Django    │         │  dj-rest-   │
-│    App      │         │   Backend   │         │    auth     │
+│   Mobile    │         │   Django    │         │  core.auth  │
+│    App      │         │   Backend   │         │  (SimpleJWT)│
 └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
        │                       │                       │
-       │  1. Sign in           │                       │
-       │──────────────────────────────────────────────▶│
-       │                       │                       │
-       │  2. ID Token          │                       │
-       │◀──────────────────────────────────────────────│
-       │                       │                       │
-       │  3. API Request       │                       │
-       │  (Bearer Token)       │                       │
+       │  1. Login / Register  │                       │
        │──────────────────────▶│                       │
        │                       │                       │
-       │                       │  4. Verify Token      │
+       │                       │  2. Validate creds    │
        │                       │──────────────────────▶│
        │                       │                       │
-       │                       │  5. Token Valid       │
-       │                       │◀──────────────────────│
+       │  3. JWT (access +     │                       │
+       │     refresh cookie)   │                       │
+       │◀──────────────────────│                       │
+       │                       │                       │
+       │  4. API Request       │                       │
+       │  (Bearer access_token)│                       │
+       │──────────────────────▶│                       │
+       │                       │                       │
+       │                       │  5. Verify JWT        │
+       │                       │──────────────────────▶│
        │                       │                       │
        │  6. API Response      │                       │
        │◀──────────────────────│                       │
        │                       │                       │
 ```
 
+**Note:** If 2FA is enabled, step 3 returns a challenge token instead of JWT.
+The client must verify the OTP via `POST /api/auth/2fa-challenge/` to receive the JWT.
+
+Native clients (Android/iOS) send `X-Client-Platform: native` to receive refresh
+tokens in the response body instead of httpOnly cookies.
+
+Social login (Google/Apple) verifies ID tokens directly via `core.auth.social`
+(no allauth adapters).
+
 ### Security Layers
 
 1. **Transport**: HTTPS/TLS 1.3
-2. **Authentication**: Token auth (django-allauth + dj-rest-auth)
-3. **Authorization**: Django permissions
-4. **Input Validation**: DRF serializers
+2. **Authentication**: Custom `core.auth` package with SimpleJWT (JWT access + httpOnly refresh cookies)
+3. **Authorization**: 10 DB-driven permission classes reading from `SubscriptionPlan` model
+4. **Input Validation**: DRF serializers + `core/sanitizers.py` (XSS) + `core/validators.py`
 5. **SQL Injection**: Django ORM (parameterized queries)
-6. **XSS**: Django template escaping
-7. **CSRF**: Django CSRF middleware
-8. **Rate Limiting**: Django Ratelimit
-9. **Security Headers**: Django SecurityMiddleware
+6. **XSS**: `nh3` sanitizer on backend, DOMPurify on frontend
+7. **CSRF**: Django CSRF middleware (exempt for `/api/` routes using token auth)
+8. **Rate Limiting**: DRF throttling + Nginx rate limits + Redis-backed daily AI quotas
+9. **Security Headers**: `SecurityHeadersMiddleware` (CSP, COOP, CORP, X-Frame-Options: DENY)
+10. **Content Moderation**: 4-tier pipeline (jailbreak + roleplay + harmful patterns + OpenAI API)
 
 ## Scalability Considerations
 
@@ -452,4 +460,4 @@ Notification Created (API / Celery task)
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** March 2026
