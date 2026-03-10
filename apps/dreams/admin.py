@@ -7,6 +7,7 @@ from .models import (
     Dream, Goal, Task, Obstacle, DreamMilestone, DreamTemplate,
     DreamCollaborator, SharedDream, DreamProgressSnapshot,
     VisionBoardImage, PlanCheckIn, CalibrationResponse,
+    DreamTag, DreamTagging, FocusSession, DreamJournal, ProgressPhoto,
 )
 
 
@@ -217,4 +218,62 @@ class CalibrationResponseAdmin(admin.ModelAdmin):
     list_filter = ['category', 'created_at']
     search_fields = ['question', 'dream__title']
     readonly_fields = ['created_at']
+    raw_id_fields = ['dream']
+
+
+@admin.register(DreamTag)
+class DreamTagAdmin(admin.ModelAdmin):
+    """Admin interface for DreamTag model."""
+
+    list_display = ['name', 'created_at']
+    search_fields = ['name']
+    ordering = ['name']
+    readonly_fields = ['id', 'created_at']
+
+
+@admin.register(DreamTagging)
+class DreamTaggingAdmin(admin.ModelAdmin):
+    """Admin interface for DreamTagging model."""
+
+    list_display = ['dream', 'tag', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['dream__title', 'tag__name']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['dream', 'tag']
+
+
+@admin.register(FocusSession)
+class FocusSessionAdmin(admin.ModelAdmin):
+    """Admin interface for FocusSession model."""
+
+    list_display = ['user', 'task', 'session_type', 'duration_minutes', 'actual_minutes', 'completed', 'started_at']
+    list_filter = ['session_type', 'completed', 'started_at']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-started_at']
+    readonly_fields = ['id', 'started_at']
+    raw_id_fields = ['user', 'task']
+
+
+@admin.register(DreamJournal)
+class DreamJournalAdmin(admin.ModelAdmin):
+    """Admin interface for DreamJournal model."""
+
+    list_display = ['dream', 'title', 'mood', 'created_at']
+    list_filter = ['mood', 'created_at']
+    search_fields = ['title', 'content', 'dream__title']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    raw_id_fields = ['dream']
+
+
+@admin.register(ProgressPhoto)
+class ProgressPhotoAdmin(admin.ModelAdmin):
+    """Admin interface for ProgressPhoto model."""
+
+    list_display = ['dream', 'taken_at', 'created_at']
+    list_filter = ['taken_at', 'created_at']
+    search_fields = ['dream__title']
+    ordering = ['-taken_at']
+    readonly_fields = ['id', 'created_at', 'updated_at']
     raw_id_fields = ['dream']

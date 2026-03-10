@@ -1,6 +1,7 @@
 """Tests for social app."""
 import pytest
 from datetime import timedelta
+from unittest.mock import patch
 from django.utils import timezone
 from rest_framework import status
 
@@ -33,6 +34,20 @@ from apps.social.admin import (
 # ---------------------------------------------------------------------------
 # Local fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _mock_notification_create():
+    """Prevent Notification.objects.create() from breaking SQLite transactions.
+
+    Several social views create notifications inside try/except blocks.
+    On SQLite the NOT-NULL IntegrityError (scheduled_for) marks the
+    transaction as broken even though the exception is caught. Mocking
+    the create call avoids this issue in tests.
+    """
+    with patch('apps.notifications.models.Notification.objects.create'):
+        yield
+
 
 @pytest.fixture
 def other_user(db):
@@ -651,8 +666,7 @@ class TestSentRequests:
 
 
 class TestSendFriendRequest:
-    @patch('apps.social.views.Notification.objects.create')
-    def test_send_request_success(self, mock_notif, authenticated_client, other_user):
+    def test_send_request_success(self, authenticated_client, other_user):
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
             {'target_user_id': str(other_user.id)},

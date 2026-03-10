@@ -11,6 +11,7 @@ from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
     CircleMessage, CircleCall, CircleCallParticipant,
+    CirclePoll, PollOption, PollVote,
 )
 
 
@@ -227,3 +228,50 @@ class CircleCallParticipantAdmin(admin.ModelAdmin):
     search_fields = ['user__email', 'user__display_name']
     readonly_fields = ['joined_at']
     raw_id_fields = ['user', 'call']
+
+
+class PollOptionInline(admin.TabularInline):
+    """Inline admin for PollOption within CirclePoll."""
+
+    model = PollOption
+    extra = 0
+    fields = ['text', 'order']
+    ordering = ['order']
+
+
+@admin.register(CirclePoll)
+class CirclePollAdmin(admin.ModelAdmin):
+    """Admin interface for CirclePoll model."""
+
+    list_display = ['question', 'post', 'allows_multiple', 'ends_at', 'created_at']
+    list_filter = ['allows_multiple', 'created_at']
+    search_fields = ['question', 'post__circle__name']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['post']
+
+    inlines = [PollOptionInline]
+
+
+@admin.register(PollOption)
+class PollOptionAdmin(admin.ModelAdmin):
+    """Admin interface for PollOption model."""
+
+    list_display = ['text', 'poll', 'order']
+    list_filter = ['poll']
+    search_fields = ['text', 'poll__question']
+    ordering = ['poll', 'order']
+    readonly_fields = ['id']
+    raw_id_fields = ['poll']
+
+
+@admin.register(PollVote)
+class PollVoteAdmin(admin.ModelAdmin):
+    """Admin interface for PollVote model."""
+
+    list_display = ['user', 'option', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name', 'option__text']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['user', 'option']

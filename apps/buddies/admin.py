@@ -7,7 +7,7 @@ encouragement messages.
 
 from django.contrib import admin
 
-from .models import BuddyPairing, BuddyEncouragement
+from .models import BuddyPairing, BuddyEncouragement, AccountabilityContract, ContractCheckIn
 
 
 class BuddyEncouragementInline(admin.TabularInline):
@@ -80,3 +80,59 @@ class BuddyEncouragementAdmin(admin.ModelAdmin):
             return '(no message)'
         return obj.message[:80] + '...' if len(obj.message) > 80 else obj.message
     message_preview.short_description = 'Message'
+
+
+class ContractCheckInInline(admin.TabularInline):
+    """Inline admin for ContractCheckIn within AccountabilityContract."""
+
+    model = ContractCheckIn
+    extra = 0
+    fields = ['user', 'mood', 'created_at']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user']
+
+
+@admin.register(AccountabilityContract)
+class AccountabilityContractAdmin(admin.ModelAdmin):
+    """Admin interface for AccountabilityContract model."""
+
+    list_display = ['title', 'pairing', 'status', 'check_in_frequency', 'start_date', 'end_date', 'accepted_by_partner', 'created_at']
+    list_filter = ['status', 'check_in_frequency', 'accepted_by_partner', 'created_at']
+    search_fields = ['title', 'description', 'created_by__email']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['pairing', 'created_by']
+
+    inlines = [ContractCheckInInline]
+
+    fieldsets = (
+        ('Contract Info', {
+            'fields': ('pairing', 'title', 'description', 'created_by')
+        }),
+        ('Schedule', {
+            'fields': ('check_in_frequency', 'start_date', 'end_date')
+        }),
+        ('Status', {
+            'fields': ('status', 'accepted_by_partner')
+        }),
+        ('Goals', {
+            'fields': ('goals',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('id', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ContractCheckIn)
+class ContractCheckInAdmin(admin.ModelAdmin):
+    """Admin interface for ContractCheckIn model."""
+
+    list_display = ['contract', 'user', 'mood', 'created_at']
+    list_filter = ['mood', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'contract__title']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['contract', 'user']

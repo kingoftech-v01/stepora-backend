@@ -7,7 +7,7 @@ and season rewards with inline editing and filtering capabilities.
 
 from django.contrib import admin
 
-from .models import League, LeagueStanding, Season, SeasonReward
+from .models import League, LeagueStanding, Season, SeasonReward, RankSnapshot, LeagueSeason, SeasonParticipant
 
 
 @admin.register(League)
@@ -148,3 +148,55 @@ class SeasonRewardAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(RankSnapshot)
+class RankSnapshotAdmin(admin.ModelAdmin):
+    """Admin interface for RankSnapshot model."""
+
+    list_display = ['user', 'season', 'league', 'rank', 'xp', 'snapshot_date', 'created_at']
+    list_filter = ['league', 'season', 'snapshot_date']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-snapshot_date']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['user', 'season', 'league']
+
+
+@admin.register(LeagueSeason)
+class LeagueSeasonAdmin(admin.ModelAdmin):
+    """Admin interface for LeagueSeason model."""
+
+    list_display = ['name', 'theme', 'start_date', 'end_date', 'is_active', 'created_at']
+    list_filter = ['is_active', 'theme', 'start_date']
+    search_fields = ['name', 'description']
+    ordering = ['-start_date']
+    readonly_fields = ['id', 'created_at']
+
+    fieldsets = (
+        ('Basic Info', {
+            'fields': ('name', 'theme', 'description', 'is_active')
+        }),
+        ('Dates', {
+            'fields': ('start_date', 'end_date')
+        }),
+        ('Configuration', {
+            'fields': ('rewards', 'theme_colors'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('id', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(SeasonParticipant)
+class SeasonParticipantAdmin(admin.ModelAdmin):
+    """Admin interface for SeasonParticipant model."""
+
+    list_display = ['user', 'season', 'xp_earned', 'rank', 'rewards_claimed', 'joined_at']
+    list_filter = ['rewards_claimed', 'season', 'joined_at']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-xp_earned']
+    readonly_fields = ['id', 'joined_at']
+    raw_id_fields = ['user', 'season']

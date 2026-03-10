@@ -3,7 +3,10 @@ Django admin configuration for Calendar app.
 """
 
 from django.contrib import admin
-from .models import CalendarEvent, TimeBlock, TimeBlockTemplate, CalendarShare
+from .models import (
+    CalendarEvent, TimeBlock, TimeBlockTemplate, CalendarShare,
+    Habit, HabitCompletion, GoogleCalendarIntegration, RecurrenceException,
+)
 
 
 @admin.register(CalendarEvent)
@@ -83,3 +86,51 @@ class CalendarShareAdmin(admin.ModelAdmin):
             'fields': ('is_active', 'created_at')
         }),
     )
+
+
+@admin.register(GoogleCalendarIntegration)
+class GoogleCalendarIntegrationAdmin(admin.ModelAdmin):
+    """Admin interface for GoogleCalendarIntegration model."""
+
+    list_display = ['user', 'calendar_id', 'sync_enabled', 'sync_direction', 'last_sync_at', 'created_at']
+    list_filter = ['sync_enabled', 'sync_direction', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'calendar_id']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    raw_id_fields = ['user']
+
+
+@admin.register(RecurrenceException)
+class RecurrenceExceptionAdmin(admin.ModelAdmin):
+    """Admin interface for RecurrenceException model."""
+
+    list_display = ['parent_event', 'original_date', 'skip_occurrence', 'modified_start_time', 'created_at']
+    list_filter = ['skip_occurrence', 'created_at']
+    search_fields = ['parent_event__title']
+    ordering = ['original_date']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['parent_event']
+
+
+@admin.register(Habit)
+class HabitAdmin(admin.ModelAdmin):
+    """Admin interface for Habit model."""
+
+    list_display = ['user', 'frequency', 'target_per_day', 'is_active', 'streak_current', 'streak_best', 'created_at']
+    list_filter = ['frequency', 'is_active', 'created_at']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    raw_id_fields = ['user']
+
+
+@admin.register(HabitCompletion)
+class HabitCompletionAdmin(admin.ModelAdmin):
+    """Admin interface for HabitCompletion model."""
+
+    list_display = ['habit', 'date', 'count', 'completed_at']
+    list_filter = ['date', 'completed_at']
+    search_fields = ['habit__user__email', 'habit__user__display_name']
+    ordering = ['-date']
+    readonly_fields = ['id', 'completed_at']
+    raw_id_fields = ['habit']

@@ -408,7 +408,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['delete'], url_path=r'unfollow/(?P<user_id>[0-9a-f-]+)')
     def unfollow_user(self, request, user_id=None):
         """Remove a follow relationship with the given user."""
-        deleted_count, _ = UserFollow.objects.filter(
+        deleted_count, _detail = UserFollow.objects.filter(
             follower=request.user,
             following_id=user_id
         ).delete()
@@ -559,7 +559,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['delete'], url_path=r'unblock/(?P<user_id>[0-9a-f-]+)')
     def unblock_user(self, request, user_id=None):
         """Remove a block on the given user."""
-        deleted_count, _ = BlockedUser.objects.filter(
+        deleted_count, _detail = BlockedUser.objects.filter(
             blocker=request.user,
             blocked_id=user_id
         ).delete()

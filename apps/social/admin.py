@@ -11,7 +11,7 @@ from .models import (
     Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser,
     Story, StoryView, ActivityLike, ActivityComment, DreamPost,
     DreamPostLike, DreamPostComment, DreamEncouragement, SocialEvent,
-    SocialEventRegistration, RecentSearch,
+    SocialEventRegistration, RecentSearch, SavedPost, PostReaction,
 )
 
 
@@ -265,3 +265,27 @@ class RecentSearchAdmin(admin.ModelAdmin):
     search_fields = ['user__email', 'user__display_name']
     readonly_fields = ['created_at']
     raw_id_fields = ['user']
+
+
+@admin.register(SavedPost)
+class SavedPostAdmin(admin.ModelAdmin):
+    """Admin interface for SavedPost model."""
+
+    list_display = ['user', 'post', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['user', 'post']
+
+
+@admin.register(PostReaction)
+class PostReactionAdmin(admin.ModelAdmin):
+    """Admin interface for PostReaction (dream post emoji reactions) model."""
+
+    list_display = ['user', 'post', 'reaction_type', 'created_at']
+    list_filter = ['reaction_type', 'created_at']
+    search_fields = ['user__email', 'user__display_name']
+    ordering = ['-created_at']
+    readonly_fields = ['id', 'created_at']
+    raw_id_fields = ['user', 'post']
