@@ -249,11 +249,30 @@ class Command(BaseCommand):
             return
 
         now = django_timezone.now()
+
+        # Dynamic season name based on current date
+        month = now.month
+        year = now.year
+        if month <= 3:
+            quarter = 'Winter'
+        elif month <= 6:
+            quarter = 'Spring'
+        elif month <= 9:
+            quarter = 'Summer'
+        else:
+            quarter = 'Fall'
+
+        # Determine season number from existing ended seasons
+        ended_count = Season.objects.filter(status='ended').count()
+        season_number = ended_count + 1
+
         season = Season.objects.create(
-            name='Season 1 - Winter 2026',
+            name=f'Season {season_number} - {quarter} {year}',
             start_date=now,
-            end_date=now + timedelta(days=90),
+            end_date=now + timedelta(days=180),
             is_active=True,
+            status='active',
+            duration_days=180,
             rewards=[
                 {
                     'tier': 'bronze',
@@ -307,7 +326,7 @@ class Command(BaseCommand):
 
         now = django_timezone.now()
         season = LeagueSeason.objects.create(
-            name='Season of Growth - Spring 2026',
+            name=f'Season of Growth - {now.strftime("%B %Y")}',
             theme='growth',
             description=(
                 'Spring has arrived, and with it comes the Season of Growth! '
