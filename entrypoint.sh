@@ -7,7 +7,7 @@ python manage.py migrate --noinput
 echo "Starting gunicorn..."
 exec gunicorn \
     --bind 0.0.0.0:8000 \
-    --workers 4 \
+    --workers 2 \
     --worker-class gthread \
     --threads 2 \
     --timeout 120 \
