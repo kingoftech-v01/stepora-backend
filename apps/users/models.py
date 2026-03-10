@@ -78,6 +78,24 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     timezone = models.CharField(max_length=50, default='Europe/Paris')
 
+    # Theme / Accent
+    THEME_MODE_CHOICES = [
+        ('auto', 'Auto'),
+        ('dark', 'Dark'),
+        ('light', 'Light'),
+    ]
+    theme_mode = models.CharField(
+        max_length=10,
+        choices=THEME_MODE_CHOICES,
+        default='auto',
+        help_text='Preferred theme mode: auto, dark, or light.'
+    )
+    accent_color = models.CharField(
+        max_length=20,
+        default='#8B5CF6',
+        help_text='User accent/brand color hex code (e.g. #8B5CF6).'
+    )
+
     # Subscription
     SUBSCRIPTION_CHOICES = [
         ('free', 'Free'),
@@ -115,6 +133,33 @@ class User(AbstractBaseUser, PermissionsMixin):
                   'budget_range, fitness_level, learning_style, typical_day, occupation, '
                   'astrological_sign, global_motivation, global_constraints}'
     )
+    calendar_preferences = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Calendar preferences: {buffer_minutes: 0-60, min_event_duration: 15-120}'
+    )
+    energy_profile = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Energy profile for smart scheduling: '
+            '{"peak_hours": [{"start": 9, "end": 12}], '
+            '"low_energy_hours": [{"start": 13, "end": 14}], '
+            '"energy_pattern": "morning_person"|"night_owl"|"steady"}'
+        )
+    )
+    notification_timing = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            'AI-optimized notification timing preferences: '
+            '{"optimal_times": [{"notification_type": "reminder", "best_hour": 9, '
+            '"best_day": "weekday", "reason": "..."}], '
+            '"quiet_hours": {"start": 22, "end": 7}, '
+            '"engagement_score": 0.85, '
+            '"last_optimized": "2026-03-01T12:00:00Z"}'
+        )
+    )
 
     # Gamification
     xp = models.IntegerField(default=0)
@@ -137,10 +182,25 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     # Onboarding
     onboarding_completed = models.BooleanField(default=False)
+    DREAMER_TYPES = [
+        ('visionary', 'Visionary'),
+        ('achiever', 'Achiever'),
+        ('explorer', 'Explorer'),
+        ('collaborator', 'Collaborator'),
+        ('strategist', 'Strategist'),
+    ]
+    dreamer_type = models.CharField(max_length=30, blank=True, choices=DREAMER_TYPES)
 
     # Django admin
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+
+    # Account deletion
+    deactivated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the account was deactivated. Hard-delete scheduled 30 days after.'
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -351,15 +411,27 @@ class Achievement(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, unique=True)
     description = models.TextField()
-    icon = models.CharField(max_length=50, help_text='Emoji or icon identifier')
+    icon = models.CharField(max_length=50, help_text='Lucide icon name (e.g. sparkles, flame, trophy)')
     CATEGORY_CHOICES = [
         ('streaks', 'Streaks'),
         ('dreams', 'Dreams'),
         ('social', 'Social'),
         ('tasks', 'Tasks'),
         ('special', 'Special'),
+        ('profile', 'Profile'),
     ]
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_index=True)
+    RARITY_CHOICES = [
+        ('common', 'Common'),
+        ('uncommon', 'Uncommon'),
+        ('rare', 'Rare'),
+        ('epic', 'Epic'),
+        ('legendary', 'Legendary'),
+    ]
+    rarity = models.CharField(
+        max_length=20, choices=RARITY_CHOICES, default='common', db_index=True,
+        help_text='Rarity tier that determines badge glow color.'
+    )
     xp_reward = models.IntegerField(default=0)
     CONDITION_CHOICES = [
         ('streak_days', 'Streak Days'),
@@ -375,6 +447,9 @@ class Achievement(models.Model):
         ('first_dream', 'First Dream Created'),
         ('first_buddy', 'First Buddy Matched'),
         ('vision_created', 'Vision Board Created'),
+        ('posts_created', 'Posts Created'),
+        ('likes_received', 'Likes Received'),
+        ('profile_completed', 'Profile Completed'),
     ]
     condition_type = models.CharField(max_length=30, choices=CONDITION_CHOICES)
     condition_value = models.IntegerField(default=1, help_text='Threshold value to unlock')
@@ -391,12 +466,16 @@ class Achievement(models.Model):
 
 
 class UserAchievement(models.Model):
-    """Tracks which achievements a user has unlocked."""
+    """Tracks which achievements a user has unlocked and their progress."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_achievements')
     achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE, related_name='user_achievements')
     unlocked_at = models.DateTimeField(auto_now_add=True)
+    progress = models.PositiveIntegerField(
+        default=0,
+        help_text='Current progress towards the achievement requirement value.'
+    )
 
     class Meta:
         db_table = 'user_achievements'

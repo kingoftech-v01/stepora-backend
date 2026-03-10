@@ -10,7 +10,7 @@ so users can verify the plan makes sense for their situation.
 import re
 import logging
 from typing import ClassVar, Optional, Set
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.sanitizers import sanitize_text, sanitize_json_values
 
@@ -36,10 +36,6 @@ VALID_CALIBRATION_CATEGORIES = {
     "experience", "timeline", "resources", "motivation",
     "constraints", "specifics", "lifestyle", "preferences",
 }
-VALID_PACE_STATUSES = {
-    "significantly_behind", "behind", "on_track", "ahead", "significantly_ahead",
-}
-VALID_QUESTION_TYPES = {"slider", "choice", "text"}
 
 
 def _clamp_int(v: int | None, lo: int, hi: int) -> int | None:
@@ -303,65 +299,6 @@ class PlanResponseSchema(BaseModel):
         return [_sanitize_str(r, MAX_SHORT_TEXT_LEN) for r in v if r]
 
 
-class SkeletonGoalSchema(BaseModel):
-    """Goal schema for skeleton phase — no tasks required."""
-    title: str = Field(min_length=1, max_length=500)
-    description: str = Field(default="", max_length=5000)
-    order: int = Field(ge=1, le=100)
-    estimated_minutes: Optional[int] = Field(default=None, ge=0, le=50000)
-    expected_date: Optional[str] = Field(default=None, max_length=20)
-    deadline_date: Optional[str] = Field(default=None, max_length=20)
-    reasoning: str = Field(default="", max_length=2000)
-
-
-class SkeletonMilestoneSchema(BaseModel):
-    """Milestone schema for skeleton phase — goals without tasks."""
-    title: str = Field(min_length=1, max_length=500)
-    description: str = Field(default="", max_length=5000)
-    order: int = Field(ge=1, le=60)
-    target_day: Optional[int] = Field(default=None, ge=1, le=1095)
-    expected_date: Optional[str] = Field(default=None, max_length=20)
-    deadline_date: Optional[str] = Field(default=None, max_length=20)
-    reasoning: str = Field(default="", max_length=2000)
-    goals: list[SkeletonGoalSchema] = Field(min_length=1)
-    obstacles: list[PlanObstacleSchema] = Field(default_factory=list)
-
-
-class SkeletonResponseSchema(BaseModel):
-    """Validates the skeleton phase output (milestones + goals, no tasks)."""
-    analysis: str = Field(default="", max_length=10000)
-    estimated_duration_weeks: Optional[int] = Field(default=None, ge=1, le=520)
-    weekly_time_hours: Optional[float] = Field(default=None, ge=0)
-    milestones: list[SkeletonMilestoneSchema] = Field(min_length=1)
-    goals: list[SkeletonGoalSchema] = Field(default_factory=list)
-    tips: list[str] = Field(default_factory=list)
-    potential_obstacles: list[PlanObstacleSchema] = Field(default_factory=list)
-    calibration_references: list[str] = Field(default_factory=list)
-
-
-class TaskPatchSchema(BaseModel):
-    """Validates task generation output for a specific goal."""
-    milestone_order: int = Field(ge=1)
-    goal_order: int = Field(ge=1)
-    tasks: list[PlanTaskSchema] = Field(min_length=1)
-
-
-def validate_skeleton_response(raw_data: dict) -> SkeletonResponseSchema:
-    """Validate and clean skeleton plan response from AI."""
-    try:
-        return SkeletonResponseSchema.model_validate(raw_data)
-    except ValidationError as e:
-        raise AIValidationError(f"Skeleton validation failed: {e}")
-
-
-def validate_task_patches(raw_data: list) -> list[TaskPatchSchema]:
-    """Validate task patch list from AI."""
-    try:
-        return [TaskPatchSchema.model_validate(item) for item in raw_data]
-    except ValidationError as e:
-        raise AIValidationError(f"Task patch validation failed: {e}")
-
-
 # ===================================================================
 # Dream analysis schemas (analyze_dream)
 # ===================================================================
@@ -373,10 +310,6 @@ class AnalysisResponseSchema(BaseModel):
     difficulty: str = Field(default="medium", max_length=20)
     key_challenges: list[str] = Field(default_factory=list)
     recommended_approach: str = Field(default="", max_length=MAX_TEXT_LEN)
-    requires_professional: bool = Field(default=False)
-    professional_type: Optional[str] = Field(default=None, max_length=MAX_SHORT_TEXT_LEN)
-    professional_note: Optional[str] = Field(default=None, max_length=MAX_TEXT_LEN)
-    detected_language: str = Field(default="", max_length=10)
 
     @field_validator("category", mode="before")
     @classmethod
@@ -409,13 +342,6 @@ class AnalysisResponseSchema(BaseModel):
     @classmethod
     def sanitize_approach(cls, v):
         return _sanitize_str(v, MAX_TEXT_LEN)
-
-    @field_validator("professional_type", "professional_note", mode="before")
-    @classmethod
-    def sanitize_professional_fields(cls, v):
-        if v is None:
-            return None
-        return _sanitize_str(v, MAX_SHORT_TEXT_LEN)
 
 
 # ===================================================================
@@ -594,19 +520,7 @@ class FunctionCallSchema(BaseModel):
     name: str = Field(..., max_length=100)
     arguments: dict = Field(default_factory=dict)
 
-    ALLOWED_FUNCTIONS: ClassVar[Set[str]] = {
-        "create_task", "complete_task", "create_goal",
-        "get_dream_progress", "get_completed_tasks", "get_overdue_tasks",
-        "create_tasks", "update_milestone", "get_calendar_availability",
-        "mark_goal_completed", "create_new_goal", "finish_check_in",
-        # Skeleton evolution tools
-        "add_milestone", "remove_milestone", "reorder_milestone",
-        "shift_milestone_dates", "generate_extension_tasks",
-        # Context tools
-        "get_goals_for_milestone",
-        # Questionnaire generation
-        "finish_questionnaire_generation",
-    }
+    ALLOWED_FUNCTIONS: ClassVar[Set[str]] = {"create_task", "complete_task", "create_goal"}
 
     @field_validator("name", mode="before")
     @classmethod
@@ -615,6 +529,92 @@ class FunctionCallSchema(BaseModel):
         if v not in cls.ALLOWED_FUNCTIONS:
             raise ValueError(f"Unknown function '{v}'. Allowed: {cls.ALLOWED_FUNCTIONS}")
         return v
+
+
+# ===================================================================
+# Smart analysis schemas (cross-dream pattern recognition)
+# ===================================================================
+
+VALID_PATTERN_TYPES = {"theme", "behavior", "resource", "timing"}
+
+
+class SmartAnalysisPatternSchema(BaseModel):
+    """A single pattern found across dreams."""
+    type: str = Field(default="theme", max_length=20)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    dreams_involved: list[str] = Field(default_factory=list)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def validate_type(cls, v):
+        v = _sanitize_str(v, 20).lower().strip()
+        return v if v in VALID_PATTERN_TYPES else "theme"
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def sanitize_description(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("dreams_involved", mode="before")
+    @classmethod
+    def sanitize_dreams(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [_sanitize_str(d, MAX_TITLE_LEN) for d in v if d]
+
+
+class SmartAnalysisInsightSchema(BaseModel):
+    """A single insight from cross-dream analysis."""
+    insight: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    actionable_tip: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("insight", "actionable_tip", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisSynergySchema(BaseModel):
+    """A synergy between two dreams."""
+    dream1: str = Field(default="", max_length=MAX_TITLE_LEN)
+    dream2: str = Field(default="", max_length=MAX_TITLE_LEN)
+    connection: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    suggestion: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("dream1", "dream2", mode="before")
+    @classmethod
+    def sanitize_titles(cls, v):
+        return _sanitize_str(v, MAX_TITLE_LEN)
+
+    @field_validator("connection", "suggestion", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisRiskSchema(BaseModel):
+    """A risk area for a specific dream."""
+    dream: str = Field(default="", max_length=MAX_TITLE_LEN)
+    risk: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    mitigation: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+
+    @field_validator("dream", mode="before")
+    @classmethod
+    def sanitize_dream(cls, v):
+        return _sanitize_str(v, MAX_TITLE_LEN)
+
+    @field_validator("risk", "mitigation", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class SmartAnalysisResponseSchema(BaseModel):
+    """Full response from smart cross-dream analysis."""
+    patterns: list[SmartAnalysisPatternSchema] = Field(default_factory=list)
+    insights: list[SmartAnalysisInsightSchema] = Field(default_factory=list)
+    synergies: list[SmartAnalysisSynergySchema] = Field(default_factory=list)
+    risk_areas: list[SmartAnalysisRiskSchema] = Field(default_factory=list)
 
 
 # ===================================================================
@@ -690,88 +690,13 @@ def validate_function_call(raw: dict) -> FunctionCallSchema:
         raise AIValidationError(f"AI generated an invalid function call: {e}") from e
 
 
-# ===================================================================
-# Check-in questionnaire schemas
-# ===================================================================
-
-class CheckInQuestionSchema(BaseModel):
-    """Single question in the check-in questionnaire."""
-    id: str = Field(..., min_length=1, max_length=50)
-    question_type: str = Field(..., max_length=20)
-    question: str = Field(..., min_length=5, max_length=MAX_SHORT_TEXT_LEN)
-    options: list[str] = Field(default_factory=list)
-    scale_min: int = Field(default=1, ge=0, le=10)
-    scale_max: int = Field(default=5, ge=1, le=10)
-    scale_labels: dict = Field(default_factory=dict)
-    is_required: bool = Field(default=True)
-
-    @field_validator("question_type", mode="before")
-    @classmethod
-    def validate_type(cls, v):
-        v = str(v).lower().strip()
-        return v if v in VALID_QUESTION_TYPES else "text"
-
-    @field_validator("question", mode="before")
-    @classmethod
-    def sanitize_question(cls, v):
-        return _sanitize_str(v, MAX_SHORT_TEXT_LEN)
-
-    @field_validator("options", mode="before")
-    @classmethod
-    def sanitize_options(cls, v):
-        if not isinstance(v, list):
-            return []
-        return [_sanitize_str(o, 200) for o in v if o]
-
-
-class CheckInQuestionnaireSchema(BaseModel):
-    """Full questionnaire generated by the AI for a check-in."""
-    questions: list[CheckInQuestionSchema] = Field(min_length=3, max_length=10)
-    opening_message: str = Field(default="", max_length=MAX_SHORT_TEXT_LEN)
-    pace_summary: str = Field(default="", max_length=MAX_SHORT_TEXT_LEN)
-
-    @field_validator("opening_message", "pace_summary", mode="before")
-    @classmethod
-    def sanitize_strings(cls, v):
-        return _sanitize_str(v, MAX_SHORT_TEXT_LEN)
-
-
-class CheckInAdaptationResultSchema(BaseModel):
-    """Result from the AI adaptation phase after user responds."""
-    coaching_message: str = Field(default="", max_length=MAX_TEXT_LEN)
-    adjustment_summary: str = Field(default="", max_length=MAX_TEXT_LEN)
-    pace_status: str = Field(default="on_track", max_length=25)
-    next_checkin_days: int = Field(default=14, ge=3, le=30)
-    months_now_covered_through: int = Field(default=0, ge=0)
-
-    @field_validator("pace_status", mode="before")
-    @classmethod
-    def validate_pace(cls, v):
-        v = str(v).lower().strip()
-        return v if v in VALID_PACE_STATUSES else "on_track"
-
-    @field_validator("coaching_message", "adjustment_summary", mode="before")
-    @classmethod
-    def sanitize_strings(cls, v):
-        return _sanitize_str(v, MAX_TEXT_LEN)
-
-
-def validate_checkin_questionnaire(raw: dict) -> CheckInQuestionnaireSchema:
-    """Validate and clean questionnaire from AI."""
+def validate_smart_analysis_response(raw: dict) -> SmartAnalysisResponseSchema:
+    """Validate and sanitize a smart analysis response from the AI."""
     try:
-        return CheckInQuestionnaireSchema.model_validate(raw)
+        return SmartAnalysisResponseSchema.model_validate(raw)
     except Exception as e:
-        logger.error("Questionnaire validation failed: %s", e)
-        raise AIValidationError(f"AI generated invalid questionnaire: {e}") from e
-
-
-def validate_checkin_adaptation(raw: dict) -> CheckInAdaptationResultSchema:
-    """Validate and clean check-in adaptation result from AI."""
-    try:
-        return CheckInAdaptationResultSchema.model_validate(raw)
-    except Exception as e:
-        logger.error("Check-in adaptation validation failed: %s", e)
-        raise AIValidationError(f"AI generated invalid adaptation: {e}") from e
+        logger.error("Smart analysis validation failed: %s", e)
+        raise AIValidationError(f"AI generated an invalid smart analysis: {e}") from e
 
 
 def validate_ai_output_safety(content: str) -> tuple[bool, str]:

@@ -38,6 +38,7 @@ from .serializers import (
     RefundRequestSerializer,
     RefundRequestDisplaySerializer,
     RefundProcessSerializer,
+    ItemPreviewSerializer,
 )
 from .services import (
     StoreService,
@@ -178,6 +179,42 @@ class StoreItemViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = StoreItemSerializer(
             featured_items,
             many=True,
+            context={'request': request},
+        )
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary='Get item preview',
+        description=(
+            'Retrieve the preview/try-before-buy configuration for a specific '
+            'store item. Returns preview_type and preview_data needed to render '
+            'a live preview of the item (theme colors, chat bubble styles, '
+            'profile backgrounds, avatar frames, etc.).'
+        ),
+        tags=['Store'],
+        responses={
+            200: ItemPreviewSerializer,
+            404: OpenApiResponse(description='Item not found or has no preview data.'),
+        },
+    )
+    @action(detail=True, methods=['get'])
+    def preview(self, request, slug=None):
+        """
+        Return the preview configuration for a store item.
+
+        Used by the frontend try-before-buy modal to render a live
+        preview of themes, chat bubbles, avatar frames, etc.
+        """
+        item = self.get_object()
+
+        if not item.preview_type and not item.preview_data:
+            return Response(
+                {'error': _('No preview available for this item.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ItemPreviewSerializer(
+            item,
             context={'request': request},
         )
         return Response(serializer.data)

@@ -23,14 +23,16 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'display_name', 'avatar_url', 'avatar_image',
             'bio', 'location', 'social_links', 'profile_visibility',
-            'timezone', 'subscription', 'subscription_ends',
+            'timezone', 'theme_mode', 'accent_color',
+            'subscription', 'subscription_ends',
             'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
+            'energy_profile',
             'xp', 'level', 'streak_days', 'last_activity',
             'can_create_dream', 'is_premium', 'email_verified', 'plan_features',
-            'onboarding_completed',
+            'onboarding_completed', 'dreamer_type',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'email', 'subscription', 'subscription_ends', 'xp', 'level', 'streak_days', 'last_activity', 'email_verified', 'onboarding_completed', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'email', 'subscription', 'subscription_ends', 'xp', 'level', 'streak_days', 'last_activity', 'email_verified', 'onboarding_completed', 'dreamer_type', 'created_at', 'updated_at']
         extra_kwargs = {
             'id': {'help_text': 'Unique user identifier.'},
             'email': {'help_text': 'User email address.'},
@@ -42,11 +44,14 @@ class UserSerializer(serializers.ModelSerializer):
             'social_links': {'help_text': 'JSON object of social media links.'},
             'profile_visibility': {'help_text': 'Profile visibility setting.'},
             'timezone': {'help_text': 'User preferred timezone.'},
+            'theme_mode': {'help_text': 'Preferred theme mode (auto, dark, light).'},
+            'accent_color': {'help_text': 'User accent color hex code.'},
             'subscription': {'help_text': 'Current subscription plan.'},
             'subscription_ends': {'help_text': 'Subscription expiration date.'},
             'work_schedule': {'help_text': 'Preferred work schedule settings.'},
             'notification_prefs': {'help_text': 'Notification preference settings.'},
             'app_prefs': {'help_text': 'Application preference settings.'},
+            'energy_profile': {'help_text': 'Energy profile for smart scheduling.'},
             'xp': {'help_text': 'Total experience points earned.'},
             'level': {'help_text': 'Current user level.'},
             'streak_days': {'help_text': 'Consecutive active days streak.'},
@@ -103,13 +108,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'display_name', 'avatar_url', 'avatar_image',
             'bio', 'location', 'social_links', 'profile_visibility',
-            'timezone', 'subscription', 'subscription_ends',
+            'timezone', 'theme_mode', 'accent_color',
+            'subscription', 'subscription_ends',
             'xp', 'level', 'streak_days',
             'is_premium', 'email_verified', 'can_create_dream',
             'onboarding_completed',
             'active_dreams_count', 'completed_dreams_count',
             'achievements_summary', 'equipped_items', 'rank',
             'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
+            'dreamer_type',
             'created_at'
         ]
         read_only_fields = fields
@@ -124,6 +131,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'social_links': {'help_text': 'JSON object of social media links.'},
             'profile_visibility': {'help_text': 'Profile visibility setting.'},
             'timezone': {'help_text': 'User preferred timezone.'},
+            'theme_mode': {'help_text': 'Preferred theme mode (auto, dark, light).'},
+            'accent_color': {'help_text': 'User accent color hex code.'},
             'subscription': {'help_text': 'Current subscription plan.'},
             'subscription_ends': {'help_text': 'Subscription expiration date.'},
             'xp': {'help_text': 'Total experience points earned.'},
@@ -216,6 +225,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'display_name', 'avatar_url', 'bio', 'location',
             'social_links', 'profile_visibility', 'timezone',
+            'theme_mode', 'accent_color',
             'work_schedule', 'notification_prefs', 'app_prefs'
         ]
         extra_kwargs = {
@@ -226,6 +236,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'social_links': {'help_text': 'JSON object of social media links.'},
             'profile_visibility': {'help_text': 'Profile visibility setting.'},
             'timezone': {'help_text': 'User preferred timezone.'},
+            'theme_mode': {'help_text': 'Preferred theme mode (auto, dark, light).'},
+            'accent_color': {'help_text': 'User accent color hex code.'},
             'work_schedule': {'help_text': 'Preferred work schedule settings.'},
             'notification_prefs': {'help_text': 'Notification preference settings.'},
             'app_prefs': {'help_text': 'Application preference settings.'},
@@ -270,6 +282,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         """Sanitize app prefs JSON values."""
         if value and isinstance(value, dict):
             return sanitize_json_values(value)
+        return value
+
+    def validate_accent_color(self, value):
+        """Validate accent color is a valid hex code."""
+        import re
+        if value and not re.match(r'^#[0-9A-Fa-f]{6}$', value):
+            raise serializers.ValidationError('Must be a valid hex color code (e.g. #8B5CF6).')
         return value
 
 

@@ -77,6 +77,62 @@ class SecurityHeadersMiddleware:
         return response
 
 
+class EmailVerificationMiddleware:
+    """
+    Blocks authenticated users with unverified email from accessing the platform.
+    Returns 403 with code 'email_not_verified' so the frontend can show a gate.
+
+    Since DRF handles JWT auth inside views (not Django middleware), this
+    middleware authenticates the JWT token itself to check the user.
+
+    Exempt paths (users need these before verifying):
+    - /api/auth/        (login, register, verify-email, token refresh)
+    - /api/users/me/    (frontend needs profile to check emailVerified)
+    - /health/          (health checks)
+    - /admin/           (Django admin)
+    - Non-API paths     (static, media, etc.)
+    """
+
+    _EXEMPT_PREFIXES = ('/api/auth/', '/api/users/me/', '/health/', '/admin/')
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Only check API paths
+        if not request.path.startswith('/api/'):
+            return self.get_response(request)
+
+        # Skip exempt paths
+        for prefix in self._EXEMPT_PREFIXES:
+            if request.path.startswith(prefix):
+                return self.get_response(request)
+
+        # Try to identify the user from JWT token
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Bearer '):
+            return self.get_response(request)
+
+        try:
+            from rest_framework_simplejwt.authentication import JWTAuthentication
+            jwt_auth = JWTAuthentication()
+            validated_token = jwt_auth.get_validated_token(auth_header[7:])
+            user = jwt_auth.get_user(validated_token)
+        except Exception:
+            # Invalid token — let DRF handle the 401
+            return self.get_response(request)
+
+        # Check email verification
+        if not user.email_addresses.filter(verified=True, primary=True).exists():
+            from django.http import JsonResponse
+            return JsonResponse(
+                {'detail': 'Please verify your email address to use the platform.', 'code': 'email_not_verified'},
+                status=403,
+            )
+
+        return self.get_response(request)
+
+
 class LastActivityMiddleware:
     """
     Updates user.last_seen and user.is_online on every authenticated request.

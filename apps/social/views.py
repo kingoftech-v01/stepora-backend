@@ -25,14 +25,16 @@ from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import inline_serializer
 
 import logging
-from django.db.models import F, Exists, OuterRef
+from django.db.models import F, Exists, OuterRef, Count, Subquery
 
 from .models import (
     Friendship, UserFollow, ActivityFeedItem, ActivityLike,
     ActivityComment, BlockedUser, ReportedUser, RecentSearch,
     DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+    PostReaction,
     SocialEvent, SocialEventRegistration,
     Story, StoryView,
+    SavedPost,
 )
 from .serializers import (
     FriendSerializer,
@@ -1631,13 +1633,21 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             user_id__in=blocked_ids,
         ).select_related('user', 'dream').order_by('-created_at')
 
-        # Annotate with user_has_liked and user_has_encouraged
+        # Annotate with user_has_liked, user_has_saved, user_has_encouraged, and user_reaction
         posts = posts.annotate(
             _user_has_liked=Exists(
                 DreamPostLike.objects.filter(post=OuterRef('pk'), user=user)
             ),
+            _user_has_saved=Exists(
+                SavedPost.objects.filter(post=OuterRef('pk'), user=user)
+            ),
             _user_has_encouraged=Exists(
                 DreamEncouragement.objects.filter(post=OuterRef('pk'), user=user)
+            ),
+            _user_reaction_type=Subquery(
+                PostReaction.objects.filter(
+                    post=OuterRef('pk'), user=user,
+                ).values('reaction_type')[:1]
             ),
         )
 
@@ -1679,6 +1689,59 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 likes_count=F('likes_count') - 1
             )
             return Response({'liked': False, 'likes_count': max(0, post.likes_count - 1)})
+
+    @extend_schema(
+        summary="React to a post",
+        description="Toggle an emoji reaction on a dream post. Same reaction removes it, different reaction changes it.",
+        tags=["Social Feed"],
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['post'])
+    def react(self, request, pk=None):
+        """Toggle emoji reaction on a post."""
+        post = self.get_object()
+        reaction_type = request.data.get('reaction_type', 'like')
+
+        valid_types = [t[0] for t in PostReaction.REACTION_TYPES]
+        if reaction_type not in valid_types:
+            return Response(
+                {'error': _('reaction_type must be one of: %(types)s') % {'types': ", ".join(valid_types)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing = PostReaction.objects.filter(user=request.user, post=post).first()
+        if existing:
+            if existing.reaction_type == reaction_type:
+                existing.delete()
+                counts = PostReaction.objects.filter(post=post).values(
+                    'reaction_type'
+                ).annotate(count=Count('id'))
+                return Response({
+                    'reacted': False,
+                    'reaction_type': None,
+                    'counts': {c['reaction_type']: c['count'] for c in counts},
+                })
+            existing.reaction_type = reaction_type
+            existing.save()
+        else:
+            PostReaction.objects.create(
+                user=request.user, post=post, reaction_type=reaction_type,
+            )
+            self._notify_post_owner(
+                post, request.user,
+                title=_("%(name)s reacted to your dream post") % {
+                    'name': request.user.display_name or _('Someone'),
+                },
+            )
+
+        counts = PostReaction.objects.filter(post=post).values(
+            'reaction_type'
+        ).annotate(count=Count('id'))
+        return Response({
+            'reacted': True,
+            'reaction_type': reaction_type,
+            'counts': {c['reaction_type']: c['count'] for c in counts},
+        })
 
     @extend_schema(
         summary="Comment on a post",
@@ -1901,14 +1964,15 @@ class DreamPostViewSet(viewsets.ModelViewSet):
     def save(self, request, pk=None):
         """Toggle bookmark/save on a post."""
         post = self.get_object()
-        if post.saved_by.filter(id=request.user.id).exists():
-            post.saved_by.remove(request.user)
+        existing = SavedPost.objects.filter(user=request.user, post=post).first()
+        if existing:
+            existing.delete()
             DreamPost.objects.filter(id=post.id).update(
                 saves_count=F('saves_count') - 1
             )
             return Response({'saved': False, 'saves_count': max(0, post.saves_count - 1)})
         else:
-            post.saved_by.add(request.user)
+            SavedPost.objects.create(user=request.user, post=post)
             DreamPost.objects.filter(id=post.id).update(
                 saves_count=F('saves_count') + 1
             )
@@ -1923,9 +1987,12 @@ class DreamPostViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def saved(self, request):
         """List all posts saved/bookmarked by the current user."""
+        saved_post_ids = SavedPost.objects.filter(
+            user=request.user,
+        ).order_by('-created_at').values_list('post_id', flat=True)
         saved_posts = DreamPost.objects.filter(
-            saved_by=request.user
-        ).select_related('user').order_by('-created_at')
+            id__in=saved_post_ids,
+        ).select_related('user', 'dream').order_by('-created_at')
         page = self.paginate_queryset(saved_posts)
         if page is not None:
             serializer = DreamPostSerializer(page, many=True, context={'request': request})
@@ -2473,3 +2540,265 @@ class StoryViewSet(viewsets.ModelViewSet):
                 'viewedAt': v.viewed_at.isoformat(),
             })
         return Response(result)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Friend Suggestions — smart recommendation engine
+# ═══════════════════════════════════════════════════════════════════
+
+class FriendSuggestionsView(APIView):
+    """
+    Smart friend suggestion engine.
+
+    Scores potential friends based on:
+    - Mutual friends (40%)
+    - Similar dream categories (30%)
+    - Activity level & XP proximity (15%)
+    - Shared circle membership (15%)
+
+    Results are cached for 1 hour per user and returned as
+    a ranked list of the top 10 candidates.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Friend suggestions",
+        description=(
+            "Get smart friend suggestions scored by mutual friends, "
+            "shared dream categories, activity level, and shared circles."
+        ),
+        tags=["Social"],
+        responses={200: OpenApiResponse(description="List of friend suggestions.")},
+    )
+    def get(self, request):
+        from django.core.cache import cache
+        from collections import Counter, defaultdict
+        from apps.circles.models import CircleMembership, Circle
+        from apps.dreams.models import Dream
+        from datetime import timedelta
+
+        user = request.user
+        cache_key = f'friend_suggestions_{user.id}'
+
+        # Check cache first
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        # ── Build exclusion set ──────────────────────────────────
+        # Already friends (accepted)
+        friend_ids = set(
+            Friendship.objects.filter(
+                user1=user, status='accepted'
+            ).values_list('user2_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(
+                user2=user, status='accepted'
+            ).values_list('user1_id', flat=True)
+        )
+
+        # Pending requests (sent or received)
+        pending_ids = set(
+            Friendship.objects.filter(
+                Q(user1=user) | Q(user2=user),
+                status='pending'
+            ).values_list('user1_id', flat=True)
+        ) | set(
+            Friendship.objects.filter(
+                Q(user1=user) | Q(user2=user),
+                status='pending'
+            ).values_list('user2_id', flat=True)
+        )
+
+        # Blocked users (either direction)
+        blocked_ids = set(
+            BlockedUser.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        ) | set(
+            BlockedUser.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        )
+
+        exclude_ids = friend_ids | pending_ids | blocked_ids | {user.id}
+
+        # ── 1. Mutual friends (weight: 0.40) ────────────────────
+        # Find friends-of-friends
+        limited_friend_ids = list(friend_ids)[:50]
+        fof_friendships = Friendship.objects.filter(
+            Q(user1_id__in=limited_friend_ids) | Q(user2_id__in=limited_friend_ids),
+            status='accepted'
+        ).values_list('user1_id', 'user2_id')
+
+        mutual_count = Counter()
+        for u1, u2 in fof_friendships:
+            for uid in (u1, u2):
+                if uid not in exclude_ids and uid not in limited_friend_ids:
+                    mutual_count[uid] += 1
+
+        # ── 2. Similar dream categories (weight: 0.30) ──────────
+        user_categories = set(
+            Dream.objects.filter(
+                user=user, status='active'
+            ).values_list('category', flat=True)
+        )
+
+        category_overlap = Counter()
+        user_shared_cats = defaultdict(set)
+        if user_categories:
+            cat_dreams = Dream.objects.filter(
+                category__in=user_categories, status='active'
+            ).exclude(
+                user_id__in=exclude_ids
+            ).values_list('user_id', 'category')
+
+            for uid, cat in cat_dreams:
+                category_overlap[uid] += 1
+                user_shared_cats[uid].add(cat)
+
+        # ── 3. Activity level & XP proximity (weight: 0.15) ─────
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        active_user_ids = set(
+            User.objects.filter(
+                last_activity__gte=seven_days_ago,
+                is_active=True,
+            ).exclude(
+                id__in=exclude_ids
+            ).values_list('id', flat=True)[:200]
+        )
+
+        # ── 4. Shared circles (weight: 0.15) ────────────────────
+        user_circle_ids = list(
+            CircleMembership.objects.filter(
+                user=user
+            ).values_list('circle_id', flat=True)
+        )
+
+        circle_members = Counter()
+        user_shared_circles = defaultdict(list)
+        if user_circle_ids:
+            circle_name_map = dict(
+                Circle.objects.filter(
+                    id__in=user_circle_ids
+                ).values_list('id', 'name')
+            )
+            memberships = CircleMembership.objects.filter(
+                circle_id__in=user_circle_ids
+            ).exclude(
+                user_id__in=exclude_ids
+            ).values_list('user_id', 'circle_id')
+
+            for uid, cid in memberships:
+                circle_members[uid] += 1
+                cname = circle_name_map.get(cid, '')
+                if cname:
+                    user_shared_circles[uid].append(cname)
+
+        # ── Combine scores ───────────────────────────────────────
+        all_candidate_ids = (
+            set(mutual_count.keys()) |
+            set(category_overlap.keys()) |
+            active_user_ids |
+            set(circle_members.keys())
+        )
+
+        # Normalize helpers
+        max_mutual = max(mutual_count.values()) if mutual_count else 1
+        max_cat = max(category_overlap.values()) if category_overlap else 1
+        max_circle = max(circle_members.values()) if circle_members else 1
+
+        scored = {}
+        for uid in all_candidate_ids:
+            # Mutual friends score (40%)
+            mutual_raw = mutual_count.get(uid, 0)
+            s_mutual = (mutual_raw / max_mutual) * 0.40 if max_mutual else 0
+
+            # Category overlap score (30%)
+            cat_raw = category_overlap.get(uid, 0)
+            s_cat = (cat_raw / max_cat) * 0.30 if max_cat else 0
+
+            # Activity score (15%) — binary: active in last 7 days
+            s_activity = 0.15 if uid in active_user_ids else 0
+
+            # Circle score (15%)
+            circle_raw = circle_members.get(uid, 0)
+            s_circle = (circle_raw / max_circle) * 0.15 if max_circle else 0
+
+            scored[uid] = s_mutual + s_cat + s_activity + s_circle
+
+        # Sort by score descending, take top 10
+        top_ids = sorted(scored, key=scored.get, reverse=True)[:10]
+
+        if not top_ids:
+            cache.set(cache_key, [], 3600)
+            return Response([])
+
+        # ── Build response ───────────────────────────────────────
+        suggested_users = User.objects.filter(id__in=top_ids, is_active=True)
+        user_map = {u.id: u for u in suggested_users}
+
+        results = []
+        for uid in top_ids:
+            u = user_map.get(uid)
+            if not u:
+                continue
+
+            score = round(scored[uid], 2)
+            m_count = mutual_count.get(uid, 0)
+            shared_cats = sorted(user_shared_cats.get(uid, set()))
+            shared_circs = user_shared_circles.get(uid, [])
+
+            # Build reasons list
+            reasons = []
+            if m_count > 0:
+                reasons.append(
+                    f'{m_count} mutual friend{"s" if m_count != 1 else ""}'
+                )
+            if shared_cats:
+                cat_labels = {
+                    'health': 'Health', 'career': 'Career',
+                    'relationships': 'Relationships', 'personal': 'Personal Growth',
+                    'finance': 'Finance', 'hobbies': 'Hobbies',
+                    'education': 'Education', 'creative': 'Creative',
+                    'social': 'Social', 'travel': 'Travel',
+                }
+                cat_names = [cat_labels.get(c, c.title()) for c in shared_cats[:3]]
+                reasons.append(
+                    f'Both pursuing {" & ".join(cat_names)} goals'
+                )
+            if shared_circs:
+                reasons.append(
+                    f'Same circle: {shared_circs[0]}'
+                )
+            if uid in active_user_ids:
+                reasons.append('Active this week')
+
+            # Level title
+            level = u.level
+            if level >= 50:
+                title = 'Legend'
+            elif level >= 30:
+                title = 'Master'
+            elif level >= 20:
+                title = 'Expert'
+            elif level >= 10:
+                title = 'Achiever'
+            elif level >= 5:
+                title = 'Explorer'
+            else:
+                title = 'Dreamer'
+
+            results.append({
+                'user': {
+                    'id': str(u.id),
+                    'displayName': u.display_name or 'Anonymous',
+                    'avatar': u.avatar_url or '',
+                    'level': u.level,
+                    'title': title,
+                },
+                'score': score,
+                'reasons': reasons,
+                'mutualFriendCount': m_count,
+                'sharedCategories': shared_cats,
+            })
+
+        cache.set(cache_key, results, 3600)
+        return Response(results)

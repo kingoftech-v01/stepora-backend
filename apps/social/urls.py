@@ -35,7 +35,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView,
     FeedLikeView, FeedCommentView, RecentSearchViewSet, DreamPostViewSet,
-    SocialEventViewSet, StoryViewSet,
+    SocialEventViewSet, StoryViewSet, FriendSuggestionsView,
 )
 
 router = DefaultRouter()
@@ -51,5 +51,6 @@ urlpatterns = [
     path('feed/<uuid:activity_id>/comment/', FeedCommentView.as_view(), name='feed-comment'),
     path('users/search', UserSearchView.as_view(), name='user-search'),
     path('follow-suggestions/', FollowSuggestionsView.as_view(), name='follow-suggestions'),
+    path('friend-suggestions/', FriendSuggestionsView.as_view(), name='friend-suggestions'),
     path('', include(router.urls)),
 ]

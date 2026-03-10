@@ -15,8 +15,10 @@ from apps.users.models import User
 from .models import (
     Friendship, UserFollow, ActivityFeedItem,
     DreamPost, DreamPostLike, DreamPostComment, DreamEncouragement,
+    PostReaction,
     SocialEvent, SocialEventRegistration,
     Story, StoryView,
+    SavedPost,
 )
 from .validators import (
     validate_image_upload, validate_video_upload,
@@ -267,6 +269,8 @@ class DreamPostSerializer(serializers.ModelSerializer):
     hasSaved = serializers.SerializerMethodField()
     hasEncouraged = serializers.SerializerMethodField()
     encouragementSummary = serializers.SerializerMethodField()
+    userReaction = serializers.SerializerMethodField()
+    reactionCounts = serializers.SerializerMethodField()
     gofundmeUrl = serializers.URLField(source='gofundme_url', read_only=True)
     imageUrl = serializers.SerializerMethodField()
     videoUrl = serializers.SerializerMethodField()
@@ -286,6 +290,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             'visibility', 'likesCount', 'commentsCount', 'sharesCount',
             'savesCount', 'is_pinned',
             'hasLiked', 'hasSaved', 'hasEncouraged', 'encouragementSummary',
+            'userReaction', 'reactionCounts',
             'linkedAchievement', 'eventDetail',
             'createdAt', 'updatedAt',
         ]
@@ -313,7 +318,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return False
         if hasattr(obj, '_user_has_saved'):
             return obj._user_has_saved
-        return obj.saved_by.filter(id=request.user.id).exists()
+        return SavedPost.objects.filter(post=obj, user=request.user).exists()
 
     def get_hasEncouraged(self, obj) -> bool:
         request = self.context.get('request')
@@ -329,6 +334,26 @@ class DreamPostSerializer(serializers.ModelSerializer):
             count=Count('id')
         )
         return {item['encouragement_type']: item['count'] for item in counts}
+
+    def get_userReaction(self, obj):
+        """Return the current user's reaction type on this post, or None."""
+        if hasattr(obj, '_user_reaction_type'):
+            return obj._user_reaction_type
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        reaction = PostReaction.objects.filter(
+            post=obj, user=request.user,
+        ).values_list('reaction_type', flat=True).first()
+        return reaction
+
+    def get_reactionCounts(self, obj) -> dict:
+        """Return a dict of reaction_type -> count for this post."""
+        from django.db.models import Count
+        counts = obj.reactions.values('reaction_type').annotate(
+            count=Count('id')
+        )
+        return {item['reaction_type']: item['count'] for item in counts}
 
     def _absolute_url(self, relative_url):
         """Convert a relative media URL to an absolute URL."""

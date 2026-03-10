@@ -8,6 +8,7 @@ and share goals for mutual motivation.
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from encrypted_model_fields.fields import EncryptedTextField
@@ -155,3 +156,149 @@ class BuddyEncouragement(models.Model):
     def __str__(self):
         preview = self.message[:50] + '...' if len(self.message) > 50 else (self.message or '(no message)')
         return f"{self.sender.display_name or self.sender.email}: {preview}"
+
+
+class AccountabilityContract(models.Model):
+    """
+    Represents an accountability contract between two buddies.
+
+    A contract defines shared goals with measurable targets, a check-in
+    frequency, and a date range. Both partners track progress via check-ins
+    and can compare results side by side.
+    """
+
+    CHECK_IN_FREQUENCY_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Bi-weekly'),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this contract.'
+    )
+    pairing = models.ForeignKey(
+        'BuddyPairing',
+        on_delete=models.CASCADE,
+        related_name='contracts',
+        help_text='The buddy pairing this contract belongs to.'
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text='Title of the accountability contract.'
+    )
+    description = models.TextField(
+        blank=True,
+        help_text='Optional description of the contract.'
+    )
+    goals = models.JSONField(
+        default=list,
+        help_text='List of goals: [{title, target, unit}].'
+    )
+    check_in_frequency = models.CharField(
+        max_length=20,
+        choices=CHECK_IN_FREQUENCY_CHOICES,
+        default='weekly',
+        help_text='How often partners should check in.'
+    )
+    start_date = models.DateField(
+        help_text='When the contract period begins.'
+    )
+    end_date = models.DateField(
+        help_text='When the contract period ends.'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        db_index=True,
+        help_text='Current status of the contract.'
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_contracts',
+        help_text='The user who created this contract.'
+    )
+    accepted_by_partner = models.BooleanField(
+        default=False,
+        help_text='Whether the partner has accepted this contract.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'buddy_contracts'
+        ordering = ['-created_at']
+        verbose_name = 'Accountability Contract'
+        verbose_name_plural = 'Accountability Contracts'
+        indexes = [
+            models.Index(fields=['pairing', 'status'], name='idx_contract_pairing_status'),
+            models.Index(fields=['created_by'], name='idx_contract_created_by'),
+            models.Index(fields=['-created_at'], name='idx_contract_created'),
+        ]
+
+    def __str__(self):
+        return f"Contract: {self.title} ({self.status})"
+
+
+class ContractCheckIn(models.Model):
+    """
+    Represents a single check-in entry for an accountability contract.
+
+    Each check-in records progress against the contract's goals,
+    an optional note, and the user's current mood.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text='Unique identifier for this check-in.'
+    )
+    contract = models.ForeignKey(
+        AccountabilityContract,
+        on_delete=models.CASCADE,
+        related_name='check_ins',
+        help_text='The contract this check-in belongs to.'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='contract_check_ins',
+        help_text='The user who submitted this check-in.'
+    )
+    progress = models.JSONField(
+        default=dict,
+        help_text='Progress values keyed by goal index: {goal_index: value}.'
+    )
+    note = models.TextField(
+        blank=True,
+        help_text='Optional note accompanying the check-in.'
+    )
+    mood = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text='User mood at time of check-in.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'buddy_contract_check_ins'
+        ordering = ['-created_at']
+        verbose_name = 'Contract Check-In'
+        verbose_name_plural = 'Contract Check-Ins'
+        indexes = [
+            models.Index(fields=['contract', 'user'], name='idx_checkin_contract_user'),
+            models.Index(fields=['contract', '-created_at'], name='idx_checkin_contract_date'),
+        ]
+
+    def __str__(self):
+        return f"Check-in by {self.user_id} on {self.created_at:%Y-%m-%d}"

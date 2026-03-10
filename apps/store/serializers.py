@@ -36,6 +36,12 @@ class StoreItemSerializer(serializers.ModelSerializer):
         help_text='Name of the parent category.',
     )
 
+    preview_type_display = serializers.CharField(
+        source='get_preview_type_display',
+        read_only=True,
+        help_text='Human-readable preview type label.',
+    )
+
     class Meta:
         model = StoreItem
         fields = [
@@ -52,6 +58,9 @@ class StoreItemSerializer(serializers.ModelSerializer):
             'rarity',
             'rarity_display',
             'metadata',
+            'preview_type',
+            'preview_type_display',
+            'preview_data',
             'xp_price',
             'available_from',
             'available_until',
@@ -464,6 +473,67 @@ class RefundRequestDisplaySerializer(serializers.ModelSerializer):
             'created_at': {'help_text': 'Timestamp when the request was submitted.'},
             'updated_at': {'help_text': 'Timestamp when the request was last updated.'},
         }
+
+
+class ItemPreviewSerializer(serializers.ModelSerializer):
+    """
+    Serializer for store item preview/try-before-buy data.
+
+    Returns the preview configuration needed by the frontend to render
+    a live preview of the item (theme colors, chat bubble styles,
+    profile backgrounds, avatar frames, etc.).
+    """
+
+    rarity_display = serializers.CharField(
+        source='get_rarity_display',
+        read_only=True,
+        help_text='Human-readable rarity label.',
+    )
+    item_type_display = serializers.CharField(
+        source='get_item_type_display',
+        read_only=True,
+        help_text='Human-readable item type label.',
+    )
+    preview_type_display = serializers.CharField(
+        source='get_preview_type_display',
+        read_only=True,
+        help_text='Human-readable preview type label.',
+    )
+    is_owned = serializers.SerializerMethodField(
+        help_text='Whether the current user owns this item.',
+    )
+
+    class Meta:
+        model = StoreItem
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'description',
+            'image_url',
+            'item_type',
+            'item_type_display',
+            'rarity',
+            'rarity_display',
+            'price',
+            'xp_price',
+            'preview_type',
+            'preview_type_display',
+            'preview_data',
+            'metadata',
+            'is_owned',
+        ]
+        read_only_fields = fields
+
+    def get_is_owned(self, obj) -> bool:
+        """Check whether the requesting user already owns this item."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            return UserInventory.objects.filter(
+                user=request.user,
+                item=obj
+            ).exists()
+        return False
 
 
 class RefundProcessSerializer(serializers.Serializer):

@@ -19,13 +19,14 @@ from django.http import JsonResponse
 from django.utils.translation import gettext as _
 
 from django.db.models import Prefetch
-from .models import Conversation, Message, MessageReadStatus, ConversationTemplate, Call
+from .models import Conversation, Message, MessageReadStatus, ConversationTemplate, Call, ConversationBranch, ChatMemory
 from .serializers import (
     ConversationSerializer, ConversationDetailSerializer, ConversationCreateSerializer,
-    MessageSerializer, MessageCreateSerializer, ConversationTemplateSerializer,
-    CallHistorySerializer
+    MessageSerializer, MessageCreateSerializer, MessageSearchSerializer,
+    ConversationTemplateSerializer, CallHistorySerializer, ConversationBranchSerializer,
+    ChatMemorySerializer,
 )
-from .tasks import transcribe_voice_message, summarize_conversation
+from .tasks import transcribe_voice_message, summarize_conversation, extract_chat_memories
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.permissions import CanUseAI
@@ -111,7 +112,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Only require CanUseAI for AI-specific write actions, not list/retrieve."""
         if self.action in ('create', 'send_message', 'send_voice', 'send_image',
-                           'summarize', 'generate_plan'):
+                           'summarize', 'summarize_voice', 'generate_plan'):
             return [IsAuthenticated(), CanUseAI()]
         return [IsAuthenticated()]
 
@@ -252,6 +253,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
             if conversation.total_messages % 20 == 0 and conversation.total_messages > 0:
                 summarize_conversation.delay(str(conversation.id))
 
+            # Trigger memory extraction every 5 user messages
+            user_msg_count = conversation.messages.filter(role='user').count()
+            if user_msg_count % 5 == 0 and user_msg_count > 0:
+                extract_chat_memories.delay(str(conversation.id))
+
             # Broadcast to WebSocket clients so other connected tabs/users get real-time updates
             try:
                 from channels.layers import get_channel_layer
@@ -364,7 +370,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
             '[Voice message]',
             metadata={'type': 'voice'},
         )
-        Message.objects.filter(id=message.id).update(audio_url=audio_url)
+        audio_duration = request.data.get('duration')
+        update_kwargs = {'audio_url': audio_url}
+        if audio_duration is not None:
+            try:
+                update_kwargs['audio_duration'] = int(audio_duration)
+            except (ValueError, TypeError):
+                pass
+        Message.objects.filter(id=message.id).update(**update_kwargs)
 
         # Increment voice usage counter
         AIUsageTracker().increment(request.user, 'ai_voice')
@@ -380,6 +393,95 @@ class ConversationViewSet(viewsets.ModelViewSet):
             'message': MessageSerializer(Message.objects.get(id=message.id)).data,
             'status': 'transcription_queued',
         }, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Summarize voice message",
+        description="Generate an AI-powered summary of a voice message's transcription, "
+                    "extracting key points, action items, and mood.",
+        tags=["Conversations"],
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='No transcription available.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Message not found.'),
+            429: OpenApiResponse(description='Rate limit exceeded.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=True, methods=['post'],
+            url_path=r'summarize-voice/(?P<message_id>[0-9a-f-]+)',
+            throttle_classes=[AIRateThrottle, AIChatDailyThrottle])
+    def summarize_voice(self, request, pk=None, message_id=None):
+        """Summarize a specific voice message in the conversation."""
+        conversation = self.get_object()
+
+        try:
+            message = conversation.messages.get(id=message_id)
+        except Message.DoesNotExist:
+            return Response(
+                {'error': _('Message not found.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if the message has a transcription to summarize
+        transcript = message.transcription or ''
+        if not transcript and message.content and message.content != '[Voice message]':
+            transcript = message.content
+
+        if not transcript:
+            return Response(
+                {'error': _('This message has no transcription yet. Please wait for transcription to complete.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if summary already exists in metadata
+        metadata = message.metadata or {}
+        existing_summary = metadata.get('voice_summary')
+        if existing_summary and not request.data.get('force'):
+            return Response({
+                'summary': existing_summary,
+                'message_id': str(message.id),
+                'cached': True,
+            })
+
+        # Build conversation context from recent messages
+        recent_msgs = list(
+            conversation.messages
+            .exclude(id=message.id)
+            .order_by('-created_at')[:5]
+        )
+        recent_msgs.reverse()
+        context = "\n".join(
+            f"{m.role}: {m.content[:200]}" for m in recent_msgs
+            if m.content and m.content != '[Voice message]'
+        )
+
+        ai_service = OpenAIService()
+        try:
+            summary_result = ai_service.summarize_voice_note(
+                transcript,
+                conversation_context=context,
+            )
+
+            # Increment AI usage counter
+            AIUsageTracker().increment(request.user, 'ai_chat')
+
+            # Store summary in message metadata
+            metadata['voice_summary'] = summary_result
+            message.metadata = metadata
+            message.save(update_fields=['metadata'])
+
+            return Response({
+                'summary': summary_result,
+                'message_id': str(message.id),
+                'cached': False,
+            })
+
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
     @extend_schema(
         summary="Send image message",
@@ -582,29 +684,31 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Search messages",
-        description="Search messages within a conversation",
+        description="Search messages within a conversation by keyword. Returns paginated results with highlighted excerpts.",
         tags=["Conversations"],
         responses={
-            200: MessageSerializer(many=True),
+            200: MessageSearchSerializer(many=True),
             403: OpenApiResponse(description='Subscription required.'),
             404: OpenApiResponse(description='Not found.'),
         },
     )
     @action(detail=True, methods=['get'])
     def search(self, request, pk=None):
-        """Search messages within a conversation."""
+        """Search messages within a conversation by content keyword."""
         conversation = self.get_object()
         query = request.query_params.get('q', '').strip()
         if len(query) < 2:
             return Response([])
 
-        # Use Elasticsearch for message search (content is encrypted at rest)
-        from apps.search.services import SearchService
-        message_ids = SearchService.search_messages(
-            request.user, query, conversation_id=str(conversation.id)
+        matched = conversation.messages.filter(
+            content__icontains=query
+        ).exclude(role='system').order_by('-created_at')[:50]
+
+        serializer = MessageSearchSerializer(
+            matched, many=True,
+            context={'search_query': query, 'request': request},
         )
-        matched = Message.objects.filter(id__in=message_ids).order_by('-created_at')[:50]
-        return Response(MessageSerializer(matched, many=True).data)
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Export conversation",
@@ -724,6 +828,236 @@ class ConversationViewSet(viewsets.ModelViewSet):
         )
 
         return Response({'status': 'ok', 'last_read_message_id': str(last_msg.id) if last_msg else None})
+
+    # ─── Branch endpoints ─────────────────────────────────────────────
+
+    @extend_schema(
+        summary="Create branch",
+        description="Create a new conversation branch from a specific message. "
+                    "All messages up to the parent message are copied as context.",
+        tags=["Conversations"],
+        responses={
+            201: ConversationBranchSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Message not found.'),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='branch')
+    def create_branch(self, request, pk=None):
+        """Create a branch from a specific message in the conversation."""
+        conversation = self.get_object()
+
+        parent_message_id = request.data.get('parent_message_id')
+        branch_name = request.data.get('name', '')
+
+        if not parent_message_id:
+            return Response(
+                {'error': _('parent_message_id is required.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            parent_message = conversation.messages.get(id=parent_message_id)
+        except Message.DoesNotExist:
+            return Response(
+                {'error': _('Message not found in this conversation.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Create the branch
+        branch = ConversationBranch.objects.create(
+            conversation=conversation,
+            parent_message=parent_message,
+            name=branch_name,
+        )
+
+        # Copy all messages up to and including parent_message as context
+        context_messages = conversation.messages.filter(
+            created_at__lte=parent_message.created_at,
+            branch__isnull=True,
+        ).order_by('created_at')
+
+        for msg in context_messages:
+            Message.objects.create(
+                conversation=conversation,
+                branch=branch,
+                role=msg.role,
+                content=msg.content,
+                metadata={**msg.metadata, 'copied_from': str(msg.id)},
+            )
+
+        return Response(
+            ConversationBranchSerializer(branch).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @extend_schema(
+        summary="List branches",
+        description="List all branches for a conversation.",
+        tags=["Conversations"],
+        responses={200: ConversationBranchSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'], url_path='branches')
+    def list_branches(self, request, pk=None):
+        """List all branches for a conversation."""
+        conversation = self.get_object()
+        branches = conversation.branches.all()
+        serializer = ConversationBranchSerializer(branches, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Send message in branch",
+        description="Send a message in a specific branch and get AI response.",
+        tags=["Conversations"],
+        request=MessageCreateSerializer,
+        responses={
+            200: dict,
+            400: OpenApiResponse(description='Validation error.'),
+            404: OpenApiResponse(description='Branch not found.'),
+            502: OpenApiResponse(description='AI service error.'),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path=r'branch/(?P<branch_id>[0-9a-f-]+)/send',
+            throttle_classes=[AIRateThrottle, AIChatDailyThrottle])
+    def branch_send(self, request, pk=None, branch_id=None):
+        """Send a message in a branch and get AI response."""
+        conversation = self.get_object()
+
+        try:
+            branch = conversation.branches.get(id=branch_id)
+        except ConversationBranch.DoesNotExist:
+            return Response(
+                {'error': _('Branch not found.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Validate message
+        message_serializer = MessageCreateSerializer(data=request.data)
+        if not message_serializer.is_valid():
+            return Response(
+                message_serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_message = message_serializer.validated_data['content']
+
+        # Content moderation
+        mod_result = ContentModerationService().moderate_text(user_message, context='chat')
+        if mod_result.is_flagged:
+            return Response(
+                {'error': mod_result.user_message, 'moderation': True},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Save user message in the branch
+        user_msg = Message.objects.create(
+            conversation=conversation,
+            branch=branch,
+            role='user',
+            content=user_message,
+        )
+
+        # Get AI response using branch messages as context
+        ai_service = OpenAIService()
+
+        try:
+            # Build context from branch messages
+            branch_messages = branch.messages.order_by('created_at')
+            api_messages = []
+
+            # Inject dream context if available
+            if conversation.dream:
+                dream = conversation.dream
+                dream_context = (
+                    f"DREAM CONTEXT (always active):\n"
+                    f"- Dream Title: {dream.title}\n"
+                    f"- Dream Description: {dream.description}\n"
+                    f"- Category: {dream.category}\n"
+                    f"- Status: {dream.status}\n"
+                    f"- Progress: {dream.progress_percentage:.0f}%\n"
+                )
+                api_messages.append({'role': 'system', 'content': dream_context})
+
+            # Add branch messages (last 20)
+            recent_branch_msgs = list(branch_messages.order_by('-created_at')[:20])
+            recent_branch_msgs.reverse()
+            api_messages.extend([
+                {'role': msg.role, 'content': msg.content}
+                for msg in recent_branch_msgs
+            ])
+
+            raw_response = ai_service.chat(
+                messages=api_messages,
+                conversation_type=conversation.conversation_type
+            )
+
+            validated = validate_chat_response(raw_response)
+
+            is_safe, safety_reason = validate_ai_output_safety(validated.content)
+            if not is_safe:
+                validated.content = (
+                    "I apologize, but I need to rephrase my response. "
+                    "Could you tell me more about what specific aspect of your dream you'd like help with?"
+                )
+
+            AIUsageTracker().increment(request.user, 'ai_chat')
+
+            assistant_message = Message.objects.create(
+                conversation=conversation,
+                branch=branch,
+                role='assistant',
+                content=validated.content,
+                metadata={'tokens_used': validated.tokens_used},
+            )
+
+            return Response({
+                'user_message': MessageSerializer(user_msg).data,
+                'assistant_message': MessageSerializer(assistant_message).data,
+                'branch': ConversationBranchSerializer(branch).data,
+            })
+
+        except AIValidationError as e:
+            return Response(
+                {'error': _('AI produced an invalid response: %(message)s') % {'message': e.message}},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+        except OpenAIError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        summary="Get branch messages",
+        description="Get all messages in a specific branch.",
+        tags=["Conversations"],
+        responses={
+            200: MessageSerializer(many=True),
+            404: OpenApiResponse(description='Branch not found.'),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path=r'branch/(?P<branch_id>[0-9a-f-]+)/messages')
+    def branch_messages(self, request, pk=None, branch_id=None):
+        """Get messages for a specific branch."""
+        conversation = self.get_object()
+
+        try:
+            branch = conversation.branches.get(id=branch_id)
+        except ConversationBranch.DoesNotExist:
+            return Response(
+                {'error': _('Branch not found.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        messages = branch.messages.order_by('created_at')
+
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = MessageSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
 
 
 @extend_schema_view(
@@ -1079,3 +1413,71 @@ class CallViewSet(viewsets.GenericViewSet):
                     logger.warning("Failed to send notification", exc_info=True)
         except Exception:
             logger.warning("Failed to send notification", exc_info=True)
+
+
+# ─── Chat Memory ViewSet ──────────────────────────────────────────────
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List chat memories",
+        description="Get all active chat memories for the current user.",
+        tags=["Chat Memory"],
+        responses={200: ChatMemorySerializer(many=True)},
+    ),
+    destroy=extend_schema(
+        summary="Delete a chat memory",
+        description="Delete a specific chat memory by ID.",
+        tags=["Chat Memory"],
+        responses={204: None},
+    ),
+)
+class ChatMemoryViewSet(viewsets.GenericViewSet):
+    """
+    ViewSet for managing AI chat memories.
+
+    Provides list, delete, and clear-all operations for the
+    user's persistent chat memories.
+    """
+
+    serializer_class = ChatMemorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ChatMemory.objects.filter(
+            user=self.request.user,
+            is_active=True,
+        )
+
+    def list(self, request):
+        """List all active memories for the current user."""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        """Delete (deactivate) a specific memory."""
+        try:
+            memory = self.get_queryset().get(pk=pk)
+        except ChatMemory.DoesNotExist:
+            return Response(
+                {'error': _('Memory not found.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        memory.is_active = False
+        memory.save(update_fields=['is_active', 'updated_at'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="Clear all chat memories",
+        description="Deactivate all chat memories for the current user.",
+        tags=["Chat Memory"],
+        responses={200: OpenApiResponse(description='All memories cleared.')},
+    )
+    @action(detail=False, methods=['post'], url_path='clear')
+    def clear_all(self, request):
+        """Deactivate all memories for the current user."""
+        count = self.get_queryset().update(is_active=False)
+        return Response({
+            'cleared': count,
+            'message': _('All memories have been cleared.'),
+        })

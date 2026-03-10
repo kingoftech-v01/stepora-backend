@@ -16,6 +16,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from .models import Conversation, Message
+from .tasks import extract_chat_memories
 from integrations.openai_service import OpenAIService
 from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
@@ -241,6 +242,9 @@ class AIChatConsumer(
                 },
             )
 
+            # Trigger memory extraction every 5 user messages
+            await self._maybe_extract_memories(conversation)
+
         except OpenAIError:
             logger.exception("AI service error in stream")
             await self.send_error('AI service is temporarily unavailable')
@@ -411,6 +415,13 @@ class AIChatConsumer(
             updated_at=timezone.now(),
         )
         return message
+
+    @database_sync_to_async
+    def _maybe_extract_memories(self, conversation):
+        """Trigger memory extraction every 5 user messages."""
+        user_msg_count = conversation.messages.filter(role='user').count()
+        if user_msg_count % 5 == 0 and user_msg_count > 0:
+            extract_chat_memories.delay(str(conversation.id))
 
     @database_sync_to_async
     def _check_ai_quota(self):

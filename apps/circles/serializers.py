@@ -14,6 +14,7 @@ from .models import (
     Circle, CircleMembership, CirclePost, CircleChallenge,
     PostReaction, CircleInvitation, ChallengeProgress,
     CircleMessage, CircleCall, CircleCallParticipant,
+    CirclePoll, PollOption, PollVote,
 )
 
 
@@ -49,8 +50,8 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
     """
     Serializer for circle challenges.
 
-    Includes challenge details, dates, status, and participant count.
-    Uses camelCase field names to match mobile app expectations.
+    Includes challenge details, dates, status, participant count, challenge type,
+    and target value. Uses camelCase field names to match mobile app expectations.
     """
 
     participantCount = serializers.IntegerField(
@@ -61,6 +62,11 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
     startDate = serializers.DateTimeField(source='start_date', read_only=True, help_text='Challenge start date and time.')
     endDate = serializers.DateTimeField(source='end_date', read_only=True, help_text='Challenge end date and time.')
     hasJoined = serializers.SerializerMethodField(help_text='Whether the current user has joined this challenge.')
+    challengeType = serializers.CharField(source='challenge_type', read_only=True, help_text='Type of challenge.')
+    challengeTypeLabel = serializers.CharField(source='challenge_type_label', read_only=True, help_text='Human-readable challenge type label.')
+    targetValue = serializers.IntegerField(source='target_value', read_only=True, help_text='Target value to complete the challenge.')
+    creatorName = serializers.SerializerMethodField(help_text='Display name of the challenge creator.')
+    myProgress = serializers.SerializerMethodField(help_text='Current user total progress in this challenge.')
 
     class Meta:
         model = CircleChallenge
@@ -68,11 +74,16 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             'id',
             'title',
             'description',
+            'challengeType',
+            'challengeTypeLabel',
+            'targetValue',
             'startDate',
             'endDate',
             'status',
             'participantCount',
             'hasJoined',
+            'creatorName',
+            'myProgress',
             'created_at',
         ]
         read_only_fields = fields
@@ -89,6 +100,178 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
         if request and hasattr(request, 'user') and request.user.is_authenticated:
             return obj.participants.filter(id=request.user.id).exists()
         return False
+
+    def get_creatorName(self, obj):
+        if obj.creator:
+            return obj.creator.display_name or _('Anonymous')
+        return None
+
+    def get_myProgress(self, obj):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            from django.db.models import Sum
+            result = obj.progress_entries.filter(
+                user=request.user
+            ).aggregate(total=Sum('progress_value'))
+            return result['total'] or 0
+        return 0
+
+
+class CircleChallengeCreateSerializer(serializers.Serializer):
+    """Serializer for creating a new challenge in a circle."""
+
+    title = serializers.CharField(
+        max_length=200,
+        help_text='Title of the challenge.'
+    )
+    description = serializers.CharField(
+        max_length=5000,
+        required=False,
+        default='',
+        help_text='Description of the challenge.'
+    )
+    challengeType = serializers.ChoiceField(
+        choices=['tasks_completed', 'streak_days', 'focus_minutes', 'dreams_progress'],
+        source='challenge_type',
+        help_text='Type of challenge.'
+    )
+    targetValue = serializers.IntegerField(
+        min_value=1,
+        source='target_value',
+        help_text='Target value to complete the challenge.'
+    )
+    startDate = serializers.DateTimeField(
+        source='start_date',
+        help_text='When the challenge starts.'
+    )
+    endDate = serializers.DateTimeField(
+        source='end_date',
+        help_text='When the challenge ends.'
+    )
+
+    def validate_title(self, value):
+        return sanitize_text(value)
+
+    def validate_description(self, value):
+        return sanitize_text(value)
+
+    def validate(self, data):
+        if data['end_date'] <= data['start_date']:
+            raise serializers.ValidationError({
+                'endDate': _('End date must be after start date.')
+            })
+        return data
+
+
+class PollOptionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for a single poll option.
+
+    Includes the option text, vote count, and display order.
+    Uses camelCase field names to match mobile app expectations.
+    """
+
+    voteCount = serializers.IntegerField(source='vote_count', read_only=True, help_text='Number of votes for this option.')
+
+    class Meta:
+        model = PollOption
+        fields = ['id', 'text', 'order', 'voteCount']
+        read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'text': {'help_text': 'Option text.'},
+            'order': {'help_text': 'Display order.'},
+        }
+
+
+class CirclePollSerializer(serializers.ModelSerializer):
+    """
+    Serializer for a poll attached to a circle post.
+
+    Includes question, options with vote counts, total votes,
+    the current user's voted option IDs, and whether the poll has ended.
+    """
+
+    options = PollOptionSerializer(many=True, read_only=True, help_text='List of poll options.')
+    totalVotes = serializers.IntegerField(source='total_votes', read_only=True, help_text='Total number of votes.')
+    allowsMultiple = serializers.BooleanField(source='allows_multiple', read_only=True, help_text='Whether multiple selections are allowed.')
+    endsAt = serializers.DateTimeField(source='ends_at', read_only=True, help_text='Poll end time.')
+    isEnded = serializers.BooleanField(source='is_ended', read_only=True, help_text='Whether the poll has ended.')
+    myVotes = serializers.SerializerMethodField(help_text='Option IDs the current user has voted for.')
+
+    class Meta:
+        model = CirclePoll
+        fields = [
+            'id', 'question', 'options', 'allowsMultiple',
+            'endsAt', 'isEnded', 'totalVotes', 'myVotes',
+        ]
+        read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier.'},
+            'question': {'help_text': 'The poll question.'},
+        }
+
+    def get_myVotes(self, obj) -> list:
+        """Return list of option IDs the current user voted for."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            voted_option_ids = PollVote.objects.filter(
+                option__poll=obj,
+                user=request.user,
+            ).values_list('option_id', flat=True)
+            return [str(oid) for oid in voted_option_ids]
+        return []
+
+
+class PollOptionInputSerializer(serializers.Serializer):
+    """Serializer for a single poll option in a create request."""
+
+    text = serializers.CharField(max_length=200, help_text='Option text.')
+
+    def validate_text(self, value):
+        return sanitize_text(value)
+
+
+class PollCreateSerializer(serializers.Serializer):
+    """
+    Serializer for creating a poll as part of a circle post.
+
+    Accepts question, options (2-6), allows_multiple flag,
+    and an optional end time.
+    """
+
+    question = serializers.CharField(max_length=300, help_text='The poll question.')
+    options = PollOptionInputSerializer(many=True, help_text='List of options (2-6).')
+    allowsMultiple = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text='Whether multiple selections are allowed.',
+    )
+    endsAt = serializers.DateTimeField(
+        required=False,
+        default=None,
+        help_text='Optional end time for the poll.',
+    )
+
+    def validate_question(self, value):
+        return sanitize_text(value)
+
+    def validate_options(self, value):
+        if len(value) < 2:
+            raise serializers.ValidationError(_('A poll must have at least 2 options.'))
+        if len(value) > 6:
+            raise serializers.ValidationError(_('A poll can have at most 6 options.'))
+        return value
+
+
+class PollVoteInputSerializer(serializers.Serializer):
+    """Serializer for voting on a poll."""
+
+    option_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        help_text='List of option IDs to vote for.',
+    )
 
 
 class CircleListSerializer(serializers.ModelSerializer):
@@ -264,11 +447,13 @@ class CirclePostSerializer(serializers.ModelSerializer):
     Serializer for circle posts (feed items).
 
     Provides post content along with author display info for the feed view.
+    Includes poll data when the post has an attached poll.
     """
 
     user = serializers.SerializerMethodField(help_text='Author display info including id, username, and avatar.')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True, help_text='Date and time the post was created.')
     reactions = serializers.SerializerMethodField(help_text='Reaction counts grouped by type.')
+    poll = serializers.SerializerMethodField(help_text='Poll data if the post has a poll attached.')
 
     class Meta:
         model = CirclePost
@@ -277,9 +462,10 @@ class CirclePostSerializer(serializers.ModelSerializer):
             'user',
             'content',
             'reactions',
+            'poll',
             'createdAt',
         ]
-        read_only_fields = ['id', 'user', 'reactions', 'createdAt']
+        read_only_fields = ['id', 'user', 'reactions', 'poll', 'createdAt']
         extra_kwargs = {
             'id': {'help_text': 'Unique identifier.'},
         }
@@ -300,13 +486,26 @@ class CirclePostSerializer(serializers.ModelSerializer):
         )
         return {item['reaction_type']: item['count'] for item in counts}
 
+    def get_poll(self, obj):
+        """Return poll data if the post has a poll, otherwise None."""
+        try:
+            poll = obj.poll
+        except CirclePoll.DoesNotExist:
+            return None
+        return CirclePollSerializer(poll, context=self.context).data
+
 
 class CirclePostCreateSerializer(serializers.Serializer):
-    """Serializer for creating a new post in a circle."""
+    """Serializer for creating a new post in a circle, optionally with a poll."""
 
     content = serializers.CharField(
         max_length=5000,
         help_text='The text content of the post.'
+    )
+    poll = PollCreateSerializer(
+        required=False,
+        default=None,
+        help_text='Optional poll to attach to the post.',
     )
 
     def validate_content(self, value):

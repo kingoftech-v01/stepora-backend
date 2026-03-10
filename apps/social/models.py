@@ -581,6 +581,43 @@ class DreamPost(models.Model):
         return f"{self.user.display_name or self.user.email}: {preview}"
 
 
+class SavedPost(models.Model):
+    """
+    Represents a user bookmarking/saving a dream post.
+
+    Each user can save a post at most once. Saving is toggled via the
+    save endpoint — calling it again removes the bookmark.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='saved_dream_posts',
+        help_text='The user who saved the post.',
+    )
+    post = models.ForeignKey(
+        'DreamPost',
+        on_delete=models.CASCADE,
+        related_name='saves',
+        help_text='The post that was saved.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'saved_posts'
+        unique_together = ('user', 'post')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='idx_savedpost_user_date'),
+            models.Index(fields=['post'], name='idx_savedpost_post'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} saved post {self.post_id}"
+
+
 class DreamPostLike(models.Model):
     """Like on a dream post. One per user per post."""
 
@@ -676,6 +713,65 @@ class DreamEncouragement(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} encouraged: {self.encouragement_type}"
+
+
+class PostReaction(models.Model):
+    """
+    Emoji reaction on a dream post.
+
+    Each user can have one reaction per post. Changing reaction type updates
+    the existing record. The six reaction types map to emoji in the frontend:
+    like (thumbs up), love (heart), fire, clap, wow, celebrate.
+    """
+
+    REACTION_TYPES = [
+        ('like', 'Like'),
+        ('love', 'Love'),
+        ('fire', 'Fire'),
+        ('clap', 'Clap'),
+        ('wow', 'Wow'),
+        ('celebrate', 'Celebrate'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='dream_post_reactions',
+        help_text='The user who reacted.',
+    )
+    post = models.ForeignKey(
+        'DreamPost',
+        on_delete=models.CASCADE,
+        related_name='reactions',
+        help_text='The post that was reacted to.',
+    )
+    reaction_type = models.CharField(
+        max_length=20,
+        choices=REACTION_TYPES,
+        help_text='Type of reaction.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'dream_post_reactions'
+        ordering = ['-created_at']
+        verbose_name = 'Post Reaction'
+        verbose_name_plural = 'Post Reactions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'post'],
+                name='unique_user_dreampost_reaction',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['post', 'reaction_type'], name='idx_dreact_post_type'),
+            models.Index(fields=['user'], name='idx_dreact_user'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.display_name or self.user.email} reacted {self.reaction_type} on post {self.post_id}"
 
 
 class SocialEvent(models.Model):

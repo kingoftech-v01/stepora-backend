@@ -89,8 +89,17 @@ class Conversation(models.Model):
         return message
 
     def get_messages_for_api(self, limit=20, max_tokens=None):
-        """Get recent messages formatted for OpenAI API, with dream context and summary."""
+        """Get recent messages formatted for OpenAI API, with dream context, memory, and summary."""
         api_messages = []
+
+        # Inject user memory context (cross-conversation recall)
+        from integrations.openai_service import OpenAIService
+        memory_context = OpenAIService.build_memory_context(self.user)
+        if memory_context:
+            api_messages.append({
+                'role': 'system',
+                'content': memory_context,
+            })
 
         # Always inject dream context if conversation is linked to a dream
         if self.dream:
@@ -209,6 +218,11 @@ class Message(models.Model):
         blank=True,
         help_text='URL to the uploaded audio file for voice messages.'
     )
+    audio_duration = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Duration of the audio file in seconds.'
+    )
     transcription = EncryptedTextField(
         blank=True,
         default='',
@@ -227,6 +241,16 @@ class Message(models.Model):
     is_liked = models.BooleanField(default=False)
     reactions = models.JSONField(default=list, blank=True, help_text='List of reaction emojis')
 
+    # Branch support
+    branch = models.ForeignKey(
+        'ConversationBranch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='messages',
+        help_text='Branch this message belongs to (null = main conversation).'
+    )
+
     # Metadata (tokens used, model version, etc.)
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -238,11 +262,47 @@ class Message(models.Model):
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
             models.Index(fields=['role']),
+            models.Index(fields=['branch', 'created_at']),
         ]
 
     def __str__(self):
         content_preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
         return f"{self.role}: {content_preview}"
+
+
+class ConversationBranch(models.Model):
+    """A branch point in a conversation, allowing exploration of alternate paths."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='branches'
+    )
+    parent_message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='branches',
+        help_text='The message from which this branch diverges.'
+    )
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Optional label for this branch.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'conversation_branches'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['conversation', '-created_at']),
+            models.Index(fields=['parent_message']),
+        ]
+
+    def __str__(self):
+        label = self.name or 'Unnamed branch'
+        return f"Branch: {label} (from {self.parent_message_id})"
 
 
 class ConversationSummary(models.Model):
@@ -345,6 +405,62 @@ class MessageReadStatus(models.Model):
 
     def __str__(self):
         return f"{self.user} read {self.conversation} up to {self.last_read_message_id}"
+
+
+class ChatMemory(models.Model):
+    """Persistent memory extracted from AI conversations.
+
+    Stores key facts, preferences, and context that the AI should
+    remember across conversations for a given user.
+    """
+
+    KEY_CHOICES = [
+        ('preference', 'Preference'),
+        ('fact', 'Fact'),
+        ('goal_context', 'Goal Context'),
+        ('style', 'Style'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_memories')
+    key = models.CharField(
+        max_length=100,
+        choices=KEY_CHOICES,
+        default='fact',
+        db_index=True,
+        help_text='Memory category (preference, fact, goal_context, style).'
+    )
+    content = EncryptedTextField(
+        help_text='The remembered information (encrypted at rest).'
+    )
+    source_conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='extracted_memories',
+        help_text='Conversation this memory was extracted from.'
+    )
+    importance = models.IntegerField(
+        default=3,
+        help_text='Importance level from 1 (low) to 5 (critical).'
+    )
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'chat_memories'
+        ordering = ['-importance', '-updated_at']
+        indexes = [
+            models.Index(fields=['user', '-importance']),
+            models.Index(fields=['user', 'key']),
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"[{self.key}] {self.content[:60]}{'...' if len(self.content) > 60 else ''}"
 
 
 class ConversationTemplate(models.Model):

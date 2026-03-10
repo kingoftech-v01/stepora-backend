@@ -21,13 +21,15 @@ from drf_spectacular.utils import (
     OpenApiResponse,
 )
 
-from .models import League, LeagueStanding, Season, SeasonReward
+from .models import League, LeagueStanding, Season, SeasonReward, LeagueSeason, SeasonParticipant
 from .serializers import (
     LeagueSerializer,
     LeagueStandingSerializer,
     SeasonSerializer,
     SeasonRewardSerializer,
     LeaderboardEntrySerializer,
+    LeagueSeasonSerializer,
+    SeasonParticipantSerializer,
 )
 from .services import LeagueService
 from core.permissions import CanUseLeague
@@ -513,4 +515,229 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
 
         reward.claim()
         serializer = SeasonRewardSerializer(reward)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List league seasons",
+        description="Retrieve all league seasons (current and past) with themed rewards.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+        },
+        tags=["Leagues"],
+    ),
+    retrieve=extend_schema(
+        summary="Get league season details",
+        description="Retrieve detailed information about a specific league season.",
+        responses={
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
+        tags=["Leagues"],
+    ),
+)
+class LeagueSeasonViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for themed league seasons with rewards.
+
+    Provides endpoints for:
+    - Listing all league seasons
+    - Retrieving season details (with user participation info)
+    - Getting the current active league season
+    - Joining the current season
+    - Viewing the season leaderboard
+    - Claiming end-of-season rewards
+    """
+
+    queryset = LeagueSeason.objects.all()
+    serializer_class = LeagueSeasonSerializer
+    permission_classes = [IsAuthenticated, CanUseLeague]
+
+    def get_serializer_context(self):
+        """Include request in serializer context for user participation lookup."""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    @extend_schema(
+        summary="Current league season",
+        description="Retrieve the currently active league season with theme and rewards.",
+        responses={
+            200: LeagueSeasonSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='No active league season.'),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=False, methods=['get'], url_path='current')
+    def current_season(self, request):
+        """Return the currently active league season."""
+        season = LeagueSeason.get_active_league_season()
+        if not season:
+            return Response(
+                {'error': _('No active league season.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = LeagueSeasonSerializer(season, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Join current league season",
+        description="Join the currently active league season. Creates a participant record.",
+        responses={
+            200: LeagueSeasonSerializer,
+            400: OpenApiResponse(description='Already joined or no active season.'),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='No active league season.'),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=False, methods=['post'], url_path='current/join')
+    def join_current_season(self, request):
+        """
+        Join the currently active league season.
+
+        Creates a SeasonParticipant record for the current user. Returns
+        400 if already joined.
+        """
+        season = LeagueSeason.get_active_league_season()
+        if not season:
+            return Response(
+                {'error': _('No active league season.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if season.has_ended:
+            return Response(
+                {'error': _('This season has already ended.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        _, created = SeasonParticipant.objects.get_or_create(
+            season=season,
+            user=request.user,
+            defaults={
+                'xp_earned': request.user.xp,
+            }
+        )
+
+        if not created:
+            return Response(
+                {'error': _('You have already joined this season.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = LeagueSeasonSerializer(season, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="League season leaderboard",
+        description=(
+            "Retrieve the top 50 participants for a specific league season, "
+            "ranked by XP earned. Shows user scores but never dreams."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Maximum number of entries (default 50, max 100).',
+                required=False,
+            ),
+        ],
+        responses={
+            200: SeasonParticipantSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
+        tags=["Leagues"],
+    )
+    @method_decorator(cache_page(300))
+    @action(detail=True, methods=['get'], url_path='leaderboard')
+    def leaderboard(self, request, pk=None):
+        """
+        Return the leaderboard for a specific league season.
+
+        Top participants ranked by XP earned. Each entry includes rank,
+        user display info, and XP metrics.
+        """
+        season = self.get_object()
+        limit = min(int(request.query_params.get('limit', 50)), 100)
+
+        participants = (
+            SeasonParticipant.objects
+            .filter(season=season)
+            .select_related('user')
+            .order_by('-xp_earned')[:limit]
+        )
+
+        # Assign ranks
+        entries = []
+        for idx, participant in enumerate(participants, start=1):
+            participant.rank = idx
+            entries.append(participant)
+
+        serializer = SeasonParticipantSerializer(entries, many=True)
+
+        # Mark the current user's entry
+        data = serializer.data
+        for entry in data:
+            if str(entry.get('user')) == str(request.user.id):
+                entry['is_current_user'] = True
+            else:
+                entry['is_current_user'] = False
+
+        return Response(data)
+
+    @extend_schema(
+        summary="Claim league season rewards",
+        description="Claim end-of-season rewards for a completed league season.",
+        responses={
+            200: SeasonParticipantSerializer,
+            400: OpenApiResponse(description="Season not ended or rewards already claimed."),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description="Not a participant in this season."),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=True, methods=['post'], url_path='claim-rewards')
+    def claim_rewards(self, request, pk=None):
+        """
+        Claim rewards for a completed league season.
+
+        The season must have ended and rewards must not have been
+        previously claimed. Returns the participant record with
+        the projected reward based on final rank.
+        """
+        season = self.get_object()
+
+        if not season.has_ended:
+            return Response(
+                {'error': _('Season has not ended yet.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            participant = SeasonParticipant.objects.select_related(
+                'season', 'user'
+            ).get(
+                season=season,
+                user=request.user
+            )
+        except SeasonParticipant.DoesNotExist:
+            return Response(
+                {'error': _('You did not participate in this season.')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if participant.rewards_claimed:
+            return Response(
+                {'error': _('Rewards have already been claimed.')},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        participant.claim_rewards()
+        serializer = SeasonParticipantSerializer(participant)
         return Response(serializer.data)

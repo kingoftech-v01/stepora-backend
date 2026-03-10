@@ -8,7 +8,7 @@ but NEVER expose user dreams (privacy by design).
 
 from rest_framework import serializers
 
-from .models import League, LeagueStanding, Season, SeasonReward
+from .models import League, LeagueStanding, Season, SeasonReward, LeagueSeason, SeasonParticipant
 
 
 class LeagueSerializer(serializers.ModelSerializer):
@@ -287,3 +287,154 @@ class LeaderboardEntrySerializer(serializers.Serializer):
         default=False,
         help_text='Whether this entry represents the requesting user.'
     )
+
+
+class LeagueSeasonSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the LeagueSeason model.
+
+    Includes computed properties for season status (remaining days,
+    whether it's current, whether it has ended) and participant count.
+    """
+
+    is_current = serializers.BooleanField(
+        read_only=True,
+        help_text='Whether today falls within this season\'s dates.'
+    )
+    has_ended = serializers.BooleanField(
+        read_only=True,
+        help_text='Whether this season has ended.'
+    )
+    days_remaining = serializers.IntegerField(
+        read_only=True,
+        help_text='Number of days left in the season.'
+    )
+    participant_count = serializers.SerializerMethodField(
+        help_text='Total number of participants in this season.'
+    )
+    user_participation = serializers.SerializerMethodField(
+        help_text='Current user\'s participation data, or null if not joined.'
+    )
+
+    class Meta:
+        model = LeagueSeason
+        fields = [
+            'id',
+            'name',
+            'theme',
+            'description',
+            'start_date',
+            'end_date',
+            'is_active',
+            'rewards',
+            'theme_colors',
+            'is_current',
+            'has_ended',
+            'days_remaining',
+            'participant_count',
+            'user_participation',
+            'created_at',
+        ]
+        read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the league season.'},
+            'name': {'help_text': 'Display name of the season.'},
+            'theme': {'help_text': 'Visual theme key (growth, fire, ocean, etc.).'},
+            'description': {'help_text': 'Description of the season.'},
+            'start_date': {'help_text': 'Start date of the season.'},
+            'end_date': {'help_text': 'End date of the season.'},
+            'is_active': {'help_text': 'Whether this season is currently active.'},
+            'rewards': {'help_text': 'Tiered reward definitions.'},
+            'theme_colors': {'help_text': 'Theme color palette (primary, secondary, accent).'},
+            'created_at': {'help_text': 'Timestamp when the season was created.'},
+        }
+
+    def get_participant_count(self, obj) -> int:
+        """Return the total number of participants in this season."""
+        return obj.participants.count()
+
+    def get_user_participation(self, obj) -> dict:
+        """
+        Return the current user's participation data for this season.
+
+        Returns None if the user is not participating.
+        """
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return None
+
+        try:
+            participant = SeasonParticipant.objects.get(
+                season=obj,
+                user=request.user
+            )
+            return {
+                'id': str(participant.id),
+                'xp_earned': participant.xp_earned,
+                'rank': participant.rank,
+                'rewards_claimed': participant.rewards_claimed,
+                'joined_at': participant.joined_at.isoformat() if participant.joined_at else None,
+            }
+        except SeasonParticipant.DoesNotExist:
+            return None
+
+
+class SeasonParticipantSerializer(serializers.ModelSerializer):
+    """
+    Serializer for season participant entries on the leaderboard.
+
+    Includes user display data (name, avatar, level) for leaderboard
+    rendering. Never exposes user dreams (privacy by design).
+    """
+
+    user_display_name = serializers.CharField(
+        source='user.display_name',
+        read_only=True,
+        help_text='Public display name of the user.'
+    )
+    user_avatar_url = serializers.URLField(
+        source='user.avatar_url',
+        read_only=True,
+        allow_blank=True,
+        help_text='URL to the user avatar image.'
+    )
+    user_level = serializers.IntegerField(
+        source='user.level',
+        read_only=True,
+        help_text='Current level of the user.'
+    )
+    projected_reward = serializers.SerializerMethodField(
+        help_text='The reward the user would earn at their current rank.'
+    )
+
+    class Meta:
+        model = SeasonParticipant
+        fields = [
+            'id',
+            'season',
+            'user',
+            'user_display_name',
+            'user_avatar_url',
+            'user_level',
+            'xp_earned',
+            'rank',
+            'rewards_claimed',
+            'joined_at',
+            'projected_reward',
+        ]
+        read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for this participant record.'},
+            'season': {'help_text': 'The season this participation belongs to.'},
+            'user': {'help_text': 'The user participating.'},
+            'xp_earned': {'help_text': 'Total XP earned this season.'},
+            'rank': {'help_text': 'Current rank in the season.'},
+            'rewards_claimed': {'help_text': 'Whether rewards have been claimed.'},
+            'joined_at': {'help_text': 'When the user joined this season.'},
+        }
+
+    def get_projected_reward(self, obj) -> dict:
+        """Return the reward matching the user's current rank, or None."""
+        if obj.rank is None:
+            return None
+        return obj.season.get_reward_for_rank(obj.rank)

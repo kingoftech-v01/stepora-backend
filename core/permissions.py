@@ -14,6 +14,40 @@ Status code semantics:
 from rest_framework import permissions
 
 
+class IsEmailVerified(permissions.BasePermission):
+    """
+    Blocks access for users whose primary email is not verified.
+
+    Returns 403 with a specific code so the frontend can show a
+    "verify your email" gate instead of a generic error.
+
+    Exempt paths (users need these before verifying):
+    - /api/auth/          (login, register, verify-email, etc.)
+    - /api/users/me/      (frontend needs user profile to check emailVerified)
+    - /health/            (health checks)
+    """
+
+    message = 'Please verify your email address to use the platform.'
+    code = 'email_not_verified'
+
+    # Prefixes that are exempt from email verification
+    _EXEMPT_PREFIXES = ('/api/auth/', '/health/', '/api/users/me/')
+
+    def has_permission(self, request, view):
+        # Skip for unauthenticated requests (let IsAuthenticated handle it)
+        user = request.user
+        if not user or not user.is_authenticated:
+            return True
+
+        # Skip for exempt paths
+        path = request.path
+        for prefix in self._EXEMPT_PREFIXES:
+            if path.startswith(prefix):
+                return True
+
+        return user.emailaddress_set.filter(verified=True, primary=True).exists()
+
+
 class IsOwner(permissions.BasePermission):
     """Permission to only allow owners of an object to access it."""
 

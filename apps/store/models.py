@@ -101,6 +101,14 @@ class StoreItem(models.Model):
         ('legendary', 'Legendary'),
     ]
 
+    PREVIEW_TYPE_CHOICES = [
+        ('theme', 'Theme'),
+        ('chat_bubble', 'Chat Bubble'),
+        ('profile_bg', 'Profile Background'),
+        ('avatar_frame', 'Avatar Frame'),
+        ('badge', 'Badge'),
+    ]
+
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -162,6 +170,19 @@ class StoreItem(models.Model):
         default=dict,
         blank=True,
         help_text='Additional item metadata (e.g., colors, animation settings, duration).'
+    )
+    preview_type = models.CharField(
+        max_length=20,
+        choices=PREVIEW_TYPE_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Type of preview experience for try-before-buy (e.g., theme, chat_bubble, avatar_frame).'
+    )
+    preview_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Preview configuration data (e.g., accent colors, background URLs, frame styles, bubble styles).'
     )
     xp_price = models.IntegerField(
         default=0,

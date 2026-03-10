@@ -28,6 +28,7 @@ class Notification(models.Model):
         ('system', 'System'),
         ('dream_completed', 'Dream Completed'),
         ('weekly_report', 'Weekly Report'),
+        ('daily_summary', 'Daily Summary'),
     ]
     notification_type = models.CharField(
         max_length=20,

@@ -89,6 +89,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.EmailVerificationMiddleware',
     'core.middleware.LastActivityMiddleware',
 ]
 
@@ -244,6 +245,7 @@ REST_FRAMEWORK = {
         'auth': '5/minute',
         'search': '15/minute',
         'export': '1/day',
+        'ai_motivation': '5/day',
     },
 }
 

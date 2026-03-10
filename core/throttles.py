@@ -140,6 +140,11 @@ class AIVoiceDailyThrottle(DailyAIQuotaThrottle):
     category = 'ai_voice'
 
 
+class AIMotivationRateThrottle(UserRateThrottle):
+    """Per-day rate limiting for AI motivation messages (5/day)."""
+    scope = 'ai_motivation'
+
+
 class TwoFactorRateThrottle(UserRateThrottle):
     """Rate limiting for 2FA operations (backup codes, setup)."""
     rate = '5/hour'
