@@ -24,12 +24,10 @@ from .permissions import (
     IsPremiumUser,
     IsProUser,
 )
-from .throttling import (
-    AIChatThrottle,
-    AIPlanGenerationThrottle,
-    StorePurchaseThrottle,
-    SubscriptionThrottle,
-)
+from .throttles import AIChatDailyThrottle as AIChatThrottle
+from .throttles import AIPlanRateThrottle as AIPlanGenerationThrottle
+from .throttles import StorePurchaseRateThrottle as StorePurchaseThrottle
+from .throttles import SubscriptionRateThrottle as SubscriptionThrottle
 
 
 class TestPermissions:
