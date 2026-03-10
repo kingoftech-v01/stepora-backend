@@ -102,6 +102,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     achievements_summary = serializers.SerializerMethodField(help_text='Summary of unlocked achievements.')
     equipped_items = serializers.SerializerMethodField(help_text='List of currently equipped store items.')
     rank = serializers.SerializerMethodField(help_text='Current season league rank.')
+    plan_features = serializers.SerializerMethodField(help_text='Feature flags from the active subscription plan.')
 
     class Meta:
         model = User
@@ -115,6 +116,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'onboarding_completed',
             'active_dreams_count', 'completed_dreams_count',
             'achievements_summary', 'equipped_items', 'rank',
+            'plan_features',
             'work_schedule', 'notification_prefs', 'app_prefs', 'persona',
             'dreamer_type',
             'created_at'
@@ -215,6 +217,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
             }
         except Exception:
             return None
+
+    def get_plan_features(self, obj) -> dict:
+        plan = obj.get_active_plan()
+        if not plan:
+            return {
+                'has_ai': False, 'has_buddy': False, 'has_circles': False,
+                'has_circle_create': False, 'has_vision_board': False,
+                'has_league': False, 'has_store': False, 'has_social_feed': False,
+                'dream_limit': 1, 'plan_name': 'Free', 'plan_slug': 'free',
+            }
+        return {
+            'has_ai': plan.has_ai, 'has_buddy': plan.has_buddy,
+            'has_circles': plan.has_circles, 'has_circle_create': plan.has_circle_create,
+            'has_vision_board': plan.has_vision_board, 'has_league': plan.has_league,
+            'has_store': plan.has_store, 'has_social_feed': plan.has_social_feed,
+            'dream_limit': plan.dream_limit, 'plan_name': plan.name,
+            'plan_slug': plan.slug,
+        }
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):

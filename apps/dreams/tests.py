@@ -263,16 +263,21 @@ class TestDreamViewSet:
         """Test POST /api/dreams/dreams/"""
         data = {
             'title': 'New Dream',
-            'description': 'A new dream to achieve',
+            'description': 'A new dream to achieve that is at least twenty characters',
             'category': 'personal',
             'priority': 1
         }
 
-        response = authenticated_client.post('/api/dreams/dreams/', data, format='json')
+        with patch('core.moderation.ContentModerationService.moderate_text') as mock_mod:
+            mock_mod.return_value = Mock(is_flagged=False)
+            response = authenticated_client.post('/api/dreams/dreams/', data, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['title'] == 'New Dream'
-        assert Dream.objects.filter(user=user, title='New Dream').exists()
+        # title is an encrypted field so filter(title=...) won't match;
+        # look up by the returned id instead.
+        dream_id = response.data['id']
+        assert Dream.objects.filter(id=dream_id, user=user).exists()
 
     def test_get_dream_detail(self, authenticated_client, dream):
         """Test GET /api/dreams/dreams/{id}/"""
@@ -334,65 +339,24 @@ class TestDreamViewSet:
         assert dream.ai_analysis is not None
 
     def test_generate_plan(self, authenticated_client, dream):
-        """Test POST /api/dreams/dreams/{id}/generate_plan/"""
+        """Test POST /api/dreams/dreams/{id}/generate_plan/
+
+        The view now dispatches plan generation as a background Celery task
+        and returns 202 Accepted with a status of 'generating'.
+        """
         # Upgrade user to pro so AI permission gate is satisfied
         _set_user_plan(dream.user, 'pro')
 
-        mock_plan_raw = {
-            'analysis': 'Test analysis',
-            'estimated_duration_weeks': 12,
-            'weekly_time_hours': 5,
-            'goals': [
-                {
-                    'title': 'Goal 1',
-                    'description': 'First goal',
-                    'order': 0,
-                    'estimated_minutes': 120,
-                    'tasks': [
-                        {
-                            'title': 'Task 1-1',
-                            'description': 'First task',
-                            'order': 0,
-                            'duration_mins': 30,
-                        }
-                    ]
-                }
-            ],
-            'potential_obstacles': [],
-            'calibration_references': [],
-        }
-
-        # Build mock validated plan that behaves like a pydantic model
-        mock_task = Mock()
-        mock_task.title = 'Task 1-1'
-        mock_task.description = 'First task'
-        mock_task.order = 0
-        mock_task.duration_mins = 30
-
-        mock_goal = Mock()
-        mock_goal.title = 'Goal 1'
-        mock_goal.description = 'First goal'
-        mock_goal.order = 0
-        mock_goal.estimated_minutes = 120
-        mock_goal.tasks = [mock_task]
-
-        mock_plan = Mock()
-        mock_plan.goals = [mock_goal]
-        mock_plan.potential_obstacles = []
-        mock_plan.calibration_references = []
-        mock_plan.model_dump.return_value = mock_plan_raw
-
-        with patch('apps.dreams.views.OpenAIService') as mock_service_cls, \
-             patch('apps.dreams.views.validate_plan_response') as mock_validate, \
-             patch('apps.dreams.views.check_plan_calibration_coherence') as mock_coherence:
-            mock_service_cls.return_value.generate_plan.return_value = mock_plan_raw
-            mock_validate.return_value = mock_plan
-            mock_coherence.return_value = []
+        with patch('apps.dreams.views.generate_dream_skeleton_task') as mock_task, \
+             patch('apps.dreams.views.get_plan_status', return_value=None), \
+             patch('apps.dreams.views.set_plan_status'):
+            mock_task.apply_async.return_value = Mock(id='fake-task-id')
 
             response = authenticated_client.post(f'/api/dreams/dreams/{dream.id}/generate_plan/')
 
-        assert response.status_code == status.HTTP_200_OK
-        assert Goal.objects.filter(dream=dream).exists()
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data['status'] == 'generating'
+        mock_task.apply_async.assert_called_once()
 
     def test_generate_two_minute_start(self, authenticated_client, dream):
         """Test POST /api/dreams/dreams/{id}/generate_two_minute_start/
@@ -587,9 +551,11 @@ class TestCeleryTasks:
             result = generate_two_minute_start(str(dream.id))
 
             assert result['created'] is True
-            assert Task.objects.filter(
-                goal__dream=dream, title__contains='\U0001f680'
-            ).exists()
+            assert result['action'] == 'Open Django tutorial website'
+            # Task is created with is_two_minute_start=True (title is encrypted,
+            # so we cannot filter by title__contains).
+            dream.refresh_from_db()
+            assert dream.has_two_minute_start is True
 
     def test_generate_two_minute_start_task_already_exists(self, db, dream):
         """Test generate_two_minute_start returns early when start already exists"""

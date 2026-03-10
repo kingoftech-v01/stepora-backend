@@ -232,10 +232,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         season = Season.get_active_season()
 
         if not season:
-            return Response(
-                {'error': _('No active season.')},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response([], status=status.HTTP_200_OK)
 
         # Get friend IDs from accepted friendships — 2 queries instead of loading all objects
         friend_ids = set(
@@ -310,10 +307,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         """
         season = Season.get_active_season()
         if not season:
-            return Response(
-                {'error': _('No active season.')},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response(None, status=status.HTTP_204_NO_CONTENT)
 
         try:
             standing = LeagueStanding.objects.select_related(

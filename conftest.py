@@ -14,12 +14,14 @@ from apps.users.models import User, GamificationProfile
 from apps.dreams.models import Dream, Goal, Task, Obstacle
 from apps.conversations.models import Conversation, Message
 from apps.notifications.models import Notification, NotificationTemplate, UserDevice
+from apps.subscriptions.models import SubscriptionPlan, Subscription
 
 
 @pytest.fixture(scope='session')
 def django_db_setup(django_db_setup, django_db_blocker):
-    """Setup test database"""
-    pass
+    """Setup test database and seed subscription plans."""
+    with django_db_blocker.unblock():
+        SubscriptionPlan.seed_plans()
 
 
 @pytest.fixture
@@ -48,27 +50,43 @@ def user(db, user_data):
 
 @pytest.fixture
 def premium_user(db):
-    """Create and return a premium user"""
+    """Create and return a premium user with an active Premium subscription."""
     user = User.objects.create_user(
         email='premium@example.com',
         password='testpassword123',
         display_name='Premium User',
         timezone='Europe/Paris',
-        subscription='premium',
-        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+    plan = SubscriptionPlan.objects.get(slug='premium')
+    Subscription.objects.update_or_create(
+        user=user,
+        defaults={
+            'plan': plan,
+            'status': 'active',
+            'current_period_start': timezone.now(),
+            'current_period_end': timezone.now() + timedelta(days=30),
+        },
     )
     return user
 
 
 @pytest.fixture
 def pro_user(db):
-    """Create and return a pro user"""
+    """Create and return a pro user with an active Pro subscription."""
     user = User.objects.create_user(
         email='prouser@example.com',
         password='testpassword123',
         display_name='Pro User',
-        subscription='pro',
-        subscription_ends=timezone.now() + timedelta(days=30),
+    )
+    plan = SubscriptionPlan.objects.get(slug='pro')
+    Subscription.objects.update_or_create(
+        user=user,
+        defaults={
+            'plan': plan,
+            'status': 'active',
+            'current_period_start': timezone.now(),
+            'current_period_end': timezone.now() + timedelta(days=30),
+        },
     )
     return user
 
@@ -380,15 +398,24 @@ def second_client(second_user):
 
 @pytest.fixture
 def second_premium_user(db):
-    """Create a second premium user for buddy/social tests"""
-    return User.objects.create_user(
+    """Create a second premium user with an active Premium subscription."""
+    user = User.objects.create_user(
         email='premium2@example.com',
         password='testpassword123',
         display_name='Premium User 2',
         timezone='Europe/Paris',
-        subscription='premium',
-        subscription_ends=timezone.now() + timedelta(days=30),
     )
+    plan = SubscriptionPlan.objects.get(slug='premium')
+    Subscription.objects.update_or_create(
+        user=user,
+        defaults={
+            'plan': plan,
+            'status': 'active',
+            'current_period_start': timezone.now(),
+            'current_period_end': timezone.now() + timedelta(days=30),
+        },
+    )
+    return user
 
 
 @pytest.fixture
@@ -401,14 +428,23 @@ def second_premium_client(second_premium_user):
 
 @pytest.fixture
 def second_pro_user(db):
-    """Create a second pro user for circles tests"""
-    return User.objects.create_user(
+    """Create a second pro user with an active Pro subscription."""
+    user = User.objects.create_user(
         email='pro2@example.com',
         password='testpassword123',
         display_name='Pro User 2',
-        subscription='pro',
-        subscription_ends=timezone.now() + timedelta(days=30),
     )
+    plan = SubscriptionPlan.objects.get(slug='pro')
+    Subscription.objects.update_or_create(
+        user=user,
+        defaults={
+            'plan': plan,
+            'status': 'active',
+            'current_period_start': timezone.now(),
+            'current_period_end': timezone.now() + timedelta(days=30),
+        },
+    )
+    return user
 
 
 @pytest.fixture

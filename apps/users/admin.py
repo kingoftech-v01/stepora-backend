@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from apps.subscriptions.models import Subscription, SubscriptionPlan
-from .models import User, GamificationProfile, EmailChangeRequest
+from .models import User, GamificationProfile, EmailChangeRequest, Achievement, UserAchievement, DailyActivity
 
 
 class SubscriptionInline(admin.StackedInline):
@@ -121,3 +121,36 @@ class EmailChangeRequestAdmin(admin.ModelAdmin):
     list_filter = ['is_verified', 'created_at']
     search_fields = ['user__email', 'new_email']
     readonly_fields = ['created_at', 'token']
+    raw_id_fields = ['user']
+
+
+@admin.register(Achievement)
+class AchievementAdmin(admin.ModelAdmin):
+    """Admin interface for Achievement model."""
+
+    list_display = ['name', 'icon', 'category', 'condition_type', 'condition_value', 'xp_reward', 'is_active', 'created_at']
+    list_filter = ['category', 'condition_type', 'is_active']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at']
+
+
+@admin.register(UserAchievement)
+class UserAchievementAdmin(admin.ModelAdmin):
+    """Admin interface for UserAchievement model."""
+
+    list_display = ['user', 'achievement', 'unlocked_at']
+    list_filter = ['unlocked_at']
+    search_fields = ['user__email', 'user__display_name', 'achievement__name']
+    readonly_fields = ['unlocked_at']
+    raw_id_fields = ['user', 'achievement']
+
+
+@admin.register(DailyActivity)
+class DailyActivityAdmin(admin.ModelAdmin):
+    """Admin interface for DailyActivity model."""
+
+    list_display = ['user', 'date', 'tasks_completed', 'xp_earned', 'minutes_active', 'created_at']
+    list_filter = ['date']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user']

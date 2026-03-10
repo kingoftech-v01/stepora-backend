@@ -7,7 +7,11 @@ and challenges with inline editing and filtering capabilities.
 
 from django.contrib import admin
 
-from .models import Circle, CircleMembership, CirclePost, CircleChallenge
+from .models import (
+    Circle, CircleMembership, CirclePost, CircleChallenge,
+    PostReaction, CircleInvitation, ChallengeProgress,
+    CircleMessage, CircleCall, CircleCallParticipant,
+)
 
 
 class CircleMembershipInline(admin.TabularInline):
@@ -152,3 +156,74 @@ class CircleChallengeAdmin(admin.ModelAdmin):
         """Display the number of participants."""
         return obj.participant_count
     participant_count.short_description = 'Participants'
+
+
+@admin.register(PostReaction)
+class PostReactionAdmin(admin.ModelAdmin):
+    """Admin interface for PostReaction model."""
+
+    list_display = ['user', 'post', 'reaction_type', 'created_at']
+    list_filter = ['reaction_type', 'created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'post']
+
+
+@admin.register(CircleInvitation)
+class CircleInvitationAdmin(admin.ModelAdmin):
+    """Admin interface for CircleInvitation model."""
+
+    list_display = ['circle', 'inviter', 'invitee', 'invite_code', 'status', 'expires_at', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['circle__name', 'inviter__email', 'invitee__email', 'invite_code']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['circle', 'inviter', 'invitee']
+
+
+@admin.register(ChallengeProgress)
+class ChallengeProgressAdmin(admin.ModelAdmin):
+    """Admin interface for ChallengeProgress model."""
+
+    list_display = ['user', 'challenge', 'progress_value', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name', 'challenge__title']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'challenge']
+
+
+@admin.register(CircleMessage)
+class CircleMessageAdmin(admin.ModelAdmin):
+    """Admin interface for CircleMessage model."""
+
+    list_display = ['sender', 'circle', 'content_preview', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['sender__email', 'sender__display_name', 'circle__name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['sender', 'circle']
+
+    def content_preview(self, obj):
+        """Display a truncated preview of the message content."""
+        return obj.content[:80] + '...' if len(obj.content) > 80 else obj.content
+    content_preview.short_description = 'Content'
+
+
+@admin.register(CircleCall)
+class CircleCallAdmin(admin.ModelAdmin):
+    """Admin interface for CircleCall model."""
+
+    list_display = ['circle', 'initiator', 'call_type', 'status', 'started_at', 'ended_at', 'duration_seconds']
+    list_filter = ['call_type', 'status', 'started_at']
+    search_fields = ['circle__name', 'initiator__email', 'agora_channel']
+    readonly_fields = ['started_at']
+    raw_id_fields = ['circle', 'initiator']
+
+
+@admin.register(CircleCallParticipant)
+class CircleCallParticipantAdmin(admin.ModelAdmin):
+    """Admin interface for CircleCallParticipant model."""
+
+    list_display = ['user', 'call', 'joined_at', 'left_at']
+    list_filter = ['joined_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['joined_at']
+    raw_id_fields = ['user', 'call']

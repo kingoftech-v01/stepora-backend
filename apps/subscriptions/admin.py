@@ -7,7 +7,7 @@ with rich list displays, filters, and search capabilities.
 
 from django.contrib import admin
 
-from .models import StripeCustomer, Subscription, SubscriptionPlan
+from .models import StripeCustomer, Subscription, SubscriptionPlan, Referral, StripeWebhookEvent
 
 
 @admin.register(StripeCustomer)
@@ -159,3 +159,24 @@ class SubscriptionAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+
+
+@admin.register(Referral)
+class ReferralAdmin(admin.ModelAdmin):
+    """Admin interface for Referral model."""
+
+    list_display = ['referrer', 'referred', 'referral_code', 'referred_has_paid', 'reward_granted', 'created_at', 'paid_at']
+    list_filter = ['referred_has_paid', 'reward_granted', 'created_at']
+    search_fields = ['referrer__email', 'referred__email', 'referral_code']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['referrer', 'referred']
+
+
+@admin.register(StripeWebhookEvent)
+class StripeWebhookEventAdmin(admin.ModelAdmin):
+    """Admin interface for StripeWebhookEvent model."""
+
+    list_display = ['stripe_event_id', 'event_type', 'processed_at']
+    list_filter = ['event_type', 'processed_at']
+    search_fields = ['stripe_event_id', 'event_type']
+    readonly_fields = ['processed_at']

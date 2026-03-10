@@ -161,6 +161,34 @@ app.conf.beat_schedule = {
         'schedule': crontab(day_of_week=0, hour=23, minute=0),
     },
 
+    # === Social Tasks ===
+
+    # Expire stories older than 24h (hourly)
+    'expire-stories': {
+        'task': 'apps.social.tasks.expire_stories',
+        'schedule': crontab(minute=10),  # Every hour at :10
+    },
+
+    # Update social event statuses (every 15 minutes)
+    'update-event-statuses': {
+        'task': 'apps.social.tasks.update_event_statuses',
+        'schedule': 900.0,  # Every 15 minutes
+    },
+
+    # === Circle Tasks ===
+
+    # Update challenge statuses (hourly)
+    'update-challenge-statuses': {
+        'task': 'apps.circles.tasks.update_challenge_statuses',
+        'schedule': crontab(minute=15),  # Every hour at :15
+    },
+
+    # Expire pending circle invitations (daily at 2:30 AM)
+    'expire-circle-invitations': {
+        'task': 'apps.circles.tasks.expire_circle_invitations',
+        'schedule': crontab(hour=2, minute=30),
+    },
+
     # === User Tasks ===
 
     # Hard-delete accounts soft-deleted 30+ days ago (GDPR)

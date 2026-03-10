@@ -46,7 +46,7 @@ router.register(r'events', SocialEventViewSet, basename='social-event')
 router.register(r'stories', StoryViewSet, basename='story')
 
 urlpatterns = [
-    path('feed/friends', ActivityFeedView.as_view(), name='friends-feed'),
+    path('feed/friends/', ActivityFeedView.as_view(), name='friends-feed'),
     path('feed/<uuid:activity_id>/like/', FeedLikeView.as_view(), name='feed-like'),
     path('feed/<uuid:activity_id>/comment/', FeedCommentView.as_view(), name='feed-comment'),
     path('users/search', UserSearchView.as_view(), name='user-search'),

@@ -3,7 +3,11 @@ Django admin configuration for Dreams app.
 """
 
 from django.contrib import admin
-from .models import Dream, Goal, Task, Obstacle
+from .models import (
+    Dream, Goal, Task, Obstacle, DreamMilestone, DreamTemplate,
+    DreamCollaborator, SharedDream, DreamProgressSnapshot,
+    VisionBoardImage, PlanCheckIn, CalibrationResponse,
+)
 
 
 class GoalInline(admin.TabularInline):
@@ -125,3 +129,92 @@ class ObstacleAdmin(admin.ModelAdmin):
     list_filter = ['obstacle_type', 'status', 'created_at']
     search_fields = ['title', 'description', 'dream__title']
     readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['dream', 'milestone', 'goal']
+
+
+@admin.register(DreamMilestone)
+class DreamMilestoneAdmin(admin.ModelAdmin):
+    """Admin interface for DreamMilestone model."""
+
+    list_display = ['title', 'dream', 'order', 'status', 'progress_percentage', 'target_date', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['title', 'description', 'dream__title']
+    ordering = ['dream', 'order']
+    readonly_fields = ['progress_percentage', 'created_at', 'updated_at']
+    raw_id_fields = ['dream']
+
+
+@admin.register(DreamTemplate)
+class DreamTemplateAdmin(admin.ModelAdmin):
+    """Admin interface for DreamTemplate model."""
+
+    list_display = ['title', 'category', 'difficulty', 'is_featured', 'is_active', 'usage_count', 'created_at']
+    list_filter = ['category', 'difficulty', 'is_featured', 'is_active']
+    search_fields = ['title', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(DreamCollaborator)
+class DreamCollaboratorAdmin(admin.ModelAdmin):
+    """Admin interface for DreamCollaborator model."""
+
+    list_display = ['user', 'dream', 'role', 'created_at']
+    list_filter = ['role', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'dream__title']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream', 'user']
+
+
+@admin.register(SharedDream)
+class SharedDreamAdmin(admin.ModelAdmin):
+    """Admin interface for SharedDream model."""
+
+    list_display = ['dream', 'shared_by', 'shared_with', 'permission', 'created_at']
+    list_filter = ['permission', 'created_at']
+    search_fields = ['dream__title', 'shared_by__email', 'shared_with__email']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream', 'shared_by', 'shared_with']
+
+
+@admin.register(DreamProgressSnapshot)
+class DreamProgressSnapshotAdmin(admin.ModelAdmin):
+    """Admin interface for DreamProgressSnapshot model."""
+
+    list_display = ['dream', 'date', 'progress_percentage', 'created_at']
+    list_filter = ['date']
+    search_fields = ['dream__title']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream']
+
+
+@admin.register(VisionBoardImage)
+class VisionBoardImageAdmin(admin.ModelAdmin):
+    """Admin interface for VisionBoardImage model."""
+
+    list_display = ['dream', 'order', 'caption', 'is_ai_generated', 'created_at']
+    list_filter = ['is_ai_generated', 'created_at']
+    search_fields = ['caption', 'dream__title']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream']
+
+
+@admin.register(PlanCheckIn)
+class PlanCheckInAdmin(admin.ModelAdmin):
+    """Admin interface for PlanCheckIn model."""
+
+    list_display = ['dream', 'status', 'triggered_by', 'pace_status', 'scheduled_for', 'completed_at', 'created_at']
+    list_filter = ['status', 'triggered_by', 'pace_status', 'created_at']
+    search_fields = ['dream__title', 'coaching_message']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream', 'conversation']
+
+
+@admin.register(CalibrationResponse)
+class CalibrationResponseAdmin(admin.ModelAdmin):
+    """Admin interface for CalibrationResponse model."""
+
+    list_display = ['dream', 'question_number', 'category', 'created_at']
+    list_filter = ['category', 'created_at']
+    search_fields = ['question', 'dream__title']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['dream']

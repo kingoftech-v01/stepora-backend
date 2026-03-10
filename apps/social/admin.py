@@ -7,7 +7,12 @@ and activity feed items.
 
 from django.contrib import admin
 
-from .models import Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser, Story, StoryView
+from .models import (
+    Friendship, UserFollow, ActivityFeedItem, BlockedUser, ReportedUser,
+    Story, StoryView, ActivityLike, ActivityComment, DreamPost,
+    DreamPostLike, DreamPostComment, DreamEncouragement, SocialEvent,
+    SocialEventRegistration, RecentSearch,
+)
 
 
 @admin.register(Friendship)
@@ -158,3 +163,105 @@ class StoryViewAdmin(admin.ModelAdmin):
     list_display = ['story', 'user', 'viewed_at']
     list_filter = ['viewed_at']
     readonly_fields = ['id', 'viewed_at']
+    raw_id_fields = ['story', 'user']
+
+
+@admin.register(ActivityLike)
+class ActivityLikeAdmin(admin.ModelAdmin):
+    """Admin interface for ActivityLike model."""
+
+    list_display = ['user', 'activity', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'activity']
+
+
+@admin.register(ActivityComment)
+class ActivityCommentAdmin(admin.ModelAdmin):
+    """Admin interface for ActivityComment model."""
+
+    list_display = ['user', 'activity', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'activity']
+
+
+@admin.register(DreamPost)
+class DreamPostAdmin(admin.ModelAdmin):
+    """Admin interface for DreamPost model."""
+
+    list_display = ['user', 'post_type', 'visibility', 'likes_count', 'comments_count', 'is_pinned', 'created_at']
+    list_filter = ['post_type', 'visibility', 'media_type', 'is_pinned', 'created_at']
+    search_fields = ['user__email', 'user__display_name', 'content']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['user', 'dream', 'linked_goal', 'linked_milestone', 'linked_task']
+
+
+@admin.register(DreamPostLike)
+class DreamPostLikeAdmin(admin.ModelAdmin):
+    """Admin interface for DreamPostLike model."""
+
+    list_display = ['user', 'post', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'post']
+
+
+@admin.register(DreamPostComment)
+class DreamPostCommentAdmin(admin.ModelAdmin):
+    """Admin interface for DreamPostComment model."""
+
+    list_display = ['user', 'post', 'parent', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'user__display_name', 'content']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'post', 'parent']
+
+
+@admin.register(DreamEncouragement)
+class DreamEncouragementAdmin(admin.ModelAdmin):
+    """Admin interface for DreamEncouragement model."""
+
+    list_display = ['user', 'post', 'encouragement_type', 'created_at']
+    list_filter = ['encouragement_type', 'created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user', 'post']
+
+
+@admin.register(SocialEvent)
+class SocialEventAdmin(admin.ModelAdmin):
+    """Admin interface for SocialEvent model."""
+
+    list_display = ['title', 'creator', 'event_type', 'status', 'start_time', 'end_time', 'participants_count', 'created_at']
+    list_filter = ['event_type', 'status', 'created_at']
+    search_fields = ['title', 'description', 'creator__email', 'creator__display_name']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['creator', 'post', 'dream']
+
+
+@admin.register(SocialEventRegistration)
+class SocialEventRegistrationAdmin(admin.ModelAdmin):
+    """Admin interface for SocialEventRegistration model."""
+
+    list_display = ['user', 'event', 'status', 'registered_at']
+    list_filter = ['status', 'registered_at']
+    search_fields = ['user__email', 'user__display_name', 'event__title']
+    readonly_fields = ['registered_at']
+    raw_id_fields = ['user', 'event']
+
+
+@admin.register(RecentSearch)
+class RecentSearchAdmin(admin.ModelAdmin):
+    """Admin interface for RecentSearch model."""
+
+    list_display = ['user', 'query', 'search_type', 'created_at']
+    list_filter = ['search_type', 'created_at']
+    search_fields = ['user__email', 'user__display_name']
+    readonly_fields = ['created_at']
+    raw_id_fields = ['user']
