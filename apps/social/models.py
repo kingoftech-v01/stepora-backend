@@ -2,7 +2,7 @@
 Models for the Social system.
 
 Implements friendships, follows, activity feeds, blocking, and reporting
-for the DreamPlanner community. Friendships are bidirectional (require
+for the Stepora community. Friendships are bidirectional (require
 acceptance), while follows are unidirectional.
 """
 

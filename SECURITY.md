@@ -9,12 +9,12 @@
 
 ## Reporting a Vulnerability
 
-We take the security of DreamPlanner very seriously. If you discover a security vulnerability, please report it to us responsibly.
+We take the security of Stepora very seriously. If you discover a security vulnerability, please report it to us responsibly.
 
 ### How to Report
 
 1. **Do not** create a public issue on GitHub
-2. Send an email to **security@dreamplanner.app** with:
+2. Send an email to **security@stepora.app** with:
    - Detailed description of the vulnerability
    - Steps to reproduce the issue
    - Potential impact
@@ -101,4 +101,4 @@ The following vulnerabilities are within our scope:
 
 ## Acknowledgments
 
-We thank all security researchers who help us improve DreamPlanner.
+We thank all security researchers who help us improve Stepora.

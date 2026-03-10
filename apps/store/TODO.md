@@ -27,7 +27,7 @@ Feature ideas and improvements for the in-app store, cosmetics, purchasing, and 
 ## Gifting
 
 - [ ] **Gift wrapping** — Animated gift wrapping styles for sent gifts
-- [ ] **Gift cards** — Purchase DreamPlanner gift cards with custom amounts
+- [ ] **Gift cards** — Purchase Stepora gift cards with custom amounts
 - [ ] **Birthday gifts** — Auto-suggest gifting to friends on their birthday
 - [ ] **Gift history** — View complete sent/received gift history with messages
 - [ ] **Wishlist sharing** — Share wishlist with friends (hint for gifts)

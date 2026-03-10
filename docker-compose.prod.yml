@@ -3,8 +3,8 @@ version: '3.8'
 services:
   # Django web application (production)
   web:
-    image: ${ECR_REGISTRY}/dreamplanner-api:${IMAGE_TAG:-latest}
-    container_name: dreamplanner_web_prod
+    image: ${ECR_REGISTRY}/stepora-api:${IMAGE_TAG:-latest}
+    container_name: stepora_web_prod
     command: gunicorn --bind 0.0.0.0:8000 --workers 4 --worker-class gthread --threads 2 --timeout 120 config.wsgi:application
     ports:
       - "8000:8000"
@@ -41,8 +41,8 @@ services:
 
   # Celery worker (production)
   celery:
-    image: ${ECR_REGISTRY}/dreamplanner-api:${IMAGE_TAG:-latest}
-    container_name: dreamplanner_celery_prod
+    image: ${ECR_REGISTRY}/stepora-api:${IMAGE_TAG:-latest}
+    container_name: stepora_celery_prod
     command: celery -A config worker --loglevel=info --concurrency=4 --max-tasks-per-child=1000
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
@@ -62,8 +62,8 @@ services:
 
   # Celery beat (production)
   celery-beat:
-    image: ${ECR_REGISTRY}/dreamplanner-api:${IMAGE_TAG:-latest}
-    container_name: dreamplanner_celery_beat_prod
+    image: ${ECR_REGISTRY}/stepora-api:${IMAGE_TAG:-latest}
+    container_name: stepora_celery_beat_prod
     command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
@@ -82,8 +82,8 @@ services:
 
   # Daphne for WebSocket (production)
   daphne:
-    image: ${ECR_REGISTRY}/dreamplanner-api:${IMAGE_TAG:-latest}
-    container_name: dreamplanner_daphne_prod
+    image: ${ECR_REGISTRY}/stepora-api:${IMAGE_TAG:-latest}
+    container_name: stepora_daphne_prod
     command: daphne -b 0.0.0.0 -p 9000 config.asgi:application
     ports:
       - "9000:9000"
@@ -103,7 +103,7 @@ services:
   # Elasticsearch (production)
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
-    container_name: dreamplanner_elasticsearch_prod
+    container_name: stepora_elasticsearch_prod
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=true
@@ -127,7 +127,7 @@ services:
   # Nginx reverse proxy (production)
   nginx:
     image: nginx:alpine
-    container_name: dreamplanner_nginx_prod
+    container_name: stepora_nginx_prod
     ports:
       - "80:80"
       - "443:443"
@@ -153,4 +153,4 @@ volumes:
 
 networks:
   default:
-    name: dreamplanner_prod_network
+    name: stepora_prod_network

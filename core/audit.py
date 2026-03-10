@@ -1,5 +1,5 @@
 """
-Security audit logging for DreamPlanner.
+Security audit logging for Stepora.
 
 Provides structured logging for security-relevant events:
 - Authentication failures

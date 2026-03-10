@@ -1,5 +1,5 @@
 """
-WSGI config for DreamPlanner backend.
+WSGI config for Stepora backend.
 """
 
 import os

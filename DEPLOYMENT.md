@@ -1,6 +1,6 @@
-# DreamPlanner Deployment Guide
+# Stepora Deployment Guide
 
-This guide covers deploying DreamPlanner to production environments.
+This guide covers deploying Stepora to production environments.
 
 ## Table of Contents
 
@@ -73,7 +73,7 @@ python --version  # >= 3.11
 ```bash
 
 # Build the image
-docker build -t dreamplanner-backend:latest .
+docker build -t stepora-backend:latest .
 
 # Or use docker-compose for full stack
 docker-compose -f docker-compose.prod.yml build
@@ -88,11 +88,11 @@ Create `.env.production`:
 DJANGO_SECRET_KEY=<generate-with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())">
 DJANGO_SETTINGS_MODULE=config.settings.production
 DEBUG=False
-ALLOWED_HOSTS=api.dreamplanner.app,localhost
+ALLOWED_HOSTS=api.stepora.app,localhost
 
 # Database
-DB_NAME=dreamplanner_prod
-DB_USER=dreamplanner
+DB_NAME=stepora_prod
+DB_USER=stepora
 DB_PASSWORD=<strong-password>
 DB_HOST=your-postgres-host.com
 DB_PORT=5432
@@ -112,7 +112,7 @@ AGORA_APP_CERTIFICATE=<your-agora-app-certificate>
 FIREBASE_CREDENTIALS_PATH=/path/to/firebase-service-account.json
 
 # Security
-CORS_ORIGIN=https://app.dreamplanner.app
+CORS_ORIGIN=https://app.stepora.app
 
 # Monitoring
 SENTRY_DSN=https://...@sentry.io/...
@@ -121,7 +121,7 @@ SENTRY_ENVIRONMENT=production
 # Web Push (VAPID) - for browser push notifications
 VAPID_PUBLIC_KEY=<your-vapid-public-key>
 VAPID_PRIVATE_KEY=<your-vapid-private-key>
-VAPID_ADMIN_EMAIL=admin@dreamplanner.app
+VAPID_ADMIN_EMAIL=admin@stepora.app
 ```
 
 #### Agora Console Setup (Required for RTM + RTC)
@@ -165,16 +165,16 @@ upstream websocket {
 
 server {
     listen 80;
-    server_name api.dreamplanner.app;
+    server_name api.stepora.app;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name api.dreamplanner.app;
+    server_name api.stepora.app;
 
-    ssl_certificate /etc/ssl/certs/dreamplanner.crt;
-    ssl_certificate_key /etc/ssl/private/dreamplanner.key;
+    ssl_certificate /etc/ssl/certs/stepora.crt;
+    ssl_certificate_key /etc/ssl/private/stepora.key;
 
     client_max_body_size 110m;  # Match Django DATA_UPLOAD_MAX_MEMORY_SIZE
 
@@ -213,20 +213,20 @@ server {
 aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
 
 # Tag and push
-docker tag dreamplanner-backend:latest $ECR_REGISTRY/dreamplanner-backend:latest
-docker push $ECR_REGISTRY/dreamplanner-backend:latest
+docker tag stepora-backend:latest $ECR_REGISTRY/stepora-backend:latest
+docker push $ECR_REGISTRY/stepora-backend:latest
 ```
 
 #### 2. ECS Task Definition
 
 ```json
 {
-  "family": "dreamplanner-api",
+  "family": "stepora-api",
   "networkMode": "awsvpc",
   "containerDefinitions": [
     {
       "name": "web",
-      "image": "${ECR_REGISTRY}/dreamplanner-backend:latest",
+      "image": "${ECR_REGISTRY}/stepora-backend:latest",
       "portMappings": [{"containerPort": 8000}],
       "command": ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"],
       "environment": [
@@ -244,8 +244,8 @@ docker push $ECR_REGISTRY/dreamplanner-backend:latest
 
 ```bash
 aws ecs update-service \
-  --cluster dreamplanner-prod \
-  --service dreamplanner-api \
+  --cluster stepora-prod \
+  --service stepora-api \
   --force-new-deployment
 ```
 
@@ -289,13 +289,13 @@ celery -A config beat -l info
 
 ```bash
 # General health
-curl https://api.dreamplanner.app/health/
+curl https://api.stepora.app/health/
 
 # Liveness probe
-curl https://api.dreamplanner.app/health/liveness/
+curl https://api.stepora.app/health/liveness/
 
 # Readiness probe (includes DB check)
-curl https://api.dreamplanner.app/health/readiness/
+curl https://api.stepora.app/health/readiness/
 ```
 
 ### Run Database Migrations
@@ -306,20 +306,20 @@ docker-compose exec web python manage.py migrate
 
 # ECS
 aws ecs run-task \
-  --cluster dreamplanner-prod \
-  --task-definition dreamplanner-migrate
+  --cluster stepora-prod \
+  --task-definition stepora-migrate
 ```
 
 ### Verify Services
 
-1. **API**: `curl https://api.dreamplanner.app/api/auth/`
+1. **API**: `curl https://api.stepora.app/api/auth/`
 2. **WebSocket**: Test with wscat:
-   - AI Chat: `wscat -c wss://api.dreamplanner.app/ws/ai-chat/test/`
-   - Circle Chat: `wscat -c wss://api.dreamplanner.app/ws/circle-chat/test/`
-   - Buddy Chat: `wscat -c wss://api.dreamplanner.app/ws/buddy-chat/test/`
-   - Notifications: `wscat -c wss://api.dreamplanner.app/ws/notifications/`
-3. **Admin**: Visit `https://api.dreamplanner.app/admin/`
-4. **Celery**: Check Flower at `https://api.dreamplanner.app:5555/`
+   - AI Chat: `wscat -c wss://api.stepora.app/ws/ai-chat/test/`
+   - Circle Chat: `wscat -c wss://api.stepora.app/ws/circle-chat/test/`
+   - Buddy Chat: `wscat -c wss://api.stepora.app/ws/buddy-chat/test/`
+   - Notifications: `wscat -c wss://api.stepora.app/ws/notifications/`
+3. **Admin**: Visit `https://api.stepora.app/admin/`
+4. **Celery**: Check Flower at `https://api.stepora.app:5555/`
 
 ## Monitoring
 
@@ -408,7 +408,7 @@ docker-compose restart celery celery-beat
 
 ```bash
 # Test WebSocket
-wscat -c wss://api.dreamplanner.app/ws/health/
+wscat -c wss://api.stepora.app/ws/health/
 
 # Check Daphne logs
 docker-compose logs daphne
@@ -468,12 +468,12 @@ psql -h $DB_HOST -U $DB_USER $DB_NAME < backup_20240101.sql
 
 ## Frontend Deployment (React + Capacitor)
 
-The frontend is a separate project at `/root/dreamplanner-frontend` (React + Vite + Capacitor for Android).
+The frontend is a separate project at `/root/stepora-frontend` (React + Vite + Capacitor for Android).
 
 ### Web Build
 
 ```bash
-cd /root/dreamplanner-frontend
+cd /root/stepora-frontend
 
 # Build production bundle
 npm run build
@@ -518,9 +518,9 @@ Push web bundle updates to mobile apps without app store review:
 
 - Documentation: `/docs` folder
 - Issues: GitHub Issues
-- Email: support@dreamplanner.app
+- Email: support@stepora.app
 
 ---
 
 **Last Updated:** March 2026
-**Maintained by:** DreamPlanner Team
+**Maintained by:** Stepora Team

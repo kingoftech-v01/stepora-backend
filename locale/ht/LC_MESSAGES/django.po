@@ -1044,12 +1044,12 @@ msgstr "Bonjou"
 
 #: apps/notifications/templates/notifications/email/notification.html:27
 #: apps/notifications/templates/notifications/email/notification.txt:7
-msgid "Open DreamPlanner"
-msgstr "Ouvri DreamPlanner"
+msgid "Open Stepora"
+msgstr "Ouvri Stepora"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
-msgid "DreamPlanner"
-msgstr "DreamPlanner"
+msgid "Stepora"
+msgstr "Stepora"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
 msgid "Turn your dreams into reality"
@@ -1060,8 +1060,8 @@ msgid "You can manage notification preferences in your profile settings."
 msgstr "Ou kapab jere preferans notifikasyon nan paramèt pwofil ou a."
 
 #: apps/notifications/templates/notifications/email/notification.txt:10
-msgid "DreamPlanner - Turn your dreams into reality"
-msgstr "DreamPlanner - Tounen rèv ou yo an reyalite"
+msgid "Stepora - Turn your dreams into reality"
+msgstr "Stepora - Tounen rèv ou yo an reyalite"
 
 #: apps/notifications/templates/notifications/email/notification.txt:11
 msgid "Manage notification preferences in your profile settings."

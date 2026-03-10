@@ -1,0 +1,9 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Plan upgraded to {{ plan_name }}{% endblock %}
+{% block heading %}Welcome to {{ plan_name }}!{% endblock %}
+{% block content_text %}Your plan has been upgraded! All new features are available immediately.
+
+- AI Coach — Unlimited personalized guidance
+- Advanced Analytics — Deep insights into your progress
+- Premium Features — Circles, buddy system & more{% endblock %}
+{% block cta_text %}Explore Your Features{% endblock %}

@@ -114,7 +114,7 @@ class StoreService:
                     'item_name': item.name,
                     'item_type': item.item_type,
                 },
-                description=f'DreamPlanner Store: {item.name}',
+                description=f'Stepora Store: {item.name}',
                 receipt_email=user.email,
             )
 
@@ -458,7 +458,7 @@ class StoreService:
                     'item_id': str(item.id),
                     'type': 'gift',
                 },
-                description=f'DreamPlanner Gift: {item.name} to {recipient.email}',
+                description=f'Stepora Gift: {item.name} to {recipient.email}',
                 receipt_email=sender.email,
             )
         except stripe.error.StripeError as e:

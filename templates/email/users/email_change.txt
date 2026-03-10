@@ -1,0 +1,9 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Verify your new email address{% endblock %}
+{% block heading %}Verify Your New Email{% endblock %}
+{% block content_text %}You requested to change your email to {{ new_email }}.
+
+Click the link below to verify this new email address. This link expires in 24 hours.
+
+If you did not request this change, you can safely ignore this email.{% endblock %}
+{% block cta_text %}Verify New Email{% endblock %}

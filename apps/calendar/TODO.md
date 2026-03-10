@@ -31,7 +31,7 @@ Feature ideas and improvements for calendar events, scheduling, time blocks, and
 
 - [ ] **Outlook Calendar** — Microsoft Graph API bidirectional sync
 - [ ] **Apple Calendar** — CalDAV-based bidirectional sync
-- [ ] **Google Tasks sync** — Sync DreamPlanner tasks with Google Tasks
+- [ ] **Google Tasks sync** — Sync Stepora tasks with Google Tasks
 - [ ] **iCal import** — Import .ics files from external calendars
 - [ ] **Google Calendar webhooks** — Replace polling with push notifications
 - [ ] **Selective sync** — Choose which dreams sync to which external calendar

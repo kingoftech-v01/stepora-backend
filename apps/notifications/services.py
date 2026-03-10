@@ -83,31 +83,23 @@ class NotificationDeliveryService:
             return False
 
     def _send_email(self, notification):
-        """Send notification via email."""
+        """Send notification via email using the glassmorphism template."""
         try:
+            from core.email import send_templated_email
+
             user = notification.user
-            context = {
-                'title': notification.title,
-                'body': notification.body,
-                'action_url': notification.action_url or settings.FRONTEND_URL,
-                'user_name': user.display_name or user.email,
-            }
 
-            text_content = render_to_string(
-                'notifications/email/notification.txt', context
-            )
-            html_content = render_to_string(
-                'notifications/email/notification.html', context
-            )
-
-            email = EmailMultiAlternatives(
+            send_templated_email(
+                template_name='notifications/notification',
                 subject=notification.title,
-                body=text_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
+                context={
+                    'title': notification.title,
+                    'body': notification.body,
+                    'action_url': notification.action_url or settings.FRONTEND_URL,
+                    'user_name': user.display_name or user.email,
+                },
             )
-            email.attach_alternative(html_content, 'text/html')
-            email.send(fail_silently=False)
 
             logger.debug(f"Email sent for notification {notification.id} to {user.email}")
             return True

@@ -1,5 +1,5 @@
 """
-Elasticsearch document classes for DreamPlanner.
+Elasticsearch document classes for Stepora.
 
 Each document maps encrypted Django model fields to searchable ES text fields.
 The prepare_<field>() methods read the decrypted value from the model instance
@@ -28,7 +28,7 @@ class DreamDocument(Document):
     category = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_dreams'
+        name = 'stepora_dreams'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -56,7 +56,7 @@ class GoalDocument(Document):
     status = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_goals'
+        name = 'stepora_goals'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -87,7 +87,7 @@ class TaskDocument(Document):
     status = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_tasks'
+        name = 'stepora_tasks'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -118,7 +118,7 @@ class MessageDocument(Document):
     created_at = fields.DateField()
 
     class Index:
-        name = 'dreamplanner_messages'
+        name = 'stepora_messages'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -146,7 +146,7 @@ class UserDocument(Document):
     user_id = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_users'
+        name = 'stepora_users'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -171,7 +171,7 @@ class CalendarEventDocument(Document):
     start_time = fields.DateField()
 
     class Index:
-        name = 'dreamplanner_calendar'
+        name = 'stepora_calendar'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -204,7 +204,7 @@ class CirclePostDocument(Document):
     created_at = fields.DateField()
 
     class Index:
-        name = 'dreamplanner_circle_posts'
+        name = 'stepora_circle_posts'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -231,7 +231,7 @@ class CircleChallengeDocument(Document):
     circle_id = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_circle_challenges'
+        name = 'stepora_circle_challenges'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:
@@ -257,7 +257,7 @@ class ActivityCommentDocument(Document):
     activity_id = fields.KeywordField()
 
     class Index:
-        name = 'dreamplanner_activity_comments'
+        name = 'stepora_activity_comments'
         settings = {'number_of_shards': 1, 'number_of_replicas': 0}
 
     class Django:

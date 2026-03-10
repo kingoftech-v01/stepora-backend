@@ -2,7 +2,7 @@
 Application configuration for the Social app.
 
 Provides social features: friendships, follows, activity feeds,
-and user search for the DreamPlanner community.
+and user search for the Stepora community.
 """
 
 from django.apps import AppConfig

@@ -1,5 +1,5 @@
 """
-Comprehensive API test suite for DreamPlanner.
+Comprehensive API test suite for Stepora.
 
 Tests all endpoints, subscription gating, ownership/IDOR,
 XSS/SQL injection, and multi-step integration flows.

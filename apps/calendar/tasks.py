@@ -314,7 +314,7 @@ def sync_google_calendar(self, integration_id):
     """
     Bidirectional sync with Google Calendar.
 
-    1. Push new/updated DreamPlanner events to Google.
+    1. Push new/updated Stepora events to Google.
     2. Pull new/updated events from Google Calendar.
     """
     from .models import GoogleCalendarIntegration

@@ -10,12 +10,12 @@ The Subscriptions app integrates Stripe for recurring billing. It defines three 
 
 ### StripeCustomer
 
-Maps a DreamPlanner user to a Stripe customer. Created automatically when needed during checkout.
+Maps a Stepora user to a Stripe customer. Created automatically when needed during checkout.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | id | UUID | Primary key |
-| user | OneToOne(User) | DreamPlanner user (related_name: `stripe_customer`) |
+| user | OneToOne(User) | Stepora user (related_name: `stripe_customer`) |
 | stripe_customer_id | CharField(255) | Stripe customer ID (`cus_xxxxx`), unique, indexed |
 | created_at | DateTimeField | Auto-set on creation |
 | updated_at | DateTimeField | Auto-set on update |

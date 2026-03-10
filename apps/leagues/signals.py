@@ -61,13 +61,45 @@ def update_league_standing_on_xp_change(sender, instance, created, **kwargs):
 
     if xp_changed or new_user_with_xp:
         try:
-            LeagueService.update_standing(instance)
+            standing = LeagueService.update_standing(instance)
             logger.info(
                 "League standing updated for user %s (XP: %d -> %d).",
                 instance.id,
                 previous_xp if previous_xp is not None else 0,
                 instance.xp
             )
+
+            # Broadcast real-time league updates via WebSocket
+            if standing:
+                try:
+                    from .consumers import broadcast_league_update, broadcast_xp_change
+                    league_tier = standing.league.tier if standing.league else 'bronze'
+
+                    # Notify the user's personal league group about their XP change
+                    broadcast_xp_change(instance.id, {
+                        'user_id': str(instance.id),
+                        'username': instance.display_name or 'User',
+                        'xp': instance.xp,
+                        'previous_xp': previous_xp if previous_xp is not None else 0,
+                        'level': instance.level,
+                        'league_tier': league_tier,
+                        'rank': standing.rank,
+                    })
+
+                    # Broadcast ranking update to the league tier group
+                    broadcast_league_update(league_tier, {
+                        'user_id': str(instance.id),
+                        'username': instance.display_name or 'User',
+                        'xp': instance.xp,
+                        'rank': standing.rank,
+                        'league_tier': league_tier,
+                    })
+                except Exception:
+                    logger.warning(
+                        "Failed to broadcast league WS update for user %s",
+                        instance.id, exc_info=True,
+                    )
+
         except Exception as e:
             # Log the error but do not prevent the User save from succeeding
             logger.error(

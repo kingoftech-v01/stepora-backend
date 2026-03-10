@@ -1,4 +1,4 @@
-# Testing Strategy - DreamPlanner
+# Testing Strategy - Stepora
 
 ## Overview
 
@@ -561,9 +561,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: dreamplanner
+          POSTGRES_USER: stepora
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: dreamplanner_test
+          POSTGRES_DB: stepora_test
         ports:
           - 5432:5432
       redis:
@@ -595,9 +595,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: dreamplanner
+          POSTGRES_USER: stepora
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: dreamplanner_test
+          POSTGRES_DB: stepora_test
         ports:
           - 5432:5432
       redis:

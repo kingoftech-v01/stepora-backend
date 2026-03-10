@@ -1,0 +1,9 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Plan change scheduled{% endblock %}
+{% block heading %}Plan Change Scheduled{% endblock %}
+{% block content_text %}Your plan will change to {{ new_plan_name }}{% if effective_date %} on {{ effective_date }}{% else %} at the end of your current billing period{% endif %}.
+
+You will keep full access to your current plan features until then.
+
+Changed your mind? Cancel this change from your subscription settings.{% endblock %}
+{% block cta_text %}Manage Subscription{% endblock %}

@@ -1,4 +1,4 @@
-# Priority Features - DreamPlanner 2.0
+# Priority Features - Stepora 2.0
 
 ## Prioritization Matrix
 

@@ -1,4 +1,4 @@
-# DreamPlanner 2.0 - Improvement Strategy
+# Stepora 2.0 - Improvement Strategy
 
 ## The Real Problem to Solve
 
@@ -23,7 +23,7 @@
 
 ### The 7 Root Causes
 
-| # | Cause | Impact | DreamPlanner Solution |
+| # | Cause | Impact | Stepora Solution |
 |---|-------|--------|----------------------|
 | 1 | **Goal too vague** | Cannot measure progress | AI that clarifies and breaks down |
 | 2 | **No clear first step** | Analysis paralysis | "Start in 2 minutes" feature |
@@ -441,11 +441,11 @@
 │  │   🔥 7 DAYS                       │ │
 │  │                                   │ │
 │  │   I'm learning guitar            │ │
-│  │   with @DreamPlanner             │ │
+│  │   with @Stepora             │ │
 │  │                                   │ │
 │  │   ████████░░░░ 35%               │ │
 │  │                                   │ │
-│  │   #DreamPlanner #GuitarJourney   │ │
+│  │   #Stepora #GuitarJourney   │ │
 │  │                                   │ │
 │  └──────────────────────────────────┘ │
 │                                        │

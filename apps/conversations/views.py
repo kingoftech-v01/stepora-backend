@@ -752,7 +752,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
                 # Messages
                 for msg in messages:
-                    role_label = "You" if msg.role == 'user' else "DreamPlanner"
+                    role_label = "You" if msg.role == 'user' else "Stepora"
                     story.append(Paragraph(
                         f"<b>{role_label}</b> ({msg.created_at.strftime('%Y-%m-%d %H:%M')})",
                         styles['Heading4']

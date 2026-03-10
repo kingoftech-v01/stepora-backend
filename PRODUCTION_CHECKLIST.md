@@ -1,4 +1,4 @@
-# DreamPlanner Production Checklist
+# Stepora Production Checklist
 
 Pre-launch checklist for moving from beta to general availability.
 Items marked with [x] are already implemented. Items marked with [ ] need operational action.
@@ -65,12 +65,12 @@ Items marked with [x] are already implemented. Items marked with [ ] need operat
 ```bash
 # Django
 DJANGO_SECRET_KEY=<generate with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())">
-ALLOWED_HOSTS=api.dreamplanner.com,dpapi.jhpetitfrere.com
+ALLOWED_HOSTS=api.stepora.app,dpapi.jhpetitfrere.com
 DJANGO_SETTINGS_MODULE=config.settings.production
 
 # Database
-DB_NAME=dreamplanner
-DB_USER=dreamplanner
+DB_NAME=stepora
+DB_USER=stepora
 DB_PASSWORD=<strong-password>
 DB_HOST=<rds-endpoint>
 DB_PORT=5432
@@ -80,11 +80,11 @@ DB_SSLMODE=require
 REDIS_URL=rediss://<redis-host>:6379/0
 
 # CORS & CSRF
-CORS_ORIGIN=https://app.dreamplanner.com,https://dreamplanner.jhpetitfrere.com
-CSRF_TRUSTED_ORIGINS=https://app.dreamplanner.com,https://dreamplanner.jhpetitfrere.com
+CORS_ORIGIN=https://app.stepora.app,https://stepora.jhpetitfrere.com
+CSRF_TRUSTED_ORIGINS=https://app.stepora.app,https://stepora.jhpetitfrere.com
 
 # Frontend
-FRONTEND_URL=https://app.dreamplanner.com
+FRONTEND_URL=https://app.stepora.app
 
 # Encryption
 FIELD_ENCRYPTION_KEY=<base64-fernet-key>
@@ -109,7 +109,7 @@ VAPID_PRIVATE_KEY=<base64>
 
 # Email (SMTP)
 EMAIL_HOST=smtp.gmail.com
-EMAIL_HOST_USER=noreply@dreamplanner.app
+EMAIL_HOST_USER=noreply@stepora.app
 EMAIL_HOST_PASSWORD=<app-password>
 
 # Monitoring

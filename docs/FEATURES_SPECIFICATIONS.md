@@ -1,4 +1,4 @@
-# Feature Specifications - DreamPlanner
+# Feature Specifications - Stepora
 
 ## 1. Onboarding & Registration
 
@@ -6,7 +6,7 @@
 
 **Slide 1 - Welcome**
 - Title: "Transform your dreams into reality"
-- Description: "DreamPlanner uses AI to create a personalized plan toward your goals"
+- Description: "Stepora uses AI to create a personalized plan toward your goals"
 - Illustration: Person reaching a summit
 
 **Slide 2 - How it works**
@@ -87,7 +87,7 @@ or
 
 ```
 ┌────────────────────────────────────────┐
-│ ← DreamPlanner            [+] New      │
+│ ← Stepora            [+] New      │
 ├────────────────────────────────────────┤
 │                                        │
 │   🤖 Hello Marie! I'm delighted to    │
@@ -430,7 +430,7 @@ After the conversation, the AI generates a plan:
 **Task reminder (15 min before)**
 ```
 ┌────────────────────────────────────────┐
-│ 🔔 DreamPlanner                        │
+│ 🔔 Stepora                        │
 │ In 15 minutes: Guitar practice         │
 │ Duration: 30 min                       │
 │                      [View] [Postpone] │
@@ -440,7 +440,7 @@ After the conversation, the AI generates a plan:
 **Daily motivation (morning)**
 ```
 ┌────────────────────────────────────────┐
-│ 🔔 DreamPlanner                        │
+│ 🔔 Stepora                        │
 │ 🔥 5 consecutive days! You are on      │
 │ track to master the guitar!            │
 │                               [View]   │
@@ -450,7 +450,7 @@ After the conversation, the AI generates a plan:
 **Progress (milestone)**
 ```
 ┌────────────────────────────────────────┐
-│ 🔔 DreamPlanner                        │
+│ 🔔 Stepora                        │
 │ 🎉 Congratulations! You have reached  │
 │ 50% of your goal "Learn guitar"       │
 │                               [View]   │
@@ -460,7 +460,7 @@ After the conversation, the AI generates a plan:
 **Check-in (after inactivity)**
 ```
 ┌────────────────────────────────────────┐
-│ 🔔 DreamPlanner                        │
+│ 🔔 Stepora                        │
 │ 👋 It's been 3 days since we last      │
 │ connected. How is your project going?  │
 │                        [Resume]        │
@@ -504,7 +504,7 @@ The notification system takes into account:
 │ ← Upgrade to Premium                   │
 ├────────────────────────────────────────┤
 │                                        │
-│      ⭐ DreamPlanner Premium ⭐        │
+│      ⭐ Stepora Premium ⭐        │
 │                                        │
 │ Unlock the full potential of your      │
 │ dreams with Premium                    │

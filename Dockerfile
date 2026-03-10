@@ -56,8 +56,8 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --chown=appuser:appuser . .
 
 # Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
-# Pass via --build-arg or set in docker-compose build args
-ARG FIELD_ENCRYPTION_KEY
+# A placeholder is used during build; the real key is injected at runtime via ECS task definition.
+ARG FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production"
 ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
 RUN python manage.py collectstatic --noinput --clear
 
@@ -69,7 +69,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+    CMD curl -f http://localhost:8000/health/liveness/ || exit 1
 
 # Run gunicorn
 CMD ["gunicorn", \

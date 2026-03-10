@@ -1,5 +1,5 @@
 """
-Two-Factor Authentication (TOTP) views for DreamPlanner.
+Two-Factor Authentication (TOTP) views for Stepora.
 
 Provides TOTP setup, verification, disable, and backup code management.
 Uses pyotp for TOTP generation and verification.
@@ -40,7 +40,7 @@ def _hash_code(code):
     """Hash a backup code for secure storage using PBKDF2 with a fixed app-level salt."""
     # Using a fixed salt derived from FIELD_ENCRYPTION_KEY avoids storing per-code salts
     # while still preventing rainbow table attacks on the 8-char hex codes.
-    salt = hashlib.sha256(b'dreamplanner-backup-codes').digest()
+    salt = hashlib.sha256(b'stepora-backup-codes').digest()
     return hashlib.pbkdf2_hmac('sha256', code.encode(), salt, iterations=100_000).hex()
 
 
@@ -67,7 +67,7 @@ class TwoFactorSetupView(APIView):
         secret = pyotp.random_base32()
         provisioning_uri = pyotp.totp.TOTP(secret).provisioning_uri(
             name=user.email,
-            issuer_name='DreamPlanner',
+            issuer_name='Stepora',
         )
 
         # Store pending secret in the EncryptedCharField (not app_prefs)

@@ -1,4 +1,4 @@
-# AI Cost Analysis - DreamPlanner
+# AI Cost Analysis - Stepora
 
 Detailed breakdown of all OpenAI API costs per feature, per user, and at scale.
 

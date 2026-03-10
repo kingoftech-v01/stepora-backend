@@ -1044,12 +1044,12 @@ msgstr "Hallo"
 
 #: apps/notifications/templates/notifications/email/notification.html:27
 #: apps/notifications/templates/notifications/email/notification.txt:7
-msgid "Open DreamPlanner"
-msgstr "DreamPlanner öffnen"
+msgid "Open Stepora"
+msgstr "Stepora öffnen"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
-msgid "DreamPlanner"
-msgstr "DreamPlanner"
+msgid "Stepora"
+msgstr "Stepora"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
 msgid "Turn your dreams into reality"
@@ -1060,8 +1060,8 @@ msgid "You can manage notification preferences in your profile settings."
 msgstr "Du kannst die Benachrichtigungseinstellungen in deinen Profileinstellungen verwalten."
 
 #: apps/notifications/templates/notifications/email/notification.txt:10
-msgid "DreamPlanner - Turn your dreams into reality"
-msgstr "DreamPlanner - Verwandle deine Träume in Wirklichkeit"
+msgid "Stepora - Turn your dreams into reality"
+msgstr "Stepora - Verwandle deine Träume in Wirklichkeit"
 
 #: apps/notifications/templates/notifications/email/notification.txt:11
 msgid "Manage notification preferences in your profile settings."

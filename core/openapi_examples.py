@@ -1,5 +1,5 @@
 """
-Centralized OpenAPI examples for DreamPlanner API documentation.
+Centralized OpenAPI examples for Stepora API documentation.
 """
 
 from drf_spectacular.utils import OpenApiExample
@@ -134,8 +134,8 @@ SUBSCRIPTION_CHECKOUT_REQUEST = OpenApiExample(
     'Checkout Request',
     value={
         'plan_slug': 'premium',
-        'success_url': 'https://app.dreamplanner.app/subscription/success',
-        'cancel_url': 'https://app.dreamplanner.app/subscription/cancel',
+        'success_url': 'https://app.stepora.app/subscription/success',
+        'cancel_url': 'https://app.stepora.app/subscription/cancel',
     },
     request_only=True,
 )

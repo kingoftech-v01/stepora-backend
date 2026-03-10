@@ -11,7 +11,7 @@ Feature ideas and improvements for external service integrations (OpenAI, Google
 - [ ] **Function calling** — Use GPT-4 function calling to let AI directly create tasks, update goals, schedule events, and set reminders
 - [ ] **Structured outputs** — Use JSON mode / structured outputs for all AI-generated content (plans, calibration questions, micro-starts) to eliminate parsing failures
 - [ ] **Embedding-based memory** — Store conversation embeddings in pgvector for semantic search across past conversations
-- [ ] **Fine-tuned model** — Fine-tune a GPT-3.5 model on DreamPlanner conversations for faster, cheaper, more consistent coaching
+- [ ] **Fine-tuned model** — Fine-tune a GPT-3.5 model on Stepora conversations for faster, cheaper, more consistent coaching
 - [ ] **Cost tracking dashboard** — Per-user and per-conversation OpenAI cost tracking with monthly budget alerts
 - [ ] **Fallback model** — Automatic fallback to GPT-3.5 when GPT-4 rate limits are hit or latency exceeds threshold
 - [ ] **DALL-E 3 style presets** — Predefined art styles for vision board generation (watercolor, minimalist, photorealistic, etc.)
@@ -21,7 +21,7 @@ Feature ideas and improvements for external service integrations (OpenAI, Google
 
 - [ ] **Real-time sync** — Use Google Calendar push notifications (webhook) instead of polling for instant bidirectional sync
 - [ ] **Multi-calendar support** — Let users choose which Google calendars to sync (work, personal, etc.)
-- [ ] **Calendar conflict resolution** — Smart conflict detection and resolution when DreamPlanner events overlap with Google Calendar events
+- [ ] **Calendar conflict resolution** — Smart conflict detection and resolution when Stepora events overlap with Google Calendar events
 - [ ] **Outlook/Office 365 integration** — Add Microsoft Graph API integration for Outlook calendar sync
 - [ ] **Apple Calendar integration** — CalDAV-based sync for Apple Calendar users
 

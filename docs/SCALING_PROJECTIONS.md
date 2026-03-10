@@ -1,4 +1,4 @@
-# Scaling Projections - DreamPlanner
+# Scaling Projections - Stepora
 
 Cost projections at different user scales, with monthly recurring and one-time costs broken out.
 

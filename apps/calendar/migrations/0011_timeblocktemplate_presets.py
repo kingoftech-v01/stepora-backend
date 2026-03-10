@@ -81,7 +81,7 @@ def create_presets(apps, schema_editor):
 
     # Get or create a system user for presets
     system_user, _ = User.objects.get_or_create(
-        email='system@dreamplanner.app',
+        email='system@stepora.app',
         defaults={
             'is_staff': True,
             'is_active': False,

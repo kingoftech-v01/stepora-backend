@@ -1,5 +1,5 @@
 """
-Content moderation service for DreamPlanner.
+Content moderation service for Stepora.
 
 Three-tier moderation:
 1. Jailbreak/role-play pattern detection (regex, instant, no API call)
@@ -59,13 +59,13 @@ REJECTION_MESSAGES = {
         "or a trusted person in your life. You deserve support."
     ),
     'jailbreak_attempt': (
-        "I'm DreamPlanner, your personal goal-planning assistant. "
+        "I'm Stepora, your personal goal-planning assistant. "
         "I can't take on other roles or personas. "
         "How can I help you with your dreams and goals today?"
     ),
     'roleplay_attempt': (
         "I appreciate the creativity, but I need to stay in my role as "
-        "DreamPlanner to best help you. Let's focus on turning your real "
+        "Stepora to best help you. Let's focus on turning your real "
         "dreams into actionable plans."
     ),
     'illegal_content': (
@@ -103,7 +103,7 @@ JAILBREAK_PATTERNS = [
     # DAN / persona injection
     re.compile(r'\bDAN\b.*\b(mode|jailbreak|prompt)\b', re.IGNORECASE),
     re.compile(
-        r'you\s+are\s+now\s+(a\s+)?(?!dreamplanner|my\s+coach|motivated|focused|disciplined)',
+        r'you\s+are\s+now\s+(a\s+)?(?!stepora|my\s+coach|motivated|focused|disciplined)',
         re.IGNORECASE,
     ),
     re.compile(

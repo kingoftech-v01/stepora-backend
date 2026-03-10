@@ -1,0 +1,39 @@
+{% extends "email/base.html" %}
+
+{% block title %}Data Export Ready — Stepora{% endblock %}
+{% block preheader %}Your Stepora data export is ready for download.{% endblock %}
+
+{% block hero %}
+<div style="margin: 0px auto; max-width: 600px;">
+<table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
+<tbody><tr><td style="padding: 0 24px;">
+<div style="border-radius: 16px 16px 0 0; overflow: hidden; height: 200px; background: linear-gradient(135deg, #7c3aed, #3b82f6, #818cf8);">
+<img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&h=200&fit=crop&auto=format" alt="" style="display: block; width: 100%; height: 200px; object-fit: cover; opacity: 0.6;" width="552" height="200" class="hero-img">
+</div>
+</td></tr></tbody>
+</table>
+</div>
+{% endblock %}
+
+{% block heading %}Your Data Export is Ready{% endblock %}
+
+{% block content %}
+<table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+<tr>
+<td style="padding-bottom: 16px;">
+<div style="font-family: Inter, sans-serif; font-size: 15px; font-weight: 400; line-height: 1.7; color: #c4c4d4;">
+Your data export has been prepared and is ready for download.
+</div>
+</td>
+</tr>
+<tr>
+<td style="padding-bottom: 16px;">
+<div style="font-family: Inter, sans-serif; font-size: 14px; line-height: 1.6; color: #9ca3af;">
+This file will be available for <strong style="color: #a78bfa;">7 days</strong>.
+</div>
+</td>
+</tr>
+</table>
+{% endblock %}
+
+{% block cta_text %}Download Your Data{% endblock %}

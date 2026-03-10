@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "DreamPlanner Backend - Available commands:"
+	@echo "Stepora Backend - Available commands:"
 	@echo "  make build          - Build Docker images"
 	@echo "  make up             - Start all services"
 	@echo "  make down           - Stop all services"
@@ -104,7 +104,7 @@ reset-db:
 	docker-compose up -d db
 	@echo "Waiting for database..."
 	@sleep 5
-	docker-compose exec db psql -U dreamplanner -d dreamplanner -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	docker-compose exec db psql -U stepora -d stepora -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	docker-compose up -d
 	@echo "Waiting for services..."
 	@sleep 5
@@ -114,14 +114,14 @@ reset-db:
 # Backup database
 backup-db:
 	@echo "Creating database backup..."
-	docker-compose exec db pg_dump -U dreamplanner dreamplanner > backup_$(shell date +%Y%m%d_%H%M%S).sql
+	docker-compose exec db pg_dump -U stepora stepora > backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "Backup created"
 
 # Restore database
 restore-db:
 	@echo "Restoring database from backup..."
 	@read -p "Enter backup file name: " backup_file; \
-	docker-compose exec -T db psql -U dreamplanner dreamplanner < $$backup_file
+	docker-compose exec -T db psql -U stepora stepora < $$backup_file
 	@echo "Database restored"
 
 # Clean up
@@ -131,7 +131,7 @@ clean:
 
 # Production commands
 build-prod:
-	docker build -t dreamplanner-api:latest -f Dockerfile .
+	docker build -t stepora-api:latest -f Dockerfile .
 
 up-prod:
 	docker-compose -f docker-compose.prod.yml up -d

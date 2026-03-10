@@ -1,5 +1,5 @@
 """
-URL configuration for DreamPlanner backend.
+URL configuration for Stepora backend.
 Routes all API endpoints to their respective app URL configurations.
 
 API versioning: All endpoints are served under /api/v1/.
@@ -46,6 +46,9 @@ api_v1_patterns = [
 urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
+
+    # Blog (public, not behind API versioning)
+    path('api/blog/', include('apps.blog.urls')),
 
     # Health check
     path('health/', include('core.urls')),

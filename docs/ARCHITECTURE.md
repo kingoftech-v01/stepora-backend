@@ -1,4 +1,4 @@
-# DreamPlanner — System Architecture & Navigation Guide
+# Stepora — System Architecture & Navigation Guide
 
 > **Purpose**: This document is your map to the entire codebase. If you need to find where something lives, how systems connect, or what infrastructure exists — start here.
 
@@ -112,7 +112,7 @@ External Service (OpenAI / Stripe / Google / Email)
 ## App Map
 
 ```
-dreamplanner/
+stepora/
 ├── apps/
 │   ├── users/           User model, auth, gamification, 2FA, achievements, GDPR
 │   ├── dreams/          Dreams, Goals, Tasks, Obstacles, Templates, Tags, Vision Board, PDF

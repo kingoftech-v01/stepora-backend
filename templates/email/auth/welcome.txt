@@ -1,0 +1,10 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Welcome to Stepora{% endblock %}
+{% block heading %}Welcome to Stepora!{% endblock %}
+{% block content_text %}Welcome to Stepora — your personal dream achievement platform!
+
+Here's how to get started:
+- Create your first dream — Define what you want to achieve
+- AI-powered roadmap — Let our AI break it into actionable steps
+- Earn XP & compete — Track progress and climb the leaderboard{% endblock %}
+{% block cta_text %}Start Your Journey{% endblock %}

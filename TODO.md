@@ -1,6 +1,6 @@
-# DreamPlanner Backend — TODO
+# Stepora Backend — TODO
 
-Feature ideas, improvements, and technical debt for the DreamPlanner backend.
+Feature ideas, improvements, and technical debt for the Stepora backend.
 
 ---
 

@@ -1,4 +1,4 @@
-# DreamPlanner Architecture
+# Stepora Architecture
 
 ## System Overview
 
@@ -106,7 +106,7 @@
 ## Django App Structure
 
 ```text
-dreamplanner/
+stepora/
 ├── apps/
 │   ├── users/              # User management, gamification, achievements, 2FA, GDPR
 │   ├── dreams/             # Dreams, Goals, Tasks, Obstacles, Templates, Tags, Vision Board, PDF

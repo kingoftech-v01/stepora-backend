@@ -1,0 +1,11 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Payment receipt for {{ plan_name }}{% endblock %}
+{% block heading %}Payment Receipt{% endblock %}
+{% block content_text %}Thank you for your {{ plan_name }} subscription!
+
+Amount charged: {{ amount }}
+{% if invoice_url %}
+View your invoice: {{ invoice_url }}
+{% endif %}
+Questions? Contact support@stepora.com{% endblock %}
+{% block cta_text %}{% if invoice_url %}View Invoice{% else %}Go to Stepora{% endif %}{% endblock %}

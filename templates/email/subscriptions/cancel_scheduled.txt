@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Subscription cancellation scheduled{% endblock %}
+{% block heading %}Cancellation Scheduled{% endblock %}
+{% block content_text %}Your {{ plan_name }} subscription will cancel{% if period_end %} on {{ period_end }}{% else %} at the end of your billing period{% endif %}.
+
+You'll keep full access to all features until then. After cancellation, your account will revert to the Free plan.{% endblock %}
+{% block cta_text %}Reactivate Subscription{% endblock %}

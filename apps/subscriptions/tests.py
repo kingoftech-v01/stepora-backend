@@ -301,7 +301,7 @@ class TestStripeServiceCreateCustomer:
         # Verify metadata was passed
         call_kwargs = mock_stripe_create.call_args[1]
         assert call_kwargs['email'] == test_user.email
-        assert call_kwargs['metadata']['dreamplanner_user_id'] == str(test_user.id)
+        assert call_kwargs['metadata']['stepora_user_id'] == str(test_user.id)
 
     def test_returns_existing_customer(self, stripe_customer, test_user):
         """Returns existing StripeCustomer without calling Stripe API."""
@@ -489,7 +489,7 @@ class TestWebhookHandleCheckoutCompleted:
 
         session_data = {
             'metadata': {
-                'dreamplanner_user_id': str(test_user.id),
+                'stepora_user_id': str(test_user.id),
                 'plan_slug': 'premium',
             },
             'subscription': 'sub_checkout_123',

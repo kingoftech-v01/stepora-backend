@@ -1,4 +1,4 @@
-# Development Roadmap - DreamPlanner
+# Development Roadmap - Stepora
 
 ## Phase Overview
 

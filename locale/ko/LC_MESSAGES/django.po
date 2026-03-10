@@ -1044,12 +1044,12 @@ msgstr "안녕하세요"
 
 #: apps/notifications/templates/notifications/email/notification.html:27
 #: apps/notifications/templates/notifications/email/notification.txt:7
-msgid "Open DreamPlanner"
-msgstr "DreamPlanner 열기"
+msgid "Open Stepora"
+msgstr "Stepora 열기"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
-msgid "DreamPlanner"
-msgstr "DreamPlanner"
+msgid "Stepora"
+msgstr "Stepora"
 
 #: apps/notifications/templates/notifications/email/notification.html:30
 msgid "Turn your dreams into reality"
@@ -1060,8 +1060,8 @@ msgid "You can manage notification preferences in your profile settings."
 msgstr "프로필 설정에서 알림 환경설정을 관리할 수 있습니다."
 
 #: apps/notifications/templates/notifications/email/notification.txt:10
-msgid "DreamPlanner - Turn your dreams into reality"
-msgstr "DreamPlanner - 꿈을 현실로 만드세요"
+msgid "Stepora - Turn your dreams into reality"
+msgstr "Stepora - 꿈을 현실로 만드세요"
 
 #: apps/notifications/templates/notifications/email/notification.txt:11
 msgid "Manage notification preferences in your profile settings."

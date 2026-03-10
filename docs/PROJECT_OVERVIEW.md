@@ -1,8 +1,8 @@
-# DreamPlanner - Dream Planning Application
+# Stepora - Dream Planning Application
 
 ## Project Vision
 
-**DreamPlanner** is a backend web application (Django API) that uses ChatGPT artificial intelligence to help users transform their dreams into concrete and achievable goals.
+**Stepora** is a backend web application (Django API) that uses ChatGPT artificial intelligence to help users transform their dreams into concrete and achievable goals.
 
 ## Problem Solved
 

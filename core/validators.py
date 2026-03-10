@@ -1,5 +1,5 @@
 """
-Input validation utilities for DreamPlanner.
+Input validation utilities for Stepora.
 
 Provides strict validation for UUIDs, pagination parameters,
 search queries, and field-specific regex patterns.

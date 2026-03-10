@@ -54,7 +54,7 @@ _LOCKOUT_SECONDS = 900  # 15 minutes
 
 # 2FA challenge token settings
 _TFA_CHALLENGE_MAX_AGE = 300  # 5 minutes
-_TFA_CHALLENGE_SALT = 'dreamplanner-2fa-challenge'
+_TFA_CHALLENGE_SALT = 'stepora-2fa-challenge'
 
 # Allowed values for X-Client-Platform header
 _NATIVE_PLATFORMS = frozenset(('native', 'ios', 'android', 'capacitor'))
@@ -746,7 +746,7 @@ class AppleRedirectView(APIView):
         raw_state = request.POST.get('state', '')
 
         # Validate state against allowed deep link schemes to prevent open redirect
-        ALLOWED_DEEP_LINK_PREFIXES = ('com.dreamplanner.app://',)
+        ALLOWED_DEEP_LINK_PREFIXES = ('com.stepora.app://',)
         state = ''
         if raw_state and any(raw_state.startswith(p) for p in ALLOWED_DEEP_LINK_PREFIXES):
             state = raw_state
@@ -769,12 +769,12 @@ class AppleRedirectView(APIView):
             if state and access_token:
                 deep_link = state + '?token=' + access_token
             elif access_token:
-                deep_link = 'com.dreamplanner.app://auth/callback?token=' + access_token
+                deep_link = 'com.stepora.app://auth/callback?token=' + access_token
             else:
-                deep_link = 'com.dreamplanner.app://auth/callback?error=no_token'
+                deep_link = 'com.stepora.app://auth/callback?error=no_token'
 
         except Exception:
-            deep_link = state + '?error=auth_failed' if state else 'com.dreamplanner.app://auth/callback?error=auth_failed'
+            deep_link = state + '?error=auth_failed' if state else 'com.stepora.app://auth/callback?error=auth_failed'
 
         # Redirect via HTML page (form_post response must be HTML)
         deep_link_js = json.dumps(deep_link)
@@ -782,7 +782,7 @@ class AppleRedirectView(APIView):
         page = (
             '<!DOCTYPE html><html><head><meta charset="utf-8">'
             '<title>Redirecting...</title></head><body>'
-            '<p>Redirecting to DreamPlanner...</p>'
+            '<p>Redirecting to Stepora...</p>'
             '<p><a href="' + deep_link_html + '">Click here if not redirected.</a></p>'
             '<script>window.location.href = ' + deep_link_js + ';</script>'
             '</body></html>'

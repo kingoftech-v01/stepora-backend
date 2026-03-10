@@ -7,7 +7,6 @@ import logging
 
 from celery import shared_task
 from django.conf import settings
-from django.core.mail import send_mail
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +17,7 @@ def send_verification_email(user_id, email_address_id):
     from django.contrib.auth import get_user_model
     from core.auth.models import EmailAddress
     from core.auth.tokens import make_email_verification_key
+    from core.email import send_templated_email
 
     User = get_user_model()
 
@@ -36,20 +36,15 @@ def send_verification_email(user_id, email_address_id):
     verification_url = f'{settings.FRONTEND_URL}/#/verify-email/{key}'
     name = user.display_name or 'there'
 
-    send_mail(
-        subject='DreamPlanner — Verify your email address',
-        message=(
-            f'Hi {name},\n\n'
-            f'Welcome to DreamPlanner! Please verify your email address '
-            f'by clicking the link below:\n\n'
-            f'{verification_url}\n\n'
-            f'This link expires in 3 days.\n\n'
-            f'If you did not create an account, please ignore this email.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[email_addr.email],
-        fail_silently=False,
+    send_templated_email(
+        template_name='auth/verify_email',
+        subject='Stepora — Verify your email address',
+        to=[email_addr.email],
+        context={
+            'user_name': name,
+            'verification_url': verification_url,
+            'action_url': verification_url,
+        },
     )
     logger.info('Verification email sent to %s for user %s', email_addr.email, user_id)
 
@@ -59,6 +54,7 @@ def send_password_reset_email(user_id):
     """Send a password reset link to the user."""
     from django.contrib.auth import get_user_model
     from core.auth.tokens import make_password_reset_token
+    from core.email import send_templated_email
 
     User = get_user_model()
 
@@ -72,21 +68,15 @@ def send_password_reset_email(user_id):
     reset_url = f'{settings.FRONTEND_URL}/#/reset-password/{uid}-{token}'
     name = user.display_name or 'there'
 
-    send_mail(
-        subject='DreamPlanner — Reset your password',
-        message=(
-            f'Hi {name},\n\n'
-            f'We received a request to reset your password. '
-            f'Click the link below to set a new password:\n\n'
-            f'{reset_url}\n\n'
-            f'This link expires in 1 hour.\n\n'
-            f'If you did not request a password reset, please ignore this email. '
-            f'Your password will remain unchanged.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
+    send_templated_email(
+        template_name='auth/password_reset',
+        subject='Stepora — Reset your password',
+        to=[user.email],
+        context={
+            'user_name': name,
+            'reset_url': reset_url,
+            'action_url': reset_url,
+        },
     )
     logger.info('Password reset email sent to %s', user.email)
 
@@ -95,6 +85,7 @@ def send_password_reset_email(user_id):
 def send_welcome_email(user_id):
     """Send a welcome email after successful registration."""
     from django.contrib.auth import get_user_model
+    from core.email import send_templated_email
 
     User = get_user_model()
 
@@ -105,18 +96,14 @@ def send_welcome_email(user_id):
 
     name = user.display_name or 'there'
 
-    send_mail(
-        subject='Welcome to DreamPlanner!',
-        message=(
-            f'Hi {name},\n\n'
-            f'Welcome to DreamPlanner — your personal dream achievement platform!\n\n'
-            f'Start by creating your first dream and let our AI help you '
-            f'build a roadmap to achieve it.\n\n'
-            f'Visit: {settings.FRONTEND_URL}\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+    send_templated_email(
+        template_name='auth/welcome',
+        subject='Welcome to Stepora!',
+        to=[user.email],
+        context={
+            'user_name': name,
+            'action_url': settings.FRONTEND_URL,
+        },
         fail_silently=True,
     )
 
@@ -125,6 +112,7 @@ def send_welcome_email(user_id):
 def send_password_changed_email(user_id):
     """Notify user that their password was changed."""
     from django.contrib.auth import get_user_model
+    from core.email import send_templated_email
 
     User = get_user_model()
 
@@ -134,19 +122,17 @@ def send_password_changed_email(user_id):
         return
 
     name = user.display_name or 'there'
+    reset_url = f'{settings.FRONTEND_URL}/#/forgot-password'
 
-    send_mail(
-        subject='DreamPlanner — Your password was changed',
-        message=(
-            f'Hi {name},\n\n'
-            f'Your DreamPlanner password was just changed.\n\n'
-            f'If you made this change, no action is needed.\n\n'
-            f'If you did not change your password, please reset it immediately '
-            f'at {settings.FRONTEND_URL}/#/forgot-password or contact support.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+    send_templated_email(
+        template_name='auth/password_changed',
+        subject='Stepora — Your password was changed',
+        to=[user.email],
+        context={
+            'user_name': name,
+            'reset_url': reset_url,
+            'action_url': reset_url,
+        },
         fail_silently=True,
     )
     logger.info('Password changed notification sent to %s', user.email)
@@ -156,6 +142,7 @@ def send_password_changed_email(user_id):
 def send_login_notification_email(user_id, ip_address='', user_agent=''):
     """Notify user of a new login to their account."""
     from django.contrib.auth import get_user_model
+    from core.email import send_templated_email
 
     User = get_user_model()
 
@@ -166,25 +153,15 @@ def send_login_notification_email(user_id, ip_address='', user_agent=''):
 
     name = user.display_name or 'there'
 
-    details = ''
-    if ip_address:
-        details += f'IP address: {ip_address}\n'
-    if user_agent:
-        details += f'Device: {user_agent}\n'
-
-    send_mail(
-        subject='DreamPlanner — New login to your account',
-        message=(
-            f'Hi {name},\n\n'
-            f'A new login to your DreamPlanner account was detected.\n\n'
-            f'{details}\n'
-            f'If this was you, no action is needed.\n\n'
-            f'If you did not log in, please change your password immediately '
-            f'and consider enabling two-factor authentication.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+    send_templated_email(
+        template_name='auth/login_notification',
+        subject='Stepora — New login to your account',
+        to=[user.email],
+        context={
+            'user_name': name,
+            'ip_address': ip_address,
+            'user_agent': user_agent,
+        },
         fail_silently=True,
     )
     logger.info('Login notification sent to %s', user.email)

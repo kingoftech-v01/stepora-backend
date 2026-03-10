@@ -37,7 +37,7 @@ class TestTwoFactorSetup:
         assert response.status_code == status.HTTP_200_OK
         assert 'secret' in response.data
         assert 'provisioning_uri' in response.data
-        assert 'DreamPlanner' in response.data['provisioning_uri']
+        assert 'Stepora' in response.data['provisioning_uri']
 
         # Pending secret stored in app_prefs
         user.refresh_from_db()

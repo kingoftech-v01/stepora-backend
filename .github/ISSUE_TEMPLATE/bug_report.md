@@ -1,6 +1,6 @@
 ---
 name: Rapport de Bug
-about: Signaler un bug pour nous aider à améliorer DreamPlanner
+about: Signaler un bug pour nous aider à améliorer Stepora
 title: '[BUG] '
 labels: bug
 assignees: ''

@@ -1,6 +1,6 @@
-# Contributing to DreamPlanner
+# Contributing to Stepora
 
-First off, thank you for considering contributing to DreamPlanner! It's people like you that make DreamPlanner such a great tool for helping people achieve their dreams.
+First off, thank you for considering contributing to Stepora! It's people like you that make Stepora such a great tool for helping people achieve their dreams.
 
 ## Code of Conduct
 
@@ -46,8 +46,8 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/dreamplanner.git
-cd dreamplanner
+git clone https://github.com/YOUR_USERNAME/stepora.git
+cd stepora
 
 # Create virtual environment
 python -m venv venv
@@ -273,7 +273,7 @@ Use our [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md) which includes
 ## Project Structure
 
 ```
-dreamplanner/
+stepora/
 ├── apps/                   # Django applications
 │   ├── users/              # User management
 │   ├── dreams/             # Dreams, Goals, Tasks
@@ -335,13 +335,13 @@ git push origin feature/add-vision-boards
 
 ### Resources
 - 📖 [Documentation](docs/)
-- 💬 [GitHub Discussions](https://github.com/yourusername/dreamplanner/discussions)
-- 🐛 [Issue Tracker](https://github.com/yourusername/dreamplanner/issues)
+- 💬 [GitHub Discussions](https://github.com/yourusername/stepora/discussions)
+- 🐛 [Issue Tracker](https://github.com/yourusername/stepora/issues)
 
 ### Contact
 - Open an issue for bugs or features
 - Start a discussion for questions
-- Email: support@dreamplanner.app (for security issues)
+- Email: support@stepora.app (for security issues)
 
 ## Recognition
 
@@ -356,6 +356,6 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to DreamPlanner! 🌟
+Thank you for contributing to Stepora! 🌟
 
 **Happy Coding!** 💻✨

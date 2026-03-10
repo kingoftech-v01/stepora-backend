@@ -1,4 +1,4 @@
-# DreamPlanner — Cross-App Flow Documentation
+# Stepora — Cross-App Flow Documentation
 
 > **Purpose**: Traces the exact code path for operations that span multiple apps. Each flow documents the methods called, parameters passed, and side effects triggered — so you never have to trace through the code yourself.
 
@@ -1053,7 +1053,7 @@ UserViewSet.delete_account(request)                  apps/users/views.py
   │
   ├─ 6. Anonymize PII
   │     user.display_name  = 'Deleted User'
-  │     user.email         = 'deleted_{user.id}@deleted.dreamplanner.app'
+  │     user.email         = 'deleted_{user.id}@deleted.stepora.app'
   │     user.avatar_url    = ''
   │     user.avatar_image  → delete file
   │     user.bio           = ''
@@ -1090,7 +1090,7 @@ hard_delete_expired_accounts()                       apps/users/tasks.py
 
 ### Key Detail
 
-Account deletion uses a **30-day grace period**. During soft-delete, PII is anonymized (display_name becomes "Deleted User", email becomes `deleted_{uuid}@deleted.dreamplanner.app`). After 30 days, the `hard_delete_expired_accounts` Celery task permanently removes the user and all related data via CASCADE deletion.
+Account deletion uses a **30-day grace period**. During soft-delete, PII is anonymized (display_name becomes "Deleted User", email becomes `deleted_{uuid}@deleted.stepora.app`). After 30 days, the `hard_delete_expired_accounts` Celery task permanently removes the user and all related data via CASCADE deletion.
 
 ---
 
@@ -1167,10 +1167,10 @@ POST /api/calendar/google/sync/
   ▼
 GoogleCalendarSyncView.post(request)                 apps/calendar/views.py
   └─ sync_google_calendar.delay(integration_id)      apps/calendar/tasks.py
-       ├─ Push: DreamPlanner events → Google Calendar
+       ├─ Push: Stepora events → Google Calendar
        │    For events modified since last_sync_at:
        │      service.push_event(event)
-       └─ Pull: Google Calendar → DreamPlanner
+       └─ Pull: Google Calendar → Stepora
             service.pull_events()
             For each Google event not already in DB:
               CalendarEvent.objects.create(...)
@@ -1231,7 +1231,7 @@ UserViewSet.setup_2fa(request)                       apps/users/views.py
   │  user.save(update_fields=['totp_secret'])
   ├─ totp = pyotp.TOTP(secret)
   ├─ uri = totp.provisioning_uri(
-  │    name=user.email, issuer_name='DreamPlanner'
+  │    name=user.email, issuer_name='Stepora'
   │  )
   └─ Returns: { secret, otpauth_url }
      (Client displays QR code from otpauth_url)

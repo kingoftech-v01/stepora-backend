@@ -6,7 +6,7 @@ Feature ideas and improvements for user management, authentication, gamification
 
 ## Authentication & Security
 
-- [ ] **Social account linking** — Allow users to link multiple social accounts (Google + Apple) to a single DreamPlanner account
+- [ ] **Social account linking** — Allow users to link multiple social accounts (Google + Apple) to a single Stepora account
 - [ ] **Account recovery** — Recovery flow using backup email or phone number when primary email is lost
 - [ ] **Password breach check** — Check passwords against HaveIBeenPwned API during registration and password change
 - [ ] **Email verification on register** — Require email verification before account activation (currently optional)

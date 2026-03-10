@@ -1,6 +1,6 @@
 # Integrations
 
-External service integrations for DreamPlanner.
+External service integrations for Stepora.
 
 ## OpenAI Service (`openai_service.py`)
 

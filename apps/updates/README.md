@@ -1,6 +1,6 @@
 # App Updates (OTA)
 
-Self-hosted Over-The-Air web bundle update system for DreamPlanner mobile apps.
+Self-hosted Over-The-Air web bundle update system for Stepora mobile apps.
 
 ## Models
 
@@ -36,4 +36,4 @@ Admin only. Accepts multipart ZIP + metadata. Verifies RSA signature if `OTA_PUB
 OTA_PUBLIC_KEY_PATH = os.getenv('OTA_PUBLIC_KEY_PATH', '')
 ```
 
-See [OTA-UPDATES.md](../../../dreamplanner-frontend/OTA-UPDATES.md) for complete documentation.
+See [OTA-UPDATES.md](../../../stepora-frontend/OTA-UPDATES.md) for complete documentation.

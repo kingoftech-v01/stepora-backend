@@ -1,5 +1,5 @@
 """
-User models for DreamPlanner.
+User models for Stepora.
 """
 
 import uuid

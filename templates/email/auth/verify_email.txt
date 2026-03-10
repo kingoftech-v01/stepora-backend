@@ -1,0 +1,9 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Verify your email address{% endblock %}
+{% block heading %}Verify Your Email{% endblock %}
+{% block content_text %}Welcome to Stepora! Please verify your email address by clicking the link below.
+
+This link expires in 3 days.
+
+If you did not create a Stepora account, you can safely ignore this email.{% endblock %}
+{% block cta_text %}Verify Email Address{% endblock %}

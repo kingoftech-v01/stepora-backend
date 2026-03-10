@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Your data export is ready{% endblock %}
+{% block heading %}Your Data Export is Ready{% endblock %}
+{% block content_text %}Your data export has been prepared and is ready for download.
+
+This file will be available for 7 days.{% endblock %}
+{% block cta_text %}Download Your Data{% endblock %}

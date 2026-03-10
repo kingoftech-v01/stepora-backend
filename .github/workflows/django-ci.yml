@@ -20,7 +20,7 @@ jobs:
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: dreamplanner_test
+          POSTGRES_DB: stepora_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -58,7 +58,7 @@ jobs:
 
       - name: Run migrations
         env:
-          DB_NAME: dreamplanner_test
+          DB_NAME: stepora_test
           DB_USER: test
           DB_PASSWORD: test
           DB_HOST: localhost
@@ -70,7 +70,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          DB_NAME: dreamplanner_test
+          DB_NAME: stepora_test
           DB_USER: test
           DB_PASSWORD: test
           DB_HOST: localhost
@@ -133,11 +133,11 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t dreamplanner:${{ github.sha }} .
+          docker build -t stepora:${{ github.sha }} .
 
       - name: Save Docker image
         run: |
-          docker save dreamplanner:${{ github.sha }} | gzip > image.tar.gz
+          docker save stepora:${{ github.sha }} | gzip > image.tar.gz
 
       - name: Upload Docker image
         uses: actions/upload-artifact@v4
@@ -169,4 +169,4 @@ jobs:
       - name: Deploy notification
         run: |
           echo "Deployment would happen here"
-          echo "Image: dreamplanner:${{ github.sha }}"
+          echo "Image: stepora:${{ github.sha }}"

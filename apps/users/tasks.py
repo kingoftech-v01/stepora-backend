@@ -8,7 +8,6 @@ and account data export.
 import logging
 
 from celery import shared_task
-from django.core.mail import send_mail
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -20,6 +19,7 @@ def send_email_change_verification(user_id: int, new_email: str, token: str):
     Send a verification email when a user requests an email change.
     """
     from .models import User
+    from core.email import send_templated_email
 
     try:
         user = User.objects.get(pk=user_id)
@@ -27,22 +27,18 @@ def send_email_change_verification(user_id: int, new_email: str, token: str):
         logger.warning('User %s not found for email change verification', user_id)
         return
 
-    verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
+    verification_url = f"{settings.FRONTEND_URL}/#/verify-email/{token}"
 
-    send_mail(
-        subject='DreamPlanner - Verify your new email address',
-        message=(
-            f'Hi {user.display_name or "there"},\n\n'
-            f'You requested to change your email to {new_email}.\n\n'
-            f'Please verify this email by clicking the link below:\n'
-            f'{verification_url}\n\n'
-            f'This link expires in 24 hours.\n\n'
-            f'If you did not request this change, please ignore this email.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[new_email],
-        fail_silently=False,
+    send_templated_email(
+        template_name='users/email_change',
+        subject='Stepora — Verify your new email address',
+        to=[new_email],
+        context={
+            'user_name': user.display_name or 'there',
+            'new_email': new_email,
+            'verification_url': verification_url,
+            'action_url': verification_url,
+        },
     )
 
     logger.info('Email change verification sent to %s for user %s', new_email, user_id)
@@ -58,6 +54,7 @@ def export_user_data(user_id: int):
     from django.core.files.storage import default_storage
     from .models import User
     from .serializers import UserSerializer
+    from core.email import send_templated_email
 
     try:
         user = User.objects.get(pk=user_id)
@@ -81,18 +78,15 @@ def export_user_data(user_id: int):
 
     download_url = f"{settings.FRONTEND_URL}/api/media/{file_path}"
 
-    send_mail(
-        subject='DreamPlanner - Your data export is ready',
-        message=(
-            f'Hi {user.display_name or "there"},\n\n'
-            f'Your data export is ready for download:\n'
-            f'{download_url}\n\n'
-            f'This file will be available for 7 days.\n\n'
-            f'— The DreamPlanner Team'
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
+    send_templated_email(
+        template_name='users/data_export',
+        subject='Stepora — Your data export is ready',
+        to=[user.email],
+        context={
+            'user_name': user.display_name or 'there',
+            'download_url': download_url,
+            'action_url': download_url,
+        },
     )
 
     logger.info('Data export completed and emailed for user %s', user_id)

@@ -1,5 +1,5 @@
 """
-Custom throttle classes for DreamPlanner.
+Custom throttle classes for Stepora.
 
 Provides rate limiting for sensitive operations:
 - Auth endpoints (login, register)

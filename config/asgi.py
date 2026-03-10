@@ -1,5 +1,5 @@
 """
-ASGI config for DreamPlanner backend.
+ASGI config for Stepora backend.
 Exposes the ASGI callable as a module-level variable named ``application``.
 """
 
@@ -18,6 +18,8 @@ from apps.conversations.routing import websocket_urlpatterns as ai_chat_ws
 from apps.buddies.routing import websocket_urlpatterns as buddy_chat_ws
 from apps.circles.routing import websocket_urlpatterns as circle_chat_ws
 from apps.notifications.routing import websocket_urlpatterns as notification_ws
+from apps.social.routing import websocket_urlpatterns as social_ws
+from apps.leagues.routing import websocket_urlpatterns as league_ws
 from core.websocket_auth import TokenAuthMiddlewareStack
 
 application = ProtocolTypeRouter({
@@ -29,6 +31,7 @@ application = ProtocolTypeRouter({
         TokenAuthMiddlewareStack(
             URLRouter(
                 ai_chat_ws + buddy_chat_ws + circle_chat_ws + notification_ws
+                + social_ws + league_ws
             )
         )
     ),

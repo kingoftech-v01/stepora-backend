@@ -1,6 +1,6 @@
 # Social App
 
-Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, follow suggestions, and the dream post social platform for the DreamPlanner community.
+Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, follow suggestions, and the dream post social platform for the Stepora community.
 
 ## Overview
 

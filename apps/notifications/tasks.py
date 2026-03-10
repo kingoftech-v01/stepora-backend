@@ -109,10 +109,10 @@ def _send_digest_email(user, subject, context):
         f"- Streak: {context['streak_days']} days\n"
         f"- Active dreams: {context['dreams_count']}\n\n"
         f"{context['motivational_msg']}\n\n"
-        f"Keep going!\nThe DreamPlanner Team"
+        f"Keep going!\nThe Stepora Team"
     )
 
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@stepora.com')
 
     send_rendered_email.delay(
         subject=subject,
@@ -433,7 +433,7 @@ def send_user_digest(self, user_id):
         'motivational_msg': motivational_msg,
         'week_start': week_ago.strftime('%b %d'),
         'week_end': now.strftime('%b %d, %Y'),
-        'app_url': getattr(settings, 'FRONTEND_URL', 'https://app.dreamplanner.app'),
+        'app_url': getattr(settings, 'FRONTEND_URL', 'https://app.stepora.app'),
     }
 
     _send_digest_email(user, title, email_context)

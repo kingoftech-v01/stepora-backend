@@ -12,7 +12,7 @@ from django.conf import settings
 
 class StripeCustomer(models.Model):
     """
-    Maps a DreamPlanner user to a Stripe customer.
+    Maps a Stepora user to a Stripe customer.
 
     Created automatically via a post_save signal when a new User is registered.
     Stores the Stripe customer ID so we can look up payment info without

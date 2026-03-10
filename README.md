@@ -1,6 +1,6 @@
-# DreamPlanner - AI-Powered Goal Achievement Platform
+# Stepora - AI-Powered Goal Achievement Platform
 
-DreamPlanner is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
+Stepora is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
 **Backend**: Django 5.0.1 with 13 apps, 170+ API endpoints, 28 Celery tasks, 4 WebSocket consumers
 
@@ -151,7 +151,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 - **RSA Code Signing**: Bundles signed with RSA-2048 private key, verified server-side and client-side
 - **Triple Verification**: Deploy script signs → Django verifies → Capacitor plugin re-verifies
 - **Two Strategies**: `silent` (apply on next restart) or `notify` (prompt user to restart)
-- **Dedicated S3 Storage**: Separate `dreamplanner-releases` bucket for bundles, backups, and native builds
+- **Dedicated S3 Storage**: Separate `stepora-releases` bucket for bundles, backups, and native builds
 - **One-Command Deploy**: `./scripts/deploy-ota.sh notify` (build + zip + sign + upload)
 - **Rollback Safety**: Plugin auto-reverts to previous bundle if new one crashes within 10s
 - **Admin Panel**: Manage bundles, deactivate bad releases, change strategies via Django Admin
@@ -166,7 +166,7 @@ DreamPlanner is a comprehensive goal-tracking and achievement platform that comb
 ## Architecture
 
 ```
-dreamplanner/
+stepora/
 +-- apps/                        # 13 Django applications
 |   +-- users/                   # User management, gamification, 2FA, GDPR
 |   +-- dreams/                  # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
@@ -286,8 +286,8 @@ CORS_ORIGIN=https://dp.yourdomain.com,https://localhost,capacitor://localhost
 CSRF_TRUSTED_ORIGINS=https://dp.yourdomain.com,https://localhost,capacitor://localhost
 
 # ── Database (PostgreSQL) ───────────────────────────────
-DB_NAME=dreamplanner
-DB_USER=dreamplanner
+DB_NAME=stepora
+DB_USER=stepora
 DB_PASSWORD=your-db-password               # REQUIRED in production
 DB_HOST=localhost
 DB_PORT=5432
@@ -350,7 +350,7 @@ DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
 ### Base URL
 - **Development**: `http://localhost:8000/api`
-- **Production**: `https://api.dreamplanner.app/api`
+- **Production**: `https://api.stepora.app/api`
 - **Swagger UI**: `http://localhost:8000/api/docs/`
 - **ReDoc**: `http://localhost:8000/api/redoc/`
 - **OpenAPI Schema**: `http://localhost:8000/api/schema/`
@@ -761,7 +761,7 @@ pytest -m asyncio       # Async tests (WebSocket)
 Architecture: **External nginx (SSL) → Docker nginx (security) → Django/Daphne**
 
 ```bash
-cd /root/dreamplanner
+cd /root/stepora
 
 # 1. Create/update .env with production secrets (chmod 600)
 # 2. Build and start all services
@@ -796,10 +796,10 @@ docker compose exec web python manage.py seed_store
 
 ```bash
 # Manual backup
-/root/dreamplanner/scripts/backup.sh
+/root/stepora/scripts/backup.sh
 
 # Automated: cron runs daily at 3 AM, 7-day retention
-# Backups stored in /root/dreamplanner/backups/
+# Backups stored in /root/stepora/backups/
 ```
 
 ### Infrastructure (AWS — future)

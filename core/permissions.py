@@ -1,5 +1,5 @@
 """
-Custom DRF permissions for DreamPlanner.
+Custom DRF permissions for Stepora.
 
 All subscription-based permissions read from the user's active SubscriptionPlan
 in the database (via User.get_active_plan()). This ensures feature access is

@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Your subscription has ended{% endblock %}
+{% block heading %}Your Subscription Has Ended{% endblock %}
+{% block content_text %}Your {{ old_plan_name }} subscription has ended. Your account has been moved to the Free plan.
+
+You can still access your dreams and basic features. To regain premium features, subscribe again anytime.{% endblock %}
+{% block cta_text %}Subscribe Again{% endblock %}

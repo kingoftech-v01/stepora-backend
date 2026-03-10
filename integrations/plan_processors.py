@@ -1,5 +1,5 @@
 """
-Category-specific plan processors for DreamPlanner.
+Category-specific plan processors for Stepora.
 
 Each processor provides domain-specific rules, calibration questions,
 and validation logic that get injected into the AI planning prompts.

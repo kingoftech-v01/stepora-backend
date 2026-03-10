@@ -11,9 +11,9 @@ Dream B (English): "Start my own business"   — very vague
 
 import os, sys, json, time
 os.environ['DB_HOST'] = '172.22.0.7'
-os.environ['DB_NAME'] = 'dreamplanner'
-os.environ['DB_USER'] = 'dreamplanner'
-os.environ['DB_PASSWORD'] = 'dreamplanner_dev_password'
+os.environ['DB_NAME'] = 'stepora'
+os.environ['DB_USER'] = 'stepora'
+os.environ['DB_PASSWORD'] = 'stepora_dev_password'
 os.environ['REDIS_HOST'] = '172.22.0.3'
 os.environ['REDIS_URL'] = 'redis://:dp_redis_S3cur3_2026!@172.22.0.3:6379/1'
 os.environ['CELERY_BROKER_URL'] = 'redis://:dp_redis_S3cur3_2026!@172.22.0.3:6379/0'
@@ -297,7 +297,7 @@ print("SETUP: Create test user")
 print("=" * 70)
 
 user, created = User.objects.get_or_create(
-    email='test_dual_dreams@dreamplanner.test',
+    email='test_dual_dreams@stepora.test',
     defaults={'display_name': 'Alex Testeur', 'timezone': 'Europe/Paris'}
 )
 if created:

@@ -2338,7 +2338,7 @@ class CalendarViewSet(viewsets.ViewSet):
             ])
 
         response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="dreamplanner-calendar-{start_date}-to-{end_date}.csv"'
+        response['Content-Disposition'] = f'attachment; filename="stepora-calendar-{start_date}-to-{end_date}.csv"'
         return response
 
     def _export_ical(self, events, user):
@@ -2346,16 +2346,16 @@ class CalendarViewSet(viewsets.ViewSet):
         lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//DreamPlanner//Calendar Export//EN',
+            'PRODID:-//Stepora//Calendar Export//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
-            f'X-WR-CALNAME:DreamPlanner - {_ical_escape(user.display_name or user.email)}',
+            f'X-WR-CALNAME:Stepora - {_ical_escape(user.display_name or user.email)}',
         ]
 
         for event in events:
             lines.extend([
                 'BEGIN:VEVENT',
-                f'UID:{event.id}@dreamplanner',
+                f'UID:{event.id}@stepora',
                 f'DTSTART:{event.start_time.strftime("%Y%m%dT%H%M%SZ")}',
                 f'DTEND:{event.end_time.strftime("%Y%m%dT%H%M%SZ")}',
                 f'SUMMARY:{_ical_escape(event.title)}',
@@ -2373,7 +2373,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         ical_content = '\r\n'.join(lines)
         response = HttpResponse(ical_content, content_type='text/calendar; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="dreamplanner-calendar.ics"'
+        response['Content-Disposition'] = 'attachment; filename="stepora-calendar.ics"'
         return response
 
     def _export_json(self, events):
@@ -2834,16 +2834,16 @@ class ICalFeedView(APIView):
         lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//DreamPlanner//Calendar//EN',
+            'PRODID:-//Stepora//Calendar//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
-            f'X-WR-CALNAME:DreamPlanner - {_ical_escape(user.display_name or user.email)}',
+            f'X-WR-CALNAME:Stepora - {_ical_escape(user.display_name or user.email)}',
         ]
 
         for event in events:
             lines.extend([
                 'BEGIN:VEVENT',
-                f'UID:{event.id}@dreamplanner',
+                f'UID:{event.id}@stepora',
                 f'DTSTART:{event.start_time.strftime("%Y%m%dT%H%M%SZ")}',
                 f'DTEND:{event.end_time.strftime("%Y%m%dT%H%M%SZ")}',
                 f'SUMMARY:{_ical_escape(event.title)}',
@@ -2857,7 +2857,7 @@ class ICalFeedView(APIView):
 
         ical_content = '\r\n'.join(lines)
         response = HttpResponse(ical_content, content_type='text/calendar; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="dreamplanner.ics"'
+        response['Content-Disposition'] = 'attachment; filename="stepora.ics"'
         return response
 
 
@@ -2956,7 +2956,7 @@ class ICalImportView(APIView):
         return dt_val.astimezone(dt_timezone.utc)
 
     def _parse_rrule(self, rrule):
-        """Convert an iCal RRULE to DreamPlanner recurrence_rule dict."""
+        """Convert an iCal RRULE to Stepora recurrence_rule dict."""
         freq_list = rrule.get('FREQ', [])
         if not freq_list:
             return None
@@ -3016,9 +3016,9 @@ class GoogleCalendarNativeRedirectView(APIView):
         error = request.query_params.get('error', '')
 
         if error:
-            deep_link = f"com.dreamplanner.app://calendar/callback?error={html.escape(error)}"
+            deep_link = f"com.stepora.app://calendar/callback?error={html.escape(error)}"
         elif code:
-            deep_link = f"com.dreamplanner.app://calendar/callback?code={html.escape(code)}"
+            deep_link = f"com.stepora.app://calendar/callback?code={html.escape(code)}"
         else:
             return HttpResponse(_('Missing authorization code.'), status=400)
 
@@ -3028,7 +3028,7 @@ class GoogleCalendarNativeRedirectView(APIView):
         page = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Redirecting...</title></head>
 <body>
-<p>Redirecting to DreamPlanner...</p>
+<p>Redirecting to Stepora...</p>
 <script>window.location.href = {deep_link_js};</script>
 <noscript><a href="{deep_link_html}">Click here to return to the app</a></noscript>
 </body></html>"""

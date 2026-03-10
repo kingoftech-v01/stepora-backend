@@ -1,4 +1,4 @@
-# Technical Architecture - DreamPlanner
+# Technical Architecture - Stepora
 
 ## 1. Architecture Overview
 
@@ -344,7 +344,7 @@ class DreamEncouragement(models.Model):
 
 ### Base URL
 - **Development**: `http://localhost:8000/api`
-- **Production**: `https://api.dreamplanner.app/api`
+- **Production**: `https://api.stepora.app/api`
 
 ### 4.1 Authentication (core.auth + SimpleJWT)
 ```
@@ -456,7 +456,7 @@ openai.api_key = settings.OPENAI_API_KEY
 
 class OpenAIService:
     SYSTEM_PROMPTS = {
-        'dream_creation': """You are DreamPlanner, a caring assistant that helps users achieve their dreams.
+        'dream_creation': """You are Stepora, a caring assistant that helps users achieve their dreams.
 
 YOUR ROLE:
 1. Listen carefully to dreams and goals
@@ -695,7 +695,7 @@ Respond ONLY with a structured JSON containing:
 from celery import Celery
 from celery.schedules import crontab
 
-app = Celery('dreamplanner')
+app = Celery('stepora')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 app.conf.beat_schedule = {
@@ -855,7 +855,7 @@ ALB (Load Balancer)
 ## 9. Directory Structure
 
 ```
-dreamplanner/
+stepora/
 ├── config/                       # Django Configuration
 │   ├── settings/
 │   │   ├── base.py

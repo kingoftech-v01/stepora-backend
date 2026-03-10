@@ -1,5 +1,5 @@
 """
-AI Usage Tracker for DreamPlanner.
+AI Usage Tracker for Stepora.
 
 Tracks AI usage per user per day using Redis atomic counters.
 Each subscription tier has daily limits for different AI operation categories.

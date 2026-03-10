@@ -1,6 +1,6 @@
 # Core Module
 
-Shared utilities, middleware, and base classes used across all DreamPlanner backend apps.
+Shared utilities, middleware, and base classes used across all Stepora backend apps.
 
 ## Overview
 

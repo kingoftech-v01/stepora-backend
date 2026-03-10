@@ -362,7 +362,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # Anonymize personal data
         user.display_name = 'Deleted User'
-        user.email = f'deleted_{user.id}@deleted.dreamplanner.app'
+        user.email = f'deleted_{user.id}@deleted.stepora.app'
         user.avatar_url = ''
         if user.avatar_image:
             user.avatar_image.delete(save=False)
@@ -559,12 +559,12 @@ class UserViewSet(viewsets.ModelViewSet):
                         ])
             csv_content = output.getvalue()
             response = HttpResponse(csv_content, content_type='text/csv')
-            response['Content-Disposition'] = 'attachment; filename="dreamplanner-export.csv"'
+            response['Content-Disposition'] = 'attachment; filename="stepora-export.csv"'
             return response
 
         # ── JSON format (default) ─────────────────────────────────────
         response = Response(data)
-        response['Content-Disposition'] = 'attachment; filename="dreamplanner-export.json"'
+        response['Content-Disposition'] = 'attachment; filename="stepora-export.json"'
         return response
 
     @extend_schema(
@@ -1000,7 +1000,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'typical_day',               # free text description
             'occupation',                # free text
             'astrological_sign',         # optional, zodiac sign
-            'global_motivation',         # free text - why they use DreamPlanner
+            'global_motivation',         # free text - why they use Stepora
             'global_constraints',        # free text - general life constraints
             'preferred_language',        # fr/en/es etc
         }
@@ -1367,7 +1367,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user.totp_secret = secret
         user.save(update_fields=['totp_secret'])
         totp = pyotp.TOTP(secret)
-        uri = totp.provisioning_uri(name=user.email, issuer_name='DreamPlanner')
+        uri = totp.provisioning_uri(name=user.email, issuer_name='Stepora')
         return Response({'secret': secret, 'otpauth_url': uri})
 
     @extend_schema(
@@ -2642,7 +2642,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'message': 'Amazing work! You are making incredible progress!',
                 'emoji': '\U0001f389',
                 'animation_type': 'confetti',
-                'share_text': 'Just hit a new milestone on my journey! #DreamPlanner',
+                'share_text': 'Just hit a new milestone on my journey! #Stepora',
             }
 
         return Response(result)

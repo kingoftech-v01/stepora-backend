@@ -60,6 +60,16 @@ _cors_raw = os.getenv('CORS_ORIGIN', '')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
+# CloudFront domain for CORS (if serving frontend via CloudFront)
+CLOUDFRONT_DOMAIN = os.environ.get('CLOUDFRONT_DOMAIN', '')
+if CLOUDFRONT_DOMAIN:
+    CORS_ALLOWED_ORIGINS.append(f'https://{CLOUDFRONT_DOMAIN}')
+
+# ALB hostname for ALLOWED_HOSTS (ECS health checks come from the ALB)
+_alb_hostname = os.environ.get('ALB_HOSTNAME', '')
+if _alb_hostname:
+    ALLOWED_HOSTS.append(_alb_hostname)
+
 # CSRF trusted origins (required for cross-origin POST from frontend)
 _csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS', os.getenv('CORS_ORIGIN', ''))
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_raw.split(',') if o.strip()]
@@ -70,17 +80,31 @@ AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_S3_BUCKET')
 AWS_S3_REGION_NAME = os.getenv('AWS_REGION', 'eu-west-1')
 AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_CLOUDFRONT_DOMAIN')
+AWS_DEFAULT_ACL = None  # Required for S3 Block Public Access
+AWS_S3_FILE_OVERWRITE = False
+AWS_STATIC_LOCATION = 'static'
+AWS_MEDIA_LOCATION = 'media'
 
 # Use S3 for static and media files (Django 4.2+ STORAGES dict)
 if AWS_STORAGE_BUCKET_NAME:
     STORAGES = {
         'default': {
             'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+            'OPTIONS': {
+                'location': AWS_MEDIA_LOCATION,
+            },
         },
         'staticfiles': {
             'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+            'OPTIONS': {
+                'location': AWS_STATIC_LOCATION,
+            },
         },
     }
+    # Set URL prefixes to include the location prefix
+    _s3_domain = AWS_S3_CUSTOM_DOMAIN or f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    STATIC_URL = f'https://{_s3_domain}/{AWS_STATIC_LOCATION}/'
+    MEDIA_URL = f'https://{_s3_domain}/{AWS_MEDIA_LOCATION}/'
 
 # OTA code signing — path to RSA public key for signature verification
 OTA_PUBLIC_KEY_PATH = os.getenv('OTA_PUBLIC_KEY_PATH', '')
@@ -95,9 +119,44 @@ if _has_sentry and os.getenv('SENTRY_DSN'):
         environment='production',
     )
 
-# Logging level
-LOGGING['root']['level'] = 'WARNING'
-LOGGING['loggers']['apps']['level'] = 'INFO'
+# Logging — stdout-only for ECS (no file handlers)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'security': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 # Email (production uses real SMTP when configured)
 EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -106,7 +165,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', '').lower() in ('true', '1', 'yes')
 EMAIL_USE_TLS = not EMAIL_USE_SSL
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@stepora.app')
 
 if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -128,6 +187,10 @@ DATABASES['default']['OPTIONS'] = {
     'options': '-c statement_timeout=30000',  # 30 seconds
     'sslmode': os.getenv('DB_SSLMODE', 'require'),
 }
+
+# Sessions via Redis (shared across ECS tasks)
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
 
 # Redis connection for production (supports redis:// and rediss:// schemes)
 _redis_url = os.getenv('REDIS_URL', '')

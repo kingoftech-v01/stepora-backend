@@ -15,8 +15,8 @@ if os.getenv('DB_HOST'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'dreamplanner'),
-            'USER': os.getenv('DB_USER', 'dreamplanner'),
+            'NAME': os.getenv('DB_NAME', 'stepora'),
+            'USER': os.getenv('DB_USER', 'stepora'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT', '5432'),
@@ -48,7 +48,7 @@ if os.getenv('REDIS_HOST'):
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             },
-            'KEY_PREFIX': 'dreamplanner',
+            'KEY_PREFIX': 'stepora',
             'TIMEOUT': 300,
         }
     }
@@ -63,7 +63,7 @@ else:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'dreamplanner-dev',
+            'LOCATION': 'stepora-dev',
         }
     }
     CELERY_TASK_ALWAYS_EAGER = True

@@ -105,12 +105,41 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def checkout(self, request):
-        """Create a Stripe Checkout Session for a plan upgrade."""
+        """Create a Stripe Checkout Session for a plan upgrade.
+
+        If the target plan is the free tier, this endpoint handles it as a
+        downgrade: it cancels the current Stripe subscription instead of
+        trying to create a checkout session (which would fail).
+        """
         serializer = SubscriptionCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         plan = serializer.get_plan()
+
+        # Free-plan downgrade: cancel the Stripe subscription locally
+        # instead of routing through Stripe Checkout.
+        if plan.is_free:
+            try:
+                subscription = StripeService.cancel_subscription(request.user)
+            except stripe.error.StripeError:
+                logger.exception("Stripe error during downgrade to free")
+                return Response(
+                    {'detail': _('Payment service error. Please try again later.')},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            if not subscription:
+                return Response(
+                    {'detail': _('No active subscription to cancel.')},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            sub_serializer = SubscriptionSerializer(subscription)
+            return Response({
+                'action': 'downgrade_scheduled',
+                'subscription': sub_serializer.data,
+            })
 
         try:
             session = StripeService.create_checkout_session(

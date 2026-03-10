@@ -158,17 +158,12 @@ class SubscriptionCreateSerializer(serializers.Serializer):
         return value
 
     def validate_plan_slug(self, value):
-        """Ensure the plan exists, is active, and is not the free tier."""
+        """Ensure the plan exists and is active."""
         try:
-            plan = SubscriptionPlan.objects.get(slug=value, is_active=True)
+            SubscriptionPlan.objects.get(slug=value, is_active=True)
         except SubscriptionPlan.DoesNotExist:
             raise serializers.ValidationError(
                 f"No active subscription plan found with slug '{value}'."
-            )
-
-        if plan.is_free:
-            raise serializers.ValidationError(
-                "Cannot create a checkout session for the free plan."
             )
 
         return value

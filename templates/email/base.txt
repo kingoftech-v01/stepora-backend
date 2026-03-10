@@ -1,0 +1,13 @@
+{% block preheader %}{% endblock %}
+
+{% block heading %}{% endblock %}
+
+Hi {{ user_name }},
+
+{% block content_text %}{% endblock %}
+
+{% block cta_text %}{% endblock %}: {{ action_url }}
+
+---
+Stepora — Turn your dreams into reality
+{{ frontend_url }}

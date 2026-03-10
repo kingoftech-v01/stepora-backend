@@ -282,7 +282,7 @@ class CircleListSerializer(serializers.ModelSerializer):
     including member count, member avatars, and basic info.
     """
 
-    memberCount = serializers.IntegerField(source='member_count', read_only=True, help_text='Total number of circle members.')
+    memberCount = serializers.IntegerField(source='members_count', read_only=True, help_text='Total number of circle members.')
     maxMembers = serializers.IntegerField(source='max_members', read_only=True, help_text='Maximum allowed members in the circle.')
     memberAvatars = serializers.SerializerMethodField(help_text='Avatar URLs of first 5 members.')
     creatorName = serializers.CharField(source='creator.display_name', read_only=True, help_text='Display name of the circle creator.')
@@ -334,7 +334,7 @@ class CircleDetailSerializer(serializers.ModelSerializer):
     and whether the current user is a member.
     """
 
-    memberCount = serializers.IntegerField(source='member_count', read_only=True, help_text='Total number of circle members.')
+    memberCount = serializers.IntegerField(source='members_count', read_only=True, help_text='Total number of circle members.')
     maxMembers = serializers.IntegerField(source='max_members', read_only=True, help_text='Maximum allowed members in the circle.')
     members = serializers.SerializerMethodField(help_text='List of all circle members.')
     challenges = serializers.SerializerMethodField(help_text='Active and upcoming circle challenges.')

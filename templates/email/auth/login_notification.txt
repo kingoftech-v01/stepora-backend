@@ -1,0 +1,12 @@
+{% extends "email/base.txt" %}
+{% block preheader %}New login detected{% endblock %}
+{% block heading %}New Login Detected{% endblock %}
+{% block content_text %}A new login to your Stepora account was detected.
+
+{% if ip_address %}IP Address: {{ ip_address }}
+{% endif %}{% if user_agent %}Device: {{ user_agent }}
+{% endif %}
+If this was you, no action is needed.
+
+If this wasn't you, change your password immediately and consider enabling two-factor authentication.{% endblock %}
+{% block cta_text %}{% endblock %}

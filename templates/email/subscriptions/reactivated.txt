@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+{% block preheader %}Subscription reactivated{% endblock %}
+{% block heading %}Subscription Reactivated!{% endblock %}
+{% block content_text %}Great news! Your {{ plan_name }} subscription has been reactivated and will continue to renew as normal.
+
+Keep dreaming!{% endblock %}
+{% block cta_text %}Open Stepora{% endblock %}

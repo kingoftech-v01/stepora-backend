@@ -1,6 +1,6 @@
 ---
 name: Demande de Fonctionnalité
-about: Proposer une nouvelle fonctionnalité pour DreamPlanner
+about: Proposer une nouvelle fonctionnalité pour Stepora
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

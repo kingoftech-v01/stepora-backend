@@ -4,8 +4,8 @@
 
 {{ body }}
 
-{% trans "Open DreamPlanner" %}: {{ action_url }}
+{% trans "Open Stepora" %}: {{ action_url }}
 
 ---
-{% trans "DreamPlanner - Turn your dreams into reality" %}
+{% trans "Stepora - Turn your dreams into reality" %}
 {% trans "Manage notification preferences in your profile settings." %}

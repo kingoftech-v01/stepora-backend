@@ -297,11 +297,22 @@ class DreamPostSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_user(self, obj) -> dict:
+        request = self.context.get('request')
+        is_following = False
+        if request and request.user.is_authenticated and obj.user_id != request.user.id:
+            if hasattr(obj, '_user_is_following'):
+                is_following = obj._user_is_following
+            else:
+                from apps.social.models import UserFollow
+                is_following = UserFollow.objects.filter(
+                    follower=request.user, following_id=obj.user_id,
+                ).exists()
         return {
             'id': str(obj.user.id),
             'username': obj.user.display_name or 'Anonymous',
             'avatar': obj.user.avatar_url or '',
             'level': obj.user.level,
+            'isFollowing': is_following,
         }
 
     def get_hasLiked(self, obj) -> bool:

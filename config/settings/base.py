@@ -1,5 +1,5 @@
 """
-Django settings for DreamPlanner backend.
+Django settings for Stepora backend.
 Base settings shared across all environments.
 """
 
@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     'apps.social',
     'apps.buddies',
     'apps.updates',
+    'apps.blog',
     'core',
 ]
 
@@ -118,8 +119,8 @@ ASGI_APPLICATION = 'config.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'dreamplanner'),
-        'USER': os.getenv('DB_USER', 'dreamplanner'),
+        'NAME': os.getenv('DB_NAME', 'stepora'),
+        'USER': os.getenv('DB_USER', 'stepora'),
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
@@ -198,13 +199,13 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dreamplanner.app')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@stepora.app')
 
 # Web Push (VAPID)
 WEBPUSH_SETTINGS = {
     'VAPID_PUBLIC_KEY': os.getenv('VAPID_PUBLIC_KEY', ''),
     'VAPID_PRIVATE_KEY': os.getenv('VAPID_PRIVATE_KEY', ''),
-    'VAPID_ADMIN_EMAIL': os.getenv('VAPID_ADMIN_EMAIL', 'admin@dreamplanner.app'),
+    'VAPID_ADMIN_EMAIL': os.getenv('VAPID_ADMIN_EMAIL', 'admin@stepora.app'),
 }
 
 # Firebase Cloud Messaging (FCM)
@@ -251,7 +252,7 @@ REST_FRAMEWORK = {
 
 # DRF Spectacular - OpenAPI/Swagger Documentation
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'DreamPlanner API',
+    'TITLE': 'Stepora API',
     'DESCRIPTION': 'API for dream and goal management with AI coaching, subscriptions, and gamification',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -377,7 +378,7 @@ CACHES = {
             'SOCKET_CONNECT_TIMEOUT': 5,
             'SOCKET_TIMEOUT': 5,
         },
-        'KEY_PREFIX': 'dreamplanner',
+        'KEY_PREFIX': 'stepora',
         'TIMEOUT': 300,  # 5 minutes default
     }
 }
@@ -415,7 +416,7 @@ AI_QUOTAS = {
     },
 }
 
-# DreamPlanner custom auth configuration
+# Stepora custom auth configuration
 DP_AUTH = {
     'JWT_AUTH_REFRESH_COOKIE': 'dp-refresh',
     'JWT_AUTH_SAMESITE': 'Lax',

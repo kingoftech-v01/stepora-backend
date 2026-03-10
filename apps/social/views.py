@@ -391,6 +391,18 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             following=target_user
         )
 
+        # Broadcast follow event to the target user's social feed
+        try:
+            from .consumers import broadcast_social_event
+            broadcast_social_event(target_user.id, 'follow_update', {
+                'action': 'followed',
+                'user_id': str(request.user.id),
+                'username': request.user.display_name or 'Someone',
+                'avatar': request.user.avatar_url or '',
+            })
+        except Exception:
+            logger.warning("Failed to broadcast follow event", exc_info=True)
+
         return Response(
             {'message': _('Now following %(name)s.') % {'name': target_user.display_name or _("user")}},
             status=status.HTTP_201_CREATED
@@ -418,6 +430,17 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 {'error': _('You are not following this user.')},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        # Broadcast unfollow event to the target user's social feed
+        try:
+            from .consumers import broadcast_social_event
+            broadcast_social_event(user_id, 'follow_update', {
+                'action': 'unfollowed',
+                'user_id': str(request.user.id),
+                'username': request.user.display_name or 'Someone',
+            })
+        except Exception:
+            logger.warning("Failed to broadcast unfollow event", exc_info=True)
 
         return Response({'message': _('Successfully unfollowed.')})
 
@@ -1552,6 +1575,20 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 dream=dream,
             )
 
+        # Broadcast new_post event to all followers
+        try:
+            from .consumers import broadcast_social_event_to_followers
+            broadcast_social_event_to_followers(request.user, 'new_post', {
+                'post_id': str(post.id),
+                'user_id': str(request.user.id),
+                'username': request.user.display_name or 'Someone',
+                'avatar': request.user.avatar_url or '',
+                'content': (post.content[:100] + '...') if len(post.content) > 100 else post.content,
+                'post_type': post.post_type,
+            })
+        except Exception:
+            logger.warning("Failed to broadcast new_post event", exc_info=True)
+
         return Response(
             DreamPostSerializer(post, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -1633,7 +1670,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             user_id__in=blocked_ids,
         ).select_related('user', 'dream').order_by('-created_at')
 
-        # Annotate with user_has_liked, user_has_saved, user_has_encouraged, and user_reaction
+        # Annotate with user_has_liked, user_has_saved, user_has_encouraged, user_reaction, and follow status
         posts = posts.annotate(
             _user_has_liked=Exists(
                 DreamPostLike.objects.filter(post=OuterRef('pk'), user=user)
@@ -1648,6 +1685,9 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 PostReaction.objects.filter(
                     post=OuterRef('pk'), user=user,
                 ).values('reaction_type')[:1]
+            ),
+            _user_is_following=Exists(
+                UserFollow.objects.filter(follower=user, following_id=OuterRef('user_id'))
             ),
         )
 
@@ -1682,6 +1722,18 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 post, request.user,
                 title=_("%(name)s liked your dream post") % {'name': request.user.display_name or _('Someone')},
             )
+            # Broadcast post_liked event to the post owner
+            if post.user_id != request.user.id:
+                try:
+                    from .consumers import broadcast_social_event
+                    broadcast_social_event(post.user_id, 'post_liked', {
+                        'post_id': str(post.id),
+                        'user_id': str(request.user.id),
+                        'username': request.user.display_name or 'Someone',
+                        'likes_count': post.likes_count + 1,
+                    })
+                except Exception:
+                    logger.warning("Failed to broadcast post_liked event", exc_info=True)
             return Response({'liked': True, 'likes_count': post.likes_count + 1})
         else:
             like.delete()
@@ -1789,6 +1841,21 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             post, request.user,
             title=_("%(name)s commented on your post") % {'name': request.user.display_name or _('Someone')},
         )
+
+        # Broadcast post_commented event to the post owner
+        if post.user_id != request.user.id:
+            try:
+                from .consumers import broadcast_social_event
+                broadcast_social_event(post.user_id, 'post_commented', {
+                    'post_id': str(post.id),
+                    'comment_id': str(comment.id),
+                    'user_id': str(request.user.id),
+                    'username': request.user.display_name or 'Someone',
+                    'content': (content[:100] + '...') if len(content) > 100 else content,
+                    'comments_count': post.comments_count + 1,
+                })
+            except Exception:
+                logger.warning("Failed to broadcast post_commented event", exc_info=True)
 
         return Response(
             DreamPostCommentSerializer(comment, context={'request': request}).data,

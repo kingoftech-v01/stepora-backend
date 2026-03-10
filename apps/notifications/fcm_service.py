@@ -2,7 +2,9 @@
 Firebase Cloud Messaging service for push notification delivery.
 """
 
+import json
 import logging
+import os
 from typing import List, Optional, Dict
 
 from django.conf import settings
@@ -25,13 +27,22 @@ def get_firebase_app():
     import firebase_admin
     from firebase_admin import credentials
 
+    # Prefer FIREBASE_CREDENTIALS_JSON env var (JSON string, e.g. for ECS)
+    cred_json = os.environ.get('FIREBASE_CREDENTIALS_JSON', '')
     cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', '')
-    if not cred_path:
+
+    if cred_json:
+        cred = credentials.Certificate(json.loads(cred_json))
+        logger.info("Firebase Admin SDK using credentials from FIREBASE_CREDENTIALS_JSON env var")
+    elif cred_path:
+        cred = credentials.Certificate(cred_path)
+        logger.info("Firebase Admin SDK using credentials from file: %s", cred_path)
+    else:
         raise RuntimeError(
-            "FIREBASE_CREDENTIALS_PATH is not configured in Django settings."
+            "Firebase credentials not configured. Set FIREBASE_CREDENTIALS_JSON env var "
+            "or FIREBASE_CREDENTIALS_PATH in Django settings."
         )
 
-    cred = credentials.Certificate(cred_path)
     _firebase_app = firebase_admin.initialize_app(cred)
     logger.info("Firebase Admin SDK initialized successfully")
     return _firebase_app
@@ -101,7 +112,7 @@ class FCMService:
         android_config = messaging.AndroidConfig(
             priority='high',
             notification=messaging.AndroidNotification(
-                channel_id='dreamplanner_default',
+                channel_id='stepora_default',
                 icon='ic_notification',
                 color='#6C63FF',
             ),

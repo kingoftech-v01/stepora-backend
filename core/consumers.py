@@ -1,5 +1,5 @@
 """
-Shared WebSocket consumer mixins for DreamPlanner.
+Shared WebSocket consumer mixins for Stepora.
 
 Provides reusable building blocks for all WebSocket consumers:
 - RateLimitMixin: per-connection sliding-window rate limiter

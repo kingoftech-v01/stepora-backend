@@ -1,5 +1,5 @@
 """
-Dreams, Goals, and Tasks models for DreamPlanner.
+Dreams, Goals, and Tasks models for Stepora.
 """
 
 import uuid

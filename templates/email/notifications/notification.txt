@@ -1,0 +1,5 @@
+{% extends "email/base.txt" %}
+{% block preheader %}{{ title }}{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content_text %}{{ body }}{% endblock %}
+{% block cta_text %}Open Stepora{% endblock %}

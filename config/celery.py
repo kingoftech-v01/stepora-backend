@@ -1,5 +1,5 @@
 """
-Celery configuration for DreamPlanner backend.
+Celery configuration for Stepora backend.
 """
 
 import os
@@ -9,7 +9,7 @@ from celery.schedules import crontab
 # Set default Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
 
-app = Celery('dreamplanner')
+app = Celery('stepora')
 
 # Load config from Django settings with namespace CELERY
 app.config_from_object('django.conf:settings', namespace='CELERY')

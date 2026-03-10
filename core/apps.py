@@ -54,7 +54,7 @@ def _sync_site_from_frontend_url():
         site = Site.objects.get(pk=getattr(settings, 'SITE_ID', 1))
         if site.domain != domain:
             site.domain = domain
-            site.name = 'DreamPlanner'
+            site.name = 'Stepora'
             site.save(update_fields=['domain', 'name'])
             logger.info("Auto-synced Site domain to %s from FRONTEND_URL", domain)
     except Exception as e:

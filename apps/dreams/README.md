@@ -4,7 +4,7 @@ Django application for managing dreams, goals, tasks, obstacles, calibration, vi
 
 ## Overview
 
-The Dreams app is the core of DreamPlanner. It manages the complete hierarchy:
+The Dreams app is the core of Stepora. It manages the complete hierarchy:
 - **Dream** - The user's main objective/vision with AI analysis and calibration
 - **DreamMilestone** - Time-based milestone within a dream plan (1 per month). NOT to be confused with "streak milestones" (7/14/30-day streaks in notifications) or "progress milestones" (25/50/75% in tasks.py)
 - **Goal** - Intermediate steps within a milestone (min 4 per milestone)

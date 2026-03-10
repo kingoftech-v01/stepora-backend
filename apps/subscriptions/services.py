@@ -50,7 +50,7 @@ class StripeService:
         the existing record instead of creating a duplicate in Stripe.
 
         Args:
-            user: The DreamPlanner user to create a customer for.
+            user: The Stepora user to create a customer for.
 
         Returns:
             The StripeCustomer instance linking the user to Stripe.
@@ -73,7 +73,7 @@ class StripeService:
                 email=user.email,
                 name=user.display_name or user.email,
                 metadata={
-                    'dreamplanner_user_id': str(user.id),
+                    'stepora_user_id': str(user.id),
                 },
             )
 
@@ -148,7 +148,7 @@ class StripeService:
         # Build subscription_data with optional trial period
         subscription_data = {
             'metadata': {
-                'dreamplanner_user_id': str(user.id),
+                'stepora_user_id': str(user.id),
                 'plan_slug': plan.slug,
             },
         }
@@ -174,7 +174,7 @@ class StripeService:
                 'success_url': success_url or default_success,
                 'cancel_url': cancel_url or default_cancel,
                 'metadata': {
-                    'dreamplanner_user_id': str(user.id),
+                    'stepora_user_id': str(user.id),
                     'plan_slug': plan.slug,
                 },
                 'subscription_data': subscription_data,
@@ -768,7 +768,7 @@ class StripeService:
         flow. We create or update a Subscription record and sync the user's
         plan on the User model.
         """
-        user_id = session.get('metadata', {}).get('dreamplanner_user_id')
+        user_id = session.get('metadata', {}).get('stepora_user_id')
         plan_slug = session.get('metadata', {}).get('plan_slug')
         stripe_subscription_id = session.get('subscription')
 

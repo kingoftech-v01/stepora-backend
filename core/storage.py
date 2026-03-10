@@ -2,7 +2,7 @@
 Dedicated S3 storage backend for release artifacts.
 
 Bucket structure:
-  dreamplanner-releases/
+  stepora-releases/
   ├── bundles/          # OTA web bundles (.zip)
   ├── backups/          # Database backups (.sql.gz)
   └── builds/           # Native app builds
@@ -10,7 +10,7 @@ Bucket structure:
       └── ios/          # IPA files
 
 Configuration (environment variables):
-  AWS_RELEASES_BUCKET       — S3 bucket name (default: dreamplanner-releases)
+  AWS_RELEASES_BUCKET       — S3 bucket name (default: stepora-releases)
   AWS_RELEASES_REGION       — AWS region (default: same as main S3)
   AWS_RELEASES_CUSTOM_DOMAIN — Optional CloudFront domain for downloads
 
@@ -28,7 +28,7 @@ class ReleasesStorage(S3Boto3Storage):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("bucket_name", os.getenv(
-            "AWS_RELEASES_BUCKET", "dreamplanner-releases"
+            "AWS_RELEASES_BUCKET", "stepora-releases"
         ))
         kwargs.setdefault("region_name", os.getenv(
             "AWS_RELEASES_REGION",

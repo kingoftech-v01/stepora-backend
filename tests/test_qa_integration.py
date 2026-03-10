@@ -1,5 +1,5 @@
 """
-QA Integration Tests — End-to-End API Flows for DreamPlanner.
+QA Integration Tests — End-to-End API Flows for Stepora.
 
 These tests verify complete user journeys through the API, chaining
 multiple requests together and verifying database state at each step.
@@ -127,7 +127,7 @@ class TestQA_TwoFactorLifecycle:
         assert r.status_code == 200
         secret = r.data['secret']
         assert 'provisioning_uri' in r.data
-        assert 'DreamPlanner' in r.data['provisioning_uri']
+        assert 'Stepora' in r.data['provisioning_uri']
         assert free_user.email.replace('@', '%40') in r.data['provisioning_uri']
 
         # 3. Verify with valid TOTP code — activates 2FA + returns backup codes

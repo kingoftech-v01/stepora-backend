@@ -378,7 +378,7 @@ class TestTwoFactor:
 
     def test_2fa_backup_code(self, client, tfa_user):
         """Backup code should work and be consumed."""
-        salt = hashlib.sha256(b'dreamplanner-backup-codes').digest()
+        salt = hashlib.sha256(b'stepora-backup-codes').digest()
         code = 'ABCD1234'
         code_hash = hashlib.pbkdf2_hmac('sha256', code.encode(), salt, iterations=100_000).hex()
         tfa_user.backup_codes = [code_hash]

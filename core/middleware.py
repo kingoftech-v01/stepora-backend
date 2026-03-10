@@ -1,5 +1,5 @@
 """
-Custom middleware for DreamPlanner.
+Custom middleware for Stepora.
 
 Includes:
 - SecurityHeadersMiddleware: CSP, Referrer-Policy, Permissions-Policy, COOP, CORP
