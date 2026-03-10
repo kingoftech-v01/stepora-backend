@@ -2,8 +2,8 @@
 Core app configuration.
 
 Auto-syncs the Django Site record (domain + name) from FRONTEND_URL
-on startup so allauth emails always use the correct domain without
-manual database edits. Just set FRONTEND_URL in .env and restart.
+on startup so emails always use the correct domain without manual
+database edits. Just set FRONTEND_URL in .env and restart.
 """
 
 import logging

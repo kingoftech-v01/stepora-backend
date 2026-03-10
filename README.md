@@ -204,7 +204,7 @@ dreamplanner/
 | **Background Jobs** | Celery 5.3.4 + django-celery-beat |
 | **Database** | PostgreSQL 15 (prod) / SQLite (dev) |
 | **Cache/Broker** | Redis 7 |
-| **Authentication** | django-allauth + dj-rest-auth (JWT auth) |
+| **Authentication** | Custom core.auth + SimpleJWT (JWT auth) |
 | **Social Auth** | Google Sign-In, Apple Sign-In |
 | **AI** | OpenAI GPT-4, DALL-E 3, Whisper, GPT-4V |
 | **Real-Time Calls** | Agora.io RTC (voice/video) |
@@ -357,7 +357,7 @@ DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
 ### Authentication
 
-JWT authentication via dj-rest-auth:
+JWT authentication via SimpleJWT:
 ```
 Authorization: Bearer <access_token>
 ```
