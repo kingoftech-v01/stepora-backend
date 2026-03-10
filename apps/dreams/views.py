@@ -215,6 +215,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             # Allow any authenticated user to retrieve — queryset handles access
             return [IsAuthenticated()]
+        if self.action == 'explore':
+            return [IsAuthenticated()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -1895,6 +1897,60 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         return Response({'message': _('Collaborator removed.')})
+
+
+    @extend_schema(
+        summary="Explore public dreams",
+        description="Browse public dreams from other users, with optional category filtering. "
+                    "Uses standard LimitOffset pagination.",
+        tags=["Dreams"],
+        parameters=[
+            OpenApiParameter(name='category', description='Filter by dream category', required=False, type=str),
+            OpenApiParameter(name='ordering', description='Order results (e.g. -created_at, -progress_percentage)', required=False, type=str),
+        ],
+        responses={200: DreamSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def explore(self, request):
+        """Return public dreams from other users for the Explore feed."""
+        from .serializers import ExploreDreamSerializer
+        from django.db.models import Count
+
+        qs = Dream.objects.filter(
+            is_public=True,
+            status='active',
+        ).exclude(
+            user=request.user,
+        ).select_related('user').prefetch_related(
+            'goals', 'taggings__tag',
+        ).annotate(
+            _goals_count=Count('goals', distinct=True),
+        )
+
+        # Optional category filter
+        category = request.query_params.get('category', '').strip()
+        if category:
+            qs = qs.filter(category=category)
+
+        # Ordering: allow client to choose, default to most recent
+        ordering = request.query_params.get('ordering', '-created_at')
+        allowed_orderings = {
+            '-created_at', 'created_at',
+            '-progress_percentage', 'progress_percentage',
+            '-updated_at', 'updated_at',
+        }
+        if ordering not in allowed_orderings:
+            ordering = '-created_at'
+        qs = qs.order_by(ordering)
+
+        # Use standard pagination
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = ExploreDreamSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = ExploreDreamSerializer(qs, many=True)
+        return Response(serializer.data)
 
 
 class SharedWithMeView(generics.ListAPIView):
