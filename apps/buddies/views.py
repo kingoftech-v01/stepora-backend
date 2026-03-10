@@ -84,9 +84,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
             "username": user.display_name or "Anonymous",
             "avatar": user.avatar_url or "",
             "title": title,
-            "currentLevel": user.level,
-            "influenceScore": user.xp,
-            "currentStreak": user.streak_days,
+            "current_level": user.level,
+            "influence_score": user.xp,
+            "current_streak": user.streak_days,
         }
 
     def _get_active_pairing(self, user):
@@ -142,12 +142,12 @@ class BuddyViewSet(viewsets.GenericViewSet):
         buddy_data = {
             "id": pairing.id,
             "partner": self._get_partner_data(partner),
-            "compatibilityScore": pairing.compatibility_score,
+            "compatibility_score": pairing.compatibility_score,
             "status": pairing.status,
-            "recentActivity": recent_tasks,
-            "encouragementStreak": pairing.encouragement_streak,
-            "bestEncouragementStreak": pairing.best_encouragement_streak,
-            "createdAt": pairing.created_at,
+            "recent_activity": recent_tasks,
+            "encouragement_streak": pairing.encouragement_streak,
+            "best_encouragement_streak": pairing.best_encouragement_streak,
+            "created_at": pairing.created_at,
         }
 
         serializer = BuddyPairingSerializer(buddy_data)
@@ -170,15 +170,15 @@ class BuddyViewSet(viewsets.GenericViewSet):
         from apps.conversations.models import Conversation
 
         target_user_id = (
-            request.data.get("userId")
+            request.data.get("user_id")
             or request.data.get("user_id")
-            or request.data.get("targetUserId")
+            or request.data.get("target_user_id")
             or request.data.get("target_user_id")
         )
 
         if not target_user_id or target_user_id == "undefined":
             return Response(
-                {"error": _("userId is required.")}, status=status.HTTP_400_BAD_REQUEST
+                {"error": _("user_id is required.")}, status=status.HTTP_400_BAD_REQUEST
             )
 
         target_user = None
@@ -204,14 +204,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
                     buddy_user = conv.user
                 return Response(
                     {
-                        "conversationId": str(conv.id),
+                        "conversation_id": str(conv.id),
                         "buddy": {
                             "id": str(buddy_user.id) if buddy_user else "",
-                            "displayName": (
+                            "display_name": (
                                 buddy_user.display_name if buddy_user else ""
                             )
                             or "Buddy",
-                            "isOnline": buddy_user.is_online if buddy_user else False,
+                            "is_online": buddy_user.is_online if buddy_user else False,
                             "level": buddy_user.level if buddy_user else 0,
                             "streak": buddy_user.streak_days if buddy_user else 0,
                         },
@@ -279,11 +279,11 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                "conversationId": str(conv.id),
+                "conversation_id": str(conv.id),
                 "buddy": {
                     "id": str(target_user.id),
-                    "displayName": target_user.display_name or "Buddy",
-                    "isOnline": target_user.is_online,
+                    "display_name": target_user.display_name or "Buddy",
+                    "is_online": target_user.is_online,
                     "level": target_user.level,
                     "streak": target_user.streak_days,
                 },
@@ -306,14 +306,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         from apps.conversations.models import Conversation, Message
 
-        conv_id = request.data.get("conversationId") or request.data.get(
+        conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"
         )
         content = sanitize_text((request.data.get("content") or "").strip())
 
         if not conv_id or conv_id == "undefined" or not content:
             return Response(
-                {"error": _("conversationId and content are required.")},
+                {"error": _("conversation_id and content are required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -330,7 +330,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             uuid.UUID(str(conv_id))
         except (ValueError, AttributeError):
             return Response(
-                {"error": _("Invalid conversationId.")},
+                {"error": _("Invalid conversation_id.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -430,8 +430,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
             {
                 "id": str(msg.id),
                 "content": msg.content,
-                "senderId": str(request.user.id),
-                "createdAt": msg.created_at.isoformat(),
+                "sender_id": str(request.user.id),
+                "created_at": msg.created_at.isoformat(),
             }
         )
 
@@ -461,14 +461,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         from apps.conversations.models import Conversation, Message
 
-        conv_id = request.data.get("conversationId") or request.data.get(
+        conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"
         )
         audio_file = request.FILES.get("audio")
 
         if not conv_id or conv_id == "undefined":
             return Response(
-                {"error": _("conversationId is required.")},
+                {"error": _("conversation_id is required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not audio_file:
@@ -481,7 +481,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             uuid_mod.UUID(str(conv_id))
         except (ValueError, AttributeError):
             return Response(
-                {"error": _("Invalid conversationId.")},
+                {"error": _("Invalid conversation_id.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -623,10 +623,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
             {
                 "id": str(msg.id),
                 "content": msg.content,
-                "audioUrl": audio_url,
-                "audioDuration": audio_duration,
-                "senderId": str(request.user.id),
-                "createdAt": msg.created_at.isoformat(),
+                "audio_url": audio_url,
+                "audio_duration": audio_duration,
+                "sender_id": str(request.user.id),
+                "created_at": msg.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,
         )
@@ -684,14 +684,14 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         progress_data = {
             "user": {
-                "currentStreak": request.user.streak_days,
-                "tasksThisWeek": user_tasks_week,
-                "influenceScore": request.user.xp,
+                "current_streak": request.user.streak_days,
+                "tasks_this_week": user_tasks_week,
+                "influence_score": request.user.xp,
             },
             "partner": {
-                "currentStreak": partner.streak_days,
-                "tasksThisWeek": partner_tasks_week,
-                "influenceScore": partner.xp,
+                "current_streak": partner.streak_days,
+                "tasks_this_week": partner_tasks_week,
+                "influence_score": partner.xp,
             },
         }
 
@@ -780,11 +780,11 @@ class BuddyViewSet(viewsets.GenericViewSet):
             shared_interests = []
 
         match_data = {
-            "userId": best_match.id,
+            "user_id": best_match.id,
             "username": best_match.display_name or "Anonymous",
             "avatar": best_match.avatar_url or "",
-            "compatibilityScore": round(best_score, 2),
-            "sharedInterests": shared_interests,
+            "compatibility_score": round(best_score, 2),
+            "shared_interests": shared_interests,
         }
 
         serializer = BuddyMatchSerializer(match_data)
@@ -927,26 +927,26 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
             ai_results.append(
                 {
-                    "userId": candidate.id,
+                    "user_id": candidate.id,
                     "username": candidate.display_name or "Anonymous",
                     "avatar": candidate.avatar_url or "",
                     "bio": candidate.bio or "",
                     "level": candidate.level,
                     "streak": candidate.streak_days,
                     "xp": candidate.xp,
-                    "dreamerType": candidate.dreamer_type or "",
-                    "compatibilityScore": ai_result["compatibility_score"],
+                    "dreamer_type": candidate.dreamer_type or "",
+                    "compatibility_score": ai_result["compatibility_score"],
                     "reasons": ai_result["reasons"],
-                    "sharedInterests": ai_result["shared_interests"],
-                    "potentialChallenges": ai_result["potential_challenges"],
-                    "suggestedIcebreaker": ai_result["suggested_icebreaker"],
+                    "shared_interests": ai_result["shared_interests"],
+                    "potential_challenges": ai_result["potential_challenges"],
+                    "suggested_icebreaker": ai_result["suggested_icebreaker"],
                     "dreams": candidate_profile["dreams"],
                     "categories": candidate_profile["categories"],
                 }
             )
 
         # Sort by AI compatibility score descending
-        ai_results.sort(key=lambda x: x["compatibilityScore"], reverse=True)
+        ai_results.sort(key=lambda x: x["compatibility_score"], reverse=True)
 
         serializer = AIBuddyMatchSerializer(ai_results, many=True)
         return Response({"results": serializer.data})
@@ -1244,13 +1244,13 @@ class BuddyViewSet(viewsets.GenericViewSet):
                     "id": pairing.id,
                     "partner": self._get_partner_data(partner),
                     "status": pairing.status,
-                    "compatibilityScore": pairing.compatibility_score,
-                    "encouragementCount": encouragement_count,
-                    "encouragementStreak": pairing.encouragement_streak,
-                    "bestEncouragementStreak": pairing.best_encouragement_streak,
-                    "durationDays": duration_days,
-                    "createdAt": pairing.created_at,
-                    "endedAt": pairing.ended_at,
+                    "compatibility_score": pairing.compatibility_score,
+                    "encouragement_count": encouragement_count,
+                    "encouragement_streak": pairing.encouragement_streak,
+                    "best_encouragement_streak": pairing.best_encouragement_streak,
+                    "duration_days": duration_days,
+                    "created_at": pairing.created_at,
+                    "ended_at": pairing.ended_at,
                 }
             )
 
@@ -1585,7 +1585,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         }
 
         return Response(
-            {"checkIn": ContractCheckInSerializer(result).data},
+            {"check_in": ContractCheckInSerializer(result).data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -1684,10 +1684,10 @@ class ContractViewSet(viewsets.GenericViewSet):
 
         result = {
             "contract": contract_data,
-            "userCheckIns": user_check_ins,
-            "partnerCheckIns": partner_check_ins,
-            "userTotals": user_totals,
-            "partnerTotals": partner_totals,
+            "user_check_ins": user_check_ins,
+            "partner_check_ins": partner_check_ins,
+            "user_totals": user_totals,
+            "partner_totals": partner_totals,
         }
 
         serializer = ContractProgressSerializer(result)

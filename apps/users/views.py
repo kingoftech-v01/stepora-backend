@@ -173,22 +173,22 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "id": str(target_user.id),
-                "displayName": target_user.display_name,
+                "display_name": target_user.display_name,
                 "name": target_user.display_name,
                 "initial": (target_user.display_name or "U")[0].upper(),
                 "bio": target_user.bio or "",
                 "location": target_user.location or "",
-                "avatarUrl": target_user.avatar_url or "",
+                "avatar_url": target_user.avatar_url or "",
                 "level": target_user.level,
                 "xp": target_user.xp,
                 "streak": target_user.streak_days,
-                "isOnline": target_user.is_online,
-                "isFriend": is_friend,
-                "mutualFriends": mutual,
-                "friendCount": friend_count,
+                "is_online": target_user.is_online,
+                "is_friend": is_friend,
+                "mutual_friends": mutual,
+                "friend_count": friend_count,
                 "dreams": dreams,
                 "categories": categories,
-                "dateJoined": (
+                "date_joined": (
                     target_user.created_at.strftime("%b %Y")
                     if target_user.created_at
                     else ""
@@ -993,11 +993,11 @@ class UserViewSet(viewsets.ModelViewSet):
                     "icon": ach.icon,
                     "category": ach.category,
                     "rarity": getattr(ach, "rarity", "common"),
-                    "xpReward": ach.xp_reward,
-                    "conditionType": ach.condition_type,
-                    "requirementValue": ach.condition_value,
+                    "xp_reward": ach.xp_reward,
+                    "condition_type": ach.condition_type,
+                    "requirement_value": ach.condition_value,
                     "unlocked": is_unlocked,
-                    "unlockedAt": ua.unlocked_at if ua else None,
+                    "unlocked_at": ua.unlocked_at if ua else None,
                     "progress": min(progress, ach.condition_value),
                 }
             )
@@ -2030,7 +2030,7 @@ class UserViewSet(viewsets.ModelViewSet):
                         "filled": c["filled"],
                         "weight": c["weight"],
                         "action": c["action"],
-                        "actionLabel": c["action_label"],
+                        "action_label": c["action_label"],
                         "suggestion": c["suggestion"],
                     }
                     for c in criteria

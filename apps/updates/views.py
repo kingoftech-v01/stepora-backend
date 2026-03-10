@@ -116,13 +116,13 @@ class UpdateCheckView(APIView):
 
         return Response(
             {
-                "bundleId": bundle.bundle_id,
+                "bundle_id": bundle.bundle_id,
                 "url": download_url,
                 "strategy": bundle.strategy,
                 "checksum": bundle.checksum or None,
                 "signature": bundle.signature or None,
                 "message": bundle.message or None,
-                "minAppVersion": bundle.min_app_version,
+                "min_app_version": bundle.min_app_version,
             }
         )
 
@@ -220,13 +220,13 @@ class BundleUploadView(APIView):
 
         return Response(
             {
-                "bundleId": bundle.bundle_id,
+                "bundle_id": bundle.bundle_id,
                 "checksum": bundle.checksum,
                 "url": bundle.bundle_file.url,
                 "strategy": bundle.strategy,
                 "platform": bundle.platform,
                 "signed": bool(signature),
-                "createdAt": bundle.created_at.isoformat(),
+                "created_at": bundle.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,
         )

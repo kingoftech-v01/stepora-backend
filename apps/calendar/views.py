@@ -4548,7 +4548,7 @@ class SharedCalendarView(APIView):
             {
                 "owner": {
                     "id": str(owner.id),
-                    "displayName": owner.display_name or "",
+                    "display_name": owner.display_name or "",
                     "avatar": (
                         owner.avatar.url
                         if hasattr(owner, "avatar")

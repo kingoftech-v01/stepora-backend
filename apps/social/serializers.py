@@ -48,13 +48,13 @@ class UserPublicSerializer(serializers.ModelSerializer):
     avatar = serializers.URLField(
         source="avatar_url", read_only=True, help_text="Avatar image URL."
     )
-    currentLevel = serializers.IntegerField(
+    current_level = serializers.IntegerField(
         source="level", read_only=True, help_text="Current user level."
     )
-    influenceScore = serializers.IntegerField(
+    influence_score = serializers.IntegerField(
         source="xp", read_only=True, help_text="Total XP earned."
     )
-    currentStreak = serializers.IntegerField(
+    current_streak = serializers.IntegerField(
         source="streak_days", read_only=True, help_text="Current streak in days."
     )
     title = serializers.SerializerMethodField(
@@ -67,9 +67,9 @@ class UserPublicSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "avatar",
-            "currentLevel",
-            "influenceScore",
-            "currentStreak",
+            "current_level",
+            "influence_score",
+            "current_streak",
             "title",
         ]
         read_only_fields = fields
@@ -106,9 +106,9 @@ class FriendSerializer(serializers.Serializer):
         allow_blank=True, help_text="Avatar URL of the friend."
     )
     title = serializers.CharField(help_text="Title based on level.")
-    currentLevel = serializers.IntegerField(help_text="Current level.")
-    influenceScore = serializers.IntegerField(help_text="Influence score (XP).")
-    currentStreak = serializers.IntegerField(help_text="Current streak days.")
+    current_level = serializers.IntegerField(help_text="Current level.")
+    influence_score = serializers.IntegerField(help_text="Influence score (XP).")
+    current_streak = serializers.IntegerField(help_text="Current streak days.")
 
 
 @extend_schema_serializer(component_name="PendingFriendRequest")
@@ -143,8 +143,8 @@ class FriendRequestSerializer(serializers.ModelSerializer):
             "id": str(user.id),
             "username": user.display_name or "Anonymous",
             "avatar": user.avatar_url or "",
-            "currentLevel": user.level,
-            "influenceScore": user.xp,
+            "current_level": user.level,
+            "influence_score": user.xp,
         }
 
 
@@ -160,13 +160,13 @@ class UserSearchResultSerializer(serializers.Serializer):
     username = serializers.CharField(help_text="Display name.")
     avatar = serializers.URLField(allow_blank=True, help_text="Avatar URL.")
     title = serializers.CharField(help_text="Title based on level.")
-    influenceScore = serializers.IntegerField(help_text="Influence score (XP).")
-    currentLevel = serializers.IntegerField(help_text="Current level.")
-    isFriend = serializers.BooleanField(help_text="Whether they are already a friend.")
-    isPendingRequest = serializers.BooleanField(
+    influence_score = serializers.IntegerField(help_text="Influence score (XP).")
+    current_level = serializers.IntegerField(help_text="Current level.")
+    is_friend = serializers.BooleanField(help_text="Whether they are already a friend.")
+    is_pending_request = serializers.BooleanField(
         help_text="Whether a friend request is pending.", default=False
     )
-    isFollowing = serializers.BooleanField(
+    is_following = serializers.BooleanField(
         help_text="Whether the current user follows them."
     )
 
@@ -176,7 +176,6 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
     Serializer for activity feed items.
 
     Provides activity data with the actor's public info for the social feed.
-    Uses camelCase field names to match mobile app expectations.
     """
 
     user = serializers.SerializerMethodField(help_text="Actor public profile info.")
@@ -184,8 +183,8 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
         source="activity_type",
         help_text="Activity type (e.g., dream_completed, task_done).",
     )
-    createdAt = serializers.DateTimeField(
-        source="created_at", read_only=True, help_text="When the activity occurred."
+    created_at = serializers.DateTimeField(
+        read_only=True, help_text="When the activity occurred."
     )
 
     class Meta:
@@ -195,7 +194,7 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
             "user",
             "type",
             "content",
-            "createdAt",
+            "created_at",
         ]
         read_only_fields = fields
         extra_kwargs = {
@@ -279,27 +278,27 @@ class DreamPostSerializer(serializers.ModelSerializer):
     """Full dream post representation for the feed."""
 
     user = serializers.SerializerMethodField()
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
-    updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
-    likesCount = serializers.IntegerField(source="likes_count", read_only=True)
-    commentsCount = serializers.IntegerField(source="comments_count", read_only=True)
-    sharesCount = serializers.IntegerField(source="shares_count", read_only=True)
-    savesCount = serializers.IntegerField(source="saves_count", read_only=True)
-    hasLiked = serializers.SerializerMethodField()
-    hasSaved = serializers.SerializerMethodField()
-    hasEncouraged = serializers.SerializerMethodField()
-    encouragementSummary = serializers.SerializerMethodField()
-    userReaction = serializers.SerializerMethodField()
-    reactionCounts = serializers.SerializerMethodField()
-    gofundmeUrl = serializers.URLField(source="gofundme_url", read_only=True)
-    imageUrl = serializers.SerializerMethodField()
-    videoUrl = serializers.SerializerMethodField()
-    audioUrl = serializers.SerializerMethodField()
-    mediaType = serializers.CharField(source="media_type", read_only=True)
-    postType = serializers.CharField(source="post_type", read_only=True)
-    dreamTitle = serializers.SerializerMethodField()
-    linkedAchievement = serializers.SerializerMethodField()
-    eventDetail = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+    likes_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.IntegerField(read_only=True)
+    shares_count = serializers.IntegerField(read_only=True)
+    saves_count = serializers.IntegerField(read_only=True)
+    has_liked = serializers.SerializerMethodField()
+    has_saved = serializers.SerializerMethodField()
+    has_encouraged = serializers.SerializerMethodField()
+    encouragement_summary = serializers.SerializerMethodField()
+    user_reaction = serializers.SerializerMethodField()
+    reaction_counts = serializers.SerializerMethodField()
+    gofundme_url = serializers.URLField(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+    audio_url = serializers.SerializerMethodField()
+    media_type = serializers.CharField(read_only=True)
+    post_type = serializers.CharField(read_only=True)
+    dream_title = serializers.SerializerMethodField()
+    linked_achievement = serializers.SerializerMethodField()
+    event_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = DreamPost
@@ -307,30 +306,30 @@ class DreamPostSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "dream",
-            "dreamTitle",
+            "dream_title",
             "content",
-            "imageUrl",
-            "videoUrl",
-            "audioUrl",
-            "mediaType",
-            "postType",
-            "gofundmeUrl",
+            "image_url",
+            "video_url",
+            "audio_url",
+            "media_type",
+            "post_type",
+            "gofundme_url",
             "visibility",
-            "likesCount",
-            "commentsCount",
-            "sharesCount",
-            "savesCount",
+            "likes_count",
+            "comments_count",
+            "shares_count",
+            "saves_count",
             "is_pinned",
-            "hasLiked",
-            "hasSaved",
-            "hasEncouraged",
-            "encouragementSummary",
-            "userReaction",
-            "reactionCounts",
-            "linkedAchievement",
-            "eventDetail",
-            "createdAt",
-            "updatedAt",
+            "has_liked",
+            "has_saved",
+            "has_encouraged",
+            "encouragement_summary",
+            "user_reaction",
+            "reaction_counts",
+            "linked_achievement",
+            "event_detail",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -352,10 +351,10 @@ class DreamPostSerializer(serializers.ModelSerializer):
             "username": obj.user.display_name or "Anonymous",
             "avatar": obj.user.avatar_url or "",
             "level": obj.user.level,
-            "isFollowing": is_following,
+            "is_following": is_following,
         }
 
-    def get_hasLiked(self, obj) -> bool:
+    def get_has_liked(self, obj) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
@@ -363,7 +362,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return obj._user_has_liked
         return obj.likes.filter(user=request.user).exists()
 
-    def get_hasSaved(self, obj) -> bool:
+    def get_has_saved(self, obj) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
@@ -371,7 +370,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return obj._user_has_saved
         return SavedPost.objects.filter(post=obj, user=request.user).exists()
 
-    def get_hasEncouraged(self, obj) -> bool:
+    def get_has_encouraged(self, obj) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
@@ -379,7 +378,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return obj._user_has_encouraged
         return obj.encouragements.filter(user=request.user).exists()
 
-    def get_encouragementSummary(self, obj) -> dict:
+    def get_encouragement_summary(self, obj) -> dict:
         from django.db.models import Count
 
         counts = obj.encouragements.values("encouragement_type").annotate(
@@ -387,7 +386,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
         )
         return {item["encouragement_type"]: item["count"] for item in counts}
 
-    def get_userReaction(self, obj):
+    def get_user_reaction(self, obj):
         """Return the current user's reaction type on this post, or None."""
         if hasattr(obj, "_user_reaction_type"):
             return obj._user_reaction_type
@@ -404,7 +403,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
         )
         return reaction
 
-    def get_reactionCounts(self, obj) -> dict:
+    def get_reaction_counts(self, obj) -> dict:
         """Return a dict of reaction_type -> count for this post."""
         from django.db.models import Count
 
@@ -418,43 +417,43 @@ class DreamPostSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(relative_url)
         return relative_url
 
-    def get_imageUrl(self, obj) -> str:
+    def get_image_url(self, obj) -> str:
         if obj.image_url:
             return obj.image_url
         if obj.image_file:
             return self._absolute_url(obj.image_file.url)
         return ""
 
-    def get_videoUrl(self, obj) -> str:
+    def get_video_url(self, obj) -> str:
         if obj.video_file:
             return self._absolute_url(obj.video_file.url)
         return ""
 
-    def get_audioUrl(self, obj) -> str:
+    def get_audio_url(self, obj) -> str:
         if obj.audio_file:
             return self._absolute_url(obj.audio_file.url)
         return ""
 
-    def get_dreamTitle(self, obj) -> str:
+    def get_dream_title(self, obj) -> str:
         if obj.dream:
             return obj.dream.title
         return ""
 
-    def get_linkedAchievement(self, obj) -> dict:
+    def get_linked_achievement(self, obj) -> dict:
         if obj.post_type not in ("achievement", "milestone"):
             return None
         result = {"type": obj.post_type}
         if obj.linked_goal:
-            result["goalTitle"] = obj.linked_goal.title
+            result["goal_title"] = obj.linked_goal.title
         if obj.linked_milestone:
-            result["milestoneTitle"] = obj.linked_milestone.title
+            result["milestone_title"] = obj.linked_milestone.title
         if obj.linked_task:
-            result["taskTitle"] = obj.linked_task.title
+            result["task_title"] = obj.linked_task.title
         if obj.dream:
-            result["dreamTitle"] = obj.dream.title
+            result["dream_title"] = obj.dream.title
         return result
 
-    def get_eventDetail(self, obj) -> dict:
+    def get_event_detail(self, obj) -> dict:
         if obj.post_type != "event":
             return None
         events = obj.social_event.all()
@@ -471,15 +470,15 @@ class DreamPostSerializer(serializers.ModelSerializer):
             "id": str(event.id),
             "title": event.title,
             "description": event.description,
-            "eventType": event.event_type,
+            "event_type": event.event_type,
             "location": event.location,
-            "meetingLink": event.meeting_link,
-            "startTime": event.start_time.isoformat(),
-            "endTime": event.end_time.isoformat(),
-            "maxParticipants": event.max_participants,
-            "participantsCount": event.participants_count,
+            "meeting_link": event.meeting_link,
+            "start_time": event.start_time.isoformat(),
+            "end_time": event.end_time.isoformat(),
+            "max_participants": event.max_participants,
+            "participants_count": event.participants_count,
             "status": event.status,
-            "isRegistered": is_registered,
+            "is_registered": is_registered,
         }
 
 
@@ -628,13 +627,13 @@ class DreamPostCommentSerializer(serializers.ModelSerializer):
     """Comment on a dream post."""
 
     user = serializers.SerializerMethodField()
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
     replies = serializers.SerializerMethodField()
 
     class Meta:
         model = DreamPostComment
-        fields = ["id", "user", "content", "parent", "replies", "createdAt"]
-        read_only_fields = ["id", "user", "replies", "createdAt"]
+        fields = ["id", "user", "content", "parent", "replies", "created_at"]
+        read_only_fields = ["id", "user", "replies", "created_at"]
 
     def get_user(self, obj) -> dict:
         return {
@@ -657,14 +656,12 @@ class DreamEncouragementSerializer(serializers.ModelSerializer):
     """Encouragement on a dream post."""
 
     user = serializers.SerializerMethodField()
-    encouragementType = serializers.CharField(
-        source="encouragement_type", read_only=True
-    )
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    encouragement_type = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = DreamEncouragement
-        fields = ["id", "user", "encouragementType", "message", "createdAt"]
+        fields = ["id", "user", "encouragement_type", "message", "created_at"]
         read_only_fields = fields
 
     def get_user(self, obj) -> dict:
@@ -682,47 +679,40 @@ class SocialEventSerializer(serializers.ModelSerializer):
     """Full social event representation."""
 
     creator = serializers.SerializerMethodField()
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
-    startTime = serializers.DateTimeField(source="start_time", read_only=True)
-    endTime = serializers.DateTimeField(source="end_time", read_only=True)
-    eventType = serializers.CharField(source="event_type", read_only=True)
-    meetingLink = serializers.URLField(source="meeting_link", read_only=True)
-    maxParticipants = serializers.IntegerField(
-        source="max_participants", read_only=True
-    )
-    participantsCount = serializers.IntegerField(
-        source="participants_count", read_only=True
-    )
-    coverImageUrl = serializers.SerializerMethodField()
-    challengeDescription = serializers.CharField(
-        source="challenge_description",
-        read_only=True,
-    )
-    isRegistered = serializers.SerializerMethodField()
-    dreamTitle = serializers.SerializerMethodField()
-    postId = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+    start_time = serializers.DateTimeField(read_only=True)
+    end_time = serializers.DateTimeField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    meeting_link = serializers.URLField(read_only=True)
+    max_participants = serializers.IntegerField(read_only=True)
+    participants_count = serializers.IntegerField(read_only=True)
+    cover_image_url = serializers.SerializerMethodField()
+    challenge_description = serializers.CharField(read_only=True)
+    is_registered = serializers.SerializerMethodField()
+    dream_title = serializers.SerializerMethodField()
+    post_id = serializers.SerializerMethodField()
 
     class Meta:
         model = SocialEvent
         fields = [
             "id",
             "creator",
-            "postId",
+            "post_id",
             "title",
             "description",
-            "coverImageUrl",
-            "eventType",
+            "cover_image_url",
+            "event_type",
             "location",
-            "meetingLink",
-            "startTime",
-            "endTime",
-            "challengeDescription",
-            "maxParticipants",
-            "participantsCount",
+            "meeting_link",
+            "start_time",
+            "end_time",
+            "challenge_description",
+            "max_participants",
+            "participants_count",
             "status",
-            "isRegistered",
-            "dreamTitle",
-            "createdAt",
+            "is_registered",
+            "dream_title",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -734,12 +724,12 @@ class SocialEventSerializer(serializers.ModelSerializer):
             "level": obj.creator.level,
         }
 
-    def get_coverImageUrl(self, obj) -> str:
+    def get_cover_image_url(self, obj) -> str:
         if obj.cover_image:
             return obj.cover_image.url
         return ""
 
-    def get_isRegistered(self, obj) -> bool:
+    def get_is_registered(self, obj) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
@@ -747,12 +737,12 @@ class SocialEventSerializer(serializers.ModelSerializer):
             return obj._user_is_registered
         return obj.registrations.filter(user=request.user, status="registered").exists()
 
-    def get_dreamTitle(self, obj) -> str:
+    def get_dream_title(self, obj) -> str:
         if obj.dream:
             return obj.dream.title
         return ""
 
-    def get_postId(self, obj) -> str:
+    def get_post_id(self, obj) -> str:
         if obj.post_id:
             return str(obj.post_id)
         return ""
@@ -818,11 +808,11 @@ class SocialEventRegistrationSerializer(serializers.ModelSerializer):
     """Registration record for a social event."""
 
     user = serializers.SerializerMethodField()
-    registeredAt = serializers.DateTimeField(source="registered_at", read_only=True)
+    registered_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = SocialEventRegistration
-        fields = ["id", "user", "status", "registeredAt"]
+        fields = ["id", "user", "status", "registered_at"]
         read_only_fields = fields
 
     def get_user(self, obj) -> dict:
@@ -843,27 +833,27 @@ class StorySerializer(serializers.ModelSerializer):
     """Read serializer for a single story."""
 
     user = serializers.SerializerMethodField()
-    imageUrl = serializers.SerializerMethodField()
-    videoUrl = serializers.SerializerMethodField()
-    mediaType = serializers.CharField(source="media_type", read_only=True)
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
-    expiresAt = serializers.DateTimeField(source="expires_at", read_only=True)
-    viewCount = serializers.IntegerField(source="view_count", read_only=True)
-    hasViewed = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+    media_type = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+    view_count = serializers.IntegerField(read_only=True)
+    has_viewed = serializers.SerializerMethodField()
 
     class Meta:
         model = Story
         fields = [
             "id",
             "user",
-            "imageUrl",
-            "videoUrl",
-            "mediaType",
+            "image_url",
+            "video_url",
+            "media_type",
             "caption",
-            "createdAt",
-            "expiresAt",
-            "viewCount",
-            "hasViewed",
+            "created_at",
+            "expires_at",
+            "view_count",
+            "has_viewed",
         ]
         read_only_fields = fields
 
@@ -871,7 +861,7 @@ class StorySerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "displayName": obj.user.display_name or "Anonymous",
+            "display_name": obj.user.display_name or "Anonymous",
             "avatar": obj.user.avatar_url or "",
         }
 
@@ -881,17 +871,17 @@ class StorySerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(relative_url)
         return relative_url
 
-    def get_imageUrl(self, obj) -> str:
+    def get_image_url(self, obj) -> str:
         if obj.image_file:
             return self._absolute_url(obj.image_file.url)
         return ""
 
-    def get_videoUrl(self, obj) -> str:
+    def get_video_url(self, obj) -> str:
         if obj.video_file:
             return self._absolute_url(obj.video_file.url)
         return ""
 
-    def get_hasViewed(self, obj) -> bool:
+    def get_has_viewed(self, obj) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
@@ -926,4 +916,4 @@ class StoryFeedGroupSerializer(serializers.Serializer):
 
     user = serializers.DictField()
     stories = StorySerializer(many=True)
-    hasUnviewed = serializers.BooleanField()
+    has_unviewed = serializers.BooleanField()

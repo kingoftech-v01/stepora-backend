@@ -19,9 +19,9 @@ class BuddyPartnerSerializer(serializers.Serializer):
         allow_blank=True, default="", help_text="Partner avatar URL."
     )
     title = serializers.CharField(help_text="Partner title based on level.")
-    currentLevel = serializers.IntegerField(help_text="Partner current level.")
-    influenceScore = serializers.IntegerField(help_text="Partner influence (XP).")
-    currentStreak = serializers.IntegerField(help_text="Partner streak days.")
+    current_level = serializers.IntegerField(help_text="Partner current level.")
+    influence_score = serializers.IntegerField(help_text="Partner influence (XP).")
+    current_streak = serializers.IntegerField(help_text="Partner streak days.")
 
 
 class BuddyPairingSerializer(serializers.Serializer):
@@ -29,16 +29,16 @@ class BuddyPairingSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text="Pairing ID.")
     partner = BuddyPartnerSerializer(help_text="Partner profile info.")
-    compatibilityScore = serializers.FloatField(help_text="Compatibility score 0-1.")
+    compatibility_score = serializers.FloatField(help_text="Compatibility score 0-1.")
     status = serializers.CharField(help_text="Pairing status.")
-    recentActivity = serializers.IntegerField(help_text="Partner tasks this week.")
-    encouragementStreak = serializers.IntegerField(
+    recent_activity = serializers.IntegerField(help_text="Partner tasks this week.")
+    encouragement_streak = serializers.IntegerField(
         help_text="Current encouragement streak."
     )
-    bestEncouragementStreak = serializers.IntegerField(
+    best_encouragement_streak = serializers.IntegerField(
         help_text="Best encouragement streak ever."
     )
-    createdAt = serializers.DateTimeField(help_text="When the pairing was created.")
+    created_at = serializers.DateTimeField(help_text="When the pairing was created.")
 
 
 class BuddyProgressSerializer(serializers.Serializer):
@@ -51,13 +51,13 @@ class BuddyProgressSerializer(serializers.Serializer):
 class BuddyMatchSerializer(serializers.Serializer):
     """Serializer for a potential buddy match result."""
 
-    userId = serializers.UUIDField(help_text="Matched user ID.")
+    user_id = serializers.UUIDField(help_text="Matched user ID.")
     username = serializers.CharField(help_text="Matched user display name.")
     avatar = serializers.CharField(
         allow_blank=True, default="", help_text="Matched user avatar."
     )
-    compatibilityScore = serializers.FloatField(help_text="Compatibility score 0-1.")
-    sharedInterests = serializers.ListField(
+    compatibility_score = serializers.FloatField(help_text="Compatibility score 0-1.")
+    shared_interests = serializers.ListField(
         child=serializers.CharField(), help_text="List of shared interest categories."
     )
 
@@ -65,7 +65,7 @@ class BuddyMatchSerializer(serializers.Serializer):
 class AIBuddyMatchSerializer(serializers.Serializer):
     """Serializer for an AI-scored buddy match result."""
 
-    userId = serializers.UUIDField(help_text="Matched user ID.")
+    user_id = serializers.UUIDField(help_text="Matched user ID.")
     username = serializers.CharField(help_text="Matched user display name.")
     avatar = serializers.CharField(
         allow_blank=True, default="", help_text="Matched user avatar."
@@ -76,21 +76,21 @@ class AIBuddyMatchSerializer(serializers.Serializer):
     level = serializers.IntegerField(help_text="User level.")
     streak = serializers.IntegerField(help_text="User streak days.")
     xp = serializers.IntegerField(help_text="User XP.")
-    dreamerType = serializers.CharField(
+    dreamer_type = serializers.CharField(
         allow_blank=True, default="", help_text="User dreamer type."
     )
-    compatibilityScore = serializers.FloatField(help_text="AI compatibility score 0-1.")
+    compatibility_score = serializers.FloatField(help_text="AI compatibility score 0-1.")
     reasons = serializers.ListField(
         child=serializers.CharField(), help_text="Reasons why these users match well."
     )
-    sharedInterests = serializers.ListField(
+    shared_interests = serializers.ListField(
         child=serializers.CharField(),
         help_text="Shared interest areas identified by AI.",
     )
-    potentialChallenges = serializers.ListField(
+    potential_challenges = serializers.ListField(
         child=serializers.CharField(), help_text="Potential challenges in the pairing."
     )
-    suggestedIcebreaker = serializers.CharField(
+    suggested_icebreaker = serializers.CharField(
         help_text="AI-suggested opening message."
     )
     dreams = serializers.ListField(
@@ -127,21 +127,21 @@ class BuddyHistorySerializer(serializers.Serializer):
     id = serializers.UUIDField(help_text="Pairing ID.")
     partner = BuddyPartnerSerializer(help_text="Partner profile info.")
     status = serializers.CharField(help_text="Pairing status.")
-    compatibilityScore = serializers.FloatField(help_text="Compatibility score.")
-    encouragementCount = serializers.IntegerField(
+    compatibility_score = serializers.FloatField(help_text="Compatibility score.")
+    encouragement_count = serializers.IntegerField(
         help_text="Total encouragements sent."
     )
-    encouragementStreak = serializers.IntegerField(
+    encouragement_streak = serializers.IntegerField(
         help_text="Final encouragement streak."
     )
-    bestEncouragementStreak = serializers.IntegerField(
+    best_encouragement_streak = serializers.IntegerField(
         help_text="Best encouragement streak."
     )
-    durationDays = serializers.IntegerField(
+    duration_days = serializers.IntegerField(
         allow_null=True, help_text="Duration in days."
     )
-    createdAt = serializers.DateTimeField(help_text="Pairing start date.")
-    endedAt = serializers.DateTimeField(allow_null=True, help_text="Pairing end date.")
+    created_at = serializers.DateTimeField(help_text="Pairing start date.")
+    ended_at = serializers.DateTimeField(allow_null=True, help_text="Pairing end date.")
 
 
 # ─── Accountability Contracts ─────────────────────────────────────────
@@ -161,8 +161,8 @@ class ContractCheckInSerializer(serializers.Serializer):
     """Serializer for a contract check-in entry."""
 
     id = serializers.UUIDField(read_only=True, help_text="Check-in ID.")
-    userId = serializers.UUIDField(
-        source="user_id", read_only=True, help_text="User who checked in."
+    user_id = serializers.UUIDField(
+        read_only=True, help_text="User who checked in."
     )
     username = serializers.CharField(
         read_only=True, help_text="Display name of the user."
@@ -182,8 +182,7 @@ class ContractCheckInSerializer(serializers.Serializer):
         max_length=20,
         help_text="User mood.",
     )
-    createdAt = serializers.DateTimeField(
-        source="created_at",
+    created_at = serializers.DateTimeField(
         read_only=True,
         help_text="When the check-in was submitted.",
     )
@@ -196,35 +195,33 @@ class AccountabilityContractSerializer(serializers.Serializer):
     """Serializer for accountability contract list and detail."""
 
     id = serializers.UUIDField(read_only=True, help_text="Contract ID.")
-    pairingId = serializers.UUIDField(
-        source="pairing_id", help_text="Buddy pairing ID."
+    pairing_id = serializers.UUIDField(
+        help_text="Buddy pairing ID."
     )
     title = serializers.CharField(max_length=200, help_text="Contract title.")
     description = serializers.CharField(
         required=False, allow_blank=True, default="", help_text="Contract description."
     )
     goals = ContractGoalSerializer(many=True, help_text="List of goals.")
-    checkInFrequency = serializers.ChoiceField(
-        source="check_in_frequency",
+    check_in_frequency = serializers.ChoiceField(
         choices=["daily", "weekly", "biweekly"],
         default="weekly",
         help_text="Check-in frequency.",
     )
-    startDate = serializers.DateField(
-        source="start_date", help_text="Contract start date."
+    start_date = serializers.DateField(
+        help_text="Contract start date."
     )
-    endDate = serializers.DateField(source="end_date", help_text="Contract end date.")
+    end_date = serializers.DateField(help_text="Contract end date.")
     status = serializers.CharField(read_only=True, help_text="Contract status.")
-    createdById = serializers.UUIDField(
-        source="created_by_id", read_only=True, help_text="Creator user ID."
+    created_by_id = serializers.UUIDField(
+        read_only=True, help_text="Creator user ID."
     )
-    acceptedByPartner = serializers.BooleanField(
-        source="accepted_by_partner",
+    accepted_by_partner = serializers.BooleanField(
         read_only=True,
         help_text="Whether partner accepted.",
     )
-    createdAt = serializers.DateTimeField(
-        source="created_at", read_only=True, help_text="Creation timestamp."
+    created_at = serializers.DateTimeField(
+        read_only=True, help_text="Creation timestamp."
     )
 
     def validate_title(self, value):
@@ -237,7 +234,7 @@ class AccountabilityContractSerializer(serializers.Serializer):
         if data.get("start_date") and data.get("end_date"):
             if data["end_date"] <= data["start_date"]:
                 raise serializers.ValidationError(
-                    {"endDate": "End date must be after start date."}
+                    {"end_date": "End date must be after start date."}
                 )
         goals = data.get("goals", [])
         if not goals:
@@ -278,15 +275,15 @@ class ContractProgressSerializer(serializers.Serializer):
     """Serializer for contract progress comparison between both partners."""
 
     contract = AccountabilityContractSerializer(help_text="Contract details.")
-    userCheckIns = ContractCheckInSerializer(
+    user_check_ins = ContractCheckInSerializer(
         many=True, help_text="Current user check-ins."
     )
-    partnerCheckIns = ContractCheckInSerializer(
+    partner_check_ins = ContractCheckInSerializer(
         many=True, help_text="Partner check-ins."
     )
-    userTotals = serializers.DictField(
+    user_totals = serializers.DictField(
         help_text="Aggregated progress totals for current user."
     )
-    partnerTotals = serializers.DictField(
+    partner_totals = serializers.DictField(
         help_text="Aggregated progress totals for partner."
     )

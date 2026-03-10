@@ -424,8 +424,8 @@ class CircleViewSet(viewsets.ModelViewSet):
             poll = CirclePoll.objects.create(
                 post=post,
                 question=poll_data["question"],
-                allows_multiple=poll_data.get("allowsMultiple", False),
-                ends_at=poll_data.get("endsAt"),
+                allows_multiple=poll_data.get("allows_multiple", False),
+                ends_at=poll_data.get("ends_at"),
             )
             for idx, option_data in enumerate(poll_data["options"]):
                 PollOption.objects.create(
@@ -1094,7 +1094,7 @@ class CircleViewSet(viewsets.ModelViewSet):
                     "name": request.user.display_name or "Someone",
                     "circle": circle.name,
                 },
-                data={"screen": "circle", "circleId": str(circle.id)},
+                data={"screen": "circle", "circle_id": str(circle.id)},
             )
         except Exception:
             pass

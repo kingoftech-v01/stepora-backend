@@ -64,40 +64,37 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
     Serializer for circle challenges.
 
     Includes challenge details, dates, status, participant count, challenge type,
-    and target value. Uses camelCase field names to match mobile app expectations.
+    and target value.
     """
 
-    participantCount = serializers.IntegerField(
-        source="participant_count",
+    participant_count = serializers.IntegerField(
         read_only=True,
         help_text="Number of participants in the challenge.",
     )
-    startDate = serializers.DateTimeField(
-        source="start_date", read_only=True, help_text="Challenge start date and time."
+    start_date = serializers.DateTimeField(
+        read_only=True, help_text="Challenge start date and time."
     )
-    endDate = serializers.DateTimeField(
-        source="end_date", read_only=True, help_text="Challenge end date and time."
+    end_date = serializers.DateTimeField(
+        read_only=True, help_text="Challenge end date and time."
     )
-    hasJoined = serializers.SerializerMethodField(
+    has_joined = serializers.SerializerMethodField(
         help_text="Whether the current user has joined this challenge."
     )
-    challengeType = serializers.CharField(
-        source="challenge_type", read_only=True, help_text="Type of challenge."
+    challenge_type = serializers.CharField(
+        read_only=True, help_text="Type of challenge."
     )
-    challengeTypeLabel = serializers.CharField(
-        source="challenge_type_label",
+    challenge_type_label = serializers.CharField(
         read_only=True,
         help_text="Human-readable challenge type label.",
     )
-    targetValue = serializers.IntegerField(
-        source="target_value",
+    target_value = serializers.IntegerField(
         read_only=True,
         help_text="Target value to complete the challenge.",
     )
-    creatorName = serializers.SerializerMethodField(
+    creator_name = serializers.SerializerMethodField(
         help_text="Display name of the challenge creator."
     )
-    myProgress = serializers.SerializerMethodField(
+    my_progress = serializers.SerializerMethodField(
         help_text="Current user total progress in this challenge."
     )
 
@@ -107,16 +104,16 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
-            "challengeType",
-            "challengeTypeLabel",
-            "targetValue",
-            "startDate",
-            "endDate",
+            "challenge_type",
+            "challenge_type_label",
+            "target_value",
+            "start_date",
+            "end_date",
             "status",
-            "participantCount",
-            "hasJoined",
-            "creatorName",
-            "myProgress",
+            "participant_count",
+            "has_joined",
+            "creator_name",
+            "my_progress",
             "created_at",
         ]
         read_only_fields = fields
@@ -128,18 +125,18 @@ class CircleChallengeSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Date and time the challenge was created."},
         }
 
-    def get_hasJoined(self, obj):
+    def get_has_joined(self, obj):
         request = self.context.get("request")
         if request and hasattr(request, "user") and request.user.is_authenticated:
             return obj.participants.filter(id=request.user.id).exists()
         return False
 
-    def get_creatorName(self, obj):
+    def get_creator_name(self, obj):
         if obj.creator:
             return obj.creator.display_name or _("Anonymous")
         return None
 
-    def get_myProgress(self, obj):
+    def get_my_progress(self, obj):
         request = self.context.get("request")
         if request and hasattr(request, "user") and request.user.is_authenticated:
             from django.db.models import Sum
@@ -161,21 +158,19 @@ class CircleChallengeCreateSerializer(serializers.Serializer):
         default="",
         help_text="Description of the challenge.",
     )
-    challengeType = serializers.ChoiceField(
+    challenge_type = serializers.ChoiceField(
         choices=["tasks_completed", "streak_days", "focus_minutes", "dreams_progress"],
-        source="challenge_type",
         help_text="Type of challenge.",
     )
-    targetValue = serializers.IntegerField(
+    target_value = serializers.IntegerField(
         min_value=1,
-        source="target_value",
         help_text="Target value to complete the challenge.",
     )
-    startDate = serializers.DateTimeField(
-        source="start_date", help_text="When the challenge starts."
+    start_date = serializers.DateTimeField(
+        help_text="When the challenge starts."
     )
-    endDate = serializers.DateTimeField(
-        source="end_date", help_text="When the challenge ends."
+    end_date = serializers.DateTimeField(
+        help_text="When the challenge ends."
     )
 
     def validate_title(self, value):
@@ -187,7 +182,7 @@ class CircleChallengeCreateSerializer(serializers.Serializer):
     def validate(self, data):
         if data["end_date"] <= data["start_date"]:
             raise serializers.ValidationError(
-                {"endDate": _("End date must be after start date.")}
+                {"end_date": _("End date must be after start date.")}
             )
         return data
 
@@ -197,18 +192,16 @@ class PollOptionSerializer(serializers.ModelSerializer):
     Serializer for a single poll option.
 
     Includes the option text, vote count, and display order.
-    Uses camelCase field names to match mobile app expectations.
     """
 
-    voteCount = serializers.IntegerField(
-        source="vote_count",
+    vote_count = serializers.IntegerField(
         read_only=True,
         help_text="Number of votes for this option.",
     )
 
     class Meta:
         model = PollOption
-        fields = ["id", "text", "order", "voteCount"]
+        fields = ["id", "text", "order", "vote_count"]
         read_only_fields = fields
         extra_kwargs = {
             "id": {"help_text": "Unique identifier."},
@@ -228,21 +221,20 @@ class CirclePollSerializer(serializers.ModelSerializer):
     options = PollOptionSerializer(
         many=True, read_only=True, help_text="List of poll options."
     )
-    totalVotes = serializers.IntegerField(
-        source="total_votes", read_only=True, help_text="Total number of votes."
+    total_votes = serializers.IntegerField(
+        read_only=True, help_text="Total number of votes."
     )
-    allowsMultiple = serializers.BooleanField(
-        source="allows_multiple",
+    allows_multiple = serializers.BooleanField(
         read_only=True,
         help_text="Whether multiple selections are allowed.",
     )
-    endsAt = serializers.DateTimeField(
-        source="ends_at", read_only=True, help_text="Poll end time."
+    ends_at = serializers.DateTimeField(
+        read_only=True, help_text="Poll end time."
     )
-    isEnded = serializers.BooleanField(
-        source="is_ended", read_only=True, help_text="Whether the poll has ended."
+    is_ended = serializers.BooleanField(
+        read_only=True, help_text="Whether the poll has ended."
     )
-    myVotes = serializers.SerializerMethodField(
+    my_votes = serializers.SerializerMethodField(
         help_text="Option IDs the current user has voted for."
     )
 
@@ -252,11 +244,11 @@ class CirclePollSerializer(serializers.ModelSerializer):
             "id",
             "question",
             "options",
-            "allowsMultiple",
-            "endsAt",
-            "isEnded",
-            "totalVotes",
-            "myVotes",
+            "allows_multiple",
+            "ends_at",
+            "is_ended",
+            "total_votes",
+            "my_votes",
         ]
         read_only_fields = fields
         extra_kwargs = {
@@ -264,7 +256,7 @@ class CirclePollSerializer(serializers.ModelSerializer):
             "question": {"help_text": "The poll question."},
         }
 
-    def get_myVotes(self, obj) -> list:
+    def get_my_votes(self, obj) -> list:
         """Return list of option IDs the current user voted for."""
         request = self.context.get("request")
         if request and hasattr(request, "user") and request.user.is_authenticated:
@@ -295,12 +287,12 @@ class PollCreateSerializer(serializers.Serializer):
 
     question = serializers.CharField(max_length=300, help_text="The poll question.")
     options = PollOptionInputSerializer(many=True, help_text="List of options (2-6).")
-    allowsMultiple = serializers.BooleanField(
+    allows_multiple = serializers.BooleanField(
         required=False,
         default=False,
         help_text="Whether multiple selections are allowed.",
     )
-    endsAt = serializers.DateTimeField(
+    ends_at = serializers.DateTimeField(
         required=False,
         default=None,
         help_text="Optional end time for the poll.",
@@ -335,25 +327,24 @@ class CircleListSerializer(serializers.ModelSerializer):
     including member count, member avatars, and basic info.
     """
 
-    memberCount = serializers.IntegerField(
+    member_count = serializers.IntegerField(
         source="members_count",
         read_only=True,
         help_text="Total number of circle members.",
     )
-    maxMembers = serializers.IntegerField(
-        source="max_members",
+    max_members = serializers.IntegerField(
         read_only=True,
         help_text="Maximum allowed members in the circle.",
     )
-    memberAvatars = serializers.SerializerMethodField(
+    member_avatars = serializers.SerializerMethodField(
         help_text="Avatar URLs of first 5 members."
     )
-    creatorName = serializers.CharField(
+    creator_name = serializers.CharField(
         source="creator.display_name",
         read_only=True,
         help_text="Display name of the circle creator.",
     )
-    isMember = serializers.SerializerMethodField(
+    is_member = serializers.SerializerMethodField(
         help_text="Whether the requesting user is a member."
     )
 
@@ -365,11 +356,11 @@ class CircleListSerializer(serializers.ModelSerializer):
             "description",
             "category",
             "is_public",
-            "memberCount",
-            "maxMembers",
-            "memberAvatars",
-            "creatorName",
-            "isMember",
+            "member_count",
+            "max_members",
+            "member_avatars",
+            "creator_name",
+            "is_member",
             "created_at",
         ]
         read_only_fields = fields
@@ -382,12 +373,12 @@ class CircleListSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Date and time the circle was created."},
         }
 
-    def get_memberAvatars(self, obj) -> list:
+    def get_member_avatars(self, obj) -> list:
         """Return avatar URLs of the first 5 members for preview display."""
         memberships = obj.memberships.select_related("user").order_by("joined_at")[:5]
         return [m.user.avatar_url for m in memberships if m.user.avatar_url]
 
-    def get_isMember(self, obj) -> bool:
+    def get_is_member(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
@@ -403,13 +394,12 @@ class CircleDetailSerializer(serializers.ModelSerializer):
     and whether the current user is a member.
     """
 
-    memberCount = serializers.IntegerField(
+    member_count = serializers.IntegerField(
         source="members_count",
         read_only=True,
         help_text="Total number of circle members.",
     )
-    maxMembers = serializers.IntegerField(
-        source="max_members",
+    max_members = serializers.IntegerField(
         read_only=True,
         help_text="Maximum allowed members in the circle.",
     )
@@ -417,12 +407,12 @@ class CircleDetailSerializer(serializers.ModelSerializer):
     challenges = serializers.SerializerMethodField(
         help_text="Active and upcoming circle challenges."
     )
-    creatorName = serializers.CharField(
+    creator_name = serializers.CharField(
         source="creator.display_name",
         read_only=True,
         help_text="Display name of the circle creator.",
     )
-    isMember = serializers.SerializerMethodField(
+    is_member = serializers.SerializerMethodField(
         help_text="Whether the requesting user is a member."
     )
 
@@ -435,12 +425,12 @@ class CircleDetailSerializer(serializers.ModelSerializer):
             "category",
             "is_public",
             "creator",
-            "creatorName",
-            "memberCount",
-            "maxMembers",
+            "creator_name",
+            "member_count",
+            "max_members",
             "members",
             "challenges",
-            "isMember",
+            "is_member",
             "created_at",
             "updated_at",
         ]
@@ -468,7 +458,7 @@ class CircleDetailSerializer(serializers.ModelSerializer):
         )
         return CircleChallengeSerializer(challenges, many=True).data
 
-    def get_isMember(self, obj) -> bool:
+    def get_is_member(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
@@ -484,9 +474,7 @@ class CircleCreateSerializer(serializers.ModelSerializer):
     is set automatically from the request user.
     """
 
-    # Accept camelCase from mobile
-    isPublic = serializers.BooleanField(
-        source="is_public",
+    is_public = serializers.BooleanField(
         required=False,
         default=True,
         help_text="Whether the circle is publicly visible.",
@@ -498,7 +486,7 @@ class CircleCreateSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "category",
-            "isPublic",
+            "is_public",
         ]
         extra_kwargs = {
             "name": {"help_text": "Name of the circle."},
@@ -534,8 +522,7 @@ class CirclePostSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField(
         help_text="Author display info including id, username, and avatar."
     )
-    createdAt = serializers.DateTimeField(
-        source="created_at",
+    created_at = serializers.DateTimeField(
         read_only=True,
         help_text="Date and time the post was created.",
     )
@@ -554,9 +541,9 @@ class CirclePostSerializer(serializers.ModelSerializer):
             "content",
             "reactions",
             "poll",
-            "createdAt",
+            "created_at",
         ]
-        read_only_fields = ["id", "user", "reactions", "poll", "createdAt"]
+        read_only_fields = ["id", "user", "reactions", "poll", "created_at"]
         extra_kwargs = {
             "id": {"help_text": "Unique identifier."},
         }
@@ -604,8 +591,7 @@ class CirclePostCreateSerializer(serializers.Serializer):
 class CircleUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating a circle (admin only)."""
 
-    isPublic = serializers.BooleanField(
-        source="is_public",
+    is_public = serializers.BooleanField(
         required=False,
         help_text="Whether the circle is publicly visible.",
     )
@@ -616,7 +602,7 @@ class CircleUpdateSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "category",
-            "isPublic",
+            "is_public",
             "max_members",
         ]
         extra_kwargs = {
@@ -689,21 +675,20 @@ class MemberRoleSerializer(serializers.Serializer):
 class CircleInvitationSerializer(serializers.ModelSerializer):
     """Serializer for circle invitations."""
 
-    inviterName = serializers.CharField(
+    inviter_name = serializers.CharField(
         source="inviter.display_name",
         read_only=True,
         help_text="Display name of the inviter.",
     )
-    inviteeName = serializers.SerializerMethodField(
+    invitee_name = serializers.SerializerMethodField(
         help_text="Display name of the invitee."
     )
-    circleName = serializers.CharField(
+    circle_name = serializers.CharField(
         source="circle.name",
         read_only=True,
         help_text="Name of the circle being invited to.",
     )
-    isExpired = serializers.BooleanField(
-        source="is_expired",
+    is_expired = serializers.BooleanField(
         read_only=True,
         help_text="Whether the invitation has expired.",
     )
@@ -713,15 +698,15 @@ class CircleInvitationSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "circle",
-            "circleName",
+            "circle_name",
             "inviter",
-            "inviterName",
+            "inviter_name",
             "invitee",
-            "inviteeName",
+            "invitee_name",
             "invite_code",
             "status",
             "expires_at",
-            "isExpired",
+            "is_expired",
             "created_at",
         ]
         read_only_fields = fields
@@ -736,7 +721,7 @@ class CircleInvitationSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Date and time the invitation was created."},
         }
 
-    def get_inviteeName(self, obj) -> str:
+    def get_invitee_name(self, obj) -> str:
         if obj.invitee:
             return obj.invitee.display_name or _("Anonymous")
         return None
@@ -751,8 +736,8 @@ class DirectInviteSerializer(serializers.Serializer):
 class ChallengeProgressSerializer(serializers.ModelSerializer):
     """Serializer for challenge progress entries."""
 
-    userName = serializers.SerializerMethodField(help_text="Display name of the user.")
-    userAvatar = serializers.SerializerMethodField(help_text="Avatar URL of the user.")
+    user_name = serializers.SerializerMethodField(help_text="Display name of the user.")
+    user_avatar = serializers.SerializerMethodField(help_text="Avatar URL of the user.")
 
     class Meta:
         model = ChallengeProgress
@@ -760,8 +745,8 @@ class ChallengeProgressSerializer(serializers.ModelSerializer):
             "id",
             "challenge",
             "user",
-            "userName",
-            "userAvatar",
+            "user_name",
+            "user_avatar",
             "progress_value",
             "notes",
             "created_at",
@@ -774,10 +759,10 @@ class ChallengeProgressSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Date and time the progress was recorded."},
         }
 
-    def get_userName(self, obj) -> str:
+    def get_user_name(self, obj) -> str:
         return obj.user.display_name or _("Anonymous")
 
-    def get_userAvatar(self, obj) -> str:
+    def get_user_avatar(self, obj) -> str:
         return obj.user.avatar_url or ""
 
 
@@ -802,9 +787,9 @@ class ChallengeProgressCreateSerializer(serializers.Serializer):
 class CircleMessageSerializer(serializers.ModelSerializer):
     """Serializer for circle chat messages."""
 
-    senderName = serializers.CharField(source="sender.display_name", read_only=True)
-    senderAvatar = serializers.URLField(source="sender.avatar_url", read_only=True)
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    sender_name = serializers.CharField(source="sender.display_name", read_only=True)
+    sender_avatar = serializers.URLField(source="sender.avatar_url", read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = CircleMessage
@@ -812,33 +797,33 @@ class CircleMessageSerializer(serializers.ModelSerializer):
             "id",
             "circle",
             "sender",
-            "senderName",
-            "senderAvatar",
+            "sender_name",
+            "sender_avatar",
             "content",
             "metadata",
-            "createdAt",
+            "created_at",
         ]
         read_only_fields = [
             "id",
             "circle",
             "sender",
-            "senderName",
-            "senderAvatar",
-            "createdAt",
+            "sender_name",
+            "sender_avatar",
+            "created_at",
         ]
 
 
 class CircleCallSerializer(serializers.ModelSerializer):
     """Serializer for circle group calls."""
 
-    initiatorName = serializers.CharField(
+    initiator_name = serializers.CharField(
         source="initiator.display_name", read_only=True
     )
-    participantCount = serializers.SerializerMethodField()
-    startedAt = serializers.DateTimeField(source="started_at", read_only=True)
-    endedAt = serializers.DateTimeField(source="ended_at", read_only=True)
-    callType = serializers.CharField(source="call_type", read_only=True)
-    agoraChannel = serializers.CharField(source="agora_channel", read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    started_at = serializers.DateTimeField(read_only=True)
+    ended_at = serializers.DateTimeField(read_only=True)
+    call_type = serializers.CharField(read_only=True)
+    agora_channel = serializers.CharField(read_only=True)
 
     class Meta:
         model = CircleCall
@@ -846,17 +831,17 @@ class CircleCallSerializer(serializers.ModelSerializer):
             "id",
             "circle",
             "initiator",
-            "initiatorName",
-            "callType",
+            "initiator_name",
+            "call_type",
             "status",
-            "agoraChannel",
-            "startedAt",
-            "endedAt",
+            "agora_channel",
+            "started_at",
+            "ended_at",
             "duration_seconds",
             "max_participants",
-            "participantCount",
+            "participant_count",
         ]
         read_only_fields = fields
 
-    def get_participantCount(self, obj) -> int:
+    def get_participant_count(self, obj) -> int:
         return obj.participants.filter(left_at__isnull=True).count()

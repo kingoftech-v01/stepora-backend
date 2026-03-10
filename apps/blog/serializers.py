@@ -51,11 +51,9 @@ class PostListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     author = serializers.SerializerMethodField()
-    publishedAt = serializers.DateTimeField(source="published_at", read_only=True)
-    readTimeMinutes = serializers.IntegerField(
-        source="read_time_minutes", read_only=True
-    )
-    coverImage = serializers.URLField(source="cover_image", read_only=True)
+    published_at = serializers.DateTimeField(read_only=True)
+    read_time_minutes = serializers.IntegerField(read_only=True)
+    cover_image = serializers.URLField(read_only=True)
 
     class Meta:
         model = Post
@@ -67,9 +65,9 @@ class PostListSerializer(serializers.ModelSerializer):
             "category",
             "tags",
             "author",
-            "coverImage",
-            "publishedAt",
-            "readTimeMinutes",
+            "cover_image",
+            "published_at",
+            "read_time_minutes",
             "featured",
         ]
         read_only_fields = fields
@@ -90,15 +88,15 @@ class PostDetailSerializer(PostListSerializer):
     Extends the list serializer with full content and view count.
     """
 
-    viewsCount = serializers.IntegerField(source="views_count", read_only=True)
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
-    updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
+    views_count = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
 
     class Meta(PostListSerializer.Meta):
         fields = PostListSerializer.Meta.fields + [
             "content",
-            "viewsCount",
-            "createdAt",
-            "updatedAt",
+            "views_count",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields

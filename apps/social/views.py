@@ -104,9 +104,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             "username": user.display_name or "Anonymous",
             "avatar": user.avatar_url or "",
             "title": title,
-            "currentLevel": user.level,
-            "influenceScore": user.xp,
-            "currentStreak": user.streak_days,
+            "current_level": user.level,
+            "influence_score": user.xp,
+            "current_streak": user.streak_days,
         }
 
     @extend_schema(
@@ -255,7 +255,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 title=_("New Friend Request"),
                 body=_("%(name)s sent you a friend request.")
                 % {"name": request.user.display_name or "Someone"},
-                data={"screen": "friends", "userId": str(request.user.id)},
+                data={"screen": "friends", "user_id": str(request.user.id)},
             )
         except Exception:
             pass
@@ -308,7 +308,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 title=_("Friend Request Accepted"),
                 body=_("%(name)s accepted your friend request!")
                 % {"name": request.user.display_name or "Someone"},
-                data={"screen": "friends", "userId": str(request.user.id)},
+                data={"screen": "friends", "user_id": str(request.user.id)},
             )
         except Exception:
             pass
@@ -531,8 +531,8 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                         "id": str(receiver.id),
                         "username": receiver.display_name or "Anonymous",
                         "avatar": receiver.avatar_url or "",
-                        "currentLevel": receiver.level,
-                        "influenceScore": receiver.xp,
+                        "current_level": receiver.level,
+                        "influence_score": receiver.xp,
                     },
                     "status": fr.status,
                     "created_at": fr.created_at,
@@ -1135,11 +1135,11 @@ class UserSearchView(generics.ListAPIView):
                     "username": user.display_name or "Anonymous",
                     "avatar": user.avatar_url or "",
                     "title": title,
-                    "influenceScore": user.xp,
-                    "currentLevel": user.level,
-                    "isFriend": user.id in friend_ids,
-                    "isPendingRequest": user.id in pending_ids,
-                    "isFollowing": user.id in following_ids,
+                    "influence_score": user.xp,
+                    "current_level": user.level,
+                    "is_friend": user.id in friend_ids,
+                    "is_pending_request": user.id in pending_ids,
+                    "is_following": user.id in following_ids,
                 }
             )
 
@@ -1296,11 +1296,11 @@ class FollowSuggestionsView(generics.ListAPIView):
                     "username": u.display_name or "Anonymous",
                     "avatar": u.avatar_url or "",
                     "title": title,
-                    "influenceScore": u.xp,
-                    "currentLevel": u.level,
-                    "isFriend": False,
-                    "isPendingRequest": is_pending,
-                    "isFollowing": False,
+                    "influence_score": u.xp,
+                    "current_level": u.level,
+                    "is_friend": False,
+                    "is_pending_request": is_pending,
+                    "is_following": False,
                 }
             )
 
@@ -2527,7 +2527,7 @@ class SocialEventViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "registered": True,
-                "participantsCount": locked_event.participants_count
+                "participants_count": locked_event.participants_count
                 + (1 if created else 0),
             }
         )
@@ -2564,7 +2564,7 @@ class SocialEventViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "registered": False,
-                "participantsCount": max(0, event.participants_count - 1),
+                "participants_count": max(0, event.participants_count - 1),
             }
         )
 
@@ -2824,15 +2824,15 @@ class StoryViewSet(viewsets.ModelViewSet):
                     "user": {
                         "id": uid,
                         "username": story.user.display_name or "Anonymous",
-                        "displayName": story.user.display_name or "Anonymous",
+                        "display_name": story.user.display_name or "Anonymous",
                         "avatar": story.user.avatar_url or "",
                     },
                     "stories": [],
-                    "hasUnviewed": False,
+                    "has_unviewed": False,
                 }
             groups[uid]["stories"].append(story)
             if not story._user_has_viewed:
-                groups[uid]["hasUnviewed"] = True
+                groups[uid]["has_unviewed"] = True
 
         # Sort: current user first, then unviewed, then viewed
         my_uid = str(user.id)
@@ -2855,7 +2855,7 @@ class StoryViewSet(viewsets.ModelViewSet):
                 many=True,
                 context={"request": request},
             ).data
-            if group["hasUnviewed"]:
+            if group["has_unviewed"]:
                 unviewed.append(group)
             else:
                 viewed.append(group)
@@ -2915,7 +2915,7 @@ class StoryViewSet(viewsets.ModelViewSet):
                     "id": str(v.user.id),
                     "username": v.user.display_name or "Anonymous",
                     "avatar": v.user.avatar_url or "",
-                    "viewedAt": v.viewed_at.isoformat(),
+                    "viewed_at": v.viewed_at.isoformat(),
                 }
             )
         return Response(result)
@@ -3171,15 +3171,15 @@ class FriendSuggestionsView(APIView):
                 {
                     "user": {
                         "id": str(u.id),
-                        "displayName": u.display_name or "Anonymous",
+                        "display_name": u.display_name or "Anonymous",
                         "avatar": u.avatar_url or "",
                         "level": u.level,
                         "title": title,
                     },
                     "score": score,
                     "reasons": reasons,
-                    "mutualFriendCount": m_count,
-                    "sharedCategories": shared_cats,
+                    "mutual_friend_count": m_count,
+                    "shared_categories": shared_cats,
                 }
             )
 

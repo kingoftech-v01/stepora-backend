@@ -397,7 +397,7 @@ def generate_dream_plan_task(self, dream_id, user_id):
                 scheduled_for=timezone.now(),
                 data={
                     "screen": "dream",
-                    "dreamId": str(dream_id),
+                    "dream_id": str(dream_id),
                     "action": "plan_ready",
                 },
             )
@@ -1075,7 +1075,7 @@ def _check_milestone(dream, old_progress, new_progress):
                 status="sent",
                 data={
                     "screen": "DreamDetail",
-                    "dreamId": str(dream.id),
+                    "dream_id": str(dream.id),
                     "milestone": threshold,
                 },
             )
@@ -1442,7 +1442,7 @@ def generate_initial_tasks_task(self, dream_id, user_id):
                 scheduled_for=timezone.now(),
                 data={
                     "screen": "dream",
-                    "dreamId": str(dream_id),
+                    "dream_id": str(dream_id),
                     "action": "plan_ready",
                 },
             )
@@ -1619,7 +1619,7 @@ def run_single_checkin_task(self, checkin_id):
                     scheduled_for=timezone.now(),
                     data={
                         "screen": "dream",
-                        "dreamId": str(dream.id),
+                        "dream_id": str(dream.id),
                         "action": "checkin_complete",
                         "checkin_id": str(checkin.id),
                     },
@@ -1940,8 +1940,8 @@ def generate_checkin_questionnaire_task(self, checkin_id):
                 scheduled_for=timezone.now(),
                 data={
                     "screen": "checkin",
-                    "checkinId": str(checkin.id),
-                    "dreamId": str(dream.id),
+                    "checkin_id": str(checkin.id),
+                    "dream_id": str(dream.id),
                     "action": "checkin_questionnaire",
                 },
             )
@@ -2062,8 +2062,8 @@ def process_checkin_responses_task(self, checkin_id):
                     scheduled_for=timezone.now(),
                     data={
                         "screen": "checkin",
-                        "checkinId": str(checkin.id),
-                        "dreamId": str(dream.id),
+                        "checkin_id": str(checkin.id),
+                        "dream_id": str(dream.id),
                         "action": "checkin_complete",
                     },
                 )

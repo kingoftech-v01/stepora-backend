@@ -571,7 +571,7 @@ class TestCircleCreateView:
             "name": "New Circle",
             "description": "A brand new circle",
             "category": "fitness",
-            "isPublic": True,
+            "is_public": True,
         }
         resp = authenticated_client.post(BASE_URL, data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
@@ -1560,7 +1560,7 @@ class TestCircleCreateSerializer:
     def test_create_private(self, authenticated_client):
         resp = authenticated_client.post(
             BASE_URL,
-            {"name": "Private One", "isPublic": False},
+            {"name": "Private One", "is_public": False},
             format="json",
         )
         c = Circle.objects.get(name="Private One")

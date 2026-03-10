@@ -1377,11 +1377,11 @@ class CallViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                "callId": str(call.id),
-                "channelName": str(call.id),
-                "callType": call.call_type,
+                "call_id": str(call.id),
+                "channel_name": str(call.id),
+                "call_type": call.call_type,
                 "status": call.status,
-                "calleeId": str(callee.id),
+                "callee_id": str(callee.id),
             },
             status=status.HTTP_201_CREATED,
         )
@@ -1419,9 +1419,9 @@ class CallViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                "callId": str(call.id),
+                "call_id": str(call.id),
                 "status": call.status,
-                "startedAt": call.started_at.isoformat(),
+                "started_at": call.started_at.isoformat(),
             }
         )
 
@@ -1482,7 +1482,7 @@ class CallViewSet(viewsets.GenericViewSet):
         except Exception:
             logger.debug("WebSocket broadcast failed", exc_info=True)
 
-        return Response({"callId": str(call.id), "status": call.status})
+        return Response({"call_id": str(call.id), "status": call.status})
 
     @extend_schema(summary="End a call", tags=["Calls"])
     @action(detail=True, methods=["post"])
@@ -1513,9 +1513,9 @@ class CallViewSet(viewsets.GenericViewSet):
 
         return Response(
             {
-                "callId": str(call.id),
+                "call_id": str(call.id),
                 "status": call.status,
-                "durationSeconds": call.duration_seconds,
+                "duration_seconds": call.duration_seconds,
             }
         )
 
@@ -1547,7 +1547,7 @@ class CallViewSet(viewsets.GenericViewSet):
         call.status = "cancelled"
         call.save(update_fields=["status", "updated_at"])
 
-        return Response({"callId": str(call.id), "status": call.status})
+        return Response({"call_id": str(call.id), "status": call.status})
 
     @extend_schema(
         summary="Incoming calls",
@@ -1576,11 +1576,11 @@ class CallViewSet(viewsets.GenericViewSet):
                 logger.debug("Failed to get display name", exc_info=True)
             results.append(
                 {
-                    "callId": str(c.id),
-                    "callerId": str(c.caller_id),
-                    "callerName": caller_name,
-                    "callType": c.call_type,
-                    "createdAt": c.created_at.isoformat(),
+                    "call_id": str(c.id),
+                    "caller_id": str(c.caller_id),
+                    "caller_name": caller_name,
+                    "call_type": c.call_type,
+                    "created_at": c.created_at.isoformat(),
                 }
             )
 
@@ -1624,12 +1624,12 @@ class CallViewSet(viewsets.GenericViewSet):
             )
         return Response(
             {
-                "callId": str(call.id),
+                "call_id": str(call.id),
                 "status": call.status,
-                "callType": call.call_type,
-                "callerId": str(call.caller_id),
-                "calleeId": str(call.callee_id),
-                "startedAt": call.started_at.isoformat() if call.started_at else None,
+                "call_type": call.call_type,
+                "caller_id": str(call.caller_id),
+                "callee_id": str(call.callee_id),
+                "started_at": call.started_at.isoformat() if call.started_at else None,
             }
         )
 

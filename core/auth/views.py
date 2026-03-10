@@ -230,8 +230,8 @@ class LoginView(APIView):
             challenge_token = _create_challenge_token(user.id)
             return Response(
                 {
-                    "tfaRequired": True,
-                    "challengeToken": challenge_token,
+                    "tfa_required": True,
+                    "challenge_token": challenge_token,
                 },
                 status=http_status.HTTP_200_OK,
             )
@@ -258,7 +258,7 @@ class TwoFactorChallengeView(APIView):
     throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
-        challenge_token = request.data.get("challengeToken", "").strip()
+        challenge_token = request.data.get("challenge_token", "").strip()
         code = request.data.get("code", "").strip()
 
         if not challenge_token or not code:
