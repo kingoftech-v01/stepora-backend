@@ -99,7 +99,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
       - name: Install linters
         run: pip install black isort flake8
       - name: Check Black formatting
@@ -123,7 +122,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build --build-arg FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production" -t stepora:${{ github.sha }} .
+          docker build --build-arg FIELD_ENCRYPTION_KEY="1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=" -t stepora:${{ github.sha }} .
 
       - name: Save Docker image
         run: |
