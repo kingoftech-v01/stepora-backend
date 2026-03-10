@@ -80,72 +80,11 @@ jobs:
           docker push "${FULL_IMAGE}:latest"
 
   # ------------------------------------------------------------------
-  # 3. Run migrations via a one-off ECS task
-  # ------------------------------------------------------------------
-  migrate:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Run migrations via ECS run-task
-        env:
-          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
-          ECS_TASK_DEF: ${{ secrets.ECS_TASK_DEFINITION }}
-        run: |
-          # Get network config from the running service
-          NET_CONFIG=$(aws ecs describe-services \
-            --cluster "${ECS_CLUSTER}" \
-            --services "${ECS_SERVICE}" \
-            --query 'services[0].networkConfiguration' \
-            --output json)
-
-          # Start a one-off migration task
-          TASK_ARN=$(aws ecs run-task \
-            --cluster "${ECS_CLUSTER}" \
-            --task-definition "${ECS_TASK_DEF}" \
-            --overrides '{
-              "containerOverrides": [{
-                "name": "backend",
-                "command": ["python", "manage.py", "migrate", "--noinput"]
-              }]
-            }' \
-            --launch-type FARGATE \
-            --network-configuration "${NET_CONFIG}" \
-            --query 'tasks[0].taskArn' \
-            --output text)
-
-          echo "Migration task: ${TASK_ARN}"
-
-          # Wait for the task to finish
-          aws ecs wait tasks-stopped \
-            --cluster "${ECS_CLUSTER}" \
-            --tasks "${TASK_ARN}"
-
-          # Verify exit code
-          EXIT_CODE=$(aws ecs describe-tasks \
-            --cluster "${ECS_CLUSTER}" \
-            --tasks "${TASK_ARN}" \
-            --query 'tasks[0].containers[0].exitCode' \
-            --output text)
-
-          if [ "${EXIT_CODE}" != "0" ]; then
-            echo "::error::Migration failed with exit code ${EXIT_CODE}"
-            exit 1
-          fi
-          echo "Migrations completed successfully"
-
-  # ------------------------------------------------------------------
-  # 4. Deploy new image to ECS service
+  # 3. Deploy new image to ECS service
+  #    Migrations run automatically via entrypoint.sh on container start
   # ------------------------------------------------------------------
   deploy:
-    needs: migrate
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
