@@ -53,6 +53,7 @@ def send_daily_summaries():
     fcm = FCMService()
     sent_count = 0
     skipped_count = 0
+    fcm_failed = 0
 
     for user in users.iterator():
         # Check if user has daily_summary_enabled preference
@@ -190,17 +191,19 @@ def send_daily_summaries():
                         fcm_token__in=result.invalid_tokens,
                     ).update(is_active=False)
             except Exception as exc:
-                logger.warning(
+                logger.error(
                     'FCM push failed for daily summary (user %s): %s',
-                    user.id, exc,
+                    user.id, exc, exc_info=True,
                 )
+                fcm_failed += 1
 
         sent_count += 1
 
     logger.info(
-        'Daily summaries: sent=%d, skipped=%d.', sent_count, skipped_count,
+        'Daily summaries: sent=%d, skipped=%d, fcm_failed=%d.',
+        sent_count, skipped_count, fcm_failed,
     )
-    return {'sent': sent_count, 'skipped': skipped_count}
+    return {'sent': sent_count, 'skipped': skipped_count, 'fcm_failed': fcm_failed}
 
 
 @shared_task(name='apps.calendar.tasks.generate_recurring_events')
@@ -367,7 +370,10 @@ def sync_google_calendar(self, integration_id):
                 service.push_event(event)
                 pushed += 1
             except Exception as e:
-                logger.error("Failed to push event %s to Google: %s", event.id, e)
+                logger.error("Failed to push event %s to Google: %s", event.id, e, exc_info=True)
+                event.sync_status = 'error'
+                event.last_sync_error = str(e)[:500]
+                event.save(update_fields=['sync_status', 'last_sync_error'])
     else:
         pushed = 0
 

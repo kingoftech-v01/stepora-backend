@@ -117,7 +117,7 @@ def transcribe_voice_message(self, message_id):
 
                     logger.info(f"Auto-summarized voice message {message_id}")
                 except Exception as e:
-                    logger.warning(f"Auto-summarization failed for {message_id}: {e}")
+                    logger.error(f"Auto-summarization failed for {message_id}: {e}", exc_info=True)
 
         finally:
             os.unlink(tmp_path)

@@ -79,7 +79,7 @@ class NotificationDeliveryService:
             logger.debug(f"WebSocket sent for notification {notification.id}")
             return True
         except Exception as e:
-            logger.warning(f"WebSocket delivery failed for {notification.id}: {e}")
+            logger.error(f"WebSocket delivery failed for {notification.id}: {e}", exc_info=True)
             return False
 
     def _send_email(self, notification):

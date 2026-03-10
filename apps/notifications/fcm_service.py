@@ -161,8 +161,8 @@ class FCMService:
         except messaging.SenderIdMismatchError:
             raise InvalidTokenError(token)
         except Exception as e:
-            logger.warning(f"FCM send failed for token {token[:20]}...: {e}")
-            return None
+            logger.error(f"FCM send failed for token {token[:20]}...: {e}", exc_info=True)
+            raise
 
     def send_multicast(
         self,

@@ -86,7 +86,7 @@ def _send_digest_push(user, title, body, data):
                 len(result.invalid_tokens), user.id,
             )
     except Exception as exc:
-        logger.warning('FCM push failed for weekly digest (user %s): %s', user.id, exc)
+        logger.error('FCM push failed for weekly digest (user %s): %s', user.id, exc, exc_info=True)
 
 
 def _send_digest_email(user, subject, context):
@@ -96,8 +96,8 @@ def _send_digest_email(user, subject, context):
     try:
         html_body = render_to_string('emails/weekly_digest.html', context)
     except Exception as exc:
-        logger.error('Failed to render weekly digest email template: %s', exc)
-        return
+        logger.error('Failed to render weekly digest email template: %s', exc, exc_info=True)
+        raise
 
     # Plain-text fallback
     plain = (

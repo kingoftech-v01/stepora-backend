@@ -118,6 +118,7 @@ def hard_delete_expired_accounts():
     )
 
     count = 0
+    failed_ids = []
     for user in expired_users:
         try:
             user_id = user.id
@@ -126,9 +127,12 @@ def hard_delete_expired_accounts():
             logger.info("Hard-deleted expired account %s", user_id)
         except Exception:
             logger.exception("Failed to hard-delete user %s", user.id)
+            failed_ids.append(str(user.id))
 
     logger.info("Hard-deleted %d expired accounts", count)
-    return count
+    if failed_ids:
+        logger.error("Failed to hard-delete %d users: %s", len(failed_ids), ', '.join(failed_ids))
+    return {'deleted': count, 'failed': failed_ids}
 
 
 @shared_task(name='apps.users.tasks.generate_weekly_reports')

@@ -37,7 +37,8 @@ def _sync_site_from_frontend_url():
     try:
         from django.contrib.sites.models import Site
         from django.conf import settings
-    except Exception:
+    except Exception as e:
+        logger.debug("Could not import Site model: %s", e)
         return
 
     frontend_url = getattr(settings, 'FRONTEND_URL', '')
