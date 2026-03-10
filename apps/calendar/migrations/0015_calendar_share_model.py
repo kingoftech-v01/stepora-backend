@@ -30,10 +30,6 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at'],
             },
         ),
-        migrations.RemoveIndex(
-            model_name='timeblock',
-            name='time_blocks_user_id_focus_idx',
-        ),
         migrations.AddField(
             model_name='calendarshare',
             name='owner',

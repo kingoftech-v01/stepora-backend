@@ -1,11 +1,11 @@
 """
-Add focus_block boolean field to TimeBlock model.
+No-op migration: focus_block was already added in 0010_recurrenceexception.
 
-Marks a time block as a focus/DND block that suppresses notifications
-and integrates with the calendar focus mode system.
+This migration originally duplicated the AddField from 0010. It is now
+empty to allow clean migrations from a fresh database.
 """
 
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -15,19 +15,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='timeblock',
-            name='focus_block',
-            field=models.BooleanField(
-                default=False,
-                help_text='Whether this time block is a focus/DND block that suppresses notifications.',
-            ),
-        ),
-        migrations.AddIndex(
-            model_name='timeblock',
-            index=models.Index(
-                fields=['user', 'focus_block', 'is_active'],
-                name='time_blocks_user_id_focus_idx',
-            ),
-        ),
+        # focus_block field and index already created in 0010
     ]
