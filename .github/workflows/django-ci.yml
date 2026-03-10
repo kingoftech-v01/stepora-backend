@@ -65,7 +65,7 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
-          FIELD_ENCRYPTION_KEY: ci-placeholder-key-not-for-prod
+          FIELD_ENCRYPTION_KEY: 1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=
           DEBUG: 'True'
         run: |
           mkdir -p logs
@@ -80,7 +80,7 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
-          FIELD_ENCRYPTION_KEY: ci-placeholder-key-not-for-prod
+          FIELD_ENCRYPTION_KEY: 1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=
           DEBUG: 'True'
         run: pytest --cov=. --cov-report=xml --cov-report=html
 
