@@ -222,9 +222,9 @@ class TestUserViewSet:
     def test_update_preferences(self, authenticated_client, user):
         """Test PUT /api/users/notification-preferences/"""
         data = {
-            'motivation': True,
-            'weekly_report': True,
-            'reminders': False
+            'push_enabled': True,
+            'weekly_summary': True,
+            'dream_reminders': False
         }
 
         response = authenticated_client.put('/api/users/notification-preferences/', data, format='json')
@@ -232,8 +232,9 @@ class TestUserViewSet:
         assert response.status_code == status.HTTP_200_OK
 
         user.refresh_from_db()
-        assert user.notification_prefs['motivation'] is True
-        assert user.notification_prefs['weekly_report'] is True
+        assert user.notification_prefs['push_enabled'] is True
+        assert user.notification_prefs['weekly_summary'] is True
+        assert user.notification_prefs['dream_reminders'] is False
 
     def test_get_stats(self, authenticated_client, user):
         """Test GET /api/users/stats/"""

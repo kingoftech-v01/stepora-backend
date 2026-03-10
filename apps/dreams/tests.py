@@ -347,16 +347,16 @@ class TestDreamViewSet:
         # Upgrade user to pro so AI permission gate is satisfied
         _set_user_plan(dream.user, 'pro')
 
-        with patch('apps.dreams.views.generate_dream_skeleton_task') as mock_task, \
-             patch('apps.dreams.views.get_plan_status', return_value=None), \
-             patch('apps.dreams.views.set_plan_status'):
-            mock_task.apply_async.return_value = Mock(id='fake-task-id')
+        with patch('apps.dreams.tasks.generate_dream_plan_task') as mock_task, \
+             patch('apps.dreams.tasks.get_plan_status', return_value=None), \
+             patch('apps.dreams.tasks.set_plan_status'):
+            mock_task.delay.return_value = Mock(id='fake-task-id')
 
             response = authenticated_client.post(f'/api/dreams/dreams/{dream.id}/generate_plan/')
 
         assert response.status_code == status.HTTP_202_ACCEPTED
         assert response.data['status'] == 'generating'
-        mock_task.apply_async.assert_called_once()
+        mock_task.delay.assert_called_once()
 
     def test_generate_two_minute_start(self, authenticated_client, dream):
         """Test POST /api/dreams/dreams/{id}/generate_two_minute_start/
