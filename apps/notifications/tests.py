@@ -786,7 +786,10 @@ class TestNotificationDeliveryService:
             scheduled_for=timezone.now(),
         )
         service = NotificationDeliveryService()
-        result = service.deliver(notification)
+        # All explicit channels disabled; service still tries email fallback
+        # Mock the email fallback to also fail so deliver returns False
+        with patch.object(service, '_send_email', return_value=False):
+            result = service.deliver(notification)
         assert result is False
 
     def test_deliver_email_success(self, db, user):

@@ -115,7 +115,7 @@ dreamplanner/
 │   ├── notifications/      # Multi-channel delivery (WebSocket + Email + Web Push), templates, preferences
 │   ├── subscriptions/      # Stripe plans (SubscriptionPlan + Subscription models), webhooks, invoices
 │   ├── store/              # Items, categories, XP/Stripe purchases, wishlists, gifting, refunds
-│   ├── leagues/            # Leagues, seasons, leaderboards, rank snapshots, rewards
+│   ├── leagues/            # Leagues, seasons, auto-grouping, leaderboards, promotion/relegation, rewards
 │   ├── circles/            # Circles, posts, reactions, challenges, invitations, group chat, Agora calls
 │   ├── social/             # Friends, follows, blocking, reporting, feed, dream posts, encouragements
 │   ├── buddies/            # Buddy pairing, encouragement, streaks, chat (BuddyChatConsumer), calls
@@ -457,6 +457,51 @@ Notification Created (API / Celery task)
 | `ws/buddy-chat/{pairing_id}/` | BuddyChatConsumer | Buddy-to-buddy chat with FCM push |
 | `ws/circle-chat/{circle_id}/` | CircleChatConsumer | Circle group chat with block filtering |
 | `ws/notifications/` | NotificationConsumer | Real-time notification delivery |
+
+---
+
+## League & Auto-Grouping System
+
+The `leagues` app implements a competitive ranking system with automatic group management.
+
+### Architecture
+
+```text
+User earns XP
+      |
+      v
+LeagueService.update_standing()
+      |
+      +--> Determine league tier (Bronze-Legend) from total XP
+      +--> Create/update LeagueStanding for active Season
+      +--> Recalculate ranks (dense ranking)
+      +--> assign_user_to_group() on new standing or tier change
+```
+
+### Key Models
+
+- **SeasonConfig** (singleton) -- Admin-configurable parameters: season duration, group sizes (target/max/min), promotion/relegation XP thresholds, auto-create toggle.
+- **League** -- 7 static tiers (Bronze through Legend) with XP ranges.
+- **Season** -- Time-bounded competitive period. Status lifecycle: `pending` -> `active` -> `processing` -> `ended`.
+- **LeagueStanding** -- User's rank, XP, and stats within a season. One per user per season.
+- **LeagueGroup** -- Competitive pod within a league tier for a season (target 20 users).
+- **LeagueGroupMembership** -- Links standings to groups (OneToOne on standing).
+
+### Automated Processes (Celery Beat)
+
+| Schedule | Task | Purpose |
+|----------|------|---------|
+| Hourly | `auto_activate_pending_seasons` | Activate scheduled seasons |
+| Daily 12:05 AM | `check_season_end` | Detect ended seasons, trigger processing |
+| Daily 11:55 PM | `create_daily_rank_snapshots` | Historical rank tracking |
+| Sunday 11 PM | `send_league_change_notifications` | Weekly promotion/demotion cycle |
+| Monday 3 AM | `rebalance_groups_task` | Rebalance groups across all leagues |
+
+Season-end processing chains: rewards calculation, promotion/relegation flags, notifications, then auto-creates the next season with carried-over standings and fresh group assignments.
+
+### Admin Configuration
+
+All settings are managed via Django admin at `/admin/leagues/`. The `SeasonConfig` singleton controls group sizing and season behavior. See `apps/leagues/README.md` for a detailed admin configuration guide.
 
 ---
 
