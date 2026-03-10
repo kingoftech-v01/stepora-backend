@@ -194,6 +194,10 @@ DATABASES["default"]["OPTIONS"] = {
     "sslmode": os.getenv("DB_SSLMODE", "require"),
 }
 
+# Elasticsearch — disabled in production (no ES instance on ECS)
+# Prevents post_save signals from trying to index to localhost:9200
+ELASTICSEARCH_DSL_AUTOSYNC = False
+
 # Sessions via Redis (shared across ECS tasks)
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
