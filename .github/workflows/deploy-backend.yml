@@ -2,13 +2,13 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     paths-ignore:
       - ".github/workflows/deploy-frontend.yml"
       - "stepora-frontend/**"
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-west-3
 
 jobs:
   # ------------------------------------------------------------------
@@ -47,6 +47,7 @@ jobs:
   # ------------------------------------------------------------------
   build-and-push:
     needs: test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +72,7 @@ jobs:
           docker build \
             --build-arg REQUIREMENTS_FILE=requirements/production.txt \
             --build-arg DJANGO_SETTINGS=config.settings.production \
-            --build-arg FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production" \
+            --build-arg FIELD_ENCRYPTION_KEY="${{ secrets.FIELD_ENCRYPTION_KEY }}" \
             -t "${FULL_IMAGE}:${IMAGE_TAG}" \
             -t "${FULL_IMAGE}:latest" \
             .
@@ -111,7 +112,7 @@ jobs:
             --task-definition "${ECS_TASK_DEF}" \
             --overrides '{
               "containerOverrides": [{
-                "name": "web",
+                "name": "backend",
                 "command": ["python", "manage.py", "migrate", "--noinput"]
               }]
             }' \

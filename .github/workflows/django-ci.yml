@@ -2,9 +2,9 @@ name: Django CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
-    branches: [main, develop]
+    branches: [main, development]
 
 env:
   PYTHON_VERSION: '3.11'
@@ -65,7 +65,7 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
-          FIELD_ENCRYPTION_KEY: 1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DEBUG: 'True'
         run: |
           mkdir -p logs
@@ -81,7 +81,7 @@ jobs:
           DB_PORT: 5432
           REDIS_URL: redis://localhost:6379
           SECRET_KEY: test-secret-key
-          FIELD_ENCRYPTION_KEY: 1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DEBUG: 'True'
         run: pytest --override-ini="addopts=" --cov=. --cov-report=xml --cov-report=html -v
 
@@ -123,7 +123,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build --build-arg FIELD_ENCRYPTION_KEY="1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=" -t stepora:${{ github.sha }} .
+          docker build --build-arg FIELD_ENCRYPTION_KEY="${{ secrets.FIELD_ENCRYPTION_KEY }}" -t stepora:${{ github.sha }} .
 
       - name: Save Docker image
         run: |
