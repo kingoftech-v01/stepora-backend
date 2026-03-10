@@ -185,7 +185,7 @@ Both services run in **private subnets** with the ECS security group. They can o
 ### CI/CD
 | User | Access Key | Policy | Purpose |
 |------|------------|--------|---------|
-| stepora-ci-deploy | AKIA6LZRWRYVAYKQ7PCB | stepora-ci-deploy-policy | GitHub Actions deploy |
+| stepora-ci-deploy | [STORED IN GITHUB SECRETS] | stepora-ci-deploy-policy | GitHub Actions deploy |
 
 **stepora-ci-deploy-policy** allows: ECR push, ECS update, S3 sync, CloudFront invalidate, IAM PassRole for ECS roles.
 

@@ -34,9 +34,9 @@ jobs:
       - name: Django system check
         env:
           DJANGO_SETTINGS_MODULE: config.settings.development
-          DJANGO_SECRET_KEY: ci-test-key-not-for-production
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'ci-test-key-not-for-production' }}
           ALLOWED_HOSTS: localhost
-          FIELD_ENCRYPTION_KEY: 1F6g3DaS4ZtUI6jMdJte5oDgebjJViwl_9xtjWmMmEs=
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DB_NAME: ":memory:"
         run: |
           mkdir -p logs

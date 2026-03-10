@@ -33,7 +33,7 @@ Items marked with [x] are already implemented. Items marked with [ ] need operat
 
 ### Critical
 
-- [ ] **Move FIELD_ENCRYPTION_KEY out of Dockerfile** — Currently hardcoded as build ARG for beta. Before GA, move to a secret manager (AWS Secrets Manager, HashiCorp Vault, or deployment environment variable). Pass via `--build-arg` at build time. The key is: `Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=`
+- [ ] **Move FIELD_ENCRYPTION_KEY out of Dockerfile** — Currently passed as build ARG. Before GA, move to runtime-only via AWS Secrets Manager. Do NOT store the key in any committed file.
 - [ ] **Rotate all secrets** — After beta, rotate: OpenAI API key, Stripe secret key, DB password, Redis password, Agora credentials, FIELD_ENCRYPTION_KEY, DJANGO_SECRET_KEY
 - [ ] **Set `client_max_body_size` in nginx** — Set to `110m` to match Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`
 

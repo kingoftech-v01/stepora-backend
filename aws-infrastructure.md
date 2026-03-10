@@ -43,7 +43,7 @@
 - Instance: stepora-db (db.t3.micro, PostgreSQL 15)
 - DB Name: stepora
 - Username: stepora_admin
-- Password: St3p0ra_Db_2026!
+- Password: [STORED IN AWS SECRETS MANAGER — stepora/backend-env]
 - Endpoint: stepora-db.c94aou6wywvf.eu-west-3.rds.amazonaws.com:5432
 
 ## ElastiCache Redis
@@ -90,7 +90,7 @@
 
 ## CI/CD Deploy User
 - Username: stepora-ci-deploy
-- Access Key: AKIA6LZRWRYVAYKQ7PCB
+- Access Key: [STORED IN GITHUB SECRETS]
 - Policy: stepora-ci-deploy-policy (ECR, ECS, S3, CloudFront)
 - GitHub Secrets configured on all 3 repos
 
