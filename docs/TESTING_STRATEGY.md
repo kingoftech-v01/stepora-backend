@@ -550,7 +550,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
     branches: [main]
 

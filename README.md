@@ -280,10 +280,10 @@ Create `.env` in the project root (must be `chmod 600`):
 # ── Django Core ─────────────────────────────────────────
 DJANGO_SECRET_KEY=your-secret-key          # REQUIRED in production
 DJANGO_SETTINGS_MODULE=config.settings.production
-ALLOWED_HOSTS=dpapi.yourdomain.com,localhost,127.0.0.1
-FRONTEND_URL=https://dp.yourdomain.com
-CORS_ORIGIN=https://dp.yourdomain.com,https://localhost,capacitor://localhost
-CSRF_TRUSTED_ORIGINS=https://dp.yourdomain.com,https://localhost,capacitor://localhost
+ALLOWED_HOSTS=api.stepora.app,localhost,127.0.0.1
+FRONTEND_URL=https://stepora.app
+CORS_ORIGIN=https://stepora.app,https://localhost,capacitor://localhost
+CSRF_TRUSTED_ORIGINS=https://stepora.app,https://localhost,capacitor://localhost
 
 # ── Database (PostgreSQL) ───────────────────────────────
 DB_NAME=stepora
@@ -756,9 +756,10 @@ pytest -m asyncio       # Async tests (WebSocket)
 
 ## Deployment
 
-### Docker Deployment (Current — VPS)
+### Docker Deployment (VPS — Preprod)
 
-Architecture: **External nginx (SSL) → Docker nginx (security) → Django/Daphne**
+Architecture on VPS: **External nginx (SSL) → Docker nginx (security) → Django/Daphne**
+Production uses AWS ECS Fargate — see `AWS_INFRASTRUCTURE.md`.
 
 ```bash
 cd /root/stepora
@@ -802,15 +803,16 @@ docker compose exec web python manage.py seed_store
 # Backups stored in /root/stepora/backups/
 ```
 
-### Infrastructure (AWS — future)
-- **ECS Fargate**: Django containers (HTTP + WebSocket + Celery worker + Celery beat)
-- **RDS PostgreSQL**: Multi-AZ for high availability
-- **ElastiCache Redis**: Cluster mode for cache + message broker
-- **S3**: Vision boards, avatars, and media files
-- **ALB**: Load balancer with health checks
-- **CloudFront**: CDN for static assets
-- **CloudWatch**: Logging and monitoring
-- **Secrets Manager**: Environment secrets
+### Infrastructure (AWS — Production)
+- **ECS Fargate**: Backend + Site vitrine containers (256 CPU, 512 MB each)
+- **RDS PostgreSQL 15**: db.t3.micro, private subnets, SSL required
+- **ElastiCache Redis**: cache.t3.micro for sessions, cache, Celery broker
+- **S3**: Frontend SPA (stepora-frontend-eu) + media uploads (stepora-media-eu)
+- **ALB**: Host-based routing (api.stepora.app → backend, stepora.net → site)
+- **CloudFront**: Frontend SPA at stepora.app via OAC
+- **CloudWatch**: Log groups with 30-day retention
+- **Secrets Manager**: `stepora/backend-env` + `stepora/site-env`
+- See `AWS_INFRASTRUCTURE.md` for full details
 
 ---
 
@@ -840,10 +842,10 @@ docker compose exec web python manage.py seed_store
 - **10 DB-driven permission classes** — All feature access reads from `SubscriptionPlan` model fields (`has_ai`, `has_buddy`, `has_circles`, `has_circle_create`, `has_vision_board`, `has_league`, `has_store`, `has_social_feed`). Plans can be reconfigured via admin without code changes. `User.get_active_plan()` caches per-request for performance.
 
 ### Infrastructure Security
-- **UFW firewall** — Only ports 22 (SSH), 80 (HTTP/certbot), 443 (HTTPS) open
-- **Docker port binding** — All services bind to `127.0.0.1` (not internet-accessible)
-- **Separate-server ready** — CORS, CSRF, and cookies configured for frontend/backend on different servers
-- **Fail2ban** — SSH (3 retries/2h ban), nginx-http-auth (5 retries), nginx-botsearch (3 retries/24h ban)
+- **AWS VPC** — ECS tasks in private subnets, only ALB is public-facing
+- **Security Groups** — Layered: Internet → ALB → ECS → RDS/Redis (no direct DB access)
+- **Secrets Manager** — All credentials in AWS Secrets Manager (not in .env or code)
+- **VPS (preprod)** — UFW firewall (22/80/443), Docker bound to 127.0.0.1, Fail2ban
 - **Daily backups** — Automated PostgreSQL backups with 7-day retention (`scripts/backup.sh`, cron at 3 AM)
 
 ### Nginx Security (Docker internal)

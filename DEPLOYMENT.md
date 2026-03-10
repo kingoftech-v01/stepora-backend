@@ -485,11 +485,13 @@ npm run build
 
 | Variable | Purpose |
 |----------|---------|
-| `VITE_API_BASE` | API base URL (empty for same-origin proxy, or `https://dpapi.jhpetitfrere.com` for direct) |
+| `VITE_API_BASE` | API base URL (empty for same-origin proxy on VPS, or `https://api.stepora.app` for direct) |
 
 ### Same-Origin Proxy Setup
 
-External nginx on `dp.jhpetitfrere.com` proxies `/api/` and `/ws/` to the backend at `127.0.0.1:8085`. The frontend uses relative URLs (`VITE_API_BASE=`), so cookies are host-only on `dp.jhpetitfrere.com`.
+**VPS (preprod)**: External nginx on the VPS proxies `/api/` and `/ws/` to the backend at `127.0.0.1:8085`. The frontend uses relative URLs (`VITE_API_BASE=`), so cookies are host-only.
+
+**AWS (production)**: Frontend at `stepora.app` (CloudFront/S3) calls API at `api.stepora.app` (ALB/ECS) directly. No same-origin proxy needed.
 
 ### Android (Capacitor)
 

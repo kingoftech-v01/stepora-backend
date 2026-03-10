@@ -65,7 +65,7 @@ Items marked with [x] are already implemented. Items marked with [ ] need operat
 ```bash
 # Django
 DJANGO_SECRET_KEY=<generate with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())">
-ALLOWED_HOSTS=api.stepora.app,dpapi.jhpetitfrere.com
+ALLOWED_HOSTS=api.stepora.app
 DJANGO_SETTINGS_MODULE=config.settings.production
 
 # Database
@@ -80,8 +80,8 @@ DB_SSLMODE=require
 REDIS_URL=rediss://<redis-host>:6379/0
 
 # CORS & CSRF
-CORS_ORIGIN=https://app.stepora.app,https://stepora.jhpetitfrere.com
-CSRF_TRUSTED_ORIGINS=https://app.stepora.app,https://stepora.jhpetitfrere.com
+CORS_ORIGIN=https://stepora.app,https://app.stepora.app
+CSRF_TRUSTED_ORIGINS=https://stepora.app,https://app.stepora.app
 
 # Frontend
 FRONTEND_URL=https://app.stepora.app

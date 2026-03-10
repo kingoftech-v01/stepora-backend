@@ -290,7 +290,7 @@ stepora/
 
 ### Main Branches
 - `main` - Production-ready code
-- `develop` - Development branch (if using Git Flow)
+- `development` - Preprod branch (CI only, no deploy)
 
 ### Feature Branches
 - `feature/feature-name` - New features
