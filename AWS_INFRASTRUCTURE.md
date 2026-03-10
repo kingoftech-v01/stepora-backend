@@ -118,16 +118,19 @@ Both services run in **private subnets** with the ECS security group. They can o
 
 ### Backend Task Definition
 - **Image**: 987409845802.dkr.ecr.eu-west-3.amazonaws.com/stepora/backend:latest
-- **Port**: 8000 (gunicorn)
+- **Port**: 8000 (gunicorn, 2 workers + 2 threads)
 - **Health check**: `curl -f http://localhost:8000/health/liveness/`
-- **Environment**: DJANGO_SETTINGS_MODULE, ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, AWS_STORAGE_BUCKET_NAME
-- **Secrets** (from Secrets Manager): SECRET_KEY, FIELD_ENCRYPTION_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, REDIS_URL
+- **Health check grace period**: 120s (allows time for migrations on startup)
+- **Startup**: `entrypoint.sh` runs `migrate --noinput` then starts gunicorn
+- **Environment**: DJANGO_SETTINGS_MODULE, ALLOWED_HOSTS=*, CORS_ALLOWED_ORIGINS, AWS_STORAGE_BUCKET_NAME, AWS_S3_REGION_NAME
+- **Secrets** (from Secrets Manager `stepora/backend-env`): DJANGO_SECRET_KEY, FIELD_ENCRYPTION_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, REDIS_URL
 
 ### Site Vitrine Task Definition
 - **Image**: 987409845802.dkr.ecr.eu-west-3.amazonaws.com/stepora/site:latest
 - **Port**: 8000 (gunicorn)
 - **Health check**: `curl -f http://localhost:8000/`
-- **Environment**: DJANGO_SETTINGS_MODULE, ALLOWED_HOSTS, WAGTAILADMIN_BASE_URL, STEPORA_API_URL, STEPORA_APP_URL, DJANGO_SECRET_KEY
+- **Environment**: DJANGO_SETTINGS_MODULE, ALLOWED_HOSTS=*, WAGTAILADMIN_BASE_URL, STEPORA_API_URL, STEPORA_APP_URL
+- **Secrets** (from Secrets Manager `stepora/site-env`): DJANGO_SECRET_KEY
 
 ## ECR (Container Registry)
 
@@ -191,8 +194,12 @@ Both services run in **private subnets** with the ECS security group. They can o
 
 ## Secrets Manager
 
-- **Secret**: stepora/backend-env
-- **Keys**: SECRET_KEY, FIELD_ENCRYPTION_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, REDIS_URL, ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS
+- **Secret**: `stepora/backend-env`
+  - **Keys**: DJANGO_SECRET_KEY, FIELD_ENCRYPTION_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, REDIS_URL
+- **Secret**: `stepora/site-env`
+  - **Keys**: DJANGO_SECRET_KEY
+
+**Important**: No secrets are stored in `.env` files or committed code. All sensitive values are in AWS Secrets Manager (runtime) and GitHub Secrets (CI/CD).
 
 ## CloudWatch Logs
 
@@ -200,6 +207,24 @@ Both services run in **private subnets** with the ECS security group. They can o
 |-----------|-----------|--------|
 | /ecs/stepora-backend | 30 days | Backend ECS tasks |
 | /ecs/stepora-site | 30 days | Site vitrine ECS tasks |
+
+## Branch Architecture & CI/CD
+
+```
+feature/xxx ──PR──► development (preprod) ──merge──► main (production)
+                         │                              │
+                    CI only (lint/test)         CI + CD (deploy to AWS)
+                    VPS: *.jhpetitfrere.com     AWS: stepora.app / stepora.net / api.stepora.app
+```
+
+### Rules
+- **Feature branches** → merge into `development` via Pull Request
+- **development** → CI runs lint/tests, NO deployment. Preprod is the local VPS at `*.jhpetitfrere.com`
+- **main** → CI runs lint/tests, then CD builds Docker image, pushes to ECR, deploys to ECS
+- Both `main` and `development` must stay on the same latest commit (merge development→main to deploy)
+
+### Deploy Guards
+All deploy/build-and-push jobs have: `if: github.ref == 'refs/heads/main' && github.event_name == 'push'`
 
 ## CI/CD (GitHub Actions)
 
@@ -215,7 +240,7 @@ GitHub Secrets are configured on all 3 repos:
 
 ### Site Vitrine (`kingoftech-v01/stepora-site`)
 - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_ACCOUNT_ID
-- ECR_REPOSITORY (stepora/site), VPS_HOST (stepora.net)
+- ECR_REPOSITORY (stepora/site), ECS_CLUSTER (stepora), ECS_SERVICE (stepora-site)
 
 ## Cost Estimate (Free Tier)
 
