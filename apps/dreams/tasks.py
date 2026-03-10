@@ -640,7 +640,9 @@ def detect_obstacles(self, dream_id):
         ai_service = OpenAIService()
 
         # Generate obstacle predictions with AI
-        obstacles_data = ai_service.predict_obstacles_simple(dream.title, dream.description)
+        obstacles_data = ai_service.predict_obstacles_simple(
+            dream.title, dream.description
+        )
 
         created_count = 0
 

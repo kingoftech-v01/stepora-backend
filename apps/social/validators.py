@@ -5,7 +5,6 @@ Validates MIME types, file sizes, and magic bytes to prevent
 malicious file uploads.
 """
 
-
 from django.core.exceptions import ValidationError
 
 # ── Allowed MIME types ───────────────────────────────────────────
