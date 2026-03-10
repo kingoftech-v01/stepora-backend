@@ -56,8 +56,8 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --chown=appuser:appuser . .
 
 # Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
-# TODO: After beta, move this key to a secret manager and pass via --build-arg
-ARG FIELD_ENCRYPTION_KEY=Zrj7pzphXdlvUL9iWESmv7K2gp3_4owO1wag6rlTrys=
+# Pass via --build-arg or set in docker-compose build args
+ARG FIELD_ENCRYPTION_KEY
 ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
 RUN python manage.py collectstatic --noinput --clear
 

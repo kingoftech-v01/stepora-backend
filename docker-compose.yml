@@ -69,6 +69,7 @@ services:
       args:
         REQUIREMENTS_FILE: requirements/production.txt
         DJANGO_SETTINGS: config.settings.production
+        FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
     container_name: dreamplanner_web
     command: >
       sh -c "python manage.py migrate --noinput &&
@@ -132,6 +133,7 @@ services:
       args:
         REQUIREMENTS_FILE: requirements/production.txt
         DJANGO_SETTINGS: config.settings.production
+        FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
     container_name: dreamplanner_celery
     command: celery -A config worker --loglevel=info --concurrency=2
     volumes:
@@ -184,6 +186,7 @@ services:
       args:
         REQUIREMENTS_FILE: requirements/production.txt
         DJANGO_SETTINGS: config.settings.production
+        FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
     container_name: dreamplanner_celery_beat
     command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler --pidfile=/tmp/celerybeat.pid
     volumes:
@@ -225,6 +228,7 @@ services:
       args:
         REQUIREMENTS_FILE: requirements/production.txt
         DJANGO_SETTINGS: config.settings.production
+        FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
     container_name: dreamplanner_daphne
     command: daphne -b 0.0.0.0 -p 9000 config.asgi:application
     volumes:

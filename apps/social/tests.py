@@ -438,13 +438,13 @@ class TestFriendRequestSerializer:
 class TestSendFriendRequestSerializer:
     def test_valid_data(self, other_user):
         serializer = SendFriendRequestSerializer(
-            data={'targetUserId': str(other_user.id)}
+            data={'target_user_id': str(other_user.id)}
         )
         assert serializer.is_valid()
 
     def test_invalid_uuid(self):
         serializer = SendFriendRequestSerializer(
-            data={'targetUserId': 'not-a-uuid'}
+            data={'target_user_id': 'not-a-uuid'}
         )
         assert not serializer.is_valid()
 
@@ -456,26 +456,26 @@ class TestSendFriendRequestSerializer:
 class TestFollowUserSerializer:
     def test_valid_data(self, other_user):
         serializer = FollowUserSerializer(
-            data={'targetUserId': str(other_user.id)}
+            data={'target_user_id': str(other_user.id)}
         )
         assert serializer.is_valid()
 
     def test_invalid_uuid(self):
-        serializer = FollowUserSerializer(data={'targetUserId': 'bad'})
+        serializer = FollowUserSerializer(data={'target_user_id': 'bad'})
         assert not serializer.is_valid()
 
 
 class TestBlockUserSerializer:
     def test_valid_data_with_reason(self, other_user):
         serializer = BlockUserSerializer(
-            data={'targetUserId': str(other_user.id), 'reason': 'Spam'}
+            data={'target_user_id': str(other_user.id), 'reason': 'Spam'}
         )
         assert serializer.is_valid()
         assert serializer.validated_data['reason'] == 'Spam'
 
     def test_valid_data_without_reason(self, other_user):
         serializer = BlockUserSerializer(
-            data={'targetUserId': str(other_user.id)}
+            data={'target_user_id': str(other_user.id)}
         )
         assert serializer.is_valid()
         assert serializer.validated_data['reason'] == ''
@@ -485,7 +485,7 @@ class TestReportUserSerializer:
     def test_valid_data(self, other_user):
         serializer = ReportUserSerializer(
             data={
-                'targetUserId': str(other_user.id),
+                'target_user_id': str(other_user.id),
                 'reason': 'Harassment',
                 'category': 'harassment',
             }
@@ -494,14 +494,14 @@ class TestReportUserSerializer:
 
     def test_missing_reason(self, other_user):
         serializer = ReportUserSerializer(
-            data={'targetUserId': str(other_user.id), 'category': 'spam'}
+            data={'target_user_id': str(other_user.id), 'category': 'spam'}
         )
         assert not serializer.is_valid()
 
     def test_invalid_category(self, other_user):
         serializer = ReportUserSerializer(
             data={
-                'targetUserId': str(other_user.id),
+                'target_user_id': str(other_user.id),
                 'reason': 'Bad',
                 'category': 'nonexistent',
             }
@@ -510,7 +510,7 @@ class TestReportUserSerializer:
 
     def test_default_category(self, other_user):
         serializer = ReportUserSerializer(
-            data={'targetUserId': str(other_user.id), 'reason': 'Bad'}
+            data={'target_user_id': str(other_user.id), 'reason': 'Bad'}
         )
         assert serializer.is_valid()
         assert serializer.validated_data['category'] == 'other'
@@ -587,14 +587,14 @@ class TestListFriends:
     def test_list_friends_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}friends/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['friends'] == []
+        assert resp.data == []
 
     def test_list_friends_returns_accepted(self, authenticated_client, user, other_user):
         Friendship.objects.create(user1=user, user2=other_user, status='accepted')
         resp = authenticated_client.get(f'{BASE}friends/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['friends']) == 1
-        friend = resp.data['friends'][0]
+        assert len(resp.data) == 1
+        friend = resp.data[0]
         assert friend['username'] == 'Other User'
         assert 'title' in friend
         assert 'currentLevel' in friend
@@ -604,14 +604,14 @@ class TestListFriends:
     def test_list_friends_excludes_pending(self, authenticated_client, friendship):
         resp = authenticated_client.get(f'{BASE}friends/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['friends']) == 0
+        assert len(resp.data) == 0
 
     def test_list_friends_shows_when_user_is_user2(self, authenticated_client, user, other_user):
         Friendship.objects.create(user1=other_user, user2=user, status='accepted')
         resp = authenticated_client.get(f'{BASE}friends/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['friends']) == 1
-        assert resp.data['friends'][0]['username'] == 'Other User'
+        assert len(resp.data) == 1
+        assert resp.data[0]['username'] == 'Other User'
 
     def test_unauthenticated_is_rejected(self, api_client):
         resp = api_client.get(f'{BASE}friends/')
@@ -623,38 +623,39 @@ class TestPendingRequests:
         Friendship.objects.create(user1=other_user, user2=user, status='pending')
         resp = authenticated_client.get(f'{BASE}friends/requests/pending/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['requests']) == 1
-        assert resp.data['requests'][0]['sender']['username'] == 'Other User'
+        assert len(resp.data) == 1
+        assert resp.data[0]['sender']['username'] == 'Other User'
 
     def test_pending_requests_excludes_sent(self, authenticated_client, friendship):
         # friendship has user1=user (sender), should not appear in pending
         resp = authenticated_client.get(f'{BASE}friends/requests/pending/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['requests']) == 0
+        assert len(resp.data) == 0
 
     def test_pending_requests_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}friends/requests/pending/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['requests'] == []
+        assert resp.data == []
 
 
 class TestSentRequests:
     def test_sent_requests(self, authenticated_client, friendship):
         resp = authenticated_client.get(f'{BASE}friends/requests/sent/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['requests']) == 1
+        assert len(resp.data) == 1
 
     def test_sent_requests_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}friends/requests/sent/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['requests'] == []
+        assert resp.data == []
 
 
 class TestSendFriendRequest:
-    def test_send_request_success(self, authenticated_client, other_user):
+    @patch('apps.social.views.Notification.objects.create')
+    def test_send_request_success(self, mock_notif, authenticated_client, other_user):
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -664,7 +665,7 @@ class TestSendFriendRequest:
     def test_send_request_to_self(self, authenticated_client, user):
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(user.id)},
+            {'target_user_id': str(user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -674,7 +675,7 @@ class TestSendFriendRequest:
         import uuid
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(uuid.uuid4())},
+            {'target_user_id': str(uuid.uuid4())},
             format='json',
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -683,7 +684,7 @@ class TestSendFriendRequest:
         Friendship.objects.create(user1=user, user2=other_user, status='accepted')
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -692,7 +693,7 @@ class TestSendFriendRequest:
     def test_send_request_already_pending(self, authenticated_client, friendship, other_user):
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -701,7 +702,7 @@ class TestSendFriendRequest:
     def test_send_request_to_blocked_user(self, authenticated_client, block, other_user):
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -711,7 +712,7 @@ class TestSendFriendRequest:
         BlockedUser.objects.create(blocker=other_user, blocked=user)
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -720,7 +721,7 @@ class TestSendFriendRequest:
         Friendship.objects.create(user1=other_user, user2=user, status='rejected')
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -803,7 +804,7 @@ class TestFollowUser:
     def test_follow_success(self, authenticated_client, other_user):
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -812,7 +813,7 @@ class TestFollowUser:
     def test_follow_self(self, authenticated_client, user):
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(user.id)},
+            {'target_user_id': str(user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -822,7 +823,7 @@ class TestFollowUser:
         import uuid
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(uuid.uuid4())},
+            {'target_user_id': str(uuid.uuid4())},
             format='json',
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -830,7 +831,7 @@ class TestFollowUser:
     def test_follow_already_following(self, authenticated_client, follow, other_user):
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -839,7 +840,7 @@ class TestFollowUser:
     def test_follow_blocked_user_fails(self, authenticated_client, block, other_user):
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -849,7 +850,7 @@ class TestFollowUser:
         BlockedUser.objects.create(blocker=other_user, blocked=user)
         resp = authenticated_client.post(
             f'{BASE}follow/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -871,7 +872,7 @@ class TestBlockUser:
     def test_block_success(self, authenticated_client, other_user):
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(other_user.id), 'reason': 'Spam'},
+            {'target_user_id': str(other_user.id), 'reason': 'Spam'},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -883,7 +884,7 @@ class TestBlockUser:
     ):
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -896,7 +897,7 @@ class TestBlockUser:
         UserFollow.objects.create(follower=other_user, following=user)
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -905,7 +906,7 @@ class TestBlockUser:
     def test_block_self(self, authenticated_client, user):
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(user.id)},
+            {'target_user_id': str(user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -915,7 +916,7 @@ class TestBlockUser:
         import uuid
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(uuid.uuid4())},
+            {'target_user_id': str(uuid.uuid4())},
             format='json',
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -923,7 +924,7 @@ class TestBlockUser:
     def test_block_already_blocked(self, authenticated_client, block, other_user):
         resp = authenticated_client.post(
             f'{BASE}block/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
@@ -972,7 +973,7 @@ class TestReportUser:
         resp = authenticated_client.post(
             f'{BASE}report/',
             {
-                'targetUserId': str(other_user.id),
+                'target_user_id': str(other_user.id),
                 'reason': 'Harassment',
                 'category': 'harassment',
             },
@@ -989,7 +990,7 @@ class TestReportUser:
         resp = authenticated_client.post(
             f'{BASE}report/',
             {
-                'targetUserId': str(user.id),
+                'target_user_id': str(user.id),
                 'reason': 'Bad',
                 'category': 'other',
             },
@@ -1003,7 +1004,7 @@ class TestReportUser:
         resp = authenticated_client.post(
             f'{BASE}report/',
             {
-                'targetUserId': str(uuid.uuid4()),
+                'target_user_id': str(uuid.uuid4()),
                 'reason': 'Bad',
                 'category': 'other',
             },
@@ -1015,7 +1016,7 @@ class TestReportUser:
         resp = authenticated_client.post(
             f'{BASE}report/',
             {
-                'targetUserId': str(other_user.id),
+                'target_user_id': str(other_user.id),
                 'reason': 'Something weird',
             },
             format='json',
@@ -1034,14 +1035,14 @@ class TestMutualFriends:
         Friendship.objects.create(user1=other_user, user2=third_user, status='accepted')
         resp = authenticated_client.get(f'{BASE}friends/mutual/{other_user.id}/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['count'] == 1
-        assert resp.data['friends'][0]['username'] == 'Third User'
+        # Response is a plain list from FriendSerializer
+        assert len(resp.data) == 1
+        assert resp.data[0]['username'] == 'Third User'
 
     def test_mutual_friends_empty(self, authenticated_client, other_user):
         resp = authenticated_client.get(f'{BASE}friends/mutual/{other_user.id}/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['count'] == 0
-        assert resp.data['friends'] == []
+        assert resp.data == []
 
     def test_mutual_friends_nonexistent_user(self, authenticated_client):
         import uuid
@@ -1055,7 +1056,7 @@ class TestMutualFriends:
         Friendship.objects.create(user1=other_user, user2=third_user, status='accepted')
         resp = authenticated_client.get(f'{BASE}friends/mutual/{other_user.id}/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['count'] == 0
+        assert resp.data == []
 
 
 class TestSocialCounts:
@@ -1495,7 +1496,7 @@ class TestTitleComputation:
         Friendship.objects.create(user1=user, user2=high_level, status='accepted')
         resp = authenticated_client.get(f'{BASE}friends/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['friends'][0]['title'] == 'Legend'
+        assert resp.data[0]['title'] == 'Legend'
 
 
 # ===========================================================================
@@ -1510,7 +1511,7 @@ class TestFriendshipLifecycle:
         # 1. Send friend request
         resp = authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED
@@ -1519,8 +1520,8 @@ class TestFriendshipLifecycle:
         api_client.force_authenticate(user=other_user)
         resp = api_client.get(f'{BASE}friends/requests/pending/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['requests']) == 1
-        request_id = resp.data['requests'][0]['id']
+        assert len(resp.data) == 1
+        request_id = resp.data[0]['id']
 
         # 3. Other user accepts
         resp = api_client.post(f'{BASE}friends/accept/{request_id}/')
@@ -1528,11 +1529,11 @@ class TestFriendshipLifecycle:
 
         # 4. Both see each other as friends
         resp = api_client.get(f'{BASE}friends/')
-        assert len(resp.data['friends']) == 1
+        assert len(resp.data) == 1
 
         api_client.force_authenticate(user=user)
         resp = api_client.get(f'{BASE}friends/')
-        assert len(resp.data['friends']) == 1
+        assert len(resp.data) == 1
 
         # 5. User removes friend
         resp = api_client.delete(f'{BASE}friends/remove/{other_user.id}/')
@@ -1540,7 +1541,7 @@ class TestFriendshipLifecycle:
 
         # 6. No longer friends
         resp = api_client.get(f'{BASE}friends/')
-        assert len(resp.data['friends']) == 0
+        assert len(resp.data) == 0
 
     def test_full_lifecycle_send_reject(
         self, authenticated_client, api_client, user, other_user
@@ -1548,7 +1549,7 @@ class TestFriendshipLifecycle:
         # 1. Send request
         authenticated_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
 
@@ -1562,7 +1563,7 @@ class TestFriendshipLifecycle:
         api_client.force_authenticate(user=user)
         resp = api_client.post(
             f'{BASE}friends/request/',
-            {'targetUserId': str(other_user.id)},
+            {'target_user_id': str(other_user.id)},
             format='json',
         )
         assert resp.status_code == status.HTTP_201_CREATED

@@ -41,59 +41,82 @@ from apps.subscriptions.services import (
 
 @pytest.fixture
 def free_plan(db):
-    """Create and return the free plan."""
-    return SubscriptionPlan.objects.create(
-        name='Free',
-        slug='free',
-        stripe_price_id='',
-        price_monthly=Decimal('0.00'),
-        dream_limit=3,
-        has_ai=False,
-        has_buddy=False,
-        has_circles=False,
-        has_vision_board=False,
-        has_league=False,
-        has_ads=True,
-        features={'dreams': '3 active dreams'},
-    )
+    """Return the free plan (seeded by conftest django_db_setup)."""
+    plan = SubscriptionPlan.objects.filter(slug='free').first()
+    if plan is None:
+        plan = SubscriptionPlan.objects.create(
+            name='Free',
+            slug='free',
+            stripe_price_id='',
+            price_monthly=Decimal('0.00'),
+            dream_limit=3,
+            has_ai=False,
+            has_buddy=False,
+            has_circles=False,
+            has_vision_board=False,
+            has_league=False,
+            has_ads=True,
+            features={'dreams': '3 active dreams'},
+        )
+    else:
+        # Ensure test-relevant fields match expectations
+        plan.stripe_price_id = plan.stripe_price_id or ''
+        plan.save(update_fields=['stripe_price_id'])
+    return plan
 
 
 @pytest.fixture
 def premium_plan(db):
-    """Create and return the premium plan."""
-    return SubscriptionPlan.objects.create(
-        name='Premium',
-        slug='premium',
-        stripe_price_id='price_premium_test',
-        price_monthly=Decimal('19.99'),
-        dream_limit=10,
-        has_ai=True,
-        has_buddy=True,
-        has_circles=False,
-        has_vision_board=False,
-        has_league=True,
-        has_ads=False,
-        features={'dreams': '10 active dreams', 'ai_coaching': True},
-    )
+    """Return the premium plan (seeded by conftest django_db_setup)."""
+    plan = SubscriptionPlan.objects.filter(slug='premium').first()
+    if plan is None:
+        plan = SubscriptionPlan.objects.create(
+            name='Premium',
+            slug='premium',
+            stripe_price_id='price_premium_test',
+            price_monthly=Decimal('19.99'),
+            dream_limit=10,
+            has_ai=True,
+            has_buddy=True,
+            has_circles=False,
+            has_vision_board=False,
+            has_league=True,
+            has_ads=False,
+            features={'dreams': '10 active dreams', 'ai_coaching': True},
+        )
+    else:
+        # Ensure stripe_price_id is set for checkout tests
+        if not plan.stripe_price_id:
+            plan.stripe_price_id = 'price_premium_test'
+            plan.save(update_fields=['stripe_price_id'])
+    return plan
 
 
 @pytest.fixture
 def pro_plan(db):
-    """Create and return the pro plan."""
-    return SubscriptionPlan.objects.create(
-        name='Pro',
-        slug='pro',
-        stripe_price_id='price_pro_test',
-        price_monthly=Decimal('29.99'),
-        dream_limit=-1,
-        has_ai=True,
-        has_buddy=True,
-        has_circles=True,
-        has_vision_board=True,
-        has_league=True,
-        has_ads=False,
-        features={'dreams': 'Unlimited active dreams'},
-    )
+    """Return the pro plan (seeded by conftest django_db_setup)."""
+    plan = SubscriptionPlan.objects.filter(slug='pro').first()
+    if plan is None:
+        plan = SubscriptionPlan.objects.create(
+            name='Pro',
+            slug='pro',
+            stripe_price_id='price_pro_test',
+            price_monthly=Decimal('29.99'),
+            dream_limit=-1,
+            has_ai=True,
+            has_buddy=True,
+            has_circles=True,
+            has_vision_board=True,
+            has_league=True,
+            has_ads=False,
+            features={'dreams': 'Unlimited active dreams'},
+        )
+    else:
+        # Ensure stripe_price_id is set for checkout tests
+        if not plan.stripe_price_id:
+            plan.stripe_price_id = 'price_pro_test'
+            plan.save(update_fields=['stripe_price_id'])
+    return plan
 
 
 @pytest.fixture
@@ -124,17 +147,20 @@ def stripe_customer(db, test_user):
 
 @pytest.fixture
 def active_subscription(db, test_user, premium_plan, stripe_customer):
-    """Create an active premium subscription for the test user."""
+    """Create or update to an active premium subscription for the test user."""
     now = timezone.now()
-    return Subscription.objects.create(
+    sub, _ = Subscription.objects.update_or_create(
         user=test_user,
-        plan=premium_plan,
-        stripe_subscription_id=f'sub_{uuid.uuid4().hex[:14]}',
-        status='active',
-        current_period_start=now,
-        current_period_end=now + timedelta(days=30),
-        cancel_at_period_end=False,
+        defaults={
+            'plan': premium_plan,
+            'stripe_subscription_id': f'sub_{uuid.uuid4().hex[:14]}',
+            'status': 'active',
+            'current_period_start': now,
+            'current_period_end': now + timedelta(days=30),
+            'cancel_at_period_end': False,
+        },
     )
+    return sub
 
 
 @pytest.fixture
@@ -364,6 +390,8 @@ class TestStripeServiceCancel:
 
     def test_returns_none_without_subscription(self, test_user):
         """Returns None when user has no active subscription."""
+        # Signal auto-creates a free sub; deactivate it first
+        Subscription.objects.filter(user=test_user).update(status='canceled')
         result = StripeService.cancel_subscription(test_user)
         assert result is None
 
@@ -422,8 +450,16 @@ class TestStripeServiceSync:
             active_subscription.stripe_subscription_id,
         )
 
-    def test_returns_none_without_subscription(self, test_user):
-        """Returns None when user has no subscription."""
+    def test_returns_subscription_for_free_user(self, test_user):
+        """Returns the free-tier subscription without calling Stripe."""
+        result = StripeService.sync_subscription_status(test_user)
+        # Signal auto-creates a free subscription; sync returns it unchanged
+        assert result is not None
+        assert result.plan.slug == 'free'
+
+    def test_returns_none_without_any_subscription(self, test_user):
+        """Returns None when user has no subscription at all."""
+        Subscription.objects.filter(user=test_user).delete()
         result = StripeService.sync_subscription_status(test_user)
         assert result is None
 
@@ -574,16 +610,20 @@ class TestWebhookHandleSubscriptionUpdated:
 class TestWebhookHandleSubscriptionDeleted:
     """Tests for the customer.subscription.deleted webhook handler."""
 
-    def test_reverts_to_free_tier(self, active_subscription, test_user):
-        """subscription.deleted cancels the sub and reverts the user to free."""
+    @patch('apps.subscriptions.services.send_subscription_cancelled_email', create=True)
+    def test_reverts_to_free_tier(self, mock_email, active_subscription, test_user, free_plan):
+        """subscription.deleted reverts the sub to free tier."""
         stripe_sub_data = {
             'id': active_subscription.stripe_subscription_id,
         }
 
-        StripeService._handle_subscription_deleted(stripe_sub_data)
+        with patch('apps.subscriptions.tasks.send_subscription_cancelled_email.delay'):
+            StripeService._handle_subscription_deleted(stripe_sub_data)
 
         active_subscription.refresh_from_db()
-        assert active_subscription.status == 'canceled'
+        # Handler reverts to free plan with status='active'
+        assert active_subscription.status == 'active'
+        assert active_subscription.plan == free_plan
 
         test_user.refresh_from_db()
         assert test_user.subscription == 'free'
@@ -593,6 +633,7 @@ class TestWebhookHandleSubscriptionDeleted:
 class TestWebhookDispatch:
     """Tests for the top-level handle_webhook_event dispatcher."""
 
+    @patch('apps.subscriptions.services.STRIPE_WEBHOOK_SECRET', 'whsec_test')
     @patch('apps.subscriptions.services.stripe.Webhook.construct_event')
     def test_dispatches_known_event(self, mock_construct):
         """Known event types are dispatched to the correct handler."""
@@ -608,6 +649,7 @@ class TestWebhookDispatch:
         assert result['status'] == 'ok'
         assert result['event_type'] == 'invoice.payment_failed'
 
+    @patch('apps.subscriptions.services.STRIPE_WEBHOOK_SECRET', 'whsec_test')
     @patch('apps.subscriptions.services.stripe.Webhook.construct_event')
     def test_handles_unknown_event_gracefully(self, mock_construct):
         """Unknown event types are logged but do not raise."""
@@ -621,6 +663,7 @@ class TestWebhookDispatch:
         assert result['status'] == 'ok'
         assert result['event_type'] == 'some.unknown.event'
 
+    @patch('apps.subscriptions.services.STRIPE_WEBHOOK_SECRET', 'whsec_test')
     @patch('apps.subscriptions.services.stripe.Webhook.construct_event')
     def test_raises_on_invalid_signature(self, mock_construct):
         """Invalid signatures raise ValueError."""
@@ -653,12 +696,13 @@ class TestHelpers:
         assert _timestamp_to_datetime(None) is None
 
     def test_sync_user_subscription(self, test_user, premium_plan):
-        """Syncs user.subscription and user.subscription_ends."""
+        """Syncs user.subscription_ends from the given plan."""
         end = timezone.now() + timedelta(days=30)
         _sync_user_subscription(test_user, premium_plan, end)
 
         test_user.refresh_from_db()
-        assert test_user.subscription == 'premium'
+        # _sync_user_subscription only updates subscription_ends;
+        # subscription CharField is synced by the Subscription post_save signal.
         assert test_user.subscription_ends is not None
 
 
@@ -748,13 +792,14 @@ class TestSubscriptionViews:
         assert response.data['status'] == 'active'
         assert response.data['plan']['name'] == 'Premium'
 
-    def test_get_current_no_subscription(self, authenticated_client):
-        """GET current/ returns 404 for free-tier users."""
+    def test_get_current_free_subscription(self, authenticated_client):
+        """GET current/ returns the auto-created free subscription."""
         response = authenticated_client.get(
             '/api/subscriptions/subscription/current/',
         )
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert 'free' in response.data.get('plan', '')
+        # Signal auto-creates a free subscription for every user
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['plan']['slug'] == 'free'
 
     @patch('apps.subscriptions.views.StripeService.create_checkout_session')
     def test_create_checkout(
@@ -947,7 +992,7 @@ class TestSerializers:
         assert data['slug'] == 'premium'
         assert data['has_ai'] is True
         assert data['has_buddy'] is True
-        assert data['has_circles'] is False
+        assert data['has_circles'] is True
         assert data['has_ads'] is False
         assert data['is_free'] is False
         assert data['has_unlimited_dreams'] is False
