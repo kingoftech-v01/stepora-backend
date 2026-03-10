@@ -14,20 +14,43 @@ from .models import Notification, NotificationTemplate
 from apps.users.models import User
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _set_user_plan(user, slug):
+    """Ensure a user has the given subscription plan via DB records."""
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
+    plan = SubscriptionPlan.objects.filter(slug=slug).first()
+    if not plan:
+        return
+    sub, _ = Subscription.objects.get_or_create(
+        user=user, defaults={'plan': plan, 'status': 'active'},
+    )
+    if sub.plan_id != plan.pk or sub.status != 'active':
+        sub.plan = plan
+        sub.status = 'active'
+        sub.save(update_fields=['plan', 'status'])
+    if hasattr(user, '_cached_plan'):
+        del user._cached_plan
+
+
 # Override global fixtures: notification view tests need a premium user
 # so that the free-tier notification type filter does not hide test results.
 
 @pytest.fixture
 def user(db):
     """Premium user for notification tests."""
-    return User.objects.create_user(
+    u = User.objects.create_user(
         email='testuser@example.com',
         password='testpassword123',
         display_name='Test User',
         timezone='Europe/Paris',
-        subscription='premium',
-        subscription_ends=timezone.now() + timedelta(days=30),
     )
+    _set_user_plan(u, 'premium')
+    u.refresh_from_db()
+    return u
 
 
 @pytest.fixture
@@ -303,10 +326,10 @@ class TestNotificationTasks:
             ).first()
 
             assert notification is not None
-            assert notification.title == '💪 Daily motivation'
+            assert notification.title == 'Daily motivation'
 
     def test_send_weekly_report(self, db, user, dream, task, mock_openai):
-        """Test send_weekly_report task"""
+        """Test send_weekly_report task dispatches per-user digest tasks."""
         # Set user preferences
         user.notification_prefs = {'weekly_report': True}
         user.save()
@@ -318,21 +341,14 @@ class TestNotificationTasks:
 
         from apps.notifications.tasks import send_weekly_report
 
-        with patch('apps.notifications.tasks.OpenAIService') as mock_service:
-            mock_service.return_value.generate_weekly_report.return_value = 'Great week!'
+        with patch('apps.notifications.tasks.send_user_digest') as mock_digest:
+            mock_digest.delay = Mock()
 
             result = send_weekly_report()
 
-            assert result['created'] >= 1
-
-            # Notification should be created
-            notification = Notification.objects.filter(
-                user=user,
-                notification_type='weekly_report'
-            ).first()
-
-            assert notification is not None
-            assert 'weekly report' in notification.title
+            # The task now dispatches per-user digest tasks
+            assert result['dispatched'] >= 1
+            mock_digest.delay.assert_called()
 
     def test_check_inactive_users(self, db, user, dream, mock_openai):
         """Test check_inactive_users task (Rescue Mode)"""

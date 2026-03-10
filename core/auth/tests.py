@@ -30,6 +30,16 @@ from core.auth.tokens import (
 PASSWORD = 'SecureP@ss123!'
 
 
+@pytest.fixture(autouse=True)
+def _mock_auth_celery_tasks():
+    """Mock all Celery tasks called by auth views to avoid Redis dependency."""
+    with patch('core.auth.views.send_login_notification_email') as m1, \
+         patch('core.auth.views.send_password_changed_email') as m2:
+        m1.delay = Mock()
+        m2.delay = Mock()
+        yield
+
+
 @pytest.fixture
 def client():
     return APIClient()

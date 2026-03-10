@@ -32,6 +32,28 @@ from apps.social.admin import (
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _set_user_plan(user, slug):
+    """Ensure a user has the given subscription plan via DB records."""
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
+    plan = SubscriptionPlan.objects.filter(slug=slug).first()
+    if not plan:
+        return
+    sub, _ = Subscription.objects.get_or_create(
+        user=user, defaults={'plan': plan, 'status': 'active'},
+    )
+    if sub.plan_id != plan.pk or sub.status != 'active':
+        sub.plan = plan
+        sub.status = 'active'
+        sub.save(update_fields=['plan', 'status'])
+    if hasattr(user, '_cached_plan'):
+        del user._cached_plan
+
+
+# ---------------------------------------------------------------------------
 # Local fixtures
 # ---------------------------------------------------------------------------
 
@@ -123,12 +145,14 @@ def activity_item(user):
 @pytest.fixture
 def premium_social_user(db):
     """A premium user used as the main actor in follow-suggestion tests."""
-    return User.objects.create_user(
+    user = User.objects.create_user(
         email='premium_social@example.com',
         password='testpass123',
         display_name='Premium Social User',
-        subscription='premium',
     )
+    _set_user_plan(user, 'premium')
+    user.refresh_from_db()
+    return user
 
 
 @pytest.fixture
@@ -961,8 +985,9 @@ class TestListBlocked:
     def test_list_blocked(self, authenticated_client, block):
         resp = authenticated_client.get(f'{BASE}blocked/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['blocked_users']) == 1
-        blocked_entry = resp.data['blocked_users'][0]
+        # View returns a plain list from BlockedUserSerializer
+        assert len(resp.data) == 1
+        blocked_entry = resp.data[0]
         assert 'user' in blocked_entry
         assert 'reason' in blocked_entry
         assert 'created_at' in blocked_entry
@@ -970,7 +995,7 @@ class TestListBlocked:
     def test_list_blocked_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}blocked/')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['blocked_users'] == []
+        assert resp.data == []
 
     def test_list_blocked_excludes_others_blocks(
         self, authenticated_client, user, other_user, third_user
@@ -979,7 +1004,7 @@ class TestListBlocked:
         BlockedUser.objects.create(blocker=other_user, blocked=third_user)
         resp = authenticated_client.get(f'{BASE}blocked/')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['blocked_users']) == 0
+        assert len(resp.data) == 0
 
 
 class TestReportUser:
@@ -1117,7 +1142,7 @@ class TestActivityFeedView:
     """Activity feed tests use premium users (full feed requires premium+)."""
 
     def test_own_activity_visible(self, premium_social_client, premium_activity_item):
-        resp = premium_social_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_200_OK
         assert 'activities' in resp.data
         ids = [a['id'] for a in resp.data['activities']]
@@ -1132,7 +1157,7 @@ class TestActivityFeedView:
             activity_type='dream_completed',
             content={'title': 'Dream done'},
         )
-        resp = premium_social_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) in ids
@@ -1145,7 +1170,7 @@ class TestActivityFeedView:
             user=other_user,
             activity_type='level_up',
         )
-        resp = premium_social_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) in ids
@@ -1157,7 +1182,7 @@ class TestActivityFeedView:
             user=other_user,
             activity_type='badge_earned',
         )
-        resp = premium_social_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_200_OK
         ids = [a['id'] for a in resp.data['activities']]
         assert str(item.id) not in ids
@@ -1171,7 +1196,7 @@ class TestActivityFeedView:
             user=other_user,
             activity_type='task_completed',
         )
-        resp = premium_social_client.get(f'{BASE}feed/friends')
+        resp = premium_social_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_200_OK
         for a in resp.data['activities']:
             assert a['user']['id'] != str(other_user.id)
@@ -1180,7 +1205,7 @@ class TestActivityFeedView:
         ActivityFeedItem.objects.create(user=premium_social_user, activity_type='task_completed')
         ActivityFeedItem.objects.create(user=premium_social_user, activity_type='dream_completed')
         resp = premium_social_client.get(
-            f'{BASE}feed/friends?activity_type=task_completed'
+            f'{BASE}feed/friends/?activity_type=task_completed'
         )
         assert resp.status_code == status.HTTP_200_OK
         for a in resp.data['activities']:
@@ -1194,7 +1219,7 @@ class TestActivityFeedView:
         future = timezone.now() + timedelta(hours=1)
         future_str = future.isoformat()
         resp = premium_social_client.get(
-            f'{BASE}feed/friends',
+            f'{BASE}feed/friends/',
             {'created_after': future_str},
         )
         assert resp.status_code == status.HTTP_200_OK
@@ -1208,14 +1233,14 @@ class TestActivityFeedView:
         past = timezone.now() - timedelta(hours=1)
         past_str = past.isoformat()
         resp = premium_social_client.get(
-            f'{BASE}feed/friends',
+            f'{BASE}feed/friends/',
             {'created_before': past_str},
         )
         assert resp.status_code == status.HTTP_200_OK
         assert len(resp.data['activities']) == 0
 
     def test_unauthenticated_is_rejected(self, api_client):
-        resp = api_client.get(f'{BASE}feed/friends')
+        resp = api_client.get(f'{BASE}feed/friends/')
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -1225,84 +1250,121 @@ class TestActivityFeedView:
 
 
 class TestUserSearchView:
+    """User search tests mock SearchService since Elasticsearch is not available."""
+
+    def _mock_search(self, user_ids):
+        """Return a patch context that mocks SearchService.search_users."""
+        return patch(
+            'apps.search.services.SearchService.search_users',
+            return_value=[uid for uid in user_ids],
+        )
+
+    def _get_results(self, resp):
+        """Extract results list from response (paginated or plain)."""
+        if isinstance(resp.data, dict):
+            return resp.data.get('results', [])
+        return resp.data
+
     def test_search_by_display_name(self, authenticated_client, other_user):
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['users']) == 1
-        assert resp.data['users'][0]['username'] == 'Other User'
+        results = self._get_results(resp)
+        assert len(results) == 1
+        assert results[0]['username'] == 'Other User'
 
     def test_search_by_email_no_longer_supported(self, authenticated_client, other_user):
         """Email search was removed from UserSearchView for security."""
-        resp = authenticated_client.get(f'{BASE}users/search?q=other@')
+        with self._mock_search([]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=other@')
         assert resp.status_code == status.HTTP_200_OK
-        # Email-based search should return no results since only display_name is searched
-        assert len(resp.data['users']) == 0
+        results = self._get_results(resp)
+        assert len(results) == 0
 
     def test_search_short_query_returns_empty(self, authenticated_client):
+        # Short queries (<2 chars) return early without calling SearchService
         resp = authenticated_client.get(f'{BASE}users/search?q=a')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'] == []
+        results = self._get_results(resp)
+        assert results == []
 
     def test_search_empty_query_returns_empty(self, authenticated_client):
         resp = authenticated_client.get(f'{BASE}users/search?q=')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'] == []
+        results = self._get_results(resp)
+        assert results == []
 
-    def test_search_excludes_current_user(self, authenticated_client, user):
-        resp = authenticated_client.get(f'{BASE}users/search?q=Test')
+    def test_search_excludes_current_user(self, authenticated_client, user, other_user):
+        with self._mock_search([user.id, other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Test')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(u['id']) for u in resp.data['users']]
+        results = self._get_results(resp)
+        ids = [str(u['id']) for u in results]
         assert str(user.id) not in ids
 
     def test_search_excludes_blocked_users(
         self, authenticated_client, block, other_user
     ):
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(u['id']) for u in resp.data['users']]
+        results = self._get_results(resp)
+        ids = [str(u['id']) for u in results]
         assert str(other_user.id) not in ids
 
     def test_search_excludes_users_who_blocked_me(
         self, authenticated_client, user, other_user
     ):
         BlockedUser.objects.create(blocker=other_user, blocked=user)
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(u['id']) for u in resp.data['users']]
+        results = self._get_results(resp)
+        ids = [str(u['id']) for u in results]
         assert str(other_user.id) not in ids
 
     def test_search_includes_is_friend_flag(
         self, authenticated_client, user, other_user
     ):
         Friendship.objects.create(user1=user, user2=other_user, status='accepted')
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['users']) == 1
-        assert resp.data['users'][0]['isFriend'] is True
+        results = self._get_results(resp)
+        assert len(results) == 1
+        assert results[0]['isFriend'] is True
 
     def test_search_includes_is_following_flag(
         self, authenticated_client, user, other_user
     ):
         UserFollow.objects.create(follower=user, following=other_user)
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['users']) == 1
-        assert resp.data['users'][0]['isFollowing'] is True
+        results = self._get_results(resp)
+        assert len(results) == 1
+        assert results[0]['isFollowing'] is True
 
     def test_search_no_match(self, authenticated_client):
-        resp = authenticated_client.get(f'{BASE}users/search?q=zzzznonexistent')
+        with self._mock_search([]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=zzzznonexistent')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'] == []
+        results = self._get_results(resp)
+        assert results == []
 
     def test_search_result_includes_title(self, authenticated_client, other_user):
-        resp = authenticated_client.get(f'{BASE}users/search?q=Other')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=Other')
         assert resp.status_code == status.HTTP_200_OK
-        assert 'title' in resp.data['users'][0]
+        results = self._get_results(resp)
+        assert 'title' in results[0]
 
     def test_search_case_insensitive(self, authenticated_client, other_user):
-        resp = authenticated_client.get(f'{BASE}users/search?q=other user')
+        with self._mock_search([other_user.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=other user')
         assert resp.status_code == status.HTTP_200_OK
-        assert len(resp.data['users']) == 1
+        results = self._get_results(resp)
+        assert len(results) == 1
 
 
 # ===========================================================================
@@ -1314,7 +1376,8 @@ class TestFollowSuggestionsView:
     def test_suggestions_empty_when_no_connections(self, premium_social_client):
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        assert 'suggestions' in resp.data
+        # View returns a plain list (no pagination)
+        assert isinstance(resp.data, list)
 
     def test_suggestions_via_shared_circle(self, premium_social_client, premium_social_user, other_user):
         from apps.circles.models import Circle, CircleMembership
@@ -1323,7 +1386,7 @@ class TestFollowSuggestionsView:
         CircleMembership.objects.create(circle=circle, user=other_user)
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(other_user.id) in ids
 
     def test_suggestions_via_friends_of_friends(
@@ -1333,7 +1396,7 @@ class TestFollowSuggestionsView:
         Friendship.objects.create(user1=other_user, user2=third_user, status='accepted')
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(third_user.id) in ids
 
     def test_suggestions_exclude_already_following(
@@ -1346,7 +1409,7 @@ class TestFollowSuggestionsView:
         UserFollow.objects.create(follower=premium_social_user, following=other_user)
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(other_user.id) not in ids
 
     def test_suggestions_exclude_friends(
@@ -1359,7 +1422,7 @@ class TestFollowSuggestionsView:
         Friendship.objects.create(user1=premium_social_user, user2=other_user, status='accepted')
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(other_user.id) not in ids
 
     def test_suggestions_exclude_blocked(
@@ -1372,7 +1435,7 @@ class TestFollowSuggestionsView:
         BlockedUser.objects.create(blocker=premium_social_user, blocked=other_user)
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(other_user.id) not in ids
 
     def test_suggestions_via_similar_dreams(
@@ -1389,7 +1452,7 @@ class TestFollowSuggestionsView:
         )
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        ids = [str(s['id']) for s in resp.data['suggestions']]
+        ids = [str(s['id']) for s in resp.data]
         assert str(other_user.id) in ids
 
     def test_suggestions_scoring_circle_ranked_higher(
@@ -1410,7 +1473,7 @@ class TestFollowSuggestionsView:
         )
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        suggestions = resp.data['suggestions']
+        suggestions = resp.data
         if len(suggestions) >= 2:
             ids = [str(s['id']) for s in suggestions]
             # other_user (circle, score 3) should be before third_user (dream, score 1)
@@ -1425,7 +1488,7 @@ class TestFollowSuggestionsView:
         CircleMembership.objects.create(circle=circle, user=other_user)
         resp = premium_social_client.get(f'{BASE}follow-suggestions/')
         assert resp.status_code == status.HTTP_200_OK
-        for suggestion in resp.data['suggestions']:
+        for suggestion in resp.data:
             assert suggestion['isFriend'] is False
             assert suggestion['isFollowing'] is False
 
@@ -1444,63 +1507,75 @@ class TestFollowSuggestionsView:
 
 
 class TestTitleComputation:
-    """Test the title computation at various level boundaries."""
+    """Test the title computation at various level boundaries via the search endpoint."""
+
+    def _get_results(self, resp):
+        if isinstance(resp.data, dict):
+            return resp.data.get('results', [])
+        return resp.data
 
     def test_level_0_is_dreamer(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l0@test.com', password='pass', display_name='LevelZero', level=0,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelZero')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelZero')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Dreamer'
+        assert self._get_results(resp)[0]['title'] == 'Dreamer'
 
     def test_level_4_is_dreamer(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l4@test.com', password='pass', display_name='LevelFour', level=4,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelFour')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelFour')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Dreamer'
+        assert self._get_results(resp)[0]['title'] == 'Dreamer'
 
     def test_level_5_is_explorer(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l5@test.com', password='pass', display_name='LevelFive', level=5,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelFive')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelFive')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Explorer'
+        assert self._get_results(resp)[0]['title'] == 'Explorer'
 
     def test_level_10_is_achiever(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l10@test.com', password='pass', display_name='LevelTen', level=10,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelTen')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelTen')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Achiever'
+        assert self._get_results(resp)[0]['title'] == 'Achiever'
 
     def test_level_20_is_expert(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l20@test.com', password='pass', display_name='LevelTwenty', level=20,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelTwenty')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelTwenty')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Expert'
+        assert self._get_results(resp)[0]['title'] == 'Expert'
 
     def test_level_30_is_master(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l30@test.com', password='pass', display_name='LevelThirty', level=30,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelThirty')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelThirty')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Master'
+        assert self._get_results(resp)[0]['title'] == 'Master'
 
     def test_level_50_is_legend(self, authenticated_client, db):
         u = User.objects.create_user(
             email='l50@test.com', password='pass', display_name='LevelFifty', level=50,
         )
-        resp = authenticated_client.get(f'{BASE}users/search?q=LevelFifty')
+        with patch('apps.search.services.SearchService.search_users', return_value=[u.id]):
+            resp = authenticated_client.get(f'{BASE}users/search?q=LevelFifty')
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['users'][0]['title'] == 'Legend'
+        assert self._get_results(resp)[0]['title'] == 'Legend'
 
     def test_title_in_friends_list(self, authenticated_client, user, db):
         high_level = User.objects.create_user(

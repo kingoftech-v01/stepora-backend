@@ -12,20 +12,43 @@ from .admin import BuddyEncouragementAdmin
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _set_user_plan(user, slug):
+    """Ensure a user has the given subscription plan via DB records."""
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
+    plan = SubscriptionPlan.objects.filter(slug=slug).first()
+    if not plan:
+        return
+    sub, _ = Subscription.objects.get_or_create(
+        user=user, defaults={'plan': plan, 'status': 'active'},
+    )
+    if sub.plan_id != plan.pk or sub.status != 'active':
+        sub.plan = plan
+        sub.status = 'active'
+        sub.save(update_fields=['plan', 'status'])
+    if hasattr(user, '_cached_plan'):
+        del user._cached_plan
+
+
+# ---------------------------------------------------------------------------
 # Local fixtures (override global user to be premium for buddy access)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def user(db):
     """Premium user for buddy tests (buddies require premium+)."""
-    return User.objects.create_user(
+    u = User.objects.create_user(
         email='testuser@example.com',
         password='testpassword123',
         display_name='Test User',
         timezone='Europe/Paris',
-        subscription='premium',
-        subscription_ends=timezone.now() + timedelta(days=30),
     )
+    _set_user_plan(u, 'premium')
+    u.refresh_from_db()
+    return u
 
 
 @pytest.fixture
@@ -39,13 +62,14 @@ def authenticated_client(user):
 @pytest.fixture
 def other_user(db):
     """Create a second premium user for pairing tests."""
-    return User.objects.create_user(
+    u = User.objects.create_user(
         email='other@example.com',
         password='testpass123',
         display_name='Other User',
-        subscription='premium',
-        subscription_ends=timezone.now() + timedelta(days=30),
     )
+    _set_user_plan(u, 'premium')
+    u.refresh_from_db()
+    return u
 
 
 @pytest.fixture
@@ -107,22 +131,30 @@ def candidate_user(db):
 
 @pytest.fixture
 def user_gamification(db, user):
-    """Create a GamificationProfile for user fixture."""
-    return GamificationProfile.objects.create(
+    """Get or create a GamificationProfile for user fixture."""
+    profile, _ = GamificationProfile.objects.get_or_create(
         user=user,
-        health_xp=100,
-        career_xp=50,
+        defaults={'health_xp': 100, 'career_xp': 50},
     )
+    if not _:
+        profile.health_xp = 100
+        profile.career_xp = 50
+        profile.save(update_fields=['health_xp', 'career_xp'])
+    return profile
 
 
 @pytest.fixture
 def candidate_gamification(db, candidate_user):
-    """Create a GamificationProfile for the candidate user."""
-    return GamificationProfile.objects.create(
+    """Get or create a GamificationProfile for the candidate user."""
+    profile, _ = GamificationProfile.objects.get_or_create(
         user=candidate_user,
-        health_xp=80,
-        career_xp=0,
+        defaults={'health_xp': 80, 'career_xp': 0},
     )
+    if not _:
+        profile.health_xp = 80
+        profile.career_xp = 0
+        profile.save(update_fields=['health_xp', 'career_xp'])
+    return profile
 
 
 # ---------------------------------------------------------------------------
@@ -392,27 +424,28 @@ class TestBuddyPairAction:
     """Tests for POST /api/buddies/pair/."""
 
     def test_pair_success(self, authenticated_client, other_user, user):
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(other_user.id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(other_user.id)})
         assert response.status_code == status.HTTP_201_CREATED
         assert 'pairing_id' in response.data
         pairing = BuddyPairing.objects.get(id=response.data['pairing_id'])
         assert pairing.user1 == user
         assert pairing.user2 == other_user
-        assert pairing.status == 'active'
+        # Pairings start as pending until the partner accepts
+        assert pairing.status == 'pending'
 
     def test_pair_self_pairing(self, authenticated_client, user):
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(user.id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(user.id)})
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'cannot pair with yourself' in response.data['error']
 
     def test_pair_already_paired(self, authenticated_client, buddy_pairing, third_user):
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(third_user.id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(third_user.id)})
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'already have' in response.data['error']
 
     def test_pair_partner_not_found(self, authenticated_client):
         fake_id = uuid.uuid4()
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(fake_id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(fake_id)})
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'not found' in response.data['error']
 
@@ -420,13 +453,13 @@ class TestBuddyPairAction:
         BuddyPairing.objects.create(
             user1=other_user, user2=third_user, status='active',
         )
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(other_user.id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(other_user.id)})
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'already has' in response.data['error']
 
     def test_pair_calculates_compatibility(self, authenticated_client, other_user, user):
         """Verify compatibility is stored and is between 0 and 1."""
-        response = authenticated_client.post(f'{BASE_URL}pair/', {'partnerId': str(other_user.id)})
+        response = authenticated_client.post(f'{BASE_URL}pair/', {'partner_id': str(other_user.id)})
         assert response.status_code == status.HTTP_201_CREATED
         pairing = BuddyPairing.objects.get(id=response.data['pairing_id'])
         assert 0.0 <= pairing.compatibility_score <= 1.0

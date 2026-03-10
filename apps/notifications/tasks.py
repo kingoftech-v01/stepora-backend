@@ -201,7 +201,7 @@ def generate_daily_motivation(self):
         for user in users:
             try:
                 # Check AI background quota
-                allowed, _ = tracker.check_quota(user, 'ai_background')
+                allowed, _quota_info = tracker.check_quota(user, 'ai_background')
                 if not allowed:
                     logger.info(f"Skipping motivation for user {user.id}: background quota reached")
                     continue
@@ -493,7 +493,7 @@ def check_inactive_users(self):
         for user in inactive_users:
             try:
                 # Check AI background quota
-                allowed, _ = tracker.check_quota(user, 'ai_background')
+                allowed, _quota_info = tracker.check_quota(user, 'ai_background')
                 if not allowed:
                     logger.info(f"Skipping rescue for user {user.id}: background quota reached")
                     continue
@@ -615,7 +615,7 @@ def cleanup_old_notifications(self):
         threshold = timezone.now() - timedelta(days=30)
 
         # Delete old read notifications
-        deleted_count, _ = Notification.objects.filter(
+        deleted_count, _detail = Notification.objects.filter(
             read_at__lt=threshold,
             status='sent'
         ).delete()
