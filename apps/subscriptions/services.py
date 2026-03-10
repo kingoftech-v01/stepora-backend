@@ -275,7 +275,7 @@ class StripeService:
         subscription = Subscription.objects.filter(
             user=user,
             status__in=('active', 'trialing'),
-        ).first()
+        ).select_related('plan').first()
 
         if not subscription:
             logger.warning(
@@ -283,6 +283,34 @@ class StripeService:
                 user.email,
             )
             return None
+
+        # Admin-assigned subscription (no Stripe backing) — downgrade locally
+        if not subscription.stripe_subscription_id:
+            free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+            if not free_plan:
+                raise ValueError("Free plan not found in database.")
+
+            old_plan_name = subscription.plan.name
+            subscription.plan = free_plan
+            subscription.status = 'canceled'
+            subscription.cancel_at_period_end = False
+            subscription.canceled_at = timezone.now()
+            subscription.pending_plan = None
+            subscription.pending_plan_effective_date = None
+            subscription.stripe_schedule_id = ''
+            subscription.save(update_fields=[
+                'plan', 'status', 'cancel_at_period_end', 'canceled_at',
+                'pending_plan', 'pending_plan_effective_date',
+                'stripe_schedule_id', 'updated_at',
+            ])
+
+            _sync_user_subscription(user, free_plan, None)
+
+            logger.info(
+                "Locally cancelled admin-assigned subscription for user %s (was %s)",
+                user.email, old_plan_name,
+            )
+            return subscription
 
         try:
             stripe.Subscription.modify(
@@ -354,6 +382,30 @@ class StripeService:
             if cancelled is None:
                 raise ValueError("No active subscription to downgrade.")
             return {'action': 'downgrade_scheduled', 'subscription': cancelled}
+
+        # Admin-assigned subscription (no Stripe backing) — change locally
+        if not subscription.stripe_subscription_id:
+            current_tier = subscription.plan.tier_order
+            new_tier = new_plan.tier_order
+            action = 'upgraded' if new_tier > current_tier else 'downgrade_scheduled'
+
+            old_plan_name = subscription.plan.name
+            subscription.plan = new_plan
+            subscription.pending_plan = None
+            subscription.pending_plan_effective_date = None
+            subscription.stripe_schedule_id = ''
+            subscription.save(update_fields=[
+                'plan', 'pending_plan', 'pending_plan_effective_date',
+                'stripe_schedule_id', 'updated_at',
+            ])
+
+            _sync_user_subscription(user, new_plan, subscription.current_period_end)
+
+            logger.info(
+                "Locally changed admin-assigned subscription from %s to %s for user %s (action: %s)",
+                old_plan_name, new_plan.name, user.email, action,
+            )
+            return {'action': action, 'subscription': subscription}
 
         # Retrieve Stripe subscription to get item ID
         try:
@@ -545,6 +597,18 @@ class StripeService:
                 user.email,
             )
             return None
+
+        # Admin-assigned subscription — reactivate locally
+        if not subscription.stripe_subscription_id:
+            subscription.cancel_at_period_end = False
+            subscription.canceled_at = None
+            subscription.save(update_fields=['cancel_at_period_end', 'canceled_at', 'updated_at'])
+
+            logger.info(
+                "Locally reactivated admin-assigned subscription for user %s",
+                user.email,
+            )
+            return subscription
 
         try:
             stripe.Subscription.modify(
