@@ -161,6 +161,18 @@ app.conf.beat_schedule = {
         'schedule': crontab(day_of_week=0, hour=23, minute=0),
     },
 
+    # Rebalance league groups weekly on Monday at 3 AM
+    'rebalance-league-groups': {
+        'task': 'apps.leagues.tasks.rebalance_groups_task',
+        'schedule': crontab(day_of_week=1, hour=3, minute=0),
+    },
+
+    # Auto-activate pending seasons (hourly check)
+    'auto-activate-pending-seasons': {
+        'task': 'apps.leagues.tasks.auto_activate_pending_seasons',
+        'schedule': crontab(minute=0),  # Every hour at :00
+    },
+
     # === Social Tasks ===
 
     # Expire stories older than 24h (hourly)

@@ -150,6 +150,85 @@ class League(models.Model):
         return created
 
 
+class SeasonConfig(models.Model):
+    """
+    Singleton configuration model for season and group parameters.
+
+    Stores all admin-configurable settings for the auto-grouping system
+    including season duration, group sizing, and promotion/relegation
+    thresholds. Only one row should exist; use SeasonConfig.get() to
+    retrieve with caching.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    season_duration_days = models.PositiveIntegerField(
+        default=180,
+        help_text='Default duration in days for new seasons.',
+    )
+    group_target_size = models.PositiveIntegerField(
+        default=20,
+        help_text='Target number of members per group.',
+    )
+    group_max_size = models.PositiveIntegerField(
+        default=30,
+        help_text='Maximum number of members allowed per group.',
+    )
+    group_min_size = models.PositiveIntegerField(
+        default=5,
+        help_text='Minimum number of members to keep a group active.',
+    )
+    promotion_xp_threshold = models.PositiveIntegerField(
+        default=1000,
+        help_text='XP earned this season to be eligible for promotion.',
+    )
+    relegation_xp_threshold = models.PositiveIntegerField(
+        default=100,
+        help_text='XP below this threshold triggers relegation risk.',
+    )
+    auto_create_next_season = models.BooleanField(
+        default=True,
+        help_text='Automatically create the next season when one ends.',
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'season_config'
+        verbose_name = 'Season Config'
+        verbose_name_plural = 'Season Config'
+
+    def __str__(self):
+        return (
+            f"SeasonConfig (duration={self.season_duration_days}d, "
+            f"group={self.group_target_size}/{self.group_max_size})"
+        )
+
+    @classmethod
+    def get(cls):
+        """
+        Return the singleton SeasonConfig, creating it if needed.
+
+        Caches the result for 5 minutes to avoid repeated DB hits.
+        """
+        key = 'season_config_singleton'
+        config = cache.get(key)
+        if config is None:
+            config, _ = cls.objects.get_or_create(
+                pk=cls.objects.values_list('pk', flat=True).first() or uuid.uuid4()
+            )
+            cache.set(key, config, 300)
+        return config
+
+    def save(self, *args, **kwargs):
+        """Invalidate cache on save."""
+        super().save(*args, **kwargs)
+        cache.delete('season_config_singleton')
+
+
 class Season(models.Model):
     """
     Represents a competitive season with a defined time period.
@@ -158,6 +237,13 @@ class Season(models.Model):
     Only one season can be active at a time. When a season ends,
     rewards are calculated and distributed to eligible users.
     """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('active', 'Active'),
+        ('processing', 'Processing'),
+        ('ended', 'Ended'),
+    ]
 
     id = models.UUIDField(
         primary_key=True,
@@ -180,6 +266,18 @@ class Season(models.Model):
         db_index=True,
         help_text='Whether this season is currently active. Only one season should be active at a time.'
     )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True,
+        help_text='Lifecycle status of the season.',
+    )
+    duration_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Duration of the season in days (stored at creation time).',
+    )
     rewards = models.JSONField(
         default=list,
         blank=True,
@@ -197,11 +295,20 @@ class Season(models.Model):
         indexes = [
             models.Index(fields=['is_active'], name='idx_season_active'),
             models.Index(fields=['start_date', 'end_date'], name='idx_season_dates'),
+            models.Index(fields=['status'], name='idx_season_status'),
         ]
 
     def __str__(self):
-        status = "Active" if self.is_active else "Inactive"
-        return f"{self.name} ({status})"
+        label = self.get_status_display() if self.status else ("Active" if self.is_active else "Inactive")
+        return f"{self.name} ({label})"
+
+    def save(self, *args, **kwargs):
+        """Keep is_active in sync with status for backward compatibility."""
+        if self.status == 'active':
+            self.is_active = True
+        elif self.status in ('processing', 'ended'):
+            self.is_active = False
+        super().save(*args, **kwargs)
 
     @property
     def is_current(self):
@@ -221,6 +328,19 @@ class Season(models.Model):
             return 0
         delta = self.end_date - django_timezone.now()
         return max(0, delta.days)
+
+    @property
+    def seconds_remaining(self):
+        """Return the number of seconds remaining in this season."""
+        if self.has_ended:
+            return 0
+        delta = self.end_date - django_timezone.now()
+        return max(0, int(delta.total_seconds()))
+
+    @property
+    def ends_at(self):
+        """Alias for end_date, used by the serializer for clarity."""
+        return self.end_date
 
     @classmethod
     def get_active_season(cls):
@@ -422,6 +542,123 @@ class SeasonReward(models.Model):
             self.save(update_fields=['rewards_claimed', 'claimed_at'])
             return True
         return False
+
+
+class LeagueGroup(models.Model):
+    """
+    A competitive group within a league for a specific season.
+
+    Users are distributed into groups to create smaller, more
+    competitive leaderboards within each league tier. Groups are
+    sized according to SeasonConfig parameters.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    season = models.ForeignKey(
+        'Season',
+        on_delete=models.CASCADE,
+        related_name='groups',
+        help_text='The season this group belongs to.',
+    )
+    league = models.ForeignKey(
+        League,
+        on_delete=models.CASCADE,
+        related_name='groups',
+        help_text='The league tier this group is in.',
+    )
+    group_number = models.PositiveIntegerField(
+        help_text='Group number within this season+league (1-indexed).',
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text='Whether this group is active (False after season ends or rebalance empties it).',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'league_groups'
+        ordering = ['season', 'league', 'group_number']
+        verbose_name = 'League Group'
+        verbose_name_plural = 'League Groups'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['season', 'league', 'group_number'],
+                name='unique_league_group',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['season', 'league', 'is_active'],
+                name='idx_lg_season_league_active',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.league.name} Group #{self.group_number} ({self.season.name})"
+
+    @property
+    def member_count(self):
+        """Return the number of active members in this group."""
+        return self.memberships.count()
+
+
+class LeagueGroupMembership(models.Model):
+    """
+    Junction table linking a LeagueStanding to a LeagueGroup.
+
+    Each standing can belong to exactly one group (OneToOne).
+    Tracks when the user joined and any promotion history.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    group = models.ForeignKey(
+        LeagueGroup,
+        on_delete=models.CASCADE,
+        related_name='memberships',
+        help_text='The group this membership belongs to.',
+    )
+    standing = models.OneToOneField(
+        'LeagueStanding',
+        on_delete=models.CASCADE,
+        related_name='group_membership',
+        help_text='The league standing this membership is for.',
+    )
+    joined_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text='When the user was assigned to this group.',
+    )
+    promoted_from_group = models.ForeignKey(
+        LeagueGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promotions_out',
+        help_text='The group the user was promoted from, if any.',
+    )
+
+    class Meta:
+        db_table = 'league_group_memberships'
+        verbose_name = 'League Group Membership'
+        verbose_name_plural = 'League Group Memberships'
+        indexes = [
+            models.Index(
+                fields=['group'],
+                name='idx_lgm_group',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.standing} -> {self.group}"
 
 
 class RankSnapshot(models.Model):

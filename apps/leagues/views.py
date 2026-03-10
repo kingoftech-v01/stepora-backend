@@ -21,7 +21,10 @@ from drf_spectacular.utils import (
     OpenApiResponse,
 )
 
-from .models import League, LeagueStanding, Season, SeasonReward, LeagueSeason, SeasonParticipant
+from .models import (
+    League, LeagueStanding, Season, SeasonReward, LeagueSeason,
+    SeasonParticipant, LeagueGroup, LeagueGroupMembership,
+)
 from .serializers import (
     LeagueSerializer,
     LeagueStandingSerializer,
@@ -30,6 +33,7 @@ from .serializers import (
     LeaderboardEntrySerializer,
     LeagueSeasonSerializer,
     SeasonParticipantSerializer,
+    LeagueGroupSerializer,
 )
 from .services import LeagueService
 from core.permissions import CanUseLeague
@@ -365,6 +369,82 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
         data = LeagueService.get_nearby_ranks(request.user, count=count)
         return Response(data)
 
+    @extend_schema(
+        summary="Group leaderboard",
+        description=(
+            "Retrieve the leaderboard for a specific group. "
+            "Shows user scores and badges but never their dreams."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='group_id',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='UUID of the group. If omitted, returns the current user\'s group.',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Maximum number of entries (default 30, max 50).',
+                required=False,
+            ),
+        ],
+        responses={
+            200: LeaderboardEntrySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Group not found.'),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=False, methods=['get'], url_path='group')
+    def group_leaderboard(self, request):
+        """
+        Return the leaderboard for a specific group.
+
+        If group_id is provided, show that group's rankings.
+        Otherwise, show the current user's group rankings.
+        """
+        limit = min(int(request.query_params.get('limit', 30)), 50)
+        group_id = request.query_params.get('group_id')
+
+        if group_id:
+            try:
+                group = LeagueGroup.objects.select_related('league', 'season').get(id=group_id)
+            except LeagueGroup.DoesNotExist:
+                return Response(
+                    {'error': _('Group not found.')},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Find the current user's group
+            season = Season.get_active_season()
+            if not season:
+                return Response([], status=status.HTTP_200_OK)
+
+            try:
+                standing = LeagueStanding.objects.get(user=request.user, season=season)
+                membership = LeagueGroupMembership.objects.select_related(
+                    'group', 'group__league', 'group__season',
+                ).get(standing=standing)
+                group = membership.group
+            except (LeagueStanding.DoesNotExist, LeagueGroupMembership.DoesNotExist):
+                return Response(
+                    {'error': _('You are not assigned to a group yet.')},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        entries = LeagueService.get_group_leaderboard(group, limit=limit)
+
+        # Mark the current user's entry
+        for entry in entries:
+            if entry['user_id'] == request.user.id:
+                entry['is_current_user'] = True
+
+        serializer = LeaderboardEntrySerializer(entries, many=True)
+        return Response(serializer.data)
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -509,6 +589,147 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
 
         reward.claim()
         serializer = SeasonRewardSerializer(reward)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List league groups",
+        description=(
+            "List all active groups for the current season, "
+            "optionally filtered by league."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='league_id',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Filter groups by league UUID.',
+                required=False,
+            ),
+        ],
+        responses={
+            200: LeagueGroupSerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+        },
+        tags=["Leagues"],
+    ),
+    retrieve=extend_schema(
+        summary="Get group details",
+        description="Retrieve details for a specific league group.",
+        responses={
+            200: LeagueGroupSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Resource not found.'),
+        },
+        tags=["Leagues"],
+    ),
+)
+class LeagueGroupViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for league groups within the auto-grouping system.
+
+    Provides endpoints for:
+    - Listing groups (optionally filtered by league)
+    - Retrieving group details
+    - Getting the current user's group (mine)
+    - Group leaderboard
+    """
+
+    serializer_class = LeagueGroupSerializer
+    permission_classes = [IsAuthenticated, CanUseLeague]
+
+    def get_queryset(self):
+        """Return active groups for the current season."""
+        season = Season.get_active_season()
+        if not season:
+            return LeagueGroup.objects.none()
+
+        qs = (
+            LeagueGroup.objects
+            .filter(season=season, is_active=True)
+            .select_related('league', 'season')
+            .order_by('league__min_xp', 'group_number')
+        )
+
+        league_id = self.request.query_params.get('league_id')
+        if league_id:
+            qs = qs.filter(league_id=league_id)
+
+        return qs
+
+    @extend_schema(
+        summary="My group",
+        description="Retrieve the current user's group assignment for the active season.",
+        responses={
+            200: LeagueGroupSerializer,
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Not assigned to a group.'),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=False, methods=['get'], url_path='mine')
+    def mine(self, request):
+        """Return the current user's group for the active season."""
+        season = Season.get_active_season()
+        if not season:
+            return Response(
+                {'error': _('No active season.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            standing = LeagueStanding.objects.get(
+                user=request.user, season=season,
+            )
+            membership = LeagueGroupMembership.objects.select_related(
+                'group', 'group__league', 'group__season',
+            ).get(standing=standing)
+        except (LeagueStanding.DoesNotExist, LeagueGroupMembership.DoesNotExist):
+            return Response(
+                {'error': _('You are not assigned to a group yet.')},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = LeagueGroupSerializer(membership.group)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Group leaderboard",
+        description=(
+            "Retrieve the ranked leaderboard for a specific group. "
+            "Shows user scores and badges but never their dreams."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Maximum entries (default 30, max 50).',
+                required=False,
+            ),
+        ],
+        responses={
+            200: LeaderboardEntrySerializer(many=True),
+            403: OpenApiResponse(description='Subscription required.'),
+            404: OpenApiResponse(description='Group not found.'),
+        },
+        tags=["Leagues"],
+    )
+    @action(detail=True, methods=['get'], url_path='leaderboard')
+    def leaderboard(self, request, pk=None):
+        """Return the leaderboard for a specific group."""
+        group = self.get_object()
+        limit = min(int(request.query_params.get('limit', 30)), 50)
+
+        entries = LeagueService.get_group_leaderboard(group, limit=limit)
+
+        # Mark the current user's entry
+        for entry in entries:
+            if entry['user_id'] == request.user.id:
+                entry['is_current_user'] = True
+
+        serializer = LeaderboardEntrySerializer(entries, many=True)
         return Response(serializer.data)
 
 

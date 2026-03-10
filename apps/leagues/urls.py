@@ -15,6 +15,11 @@ Routes:
     /leaderboard/friends/ - Friends leaderboard
     /leaderboard/me/      - Current user's standing
     /leaderboard/nearby/  - Users ranked near the current user
+    /leaderboard/group/   - Group leaderboard
+    /groups/              - List league groups (active season)
+    /groups/<id>/         - Group detail
+    /groups/mine/         - Current user's group
+    /groups/<id>/leaderboard/ - Group leaderboard (detail)
     /league-seasons/            - List all league seasons
     /league-seasons/<id>/       - League season detail
     /league-seasons/current/    - Current active league season
@@ -26,12 +31,16 @@ Routes:
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import LeagueViewSet, LeaderboardViewSet, SeasonViewSet, LeagueSeasonViewSet
+from .views import (
+    LeagueViewSet, LeaderboardViewSet, SeasonViewSet,
+    LeagueSeasonViewSet, LeagueGroupViewSet,
+)
 
 router = DefaultRouter()
 router.register(r'leagues', LeagueViewSet, basename='league')
 router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
 router.register(r'seasons', SeasonViewSet, basename='season')
+router.register(r'groups', LeagueGroupViewSet, basename='league-group')
 router.register(r'league-seasons', LeagueSeasonViewSet, basename='league-season')
 
 urlpatterns = [

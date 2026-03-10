@@ -8,7 +8,10 @@ but NEVER expose user dreams (privacy by design).
 
 from rest_framework import serializers
 
-from .models import League, LeagueStanding, Season, SeasonReward, LeagueSeason, SeasonParticipant
+from .models import (
+    League, LeagueStanding, Season, SeasonReward, LeagueSeason,
+    SeasonParticipant, SeasonConfig, LeagueGroup, LeagueGroupMembership,
+)
 
 
 class LeagueSerializer(serializers.ModelSerializer):
@@ -54,7 +57,9 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
     Serializer for a user's league standing.
 
     Includes user public profile data (display_name, avatar_url, level, badges)
-    but explicitly excludes any dream-related information to protect privacy.
+    and auto-grouping fields (group_number, group_id, rank_in_group,
+    promotion_eligible, relegation_risk). Explicitly excludes any
+    dream-related information to protect privacy.
     """
 
     user_display_name = serializers.CharField(
@@ -94,6 +99,23 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
         help_text='URL to the league icon image.'
     )
 
+    # Auto-grouping fields
+    group_number = serializers.SerializerMethodField(
+        help_text='The group number the user is assigned to within their league.'
+    )
+    group_id = serializers.SerializerMethodField(
+        help_text='UUID of the group the user belongs to.'
+    )
+    rank_in_group = serializers.SerializerMethodField(
+        help_text='Rank within the user\'s group (1-indexed).'
+    )
+    promotion_eligible = serializers.SerializerMethodField(
+        help_text='Whether the user\'s XP meets the promotion threshold.'
+    )
+    relegation_risk = serializers.SerializerMethodField(
+        help_text='Whether the user\'s XP is below the relegation threshold.'
+    )
+
     class Meta:
         model = LeagueStanding
         fields = [
@@ -115,6 +137,11 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
             'dreams_completed',
             'streak_best',
             'updated_at',
+            'group_number',
+            'group_id',
+            'rank_in_group',
+            'promotion_eligible',
+            'relegation_risk',
         ]
         read_only_fields = fields
         extra_kwargs = {
@@ -143,18 +170,78 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
         except Exception:
             return []
 
+    def _get_membership(self, obj):
+        """Cache and return the group membership for this standing."""
+        if not hasattr(obj, '_cached_group_membership'):
+            try:
+                obj._cached_group_membership = obj.group_membership
+            except LeagueGroupMembership.DoesNotExist:
+                obj._cached_group_membership = None
+        return obj._cached_group_membership
+
+    def get_group_number(self, obj) -> int:
+        """Return the group number or None."""
+        membership = self._get_membership(obj)
+        return membership.group.group_number if membership else None
+
+    def get_group_id(self, obj) -> str:
+        """Return the group UUID or None."""
+        membership = self._get_membership(obj)
+        return str(membership.group_id) if membership else None
+
+    def get_rank_in_group(self, obj) -> int:
+        """
+        Compute the user's rank within their group.
+
+        Counts how many group members have more XP than this standing.
+        """
+        membership = self._get_membership(obj)
+        if not membership:
+            return None
+        rank = (
+            LeagueGroupMembership.objects
+            .filter(
+                group=membership.group,
+                standing__xp_earned_this_season__gt=obj.xp_earned_this_season,
+            )
+            .count()
+        ) + 1
+        return rank
+
+    def get_promotion_eligible(self, obj) -> bool:
+        """Check if the user's XP meets the promotion threshold."""
+        config = SeasonConfig.get()
+        return obj.xp_earned_this_season >= config.promotion_xp_threshold
+
+    def get_relegation_risk(self, obj) -> bool:
+        """Check if the user's XP is below the relegation threshold."""
+        config = SeasonConfig.get()
+        return obj.xp_earned_this_season < config.relegation_xp_threshold
+
 
 class SeasonSerializer(serializers.ModelSerializer):
     """
     Serializer for the Season model.
 
-    Includes computed properties for season status (remaining days,
-    whether it has ended, etc.).
+    Includes computed properties for season status (remaining days/seconds,
+    whether it has ended, etc.) and promotion/relegation thresholds from
+    the SeasonConfig singleton.
     """
 
     is_current = serializers.BooleanField(read_only=True, help_text='Whether this is the currently active season.')
     has_ended = serializers.BooleanField(read_only=True, help_text='Whether this season has ended.')
     days_remaining = serializers.IntegerField(read_only=True, help_text='Number of days left in the season.')
+    seconds_remaining = serializers.IntegerField(
+        read_only=True,
+        help_text='Number of seconds remaining for live countdown.',
+    )
+    ends_at = serializers.DateTimeField(
+        read_only=True,
+        help_text='Alias for end_date as a datetime for live countdown.',
+    )
+    thresholds = serializers.SerializerMethodField(
+        help_text='Promotion/relegation XP thresholds from SeasonConfig.',
+    )
 
     class Meta:
         model = Season
@@ -163,11 +250,16 @@ class SeasonSerializer(serializers.ModelSerializer):
             'name',
             'start_date',
             'end_date',
+            'ends_at',
             'is_active',
+            'status',
+            'duration_days',
             'rewards',
             'is_current',
             'has_ended',
             'days_remaining',
+            'seconds_remaining',
+            'thresholds',
             'created_at',
             'updated_at',
         ]
@@ -178,9 +270,19 @@ class SeasonSerializer(serializers.ModelSerializer):
             'start_date': {'help_text': 'Start date of the season.'},
             'end_date': {'help_text': 'End date of the season.'},
             'is_active': {'help_text': 'Whether this season is currently active.'},
+            'status': {'help_text': 'Lifecycle status (pending/active/processing/ended).'},
+            'duration_days': {'help_text': 'Duration of the season in days.'},
             'rewards': {'help_text': 'Rewards available for this season.'},
             'created_at': {'help_text': 'Timestamp when the season was created.'},
             'updated_at': {'help_text': 'Timestamp when the season was last updated.'},
+        }
+
+    def get_thresholds(self, obj) -> dict:
+        """Return promotion/relegation XP thresholds from SeasonConfig."""
+        config = SeasonConfig.get()
+        return {
+            'promotion_xp': config.promotion_xp_threshold,
+            'relegation_xp': config.relegation_xp_threshold,
         }
 
 
@@ -438,3 +540,82 @@ class SeasonParticipantSerializer(serializers.ModelSerializer):
         if obj.rank is None:
             return None
         return obj.season.get_reward_for_rank(obj.rank)
+
+
+class LeagueGroupSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the LeagueGroup model.
+
+    Includes league name/tier, member count, and season info.
+    """
+
+    league_name = serializers.CharField(
+        source='league.name',
+        read_only=True,
+        help_text='Display name of the league tier.',
+    )
+    league_tier = serializers.CharField(
+        source='league.tier',
+        read_only=True,
+        help_text='Tier key of the league.',
+    )
+    league_color_hex = serializers.CharField(
+        source='league.color_hex',
+        read_only=True,
+        help_text='Hex color code for the league.',
+    )
+    season_name = serializers.CharField(
+        source='season.name',
+        read_only=True,
+        help_text='Display name of the season.',
+    )
+    member_count = serializers.IntegerField(
+        read_only=True,
+        help_text='Number of members in this group.',
+    )
+
+    class Meta:
+        model = LeagueGroup
+        fields = [
+            'id',
+            'season',
+            'season_name',
+            'league',
+            'league_name',
+            'league_tier',
+            'league_color_hex',
+            'group_number',
+            'is_active',
+            'member_count',
+            'created_at',
+        ]
+        read_only_fields = fields
+        extra_kwargs = {
+            'id': {'help_text': 'Unique identifier for the group.'},
+            'season': {'help_text': 'Season this group belongs to.'},
+            'league': {'help_text': 'League tier this group is in.'},
+            'group_number': {'help_text': 'Group number within the league.'},
+            'is_active': {'help_text': 'Whether this group is currently active.'},
+            'created_at': {'help_text': 'When this group was created.'},
+        }
+
+
+class SeasonConfigSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer for the SeasonConfig singleton.
+
+    Exposes all configuration values for frontend display.
+    """
+
+    class Meta:
+        model = SeasonConfig
+        fields = [
+            'season_duration_days',
+            'group_target_size',
+            'group_max_size',
+            'group_min_size',
+            'promotion_xp_threshold',
+            'relegation_xp_threshold',
+            'auto_create_next_season',
+        ]
+        read_only_fields = fields
