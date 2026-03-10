@@ -156,6 +156,9 @@ class NotificationDeliveryService:
                     UserDevice.objects.filter(fcm_token=tokens[0]).update(is_active=False)
                     logger.info(f"Deactivated invalid FCM token for user {notification.user.id}")
                     return False
+                except Exception as e:
+                    logger.error(f"FCM send failed for notification {notification.id}: {e}", exc_info=True)
+                    return False
             else:
                 result = fcm.send_multicast(
                     tokens=tokens,
