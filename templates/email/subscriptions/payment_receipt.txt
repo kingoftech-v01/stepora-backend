@@ -7,5 +7,5 @@ Amount charged: {{ amount }}
 {% if invoice_url %}
 View your invoice: {{ invoice_url }}
 {% endif %}
-Questions? Contact support@stepora.com{% endblock %}
+Questions? Contact support@stepora.net{% endblock %}
 {% block cta_text %}{% if invoice_url %}View Invoice{% else %}Go to Stepora{% endif %}{% endblock %}
