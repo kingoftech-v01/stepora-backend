@@ -73,6 +73,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
           DB_NAME: stepora_test
           DB_USER: test
           DB_PASSWORD: test
