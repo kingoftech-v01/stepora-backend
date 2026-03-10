@@ -1173,7 +1173,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             valid_magic = (
                 header[:3] == b'\xff\xd8\xff' or  # JPEG
                 header[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
-                header[:4] == b'RIFF' and header[8:12] == b'WEBP' or  # WebP
+                (header[:4] == b'RIFF' and header[8:12] == b'WEBP') or  # WebP
                 header[:6] in (b'GIF87a', b'GIF89a')  # GIF
             )
             if not valid_magic:
@@ -1293,11 +1293,9 @@ class DreamViewSet(viewsets.ModelViewSet):
         header = image_file.read(12)
         image_file.seek(0)
         valid_magic = (
-            header[:3] == b'ÿØÿ' or  # JPEG
-            header[:8] == b'PNG
-
-' or  # PNG
-            header[:4] == b'RIFF' and header[8:12] == b'WEBP' or  # WebP
+            header[:2] == b'\xff\xd8' or  # JPEG
+            header[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
+            (header[:4] == b'RIFF' and header[8:12] == b'WEBP') or  # WebP
             header[:6] in (b'GIF87a', b'GIF89a')  # GIF
         )
         if not valid_magic:
