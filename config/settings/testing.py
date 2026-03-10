@@ -8,20 +8,21 @@ DEBUG = True
 
 # Use in-memory SQLite for faster tests
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
     }
 }
 
 # Password hashers (faster for tests)
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.MD5PasswordHasher',
+    "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
 # Celery eager execution (synchronous)
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+
 
 # Disable migrations in tests
 class DisableMigrations:
@@ -31,41 +32,44 @@ class DisableMigrations:
     def __getitem__(self, item):
         return None
 
+
 MIGRATION_MODULES = DisableMigrations()
 
 # Email backend (memory for tests)
-EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 # Logging (minimal in tests)
-LOGGING['root']['level'] = 'ERROR'
-LOGGING['loggers']['apps']['level'] = 'ERROR'
+LOGGING["root"]["level"] = "ERROR"
+LOGGING["loggers"]["apps"]["level"] = "ERROR"
 
 # Redis (use fake Redis for tests)
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
 
 # Disable Elasticsearch auto-sync in tests (no ES server available)
 ELASTICSEARCH_DSL_AUTOSYNC = False
-ELASTICSEARCH_DSL_SIGNAL_PROCESSOR = 'django_elasticsearch_dsl.signals.BaseSignalProcessor'
+ELASTICSEARCH_DSL_SIGNAL_PROCESSOR = (
+    "django_elasticsearch_dsl.signals.BaseSignalProcessor"
+)
 
 # Set very high throttle rates in tests to prevent rate limit interference
-REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
-    'anon': '10000/minute',
-    'user': '10000/minute',
-    'ai_chat': '10000/minute',
-    'ai_plan': '10000/minute',
-    'subscription': '10000/minute',
-    'store_purchase': '10000/minute',
-    'auth': '10000/minute',
-    'search': '10000/minute',
-    'export': '10000/minute',
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    "anon": "10000/minute",
+    "user": "10000/minute",
+    "ai_chat": "10000/minute",
+    "ai_plan": "10000/minute",
+    "subscription": "10000/minute",
+    "store_purchase": "10000/minute",
+    "auth": "10000/minute",
+    "search": "10000/minute",
+    "export": "10000/minute",
 }

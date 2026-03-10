@@ -18,18 +18,18 @@ Routes:
     /contracts/<id>/progress/ - View progress
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import BuddyViewSet, ContractViewSet
 
 router = DefaultRouter()
-router.register(r'', BuddyViewSet, basename='buddy')
+router.register(r"", BuddyViewSet, basename="buddy")
 
 contract_router = DefaultRouter()
-contract_router.register(r'', ContractViewSet, basename='contract')
+contract_router.register(r"", ContractViewSet, basename="contract")
 
 urlpatterns = [
-    path('contracts/', include(contract_router.urls)),
-    path('', include(router.urls)),
+    path("contracts/", include(contract_router.urls)),
+    path("", include(router.urls)),
 ]

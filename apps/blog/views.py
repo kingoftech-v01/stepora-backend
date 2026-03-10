@@ -10,18 +10,18 @@ import logging
 
 from django.db.models import F
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Category, Tag, Post
+from .models import Category, Post, Tag
 from .serializers import (
     CategorySerializer,
-    TagSerializer,
-    PostListSerializer,
     PostDetailSerializer,
+    PostListSerializer,
+    TagSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,46 +43,48 @@ class PostViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     permission_classes = [AllowAny]
-    lookup_field = 'slug'
+    lookup_field = "slug"
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    search_fields = ['title', 'excerpt']
-    ordering_fields = ['published_at', 'views_count', 'read_time_minutes']
-    ordering = ['-published_at']
+    search_fields = ["title", "excerpt"]
+    ordering_fields = ["published_at", "views_count", "read_time_minutes"]
+    ordering = ["-published_at"]
 
     def get_queryset(self):
-        qs = Post.published.select_related('category', 'author').prefetch_related('tags')
+        qs = Post.published.select_related("category", "author").prefetch_related(
+            "tags"
+        )
 
         # Filter by category slug
-        category_slug = self.request.query_params.get('category')
+        category_slug = self.request.query_params.get("category")
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
 
         # Filter by tag slug
-        tag_slug = self.request.query_params.get('tag')
+        tag_slug = self.request.query_params.get("tag")
         if tag_slug:
             qs = qs.filter(tags__slug=tag_slug)
 
         # Filter by featured
-        featured = self.request.query_params.get('featured')
+        featured = self.request.query_params.get("featured")
         if featured is not None:
-            qs = qs.filter(featured=featured.lower() in ('true', '1', 'yes'))
+            qs = qs.filter(featured=featured.lower() in ("true", "1", "yes"))
 
         return qs.distinct()
 
     def get_serializer_class(self):
-        if self.action == 'retrieve':
+        if self.action == "retrieve":
             return PostDetailSerializer
         return PostListSerializer
 
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a post by slug and increment views atomically."""
         instance = self.get_object()
-        Post.objects.filter(pk=instance.pk).update(views_count=F('views_count') + 1)
+        Post.objects.filter(pk=instance.pk).update(views_count=F("views_count") + 1)
         instance.refresh_from_db()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='search')
+    @action(detail=False, methods=["get"], url_path="search")
     def search(self, request):
         """
         Full-text search across published posts.
@@ -90,35 +92,35 @@ class PostViewSet(viewsets.ReadOnlyModelViewSet):
         Query param: ?q=<search term>
         Searches title, excerpt, and content fields.
         """
-        query = request.query_params.get('q', '').strip()
+        query = request.query_params.get("q", "").strip()
         if not query:
             return Response(
-                {'detail': 'Query parameter "q" is required.'},
+                {"detail": 'Query parameter "q" is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         qs = (
-            Post.published
-            .select_related('category', 'author')
-            .prefetch_related('tags')
-            .filter(
-                models_Q_title_excerpt_content(query)
-            )
+            Post.published.select_related("category", "author")
+            .prefetch_related("tags")
+            .filter(models_Q_title_excerpt_content(query))
             .distinct()
         )
 
         page = self.paginate_queryset(qs)
         if page is not None:
-            serializer = PostListSerializer(page, many=True, context={'request': request})
+            serializer = PostListSerializer(
+                page, many=True, context={"request": request}
+            )
             return self.get_paginated_response(serializer.data)
 
-        serializer = PostListSerializer(qs, many=True, context={'request': request})
+        serializer = PostListSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
 
 def models_Q_title_excerpt_content(query):
     """Build a Q filter for searching across title, excerpt, and content."""
     from django.db.models import Q
+
     return (
         Q(title__icontains=query)
         | Q(excerpt__icontains=query)

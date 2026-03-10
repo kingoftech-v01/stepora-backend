@@ -33,34 +33,36 @@ class BlockedUser(models.Model):
     blocker = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='blocked_users',
-        help_text='The user who performed the block.'
+        related_name="blocked_users",
+        help_text="The user who performed the block.",
     )
     blocked = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='blocked_by',
-        help_text='The user who was blocked.'
+        related_name="blocked_by",
+        help_text="The user who was blocked.",
     )
     reason = EncryptedTextField(
         blank=True,
-        default='',
-        help_text='Optional reason for blocking (encrypted at rest).'
+        default="",
+        help_text="Optional reason for blocking (encrypted at rest).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'blocked_users'
-        ordering = ['-created_at']
-        verbose_name = 'Blocked User'
-        verbose_name_plural = 'Blocked Users'
+        db_table = "blocked_users"
+        ordering = ["-created_at"]
+        verbose_name = "Blocked User"
+        verbose_name_plural = "Blocked Users"
         constraints = [
-            models.UniqueConstraint(fields=['blocker', 'blocked'], name='unique_blocker_blocked'),
+            models.UniqueConstraint(
+                fields=["blocker", "blocked"], name="unique_blocker_blocked"
+            ),
         ]
         indexes = [
-            models.Index(fields=['blocker'], name='idx_blocked_blocker'),
-            models.Index(fields=['blocked'], name='idx_blocked_blocked'),
+            models.Index(fields=["blocker"], name="idx_blocked_blocker"),
+            models.Index(fields=["blocked"], name="idx_blocked_blocked"),
         ]
 
     def __str__(self):
@@ -83,16 +85,16 @@ class ReportedUser(models.Model):
     """
 
     CATEGORY_CHOICES = [
-        ('spam', 'Spam'),
-        ('harassment', 'Harassment'),
-        ('inappropriate', 'Inappropriate Content'),
-        ('other', 'Other'),
+        ("spam", "Spam"),
+        ("harassment", "Harassment"),
+        ("inappropriate", "Inappropriate Content"),
+        ("other", "Other"),
     ]
 
     STATUS_CHOICES = [
-        ('pending', 'Pending Review'),
-        ('reviewed', 'Reviewed'),
-        ('dismissed', 'Dismissed'),
+        ("pending", "Pending Review"),
+        ("reviewed", "Reviewed"),
+        ("dismissed", "Dismissed"),
     ]
 
     id = models.UUIDField(
@@ -103,47 +105,45 @@ class ReportedUser(models.Model):
     reporter = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='reports_made',
-        help_text='The user who filed the report.'
+        related_name="reports_made",
+        help_text="The user who filed the report.",
     )
     reported = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='reports_received',
-        help_text='The user being reported.'
+        related_name="reports_received",
+        help_text="The user being reported.",
     )
     reason = EncryptedTextField(
-        help_text='Description of why the user is being reported (encrypted at rest).'
+        help_text="Description of why the user is being reported (encrypted at rest)."
     )
     category = models.CharField(
         max_length=20,
         choices=CATEGORY_CHOICES,
-        default='other',
-        help_text='Category of the report.'
+        default="other",
+        help_text="Category of the report.",
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default="pending",
         db_index=True,
     )
     admin_notes = models.TextField(
-        blank=True,
-        default='',
-        help_text='Internal notes from admin review.'
+        blank=True, default="", help_text="Internal notes from admin review."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'reported_users'
-        ordering = ['-created_at']
-        verbose_name = 'Reported User'
-        verbose_name_plural = 'Reported Users'
+        db_table = "reported_users"
+        ordering = ["-created_at"]
+        verbose_name = "Reported User"
+        verbose_name_plural = "Reported Users"
         indexes = [
-            models.Index(fields=['status'], name='idx_report_status'),
-            models.Index(fields=['-created_at'], name='idx_report_created'),
+            models.Index(fields=["status"], name="idx_report_status"),
+            models.Index(fields=["-created_at"], name="idx_report_created"),
         ]
 
     def __str__(self):
@@ -163,53 +163,59 @@ class Friendship(models.Model):
     """
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('accepted', 'Accepted'),
-        ('rejected', 'Rejected'),
+        ("pending", "Pending"),
+        ("accepted", "Accepted"),
+        ("rejected", "Rejected"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this friendship.'
+        help_text="Unique identifier for this friendship.",
     )
     user1 = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='friendships_sent',
-        help_text='The user who sent the friend request.'
+        related_name="friendships_sent",
+        help_text="The user who sent the friend request.",
     )
     user2 = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='friendships_received',
-        help_text='The user who received the friend request.'
+        related_name="friendships_received",
+        help_text="The user who received the friend request.",
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default="pending",
         db_index=True,
-        help_text='Current status of the friendship.'
+        help_text="Current status of the friendship.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'friendships'
-        ordering = ['-created_at']
-        verbose_name = 'Friendship'
-        verbose_name_plural = 'Friendships'
+        db_table = "friendships"
+        ordering = ["-created_at"]
+        verbose_name = "Friendship"
+        verbose_name_plural = "Friendships"
         constraints = [
-            models.UniqueConstraint(fields=['user1', 'user2'], name='unique_friendship_pair'),
+            models.UniqueConstraint(
+                fields=["user1", "user2"], name="unique_friendship_pair"
+            ),
         ]
         indexes = [
-            models.Index(fields=['user1', 'status'], name='idx_friendship_user1_status'),
-            models.Index(fields=['user2', 'status'], name='idx_friendship_user2_status'),
-            models.Index(fields=['status'], name='idx_friendship_status'),
-            models.Index(fields=['-created_at'], name='idx_friendship_created'),
+            models.Index(
+                fields=["user1", "status"], name="idx_friendship_user1_status"
+            ),
+            models.Index(
+                fields=["user2", "status"], name="idx_friendship_user2_status"
+            ),
+            models.Index(fields=["status"], name="idx_friendship_status"),
+            models.Index(fields=["-created_at"], name="idx_friendship_created"),
         ]
 
     def __str__(self):
@@ -231,34 +237,36 @@ class UserFollow(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this follow.'
+        help_text="Unique identifier for this follow.",
     )
     follower = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='following_set',
-        help_text='The user who is following.'
+        related_name="following_set",
+        help_text="The user who is following.",
     )
     following = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='followers_set',
-        help_text='The user being followed.'
+        related_name="followers_set",
+        help_text="The user being followed.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'user_follows'
-        ordering = ['-created_at']
-        verbose_name = 'User Follow'
-        verbose_name_plural = 'User Follows'
+        db_table = "user_follows"
+        ordering = ["-created_at"]
+        verbose_name = "User Follow"
+        verbose_name_plural = "User Follows"
         constraints = [
-            models.UniqueConstraint(fields=['follower', 'following'], name='unique_follower_following'),
+            models.UniqueConstraint(
+                fields=["follower", "following"], name="unique_follower_following"
+            ),
         ]
         indexes = [
-            models.Index(fields=['follower'], name='idx_follow_follower'),
-            models.Index(fields=['following'], name='idx_follow_following'),
+            models.Index(fields=["follower"], name="idx_follow_follower"),
+            models.Index(fields=["following"], name="idx_follow_following"),
         ]
 
     def __str__(self):
@@ -278,64 +286,62 @@ class ActivityFeedItem(models.Model):
     """
 
     ACTIVITY_TYPE_CHOICES = [
-        ('task_completed', 'Task Completed'),
-        ('dream_completed', 'Dream Completed'),
-        ('milestone_reached', 'Milestone Reached'),
-        ('buddy_matched', 'Buddy Matched'),
-        ('circle_joined', 'Circle Joined'),
-        ('level_up', 'Level Up'),
-        ('streak_milestone', 'Streak Milestone'),
-        ('badge_earned', 'Badge Earned'),
+        ("task_completed", "Task Completed"),
+        ("dream_completed", "Dream Completed"),
+        ("milestone_reached", "Milestone Reached"),
+        ("buddy_matched", "Buddy Matched"),
+        ("circle_joined", "Circle Joined"),
+        ("level_up", "Level Up"),
+        ("streak_milestone", "Streak Milestone"),
+        ("badge_earned", "Badge Earned"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this activity item.'
+        help_text="Unique identifier for this activity item.",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='activity_items',
-        help_text='The user who performed the activity.'
+        related_name="activity_items",
+        help_text="The user who performed the activity.",
     )
     activity_type = models.CharField(
         max_length=30,
         choices=ACTIVITY_TYPE_CHOICES,
         db_index=True,
-        help_text='The type of activity.'
+        help_text="The type of activity.",
     )
     content = models.JSONField(
         default=dict,
         blank=True,
-        help_text='Structured content data for the activity (e.g., task title, dream name).'
+        help_text="Structured content data for the activity (e.g., task title, dream name).",
     )
     related_user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='related_activity_items',
-        help_text='Another user related to this activity (e.g., buddy partner).'
+        related_name="related_activity_items",
+        help_text="Another user related to this activity (e.g., buddy partner).",
     )
     data = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text='Additional metadata for the activity.'
+        default=dict, blank=True, help_text="Additional metadata for the activity."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'activity_feed_items'
-        ordering = ['-created_at']
-        verbose_name = 'Activity Feed Item'
-        verbose_name_plural = 'Activity Feed Items'
+        db_table = "activity_feed_items"
+        ordering = ["-created_at"]
+        verbose_name = "Activity Feed Item"
+        verbose_name_plural = "Activity Feed Items"
         indexes = [
-            models.Index(fields=['user', '-created_at'], name='idx_activity_user_date'),
-            models.Index(fields=['activity_type'], name='idx_activity_type'),
-            models.Index(fields=['-created_at'], name='idx_activity_created'),
+            models.Index(fields=["user", "-created_at"], name="idx_activity_user_date"),
+            models.Index(fields=["activity_type"], name="idx_activity_type"),
+            models.Index(fields=["-created_at"], name="idx_activity_created"),
         ]
 
     def __str__(self):
@@ -354,29 +360,31 @@ class ActivityLike(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='activity_likes',
-        help_text='The user who liked the activity.',
+        related_name="activity_likes",
+        help_text="The user who liked the activity.",
     )
     activity = models.ForeignKey(
         ActivityFeedItem,
         on_delete=models.CASCADE,
-        related_name='likes',
-        help_text='The activity feed item that was liked.',
+        related_name="likes",
+        help_text="The activity feed item that was liked.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'activity_likes'
-        ordering = ['-created_at']
-        verbose_name = 'Activity Like'
-        verbose_name_plural = 'Activity Likes'
+        db_table = "activity_likes"
+        ordering = ["-created_at"]
+        verbose_name = "Activity Like"
+        verbose_name_plural = "Activity Likes"
         constraints = [
-            models.UniqueConstraint(fields=['user', 'activity'], name='unique_user_activity_like'),
+            models.UniqueConstraint(
+                fields=["user", "activity"], name="unique_user_activity_like"
+            ),
         ]
         indexes = [
-            models.Index(fields=['activity'], name='idx_activity_like_activity'),
-            models.Index(fields=['user'], name='idx_activity_like_user'),
+            models.Index(fields=["activity"], name="idx_activity_like_activity"),
+            models.Index(fields=["user"], name="idx_activity_like_user"),
         ]
 
     def __str__(self):
@@ -395,27 +403,29 @@ class ActivityComment(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='activity_comments',
-        help_text='The user who wrote the comment.',
+        related_name="activity_comments",
+        help_text="The user who wrote the comment.",
     )
     activity = models.ForeignKey(
         ActivityFeedItem,
         on_delete=models.CASCADE,
-        related_name='comments',
-        help_text='The activity feed item that was commented on.',
+        related_name="comments",
+        help_text="The activity feed item that was commented on.",
     )
-    text = EncryptedTextField(help_text='The comment text (encrypted at rest).')
+    text = EncryptedTextField(help_text="The comment text (encrypted at rest).")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'activity_comments'
-        ordering = ['created_at']
-        verbose_name = 'Activity Comment'
-        verbose_name_plural = 'Activity Comments'
+        db_table = "activity_comments"
+        ordering = ["created_at"]
+        verbose_name = "Activity Comment"
+        verbose_name_plural = "Activity Comments"
         indexes = [
-            models.Index(fields=['activity', 'created_at'], name='idx_activity_comment_activity'),
-            models.Index(fields=['user'], name='idx_activity_comment_user'),
+            models.Index(
+                fields=["activity", "created_at"], name="idx_activity_comment_activity"
+            ),
+            models.Index(fields=["user"], name="idx_activity_comment_user"),
         ]
 
     def __str__(self):
@@ -426,27 +436,31 @@ class RecentSearch(models.Model):
     """Stores recent search queries for a user."""
 
     SEARCH_TYPE_CHOICES = [
-        ('users', 'Users'),
-        ('dreams', 'Dreams'),
-        ('all', 'All'),
+        ("users", "Users"),
+        ("dreams", "Dreams"),
+        ("all", "All"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='recent_searches',
+        User,
+        on_delete=models.CASCADE,
+        related_name="recent_searches",
     )
     query = EncryptedCharField(max_length=200)
     search_type = models.CharField(
-        max_length=10, choices=SEARCH_TYPE_CHOICES, default='all',
+        max_length=10,
+        choices=SEARCH_TYPE_CHOICES,
+        default="all",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'recent_searches'
-        ordering = ['-created_at']
+        db_table = "recent_searches"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=["user", "-created_at"]),
         ]
 
     def __str__(self):
@@ -463,121 +477,145 @@ class DreamPost(models.Model):
     """
 
     VISIBILITY_CHOICES = [
-        ('public', 'Public'),
-        ('followers', 'Followers Only'),
-        ('private', 'Private'),
+        ("public", "Public"),
+        ("followers", "Followers Only"),
+        ("private", "Private"),
     ]
 
     MEDIA_TYPE_CHOICES = [
-        ('none', 'None'),
-        ('image', 'Image'),
-        ('video', 'Video'),
-        ('audio', 'Audio'),
+        ("none", "None"),
+        ("image", "Image"),
+        ("video", "Video"),
+        ("audio", "Audio"),
     ]
 
     POST_TYPE_CHOICES = [
-        ('regular', 'Regular'),
-        ('achievement', 'Achievement'),
-        ('milestone', 'Milestone'),
-        ('event', 'Event'),
+        ("regular", "Regular"),
+        ("achievement", "Achievement"),
+        ("milestone", "Milestone"),
+        ("event", "Event"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='dream_posts',
+        User,
+        on_delete=models.CASCADE,
+        related_name="dream_posts",
     )
     dream = models.ForeignKey(
-        'dreams.Dream',
+        "dreams.Dream",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='social_posts',
-        help_text='Optionally linked dream.',
+        related_name="social_posts",
+        help_text="Optionally linked dream.",
     )
     content = EncryptedTextField(
-        help_text='Caption/description (encrypted at rest).',
+        help_text="Caption/description (encrypted at rest).",
     )
 
     # Media
-    image_url = models.URLField(blank=True, help_text='Optional image URL.')
+    image_url = models.URLField(blank=True, help_text="Optional image URL.")
     image_file = models.ImageField(
-        upload_to='dream_posts/', blank=True,
-        help_text='Optional uploaded image.',
+        upload_to="dream_posts/",
+        blank=True,
+        help_text="Optional uploaded image.",
     )
     video_file = models.FileField(
-        upload_to='dream_posts/videos/', blank=True,
-        help_text='Optional uploaded video.',
+        upload_to="dream_posts/videos/",
+        blank=True,
+        help_text="Optional uploaded video.",
     )
     audio_file = models.FileField(
-        upload_to='dream_posts/audio/', blank=True,
-        help_text='Optional uploaded audio.',
+        upload_to="dream_posts/audio/",
+        blank=True,
+        help_text="Optional uploaded audio.",
     )
     media_type = models.CharField(
-        max_length=10, choices=MEDIA_TYPE_CHOICES, default='none',
-        help_text='Type of media attached to this post.',
+        max_length=10,
+        choices=MEDIA_TYPE_CHOICES,
+        default="none",
+        help_text="Type of media attached to this post.",
     )
 
     # Post type & linked achievements
     post_type = models.CharField(
-        max_length=20, choices=POST_TYPE_CHOICES, default='regular',
+        max_length=20,
+        choices=POST_TYPE_CHOICES,
+        default="regular",
         db_index=True,
-        help_text='Type of post (regular, achievement, milestone, event).',
+        help_text="Type of post (regular, achievement, milestone, event).",
     )
     linked_goal = models.ForeignKey(
-        'dreams.Goal',
+        "dreams.Goal",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='celebration_posts',
-        help_text='Goal that was completed (for achievement posts).',
+        null=True,
+        blank=True,
+        related_name="celebration_posts",
+        help_text="Goal that was completed (for achievement posts).",
     )
     linked_milestone = models.ForeignKey(
-        'dreams.DreamMilestone',
+        "dreams.DreamMilestone",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='celebration_posts',
-        help_text='Milestone that was reached (for milestone posts).',
+        null=True,
+        blank=True,
+        related_name="celebration_posts",
+        help_text="Milestone that was reached (for milestone posts).",
     )
     linked_task = models.ForeignKey(
-        'dreams.Task',
+        "dreams.Task",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='celebration_posts',
-        help_text='Task that was completed (for achievement posts).',
+        null=True,
+        blank=True,
+        related_name="celebration_posts",
+        help_text="Task that was completed (for achievement posts).",
     )
 
     gofundme_url = models.URLField(
-        blank=True, help_text='External fundraising link.',
+        blank=True,
+        help_text="External fundraising link.",
     )
     visibility = models.CharField(
-        max_length=15, choices=VISIBILITY_CHOICES, default='public', db_index=True,
+        max_length=15,
+        choices=VISIBILITY_CHOICES,
+        default="public",
+        db_index=True,
     )
-    likes_count = models.IntegerField(default=0, help_text='Denormalized like count.')
-    comments_count = models.IntegerField(default=0, help_text='Denormalized comment count.')
+    likes_count = models.IntegerField(default=0, help_text="Denormalized like count.")
+    comments_count = models.IntegerField(
+        default=0, help_text="Denormalized comment count."
+    )
     shares_count = models.IntegerField(default=0)
-    saves_count = models.IntegerField(default=0, help_text='Denormalized bookmark count.')
+    saves_count = models.IntegerField(
+        default=0, help_text="Denormalized bookmark count."
+    )
     is_pinned = models.BooleanField(default=False)
 
     # Bookmarks
     saved_by = models.ManyToManyField(
-        User, related_name='saved_posts', blank=True,
-        help_text='Users who bookmarked this post.',
+        User,
+        related_name="saved_posts",
+        blank=True,
+        help_text="Users who bookmarked this post.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'dream_posts'
-        ordering = ['-created_at']
+        db_table = "dream_posts"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', '-created_at'], name='idx_dreampost_user_date'),
-            models.Index(fields=['-created_at'], name='idx_dreampost_created'),
-            models.Index(fields=['visibility'], name='idx_dreampost_visibility'),
-            models.Index(fields=['post_type'], name='idx_dreampost_post_type'),
+            models.Index(
+                fields=["user", "-created_at"], name="idx_dreampost_user_date"
+            ),
+            models.Index(fields=["-created_at"], name="idx_dreampost_created"),
+            models.Index(fields=["visibility"], name="idx_dreampost_visibility"),
+            models.Index(fields=["post_type"], name="idx_dreampost_post_type"),
         ]
 
     def __str__(self):
-        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"{self.user.display_name or self.user.email}: {preview}"
 
 
@@ -593,25 +631,27 @@ class SavedPost(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='saved_dream_posts',
-        help_text='The user who saved the post.',
+        related_name="saved_dream_posts",
+        help_text="The user who saved the post.",
     )
     post = models.ForeignKey(
-        'DreamPost',
+        "DreamPost",
         on_delete=models.CASCADE,
-        related_name='saves',
-        help_text='The post that was saved.',
+        related_name="saves",
+        help_text="The post that was saved.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'saved_posts'
-        unique_together = ('user', 'post')
-        ordering = ['-created_at']
+        db_table = "saved_posts"
+        unique_together = ("user", "post")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', '-created_at'], name='idx_savedpost_user_date'),
-            models.Index(fields=['post'], name='idx_savedpost_post'),
+            models.Index(
+                fields=["user", "-created_at"], name="idx_savedpost_user_date"
+            ),
+            models.Index(fields=["post"], name="idx_savedpost_post"),
         ]
 
     def __str__(self):
@@ -623,20 +663,26 @@ class DreamPostLike(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(
-        DreamPost, on_delete=models.CASCADE, related_name='likes',
+        DreamPost,
+        on_delete=models.CASCADE,
+        related_name="likes",
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='dream_post_likes',
+        User,
+        on_delete=models.CASCADE,
+        related_name="dream_post_likes",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_post_likes'
+        db_table = "dream_post_likes"
         constraints = [
-            models.UniqueConstraint(fields=['post', 'user'], name='unique_dreampost_like'),
+            models.UniqueConstraint(
+                fields=["post", "user"], name="unique_dreampost_like"
+            ),
         ]
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} liked post {self.post_id}"
@@ -647,31 +693,40 @@ class DreamPostComment(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(
-        DreamPost, on_delete=models.CASCADE, related_name='comments',
+        DreamPost,
+        on_delete=models.CASCADE,
+        related_name="comments",
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='dream_post_comments',
+        User,
+        on_delete=models.CASCADE,
+        related_name="dream_post_comments",
     )
     content = EncryptedTextField(
-        help_text='Comment content (encrypted at rest).',
+        help_text="Comment content (encrypted at rest).",
     )
     parent = models.ForeignKey(
-        'self', null=True, blank=True, on_delete=models.CASCADE,
-        related_name='replies',
-        help_text='Parent comment for threaded replies.',
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="replies",
+        help_text="Parent comment for threaded replies.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_post_comments'
-        ordering = ['created_at']
+        db_table = "dream_post_comments"
+        ordering = ["created_at"]
         indexes = [
-            models.Index(fields=['post', '-created_at'], name='idx_dreamcomment_post_date'),
+            models.Index(
+                fields=["post", "-created_at"], name="idx_dreamcomment_post_date"
+            ),
         ]
 
     def __str__(self):
-        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"{self.user.display_name or self.user.email}: {preview}"
 
 
@@ -681,35 +736,43 @@ class DreamEncouragement(models.Model):
     """
 
     ENCOURAGEMENT_TYPES = [
-        ('you_got_this', 'You Got This!'),
-        ('keep_going', 'Keep Going!'),
-        ('inspired', 'You Inspire Me!'),
-        ('proud', 'So Proud!'),
-        ('fire', 'On Fire!'),
+        ("you_got_this", "You Got This!"),
+        ("keep_going", "Keep Going!"),
+        ("inspired", "You Inspire Me!"),
+        ("proud", "So Proud!"),
+        ("fire", "On Fire!"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(
-        DreamPost, on_delete=models.CASCADE, related_name='encouragements',
+        DreamPost,
+        on_delete=models.CASCADE,
+        related_name="encouragements",
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='given_encouragements',
+        User,
+        on_delete=models.CASCADE,
+        related_name="given_encouragements",
     )
     encouragement_type = models.CharField(
-        max_length=20, choices=ENCOURAGEMENT_TYPES,
+        max_length=20,
+        choices=ENCOURAGEMENT_TYPES,
     )
     message = EncryptedTextField(
-        blank=True, help_text='Optional personal message (encrypted at rest).',
+        blank=True,
+        help_text="Optional personal message (encrypted at rest).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_encouragements'
+        db_table = "dream_encouragements"
         constraints = [
-            models.UniqueConstraint(fields=['post', 'user'], name='unique_dreampost_encouragement'),
+            models.UniqueConstraint(
+                fields=["post", "user"], name="unique_dreampost_encouragement"
+            ),
         ]
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} encouraged: {self.encouragement_type}"
@@ -725,49 +788,49 @@ class PostReaction(models.Model):
     """
 
     REACTION_TYPES = [
-        ('like', 'Like'),
-        ('love', 'Love'),
-        ('fire', 'Fire'),
-        ('clap', 'Clap'),
-        ('wow', 'Wow'),
-        ('celebrate', 'Celebrate'),
+        ("like", "Like"),
+        ("love", "Love"),
+        ("fire", "Fire"),
+        ("clap", "Clap"),
+        ("wow", "Wow"),
+        ("celebrate", "Celebrate"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='dream_post_reactions',
-        help_text='The user who reacted.',
+        related_name="dream_post_reactions",
+        help_text="The user who reacted.",
     )
     post = models.ForeignKey(
-        'DreamPost',
+        "DreamPost",
         on_delete=models.CASCADE,
-        related_name='reactions',
-        help_text='The post that was reacted to.',
+        related_name="reactions",
+        help_text="The post that was reacted to.",
     )
     reaction_type = models.CharField(
         max_length=20,
         choices=REACTION_TYPES,
-        help_text='Type of reaction.',
+        help_text="Type of reaction.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_post_reactions'
-        ordering = ['-created_at']
-        verbose_name = 'Post Reaction'
-        verbose_name_plural = 'Post Reactions'
+        db_table = "dream_post_reactions"
+        ordering = ["-created_at"]
+        verbose_name = "Post Reaction"
+        verbose_name_plural = "Post Reactions"
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'post'],
-                name='unique_user_dreampost_reaction',
+                fields=["user", "post"],
+                name="unique_user_dreampost_reaction",
             ),
         ]
         indexes = [
-            models.Index(fields=['post', 'reaction_type'], name='idx_dreact_post_type'),
-            models.Index(fields=['user'], name='idx_dreact_user'),
+            models.Index(fields=["post", "reaction_type"], name="idx_dreact_post_type"),
+            models.Index(fields=["user"], name="idx_dreact_user"),
         ]
 
     def __str__(self):
@@ -784,48 +847,59 @@ class SocialEvent(models.Model):
     """
 
     EVENT_TYPE_CHOICES = [
-        ('virtual', 'Virtual'),
-        ('physical', 'Physical'),
-        ('challenge', 'Challenge'),
+        ("virtual", "Virtual"),
+        ("physical", "Physical"),
+        ("challenge", "Challenge"),
     ]
 
     STATUS_CHOICES = [
-        ('upcoming', 'Upcoming'),
-        ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
+        ("upcoming", "Upcoming"),
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     creator = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='created_events',
+        User,
+        on_delete=models.CASCADE,
+        related_name="created_events",
     )
     post = models.ForeignKey(
-        DreamPost, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='social_event',
-        help_text='The post announcing this event in the feed.',
+        DreamPost,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="social_event",
+        help_text="The post announcing this event in the feed.",
     )
 
     # Content
     title = EncryptedCharField(max_length=255)
-    description = EncryptedTextField(blank=True, default='')
+    description = EncryptedTextField(blank=True, default="")
     cover_image = models.ImageField(
-        upload_to='events/', blank=True,
-        help_text='Cover image for the event.',
+        upload_to="events/",
+        blank=True,
+        help_text="Cover image for the event.",
     )
 
     # Type
     event_type = models.CharField(
-        max_length=20, choices=EVENT_TYPE_CHOICES, db_index=True,
+        max_length=20,
+        choices=EVENT_TYPE_CHOICES,
+        db_index=True,
     )
 
     # Location / Link
     location = EncryptedCharField(
-        max_length=500, blank=True, default='',
-        help_text='Physical address (encrypted at rest).',
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Physical address (encrypted at rest).",
     )
     meeting_link = models.URLField(
-        blank=True, help_text='Virtual meeting URL.',
+        blank=True,
+        help_text="Virtual meeting URL.",
     )
 
     # Time
@@ -834,28 +908,34 @@ class SocialEvent(models.Model):
 
     # Challenge specific
     challenge_description = EncryptedTextField(
-        blank=True, default='',
-        help_text='Detailed challenge rules/description (encrypted at rest).',
+        blank=True,
+        default="",
+        help_text="Detailed challenge rules/description (encrypted at rest).",
     )
 
     # Capacity
     max_participants = models.IntegerField(
-        null=True, blank=True,
-        help_text='Maximum number of participants. Null = unlimited.',
+        null=True,
+        blank=True,
+        help_text="Maximum number of participants. Null = unlimited.",
     )
 
     # Linked dream
     dream = models.ForeignKey(
-        'dreams.Dream',
+        "dreams.Dream",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='social_events',
-        help_text='Optionally linked dream.',
+        null=True,
+        blank=True,
+        related_name="social_events",
+        help_text="Optionally linked dream.",
     )
 
     # Status
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default='upcoming', db_index=True,
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="upcoming",
+        db_index=True,
     )
 
     # Denormalized count
@@ -865,13 +945,17 @@ class SocialEvent(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'social_events'
-        ordering = ['-created_at']
+        db_table = "social_events"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['creator', '-created_at'], name='idx_sevent_creator_date'),
-            models.Index(fields=['event_type'], name='idx_sevent_type'),
-            models.Index(fields=['status', 'start_time'], name='idx_sevent_status_start'),
-            models.Index(fields=['-created_at'], name='idx_sevent_created'),
+            models.Index(
+                fields=["creator", "-created_at"], name="idx_sevent_creator_date"
+            ),
+            models.Index(fields=["event_type"], name="idx_sevent_type"),
+            models.Index(
+                fields=["status", "start_time"], name="idx_sevent_status_start"
+            ),
+            models.Index(fields=["-created_at"], name="idx_sevent_created"),
         ]
 
     def __str__(self):
@@ -887,34 +971,43 @@ class SocialEventRegistration(models.Model):
     """
 
     STATUS_CHOICES = [
-        ('registered', 'Registered'),
-        ('cancelled', 'Cancelled'),
+        ("registered", "Registered"),
+        ("cancelled", "Cancelled"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(
-        SocialEvent, on_delete=models.CASCADE, related_name='registrations',
+        SocialEvent,
+        on_delete=models.CASCADE,
+        related_name="registrations",
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='event_registrations',
+        User,
+        on_delete=models.CASCADE,
+        related_name="event_registrations",
     )
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default='registered',
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="registered",
     )
 
     registered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'social_event_registrations'
-        ordering = ['-registered_at']
+        db_table = "social_event_registrations"
+        ordering = ["-registered_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=['event', 'user'], name='unique_event_registration',
+                fields=["event", "user"],
+                name="unique_event_registration",
             ),
         ]
         indexes = [
-            models.Index(fields=['event', 'status'], name='idx_sevent_reg_event_status'),
-            models.Index(fields=['user'], name='idx_sevent_reg_user'),
+            models.Index(
+                fields=["event", "status"], name="idx_sevent_reg_event_status"
+            ),
+            models.Index(fields=["user"], name="idx_sevent_reg_user"),
         ]
 
     def __str__(self):
@@ -925,6 +1018,7 @@ class SocialEventRegistration(models.Model):
 #  Stories — ephemeral media posts (24h expiry)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class Story(models.Model):
     """
     A story is a short-lived media post (image or video) that expires after 24 hours.
@@ -932,26 +1026,32 @@ class Story(models.Model):
     """
 
     MEDIA_TYPE_CHOICES = [
-        ('image', 'Image'),
-        ('video', 'Video'),
+        ("image", "Image"),
+        ("video", "Video"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='stories',
+        User,
+        on_delete=models.CASCADE,
+        related_name="stories",
     )
 
     # Media — one per story (image or video)
     image_file = models.ImageField(
-        upload_to='stories/', blank=True,
-        help_text='Story image.',
+        upload_to="stories/",
+        blank=True,
+        help_text="Story image.",
     )
     video_file = models.FileField(
-        upload_to='stories/videos/', blank=True,
-        help_text='Story video.',
+        upload_to="stories/videos/",
+        blank=True,
+        help_text="Story video.",
     )
     media_type = models.CharField(
-        max_length=10, choices=MEDIA_TYPE_CHOICES, default='image',
+        max_length=10,
+        choices=MEDIA_TYPE_CHOICES,
+        default="image",
     )
 
     # Optional text overlay
@@ -960,15 +1060,15 @@ class Story(models.Model):
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(
-        help_text='Auto-set to created_at + 24 hours.',
+        help_text="Auto-set to created_at + 24 hours.",
     )
 
     # Denormalized view count
     view_count = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ['-created_at']
-        verbose_name_plural = 'stories'
+        ordering = ["-created_at"]
+        verbose_name_plural = "stories"
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
@@ -988,18 +1088,22 @@ class StoryView(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     story = models.ForeignKey(
-        Story, on_delete=models.CASCADE, related_name='views',
+        Story,
+        on_delete=models.CASCADE,
+        related_name="views",
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='story_views',
+        User,
+        on_delete=models.CASCADE,
+        related_name="story_views",
     )
     viewed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['story', 'user'],
-                name='unique_story_view',
+                fields=["story", "user"],
+                name="unique_story_view",
             ),
         ]
 

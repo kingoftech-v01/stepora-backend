@@ -2,17 +2,17 @@
 Tests for users app.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
-from datetime import timedelta
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
 from rest_framework.authtoken.models import Token
-from unittest.mock import Mock
-import uuid
+from rest_framework.test import APIRequestFactory
 
-from .models import User, GamificationProfile
 from core.authentication import ExpiringTokenAuthentication
+
+from .models import GamificationProfile, User
 
 
 class TestUserModel:
@@ -21,9 +21,9 @@ class TestUserModel:
     def test_create_user(self, db, user_data):
         """Test creating a user"""
         user = User.objects.create(**user_data)
-        assert user.email == user_data['email']
-        assert user.display_name == user_data['display_name']
-        assert user.subscription == 'free'
+        assert user.email == user_data["email"]
+        assert user.display_name == user_data["display_name"]
+        assert user.subscription == "free"
         assert user.xp == 0
         assert user.level == 1
         assert user.streak_days == 0
@@ -41,16 +41,19 @@ class TestUserModel:
     def test_is_premium_expired(self, user, db):
         """Test is_premium checks the Subscription table plan, not expiry."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
-        premium_plan = SubscriptionPlan.objects.filter(slug='premium').first()
+
+        premium_plan = SubscriptionPlan.objects.filter(slug="premium").first()
         if not premium_plan:
-            pytest.skip('No premium plan in DB')
-        sub, _ = Subscription.objects.get_or_create(user=user, defaults={'plan': premium_plan, 'status': 'active'})
+            pytest.skip("No premium plan in DB")
+        sub, _ = Subscription.objects.get_or_create(
+            user=user, defaults={"plan": premium_plan, "status": "active"}
+        )
         sub.plan = premium_plan
-        sub.status = 'active'
+        sub.status = "active"
         sub.save()
         user.subscription_ends = timezone.now() - timedelta(days=1)
-        user.save(update_fields=['subscription_ends'])
-        if hasattr(user, '_cached_plan'):
+        user.save(update_fields=["subscription_ends"])
+        if hasattr(user, "_cached_plan"):
             del user._cached_plan
         # is_premium() reads from Subscription table, not User.subscription
         assert user.is_premium()
@@ -139,7 +142,7 @@ class TestTokenAuthentication:
         authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
-        request = factory.get('/', HTTP_AUTHORIZATION=f'Token {token.key}')
+        request = factory.get("/", HTTP_AUTHORIZATION=f"Token {token.key}")
 
         authenticated_user, auth_token = authenticator.authenticate(request)
 
@@ -152,7 +155,7 @@ class TestTokenAuthentication:
         authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
-        request = factory.get('/', HTTP_AUTHORIZATION=f'Bearer {token.key}')
+        request = factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token.key}")
 
         authenticated_user, auth_token = authenticator.authenticate(request)
 
@@ -164,7 +167,7 @@ class TestTokenAuthentication:
         authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
-        request = factory.get('/')
+        request = factory.get("/")
 
         result = authenticator.authenticate(request)
         assert result is None
@@ -176,7 +179,7 @@ class TestTokenAuthentication:
         authenticator = ExpiringTokenAuthentication()
 
         factory = APIRequestFactory()
-        request = factory.get('/', HTTP_AUTHORIZATION='Token invalidtokenkey123')
+        request = factory.get("/", HTTP_AUTHORIZATION="Token invalidtokenkey123")
 
         with pytest.raises(AuthenticationFailed):
             authenticator.authenticate(request)
@@ -187,66 +190,65 @@ class TestUserViewSet:
 
     def test_get_current_user(self, authenticated_client, user):
         """Test GET /api/users/me/"""
-        response = authenticated_client.get('/api/users/me/')
+        response = authenticated_client.get("/api/users/me/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['email'] == user.email
-        assert response.data['display_name'] == user.display_name
+        assert response.data["email"] == user.email
+        assert response.data["display_name"] == user.display_name
 
     def test_update_current_user(self, authenticated_client, user):
         """Test PUT /api/users/update_profile/"""
-        data = {
-            'display_name': 'Updated Name',
-            'timezone': 'America/New_York'
-        }
+        data = {"display_name": "Updated Name", "timezone": "America/New_York"}
 
-        response = authenticated_client.put('/api/users/update_profile/', data, format='json')
+        response = authenticated_client.put(
+            "/api/users/update_profile/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['display_name'] == 'Updated Name'
+        assert response.data["display_name"] == "Updated Name"
 
         user.refresh_from_db()
-        assert user.display_name == 'Updated Name'
-        assert user.timezone == 'America/New_York'
+        assert user.display_name == "Updated Name"
+        assert user.timezone == "America/New_York"
 
     def test_partial_update_current_user(self, authenticated_client, user):
         """Test PATCH /api/users/update_profile/"""
-        data = {'display_name': 'Partial Update'}
+        data = {"display_name": "Partial Update"}
 
-        response = authenticated_client.patch('/api/users/update_profile/', data, format='json')
+        response = authenticated_client.patch(
+            "/api/users/update_profile/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
-        assert user.display_name == 'Partial Update'
+        assert user.display_name == "Partial Update"
 
     def test_update_preferences(self, authenticated_client, user):
         """Test PUT /api/users/notification-preferences/"""
-        data = {
-            'push_enabled': True,
-            'weekly_summary': True,
-            'dream_reminders': False
-        }
+        data = {"push_enabled": True, "weekly_summary": True, "dream_reminders": False}
 
-        response = authenticated_client.put('/api/users/notification-preferences/', data, format='json')
+        response = authenticated_client.put(
+            "/api/users/notification-preferences/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
 
         user.refresh_from_db()
-        assert user.notification_prefs['push_enabled'] is True
-        assert user.notification_prefs['weekly_summary'] is True
-        assert user.notification_prefs['dream_reminders'] is False
+        assert user.notification_prefs["push_enabled"] is True
+        assert user.notification_prefs["weekly_summary"] is True
+        assert user.notification_prefs["dream_reminders"] is False
 
     def test_get_stats(self, authenticated_client, user):
         """Test GET /api/users/stats/"""
-        response = authenticated_client.get('/api/users/stats/')
+        response = authenticated_client.get("/api/users/stats/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert 'total_dreams' in response.data
-        assert 'completed_dreams' in response.data
-        assert 'active_dreams' in response.data
-        assert 'total_tasks_completed' in response.data
+        assert "total_dreams" in response.data
+        assert "completed_dreams" in response.data
+        assert "active_dreams" in response.data
+        assert "total_tasks_completed" in response.data
 
     def test_unauthenticated_access(self, api_client):
         """Test unauthenticated access is denied"""
-        response = api_client.get('/api/users/me/')
+        response = api_client.get("/api/users/me/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

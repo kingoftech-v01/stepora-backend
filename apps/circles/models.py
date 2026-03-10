@@ -9,8 +9,8 @@ maximum of 20 members and can be public or private.
 import uuid
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone as django_timezone
 from encrypted_model_fields.fields import EncryptedTextField
 
@@ -27,69 +27,66 @@ class Circle(models.Model):
     """
 
     CATEGORY_CHOICES = [
-        ('career', 'Career'),
-        ('health', 'Health'),
-        ('fitness', 'Fitness'),
-        ('education', 'Education'),
-        ('finance', 'Finance'),
-        ('creativity', 'Creativity'),
-        ('relationships', 'Relationships'),
-        ('personal_growth', 'Personal Growth'),
-        ('hobbies', 'Hobbies'),
-        ('other', 'Other'),
+        ("career", "Career"),
+        ("health", "Health"),
+        ("fitness", "Fitness"),
+        ("education", "Education"),
+        ("finance", "Finance"),
+        ("creativity", "Creativity"),
+        ("relationships", "Relationships"),
+        ("personal_growth", "Personal Growth"),
+        ("hobbies", "Hobbies"),
+        ("other", "Other"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this circle.'
+        help_text="Unique identifier for this circle.",
     )
-    name = models.CharField(
-        max_length=200,
-        help_text='Display name of the circle.'
-    )
+    name = models.CharField(max_length=200, help_text="Display name of the circle.")
     description = EncryptedTextField(
         blank=True,
-        help_text='Description of the circle and its goals (encrypted at rest).'
+        help_text="Description of the circle and its goals (encrypted at rest).",
     )
     category = models.CharField(
         max_length=30,
         choices=CATEGORY_CHOICES,
-        default='other',
+        default="other",
         db_index=True,
-        help_text='Category of the circle for discovery.'
+        help_text="Category of the circle for discovery.",
     )
     is_public = models.BooleanField(
         default=True,
         db_index=True,
-        help_text='Whether the circle is publicly visible and joinable.'
+        help_text="Whether the circle is publicly visible and joinable.",
     )
     creator = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='created_circles',
-        help_text='The user who created this circle.'
+        related_name="created_circles",
+        help_text="The user who created this circle.",
     )
     max_members = models.IntegerField(
         default=20,
         validators=[MinValueValidator(2), MaxValueValidator(100)],
-        help_text='Maximum number of members allowed in this circle.'
+        help_text="Maximum number of members allowed in this circle.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'circles'
-        ordering = ['-created_at']
-        verbose_name = 'Circle'
-        verbose_name_plural = 'Circles'
+        db_table = "circles"
+        ordering = ["-created_at"]
+        verbose_name = "Circle"
+        verbose_name_plural = "Circles"
         indexes = [
-            models.Index(fields=['category'], name='idx_circle_category'),
-            models.Index(fields=['is_public'], name='idx_circle_public'),
-            models.Index(fields=['creator'], name='idx_circle_creator'),
-            models.Index(fields=['-created_at'], name='idx_circle_created'),
+            models.Index(fields=["category"], name="idx_circle_category"),
+            models.Index(fields=["is_public"], name="idx_circle_public"),
+            models.Index(fields=["creator"], name="idx_circle_creator"),
+            models.Index(fields=["-created_at"], name="idx_circle_created"),
         ]
 
     def __str__(self):
@@ -117,50 +114,52 @@ class CircleMembership(models.Model):
     """
 
     ROLE_CHOICES = [
-        ('member', 'Member'),
-        ('moderator', 'Moderator'),
-        ('admin', 'Admin'),
+        ("member", "Member"),
+        ("moderator", "Moderator"),
+        ("admin", "Admin"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this membership.'
+        help_text="Unique identifier for this membership.",
     )
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='memberships',
-        help_text='The circle this membership belongs to.'
+        related_name="memberships",
+        help_text="The circle this membership belongs to.",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_memberships',
-        help_text='The user who is a member of the circle.'
+        related_name="circle_memberships",
+        help_text="The user who is a member of the circle.",
     )
     role = models.CharField(
         max_length=20,
         choices=ROLE_CHOICES,
-        default='member',
-        help_text='The role of the user within the circle.'
+        default="member",
+        help_text="The role of the user within the circle.",
     )
 
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'circle_memberships'
-        ordering = ['-joined_at']
-        verbose_name = 'Circle Membership'
-        verbose_name_plural = 'Circle Memberships'
+        db_table = "circle_memberships"
+        ordering = ["-joined_at"]
+        verbose_name = "Circle Membership"
+        verbose_name_plural = "Circle Memberships"
         constraints = [
-            models.UniqueConstraint(fields=['circle', 'user'], name='unique_circle_membership'),
+            models.UniqueConstraint(
+                fields=["circle", "user"], name="unique_circle_membership"
+            ),
         ]
         indexes = [
-            models.Index(fields=['circle', 'user'], name='idx_membership_circle_user'),
-            models.Index(fields=['user'], name='idx_membership_user'),
-            models.Index(fields=['circle', 'role'], name='idx_membership_role'),
+            models.Index(fields=["circle", "user"], name="idx_membership_circle_user"),
+            models.Index(fields=["user"], name="idx_membership_user"),
+            models.Index(fields=["circle", "role"], name="idx_membership_role"),
         ]
 
     def __str__(self):
@@ -179,39 +178,39 @@ class CirclePost(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this post.'
+        help_text="Unique identifier for this post.",
     )
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='posts',
-        help_text='The circle this post belongs to.'
+        related_name="posts",
+        help_text="The circle this post belongs to.",
     )
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_posts',
-        help_text='The user who created this post.'
+        related_name="circle_posts",
+        help_text="The user who created this post.",
     )
     content = EncryptedTextField(
-        help_text='The text content of the post (encrypted at rest).'
+        help_text="The text content of the post (encrypted at rest)."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'circle_posts'
-        ordering = ['-created_at']
-        verbose_name = 'Circle Post'
-        verbose_name_plural = 'Circle Posts'
+        db_table = "circle_posts"
+        ordering = ["-created_at"]
+        verbose_name = "Circle Post"
+        verbose_name_plural = "Circle Posts"
         indexes = [
-            models.Index(fields=['circle', '-created_at'], name='idx_post_circle_date'),
-            models.Index(fields=['author'], name='idx_post_author'),
+            models.Index(fields=["circle", "-created_at"], name="idx_post_circle_date"),
+            models.Index(fields=["author"], name="idx_post_author"),
         ]
 
     def __str__(self):
-        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"{self.author.display_name or self.author.email}: {preview}"
 
 
@@ -226,89 +225,84 @@ class CircleChallenge(models.Model):
     """
 
     STATUS_CHOICES = [
-        ('upcoming', 'Upcoming'),
-        ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
+        ("upcoming", "Upcoming"),
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
     ]
 
     CHALLENGE_TYPE_CHOICES = [
-        ('tasks_completed', 'Complete Tasks'),
-        ('streak_days', 'Maintain Streak'),
-        ('focus_minutes', 'Focus Minutes'),
-        ('dreams_progress', 'Dream Progress'),
+        ("tasks_completed", "Complete Tasks"),
+        ("streak_days", "Maintain Streak"),
+        ("focus_minutes", "Focus Minutes"),
+        ("dreams_progress", "Dream Progress"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this challenge.'
+        help_text="Unique identifier for this challenge.",
     )
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='challenges',
-        help_text='The circle this challenge belongs to.'
+        related_name="challenges",
+        help_text="The circle this challenge belongs to.",
     )
     creator = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='created_challenges',
+        related_name="created_challenges",
         null=True,
         blank=True,
-        help_text='The user who created this challenge.'
+        help_text="The user who created this challenge.",
     )
-    title = models.CharField(
-        max_length=200,
-        help_text='Title of the challenge.'
-    )
+    title = models.CharField(max_length=200, help_text="Title of the challenge.")
     description = EncryptedTextField(
         blank=True,
-        help_text='Detailed description of the challenge (encrypted at rest).'
+        help_text="Detailed description of the challenge (encrypted at rest).",
     )
     challenge_type = models.CharField(
         max_length=50,
         choices=CHALLENGE_TYPE_CHOICES,
-        default='tasks_completed',
-        help_text='Type of challenge determining how progress is measured.'
+        default="tasks_completed",
+        help_text="Type of challenge determining how progress is measured.",
     )
     target_value = models.PositiveIntegerField(
         default=0,
-        help_text='Target value participants must reach to complete the challenge.'
+        help_text="Target value participants must reach to complete the challenge.",
     )
-    start_date = models.DateTimeField(
-        help_text='When this challenge starts.'
-    )
-    end_date = models.DateTimeField(
-        help_text='When this challenge ends.'
-    )
+    start_date = models.DateTimeField(help_text="When this challenge starts.")
+    end_date = models.DateTimeField(help_text="When this challenge ends.")
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='upcoming',
+        default="upcoming",
         db_index=True,
-        help_text='Current status of the challenge.'
+        help_text="Current status of the challenge.",
     )
     participants = models.ManyToManyField(
         User,
-        related_name='circle_challenges',
+        related_name="circle_challenges",
         blank=True,
-        help_text='Users who have joined this challenge.'
+        help_text="Users who have joined this challenge.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'circle_challenges'
-        ordering = ['-start_date']
-        verbose_name = 'Circle Challenge'
-        verbose_name_plural = 'Circle Challenges'
+        db_table = "circle_challenges"
+        ordering = ["-start_date"]
+        verbose_name = "Circle Challenge"
+        verbose_name_plural = "Circle Challenges"
         indexes = [
-            models.Index(fields=['circle', 'status'], name='idx_challenge_circle_status'),
-            models.Index(fields=['status'], name='idx_challenge_status'),
-            models.Index(fields=['start_date', 'end_date'], name='idx_challenge_dates'),
+            models.Index(
+                fields=["circle", "status"], name="idx_challenge_circle_status"
+            ),
+            models.Index(fields=["status"], name="idx_challenge_status"),
+            models.Index(fields=["start_date", "end_date"], name="idx_challenge_dates"),
         ]
 
     def __str__(self):
@@ -318,7 +312,7 @@ class CircleChallenge(models.Model):
     def is_active(self):
         """Check if the challenge is currently active."""
         now = django_timezone.now()
-        return self.start_date <= now <= self.end_date and self.status == 'active'
+        return self.start_date <= now <= self.end_date and self.status == "active"
 
     @property
     def participant_count(self):
@@ -328,7 +322,9 @@ class CircleChallenge(models.Model):
     @property
     def challenge_type_label(self):
         """Return the human-readable label for the challenge type."""
-        return dict(self.CHALLENGE_TYPE_CHOICES).get(self.challenge_type, self.challenge_type)
+        return dict(self.CHALLENGE_TYPE_CHOICES).get(
+            self.challenge_type, self.challenge_type
+        )
 
 
 class PostReaction(models.Model):
@@ -340,10 +336,10 @@ class PostReaction(models.Model):
     """
 
     REACTION_CHOICES = [
-        ('thumbs_up', 'Thumbs Up'),
-        ('fire', 'Fire'),
-        ('clap', 'Clap'),
-        ('heart', 'Heart'),
+        ("thumbs_up", "Thumbs Up"),
+        ("fire", "Fire"),
+        ("clap", "Clap"),
+        ("heart", "Heart"),
     ]
 
     id = models.UUIDField(
@@ -354,33 +350,35 @@ class PostReaction(models.Model):
     post = models.ForeignKey(
         CirclePost,
         on_delete=models.CASCADE,
-        related_name='reactions',
-        help_text='The post this reaction is on.'
+        related_name="reactions",
+        help_text="The post this reaction is on.",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='post_reactions',
-        help_text='The user who reacted.'
+        related_name="post_reactions",
+        help_text="The user who reacted.",
     )
     reaction_type = models.CharField(
-        max_length=20,
-        choices=REACTION_CHOICES,
-        help_text='Type of reaction.'
+        max_length=20, choices=REACTION_CHOICES, help_text="Type of reaction."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'post_reactions'
-        ordering = ['-created_at']
-        verbose_name = 'Post Reaction'
-        verbose_name_plural = 'Post Reactions'
+        db_table = "post_reactions"
+        ordering = ["-created_at"]
+        verbose_name = "Post Reaction"
+        verbose_name_plural = "Post Reactions"
         constraints = [
-            models.UniqueConstraint(fields=['post', 'user'], name='unique_post_reaction'),
+            models.UniqueConstraint(
+                fields=["post", "user"], name="unique_post_reaction"
+            ),
         ]
         indexes = [
-            models.Index(fields=['post', 'reaction_type'], name='idx_reaction_post_type'),
+            models.Index(
+                fields=["post", "reaction_type"], name="idx_reaction_post_type"
+            ),
         ]
 
     def __str__(self):
@@ -404,54 +402,54 @@ class CircleInvitation(models.Model):
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='invitations',
+        related_name="invitations",
     )
     inviter = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_invites_sent',
+        related_name="circle_invites_sent",
     )
     invitee = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_invites_received',
+        related_name="circle_invites_received",
         null=True,
         blank=True,
-        help_text='The user invited (null for link invitations).',
+        help_text="The user invited (null for link invitations).",
     )
     invite_code = models.CharField(
         max_length=20,
         unique=True,
         db_index=True,
-        help_text='Shareable code for link-based invitations.',
+        help_text="Shareable code for link-based invitations.",
     )
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('accepted', 'Accepted'),
-        ('declined', 'Declined'),
-        ('expired', 'Expired'),
+        ("pending", "Pending"),
+        ("accepted", "Accepted"),
+        ("declined", "Declined"),
+        ("expired", "Expired"),
     ]
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default="pending",
     )
     expires_at = models.DateTimeField(
-        help_text='When this invitation expires.',
+        help_text="When this invitation expires.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'circle_invitations'
-        ordering = ['-created_at']
+        db_table = "circle_invitations"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['invite_code']),
-            models.Index(fields=['circle', 'invitee', 'status']),
+            models.Index(fields=["invite_code"]),
+            models.Index(fields=["circle", "invitee", "status"]),
         ]
 
     def __str__(self):
-        target = self.invitee.email if self.invitee else f'code:{self.invite_code}'
+        target = self.invitee.email if self.invitee else f"code:{self.invite_code}"
         return f"Invite to {self.circle.name} for {target}"
 
     @property
@@ -472,29 +470,29 @@ class ChallengeProgress(models.Model):
     challenge = models.ForeignKey(
         CircleChallenge,
         on_delete=models.CASCADE,
-        related_name='progress_entries',
+        related_name="progress_entries",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='challenge_progress',
+        related_name="challenge_progress",
     )
     progress_value = models.FloatField(
         default=0,
-        help_text='Numeric progress value (interpretation depends on challenge).',
+        help_text="Numeric progress value (interpretation depends on challenge).",
     )
     notes = EncryptedTextField(
         blank=True,
-        help_text='Optional notes about this progress update (encrypted at rest).',
+        help_text="Optional notes about this progress update (encrypted at rest).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'challenge_progress'
-        ordering = ['-created_at']
+        db_table = "challenge_progress"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['challenge', 'user', '-created_at']),
+            models.Index(fields=["challenge", "user", "-created_at"]),
         ]
 
     def __str__(self):
@@ -513,30 +511,32 @@ class CircleMessage(models.Model):
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='chat_messages',
+        related_name="chat_messages",
     )
     sender = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_chat_messages',
+        related_name="circle_chat_messages",
     )
     content = EncryptedTextField(
-        help_text='Message content (encrypted at rest).',
+        help_text="Message content (encrypted at rest).",
     )
     metadata = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'circle_messages'
-        ordering = ['created_at']
+        db_table = "circle_messages"
+        ordering = ["created_at"]
         indexes = [
-            models.Index(fields=['circle', 'created_at'], name='idx_circlemsg_circle_date'),
-            models.Index(fields=['sender'], name='idx_circlemsg_sender'),
+            models.Index(
+                fields=["circle", "created_at"], name="idx_circlemsg_circle_date"
+            ),
+            models.Index(fields=["sender"], name="idx_circlemsg_sender"),
         ]
 
     def __str__(self):
-        preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"{self.sender.display_name or self.sender.email}: {preview}"
 
 
@@ -544,31 +544,35 @@ class CircleCall(models.Model):
     """Voice/video group call within a circle."""
 
     CALL_TYPE_CHOICES = [
-        ('voice', 'Voice'),
-        ('video', 'Video'),
+        ("voice", "Voice"),
+        ("video", "Video"),
     ]
     STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     circle = models.ForeignKey(
         Circle,
         on_delete=models.CASCADE,
-        related_name='calls',
+        related_name="calls",
     )
     initiator = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_calls_initiated',
+        related_name="circle_calls_initiated",
     )
-    call_type = models.CharField(max_length=5, choices=CALL_TYPE_CHOICES, default='voice')
-    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='active', db_index=True)
+    call_type = models.CharField(
+        max_length=5, choices=CALL_TYPE_CHOICES, default="voice"
+    )
+    status = models.CharField(
+        max_length=15, choices=STATUS_CHOICES, default="active", db_index=True
+    )
     agora_channel = models.CharField(
         max_length=100,
-        help_text='Agora channel name (= str(call.id)).',
+        help_text="Agora channel name (= str(call.id)).",
     )
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
@@ -576,11 +580,13 @@ class CircleCall(models.Model):
     max_participants = models.IntegerField(default=20)
 
     class Meta:
-        db_table = 'circle_calls'
-        ordering = ['-started_at']
+        db_table = "circle_calls"
+        ordering = ["-started_at"]
         indexes = [
-            models.Index(fields=['circle', 'status'], name='idx_circlecall_circle_status'),
-            models.Index(fields=['status'], name='idx_circlecall_status'),
+            models.Index(
+                fields=["circle", "status"], name="idx_circlecall_circle_status"
+            ),
+            models.Index(fields=["status"], name="idx_circlecall_status"),
         ]
 
     def __str__(self):
@@ -594,22 +600,24 @@ class CircleCallParticipant(models.Model):
     call = models.ForeignKey(
         CircleCall,
         on_delete=models.CASCADE,
-        related_name='participants',
+        related_name="participants",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='circle_call_participations',
+        related_name="circle_call_participations",
     )
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'circle_call_participants'
+        db_table = "circle_call_participants"
         constraints = [
-            models.UniqueConstraint(fields=['call', 'user'], name='unique_call_participant'),
+            models.UniqueConstraint(
+                fields=["call", "user"], name="unique_call_participant"
+            ),
         ]
-        ordering = ['joined_at']
+        ordering = ["joined_at"]
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} in call {self.call_id}"
@@ -628,36 +636,30 @@ class CirclePoll(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this poll.'
+        help_text="Unique identifier for this poll.",
     )
     post = models.OneToOneField(
         CirclePost,
         on_delete=models.CASCADE,
-        related_name='poll',
-        help_text='The circle post this poll belongs to.'
+        related_name="poll",
+        help_text="The circle post this poll belongs to.",
     )
-    question = models.CharField(
-        max_length=300,
-        help_text='The poll question.'
-    )
+    question = models.CharField(max_length=300, help_text="The poll question.")
     allows_multiple = models.BooleanField(
-        default=False,
-        help_text='Whether users can vote for multiple options.'
+        default=False, help_text="Whether users can vote for multiple options."
     )
     ends_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='When voting closes (null = no deadline).'
+        null=True, blank=True, help_text="When voting closes (null = no deadline)."
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'circle_polls'
-        ordering = ['-created_at']
-        verbose_name = 'Circle Poll'
-        verbose_name_plural = 'Circle Polls'
+        db_table = "circle_polls"
+        ordering = ["-created_at"]
+        verbose_name = "Circle Poll"
+        verbose_name_plural = "Circle Polls"
         indexes = [
-            models.Index(fields=['post'], name='idx_poll_post'),
+            models.Index(fields=["post"], name="idx_poll_post"),
         ]
 
     def __str__(self):
@@ -688,30 +690,26 @@ class PollOption(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this option.'
+        help_text="Unique identifier for this option.",
     )
     poll = models.ForeignKey(
         CirclePoll,
         on_delete=models.CASCADE,
-        related_name='options',
-        help_text='The poll this option belongs to.'
+        related_name="options",
+        help_text="The poll this option belongs to.",
     )
-    text = models.CharField(
-        max_length=200,
-        help_text='The option text.'
-    )
+    text = models.CharField(max_length=200, help_text="The option text.")
     order = models.PositiveIntegerField(
-        default=0,
-        help_text='Display order (ascending).'
+        default=0, help_text="Display order (ascending)."
     )
 
     class Meta:
-        db_table = 'poll_options'
-        ordering = ['order']
-        verbose_name = 'Poll Option'
-        verbose_name_plural = 'Poll Options'
+        db_table = "poll_options"
+        ordering = ["order"]
+        verbose_name = "Poll Option"
+        verbose_name_plural = "Poll Options"
         indexes = [
-            models.Index(fields=['poll', 'order'], name='idx_polloption_poll_order'),
+            models.Index(fields=["poll", "order"], name="idx_polloption_poll_order"),
         ]
 
     def __str__(self):
@@ -735,36 +733,36 @@ class PollVote(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this vote.'
+        help_text="Unique identifier for this vote.",
     )
     option = models.ForeignKey(
         PollOption,
         on_delete=models.CASCADE,
-        related_name='votes',
-        help_text='The option that was voted for.'
+        related_name="votes",
+        help_text="The option that was voted for.",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='poll_votes',
-        help_text='The user who cast this vote.'
+        related_name="poll_votes",
+        help_text="The user who cast this vote.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'poll_votes'
-        ordering = ['-created_at']
-        verbose_name = 'Poll Vote'
-        verbose_name_plural = 'Poll Votes'
+        db_table = "poll_votes"
+        ordering = ["-created_at"]
+        verbose_name = "Poll Vote"
+        verbose_name_plural = "Poll Votes"
         constraints = [
             models.UniqueConstraint(
-                fields=['option', 'user'],
-                name='unique_poll_vote',
+                fields=["option", "user"],
+                name="unique_poll_vote",
             ),
         ]
         indexes = [
-            models.Index(fields=['option', 'user'], name='idx_pollvote_option_user'),
-            models.Index(fields=['user'], name='idx_pollvote_user'),
+            models.Index(fields=["option", "user"], name="idx_pollvote_option_user"),
+            models.Index(fields=["user"], name="idx_pollvote_user"),
         ]
 
     def __str__(self):

@@ -27,13 +27,16 @@ class ReleasesStorage(S3Boto3Storage):
     """S3 storage backend dedicated to release artifacts (bundles, backups, builds)."""
 
     def __init__(self, **kwargs):
-        kwargs.setdefault("bucket_name", os.getenv(
-            "AWS_RELEASES_BUCKET", "stepora-releases"
-        ))
-        kwargs.setdefault("region_name", os.getenv(
-            "AWS_RELEASES_REGION",
-            getattr(settings, "AWS_S3_REGION_NAME", "eu-west-1"),
-        ))
+        kwargs.setdefault(
+            "bucket_name", os.getenv("AWS_RELEASES_BUCKET", "stepora-releases")
+        )
+        kwargs.setdefault(
+            "region_name",
+            os.getenv(
+                "AWS_RELEASES_REGION",
+                getattr(settings, "AWS_S3_REGION_NAME", "eu-west-1"),
+            ),
+        )
         custom_domain = os.getenv("AWS_RELEASES_CUSTOM_DOMAIN")
         if custom_domain:
             kwargs.setdefault("custom_domain", custom_domain)

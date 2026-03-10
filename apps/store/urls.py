@@ -16,41 +16,47 @@ Routes:
     /purchase/xp/          - Purchase with XP
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    GiftClaimView,
+    GiftListView,
+    GiftSendView,
+    PurchaseConfirmView,
+    PurchaseView,
+    RefundAdminView,
+    RefundRequestView,
     StoreCategoryViewSet,
     StoreItemViewSet,
     UserInventoryViewSet,
     WishlistViewSet,
-    PurchaseView,
-    PurchaseConfirmView,
     XPPurchaseView,
-    GiftSendView,
-    GiftClaimView,
-    GiftListView,
-    RefundRequestView,
-    RefundAdminView,
 )
 
 router = DefaultRouter()
-router.register(r'categories', StoreCategoryViewSet, basename='store-category')
-router.register(r'items', StoreItemViewSet, basename='store-item')
-router.register(r'inventory', UserInventoryViewSet, basename='user-inventory')
-router.register(r'wishlist', WishlistViewSet, basename='store-wishlist')
+router.register(r"categories", StoreCategoryViewSet, basename="store-category")
+router.register(r"items", StoreItemViewSet, basename="store-item")
+router.register(r"inventory", UserInventoryViewSet, basename="user-inventory")
+router.register(r"wishlist", WishlistViewSet, basename="store-wishlist")
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('purchase/', PurchaseView.as_view(), name='store-purchase'),
-    path('purchase/confirm/', PurchaseConfirmView.as_view(), name='store-purchase-confirm'),
-    path('purchase/xp/', XPPurchaseView.as_view(), name='store-purchase-xp'),
+    path("", include(router.urls)),
+    path("purchase/", PurchaseView.as_view(), name="store-purchase"),
+    path(
+        "purchase/confirm/",
+        PurchaseConfirmView.as_view(),
+        name="store-purchase-confirm",
+    ),
+    path("purchase/xp/", XPPurchaseView.as_view(), name="store-purchase-xp"),
     # Gifting
-    path('gifts/send/', GiftSendView.as_view(), name='store-gift-send'),
-    path('gifts/<uuid:gift_id>/claim/', GiftClaimView.as_view(), name='store-gift-claim'),
-    path('gifts/', GiftListView.as_view(), name='store-gift-list'),
+    path("gifts/send/", GiftSendView.as_view(), name="store-gift-send"),
+    path(
+        "gifts/<uuid:gift_id>/claim/", GiftClaimView.as_view(), name="store-gift-claim"
+    ),
+    path("gifts/", GiftListView.as_view(), name="store-gift-list"),
     # Refunds
-    path('refunds/', RefundRequestView.as_view(), name='store-refund'),
+    path("refunds/", RefundRequestView.as_view(), name="store-refund"),
     # Admin refund management
-    path('admin/refunds/', RefundAdminView.as_view(), name='store-refund-admin'),
+    path("admin/refunds/", RefundAdminView.as_view(), name="store-refund-admin"),
 ]

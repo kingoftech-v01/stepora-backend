@@ -8,13 +8,12 @@ Provides reusable building blocks for all WebSocket consumers:
 - ModerationMixin: content moderation via ContentModerationService
 """
 
-import json
-import time
 import asyncio
+import json
 import logging
+import time
 from collections import deque
 
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
 logger = logging.getLogger(__name__)
@@ -57,7 +56,7 @@ class AuthenticatedConsumerMixin:
 
     async def _init_auth(self):
         """Call from connect(). Sets up auth state."""
-        self.user = self.scope['user']
+        self.user = self.scope["user"]
         self._authenticated = False
 
     async def _handle_auth_connect(self):
@@ -65,7 +64,7 @@ class AuthenticatedConsumerMixin:
         if self.user.is_authenticated:
             await self._setup_authenticated()
             return True
-        elif self.scope.get('_allow_post_auth'):
+        elif self.scope.get("_allow_post_auth"):
             await self.accept()
             return True
         else:
@@ -76,7 +75,7 @@ class AuthenticatedConsumerMixin:
         """Verify access and join room after authentication."""
         self._authenticated = True
 
-        if self.scope.get('_allow_post_auth'):
+        if self.scope.get("_allow_post_auth"):
             pass  # Already accepted
         else:
             await self.accept()
@@ -93,14 +92,14 @@ class AuthenticatedConsumerMixin:
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                await self.send(text_data=json.dumps({'type': 'ping'}))
+                await self.send(text_data=json.dumps({"type": "ping"}))
         except asyncio.CancelledError:
             pass
         except Exception:
             logger.debug("Heartbeat error", exc_info=True)
 
     async def _cancel_heartbeat(self):
-        if hasattr(self, '_heartbeat_task'):
+        if hasattr(self, "_heartbeat_task"):
             self._heartbeat_task.cancel()
 
     async def _handle_authenticate_message(self, data):
@@ -108,21 +107,26 @@ class AuthenticatedConsumerMixin:
         if self._authenticated:
             return
         from core.websocket_auth import get_user_from_token
-        user = await get_user_from_token(data.get('token', ''))
+
+        user = await get_user_from_token(data.get("token", ""))
         if user.is_authenticated:
             self.user = user
-            self.scope['user'] = user
+            self.scope["user"] = user
             await self._setup_authenticated()
         else:
-            await self.send_error('Invalid token')
+            await self.send_error("Invalid token")
             await self.close(code=4001)
 
     async def send_error(self, error_message):
         """Send error message to client."""
-        await self.send(text_data=json.dumps({
-            'type': 'error',
-            'error': error_message,
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "error",
+                    "error": error_message,
+                }
+            )
+        )
 
 
 class BlockingMixin:
@@ -131,6 +135,7 @@ class BlockingMixin:
     @database_sync_to_async
     def _is_blocked(self, user_a, user_b):
         from apps.social.models import BlockedUser
+
         return BlockedUser.is_blocked(user_a, user_b)
 
 
@@ -138,6 +143,7 @@ class ModerationMixin:
     """Content moderation via ContentModerationService."""
 
     @database_sync_to_async
-    def _moderate_content(self, content, context='chat'):
+    def _moderate_content(self, content, context="chat"):
         from core.moderation import ContentModerationService
+
         return ContentModerationService().moderate_text(content, context=context)

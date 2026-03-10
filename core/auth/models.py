@@ -15,7 +15,7 @@ class EmailAddress(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='email_addresses',
+        related_name="email_addresses",
     )
     email = models.EmailField(max_length=254, db_index=True)
     verified = models.BooleanField(default=False)
@@ -23,9 +23,9 @@ class EmailAddress(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dp_auth_email_address'
-        unique_together = [('user', 'email')]
-        verbose_name_plural = 'email addresses'
+        db_table = "dp_auth_email_address"
+        unique_together = [("user", "email")]
+        verbose_name_plural = "email addresses"
 
     def __str__(self):
         return f'{self.email} ({"verified" if self.verified else "unverified"})'
@@ -33,7 +33,7 @@ class EmailAddress(models.Model):
     def verify(self):
         if not self.verified:
             self.verified = True
-            self.save(update_fields=['verified'])
+            self.save(update_fields=["verified"])
 
     def set_as_primary(self):
         EmailAddress.objects.filter(user=self.user, primary=True).exclude(
@@ -41,21 +41,21 @@ class EmailAddress(models.Model):
         ).update(primary=False)
         if not self.primary:
             self.primary = True
-            self.save(update_fields=['primary'])
+            self.save(update_fields=["primary"])
 
 
 class SocialAccount(models.Model):
     """Links an OAuth provider identity (Google, Apple) to a user."""
 
     PROVIDER_CHOICES = [
-        ('google', 'Google'),
-        ('apple', 'Apple'),
+        ("google", "Google"),
+        ("apple", "Apple"),
     ]
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='social_accounts',
+        related_name="social_accounts",
     )
     provider = models.CharField(max_length=30, choices=PROVIDER_CHOICES)
     uid = models.CharField(max_length=255)
@@ -64,11 +64,11 @@ class SocialAccount(models.Model):
     last_login = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'dp_auth_social_account'
-        unique_together = [('provider', 'uid')]
+        db_table = "dp_auth_social_account"
+        unique_together = [("provider", "uid")]
         indexes = [
-            models.Index(fields=['user', 'provider']),
+            models.Index(fields=["user", "provider"]),
         ]
 
     def __str__(self):
-        return f'{self.provider}:{self.uid} → {self.user.email}'
+        return f"{self.provider}:{self.uid} → {self.user.email}"

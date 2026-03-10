@@ -11,9 +11,9 @@ from django.apps import AppConfig
 class DreamsConfig(AppConfig):
     """Configuration for the Dreams application."""
 
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.dreams'
-    verbose_name = 'Dreams'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.dreams"
+    verbose_name = "Dreams"
 
     def ready(self):
         """Import signals when the app is ready."""

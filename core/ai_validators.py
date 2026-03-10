@@ -7,12 +7,13 @@ enforces field constraints, and guarantees the AI provides evidence/reasoning
 so users can verify the plan makes sense for their situation.
 """
 
-import re
 import logging
+import re
 from typing import ClassVar, Optional, Set
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from core.sanitizers import sanitize_text, sanitize_json_values
+from core.sanitizers import sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +26,28 @@ MAX_TEXT_LEN = 10000
 MAX_SHORT_TEXT_LEN = 500
 
 VALID_CATEGORIES = {
-    "health", "career", "relationships", "finance",
-    "personal_development", "hobbies", "education", "other",
+    "health",
+    "career",
+    "relationships",
+    "finance",
+    "personal_development",
+    "hobbies",
+    "education",
+    "other",
 }
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 VALID_EXPERIENCE_LEVELS = {"beginner", "intermediate", "advanced"}
 VALID_PACES = {"aggressive", "moderate", "relaxed"}
 VALID_RISK_LEVELS = {"low", "medium", "high"}
 VALID_CALIBRATION_CATEGORIES = {
-    "experience", "timeline", "resources", "motivation",
-    "constraints", "specifics", "lifestyle", "preferences",
+    "experience",
+    "timeline",
+    "resources",
+    "motivation",
+    "constraints",
+    "specifics",
+    "lifestyle",
+    "preferences",
 }
 
 
@@ -54,12 +67,19 @@ def _sanitize_str(v: str | None, max_len: int = MAX_TEXT_LEN) -> str:
 # Plan generation schemas (generate_plan)
 # ===================================================================
 
+
 class PlanTaskSchema(BaseModel):
     """Single task inside a goal."""
+
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=500)
-    day_number: Optional[int] = Field(default=None, ge=1, le=1095, description="Day number from start (1 = first day, max 3 years)")
+    day_number: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=1095,
+        description="Day number from start (1 = first day, max 3 years)",
+    )
     expected_date: Optional[str] = Field(
         default=None,
         description="Ideal/soft date (YYYY-MM-DD) — the best day to do this task",
@@ -88,6 +108,7 @@ class PlanTaskSchema(BaseModel):
         v = str(v).strip()[:10]
         # Accept YYYY-MM-DD format
         import re as _re
+
         if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
             return None
         return v
@@ -103,6 +124,7 @@ class PlanTaskSchema(BaseModel):
 
 class PlanGoalSchema(BaseModel):
     """Single goal inside a milestone."""
+
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=0, le=100)
@@ -134,6 +156,7 @@ class PlanGoalSchema(BaseModel):
             return None
         v = str(v).strip()[:10]
         import re as _re
+
         if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
             return None
         return v
@@ -159,6 +182,7 @@ class PlanGoalSchema(BaseModel):
 
 class PlanObstacleSchema(BaseModel):
     """Predicted obstacle with a solution, optionally linked to milestone/goal."""
+
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     solution: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
@@ -189,11 +213,14 @@ class PlanMilestoneSchema(BaseModel):
     Milestones divide the dream timeline into periods (e.g., monthly for a 1-year dream).
     Each milestone contains multiple goals (min 4), and each goal contains tasks (min 4).
     """
+
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     order: int = Field(..., ge=1, le=60, description="Milestone order (1-based)")
     target_day: Optional[int] = Field(
-        default=None, ge=1, le=3650,
+        default=None,
+        ge=1,
+        le=3650,
         description="Day number by which this milestone should be reached",
     )
     expected_date: Optional[str] = Field(
@@ -227,6 +254,7 @@ class PlanMilestoneSchema(BaseModel):
             return None
         v = str(v).strip()[:10]
         import re as _re
+
         if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
             return None
         return v
@@ -242,6 +270,7 @@ class PlanMilestoneSchema(BaseModel):
 
 class PlanResponseSchema(BaseModel):
     """Full plan response from AI. The top-level schema for generate_plan."""
+
     analysis: str = Field(default="", max_length=MAX_TEXT_LEN)
     estimated_duration_weeks: int = Field(default=12, ge=1, le=520)
     weekly_time_hours: int = Field(default=5, ge=1, le=168)
@@ -303,8 +332,10 @@ class PlanResponseSchema(BaseModel):
 # Dream analysis schemas (analyze_dream)
 # ===================================================================
 
+
 class AnalysisResponseSchema(BaseModel):
     """Response from analyze_dream."""
+
     category: str = Field(default="other", max_length=50)
     estimated_duration_weeks: int = Field(default=12, ge=1, le=520)
     difficulty: str = Field(default="medium", max_length=20)
@@ -348,8 +379,10 @@ class AnalysisResponseSchema(BaseModel):
 # Calibration question schemas
 # ===================================================================
 
+
 class CalibrationQuestionSchema(BaseModel):
     """A single calibration question."""
+
     question: str = Field(..., min_length=5, max_length=MAX_SHORT_TEXT_LEN)
     category: str = Field(default="specifics", max_length=30)
 
@@ -367,6 +400,7 @@ class CalibrationQuestionSchema(BaseModel):
 
 class CalibrationQuestionsResponseSchema(BaseModel):
     """Response from generate_calibration_questions."""
+
     sufficient: bool = Field(default=False)
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
     missing_areas: list[str] = Field(default_factory=list)
@@ -392,8 +426,10 @@ class CalibrationQuestionsResponseSchema(BaseModel):
 # Calibration summary schemas
 # ===================================================================
 
+
 class UserProfileSchema(BaseModel):
     """Structured user profile from calibration summary."""
+
     experience_level: str = Field(default="beginner", max_length=20)
     experience_details: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     available_hours_per_week: int = Field(default=5, ge=1, le=168)
@@ -429,9 +465,13 @@ class UserProfileSchema(BaseModel):
             return 5
 
     @field_validator(
-        "experience_details", "preferred_schedule", "budget",
-        "primary_motivation", "success_definition",
-        "preferred_learning_style", "timeline_preference",
+        "experience_details",
+        "preferred_schedule",
+        "budget",
+        "primary_motivation",
+        "success_definition",
+        "preferred_learning_style",
+        "timeline_preference",
         mode="before",
     )
     @classmethod
@@ -439,7 +479,9 @@ class UserProfileSchema(BaseModel):
         return _sanitize_str(v, MAX_SHORT_TEXT_LEN)
 
     @field_validator(
-        "tools_available", "secondary_motivations", "known_constraints",
+        "tools_available",
+        "secondary_motivations",
+        "known_constraints",
         mode="before",
     )
     @classmethod
@@ -451,6 +493,7 @@ class UserProfileSchema(BaseModel):
 
 class PlanRecommendationsSchema(BaseModel):
     """AI recommendations for plan generation."""
+
     suggested_pace: str = Field(default="moderate", max_length=20)
     focus_areas: list[str] = Field(default_factory=list)
     potential_pitfalls: list[str] = Field(default_factory=list)
@@ -477,6 +520,7 @@ class PlanRecommendationsSchema(BaseModel):
 
 class CalibrationSummaryResponseSchema(BaseModel):
     """Response from generate_calibration_summary."""
+
     user_profile: UserProfileSchema = Field(default_factory=UserProfileSchema)
     plan_recommendations: PlanRecommendationsSchema = Field(
         default_factory=PlanRecommendationsSchema
@@ -493,8 +537,10 @@ class CalibrationSummaryResponseSchema(BaseModel):
 # Chat response schema
 # ===================================================================
 
+
 class ChatResponseSchema(BaseModel):
     """Response from chat / chat_async."""
+
     content: str = Field(default="", max_length=MAX_TEXT_LEN)
     tokens_used: int = Field(default=0, ge=0)
     model: str = Field(default="")
@@ -517,17 +563,24 @@ class ChatResponseSchema(BaseModel):
 
 class FunctionCallSchema(BaseModel):
     """Function call returned by AI."""
+
     name: str = Field(..., max_length=100)
     arguments: dict = Field(default_factory=dict)
 
-    ALLOWED_FUNCTIONS: ClassVar[Set[str]] = {"create_task", "complete_task", "create_goal"}
+    ALLOWED_FUNCTIONS: ClassVar[Set[str]] = {
+        "create_task",
+        "complete_task",
+        "create_goal",
+    }
 
     @field_validator("name", mode="before")
     @classmethod
     def validate_function_name(cls, v):
         v = _sanitize_str(v, 100)
         if v not in cls.ALLOWED_FUNCTIONS:
-            raise ValueError(f"Unknown function '{v}'. Allowed: {cls.ALLOWED_FUNCTIONS}")
+            raise ValueError(
+                f"Unknown function '{v}'. Allowed: {cls.ALLOWED_FUNCTIONS}"
+            )
         return v
 
 
@@ -540,6 +593,7 @@ VALID_PATTERN_TYPES = {"theme", "behavior", "resource", "timing"}
 
 class SmartAnalysisPatternSchema(BaseModel):
     """A single pattern found across dreams."""
+
     type: str = Field(default="theme", max_length=20)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     dreams_involved: list[str] = Field(default_factory=list)
@@ -565,6 +619,7 @@ class SmartAnalysisPatternSchema(BaseModel):
 
 class SmartAnalysisInsightSchema(BaseModel):
     """A single insight from cross-dream analysis."""
+
     insight: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     actionable_tip: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
 
@@ -576,6 +631,7 @@ class SmartAnalysisInsightSchema(BaseModel):
 
 class SmartAnalysisSynergySchema(BaseModel):
     """A synergy between two dreams."""
+
     dream1: str = Field(default="", max_length=MAX_TITLE_LEN)
     dream2: str = Field(default="", max_length=MAX_TITLE_LEN)
     connection: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
@@ -594,6 +650,7 @@ class SmartAnalysisSynergySchema(BaseModel):
 
 class SmartAnalysisRiskSchema(BaseModel):
     """A risk area for a specific dream."""
+
     dream: str = Field(default="", max_length=MAX_TITLE_LEN)
     risk: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
     mitigation: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
@@ -611,6 +668,7 @@ class SmartAnalysisRiskSchema(BaseModel):
 
 class SmartAnalysisResponseSchema(BaseModel):
     """Full response from smart cross-dream analysis."""
+
     patterns: list[SmartAnalysisPatternSchema] = Field(default_factory=list)
     insights: list[SmartAnalysisInsightSchema] = Field(default_factory=list)
     synergies: list[SmartAnalysisSynergySchema] = Field(default_factory=list)
@@ -620,6 +678,7 @@ class SmartAnalysisResponseSchema(BaseModel):
 # ===================================================================
 # Public validation functions — called from views / services
 # ===================================================================
+
 
 class AIValidationError(Exception):
     """Raised when AI output fails validation."""
@@ -636,7 +695,8 @@ def validate_plan_response(raw: dict) -> PlanResponseSchema:
         plan = PlanResponseSchema.model_validate(raw)
         logger.info(
             "Plan validated: %d goals, %d obstacles, %d calibration refs",
-            len(plan.goals), len(plan.potential_obstacles),
+            len(plan.goals),
+            len(plan.potential_obstacles),
             len(plan.calibration_references),
         )
         return plan
@@ -660,7 +720,9 @@ def validate_calibration_questions(raw: dict) -> CalibrationQuestionsResponseSch
         return CalibrationQuestionsResponseSchema.model_validate(raw)
     except Exception as e:
         logger.error("Calibration questions validation failed: %s", e)
-        raise AIValidationError(f"AI generated invalid calibration questions: {e}") from e
+        raise AIValidationError(
+            f"AI generated invalid calibration questions: {e}"
+        ) from e
 
 
 def validate_calibration_summary(raw: dict) -> CalibrationSummaryResponseSchema:
@@ -669,7 +731,9 @@ def validate_calibration_summary(raw: dict) -> CalibrationSummaryResponseSchema:
         return CalibrationSummaryResponseSchema.model_validate(raw)
     except Exception as e:
         logger.error("Calibration summary validation failed: %s", e)
-        raise AIValidationError(f"AI generated an invalid calibration summary: {e}") from e
+        raise AIValidationError(
+            f"AI generated an invalid calibration summary: {e}"
+        ) from e
 
 
 def validate_chat_response(raw: dict) -> ChatResponseSchema:
@@ -720,12 +784,14 @@ def validate_ai_output_safety(content: str) -> tuple[bool, str]:
     # Run content moderation on the output
     try:
         from core.moderation import ContentModerationService
+
         moderation = ContentModerationService()
-        result = moderation.moderate_text(content, context='ai_output')
+        result = moderation.moderate_text(content, context="ai_output")
         if result.is_flagged:
             logger.warning(
                 "AI OUTPUT FLAGGED: categories=%s, severity=%s",
-                result.categories, result.severity
+                result.categories,
+                result.severity,
             )
             return False, f"AI output flagged: {','.join(result.categories)}"
     except Exception as e:
@@ -737,12 +803,20 @@ def validate_ai_output_safety(content: str) -> tuple[bool, str]:
 
 # Patterns that indicate the AI broke character or complied with a jailbreak
 BROKEN_CHARACTER_PATTERNS = [
-    re.compile(r'as\s+an?\s+AI\s+(language\s+)?model', re.IGNORECASE),
-    re.compile(r'I\s+am\s+(just|only)\s+an?\s+(AI|language\s+model|chatbot)', re.IGNORECASE),
-    re.compile(r'I\s+don\'?t\s+have\s+(personal\s+)?(feelings|emotions|opinions)', re.IGNORECASE),
-    re.compile(r'(sure|okay|alright),?\s+I\'?ll\s+(pretend|act|role.?play|be)\s+', re.IGNORECASE),
-    re.compile(r'\[DAN\]|\[JAILBREAK\]|\[NO\s+FILTER\]', re.IGNORECASE),
-    re.compile(r'\*enters?\s+.*mode\*', re.IGNORECASE),
+    re.compile(r"as\s+an?\s+AI\s+(language\s+)?model", re.IGNORECASE),
+    re.compile(
+        r"I\s+am\s+(just|only)\s+an?\s+(AI|language\s+model|chatbot)", re.IGNORECASE
+    ),
+    re.compile(
+        r"I\s+don\'?t\s+have\s+(personal\s+)?(feelings|emotions|opinions)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(sure|okay|alright),?\s+I\'?ll\s+(pretend|act|role.?play|be)\s+",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\[DAN\]|\[JAILBREAK\]|\[NO\s+FILTER\]", re.IGNORECASE),
+    re.compile(r"\*enters?\s+.*mode\*", re.IGNORECASE),
 ]
 
 
@@ -754,7 +828,9 @@ def check_ai_character_integrity(content: str) -> bool:
     """
     for pattern in BROKEN_CHARACTER_PATTERNS:
         if pattern.search(content):
-            logger.warning("AI character integrity breach detected: %s", pattern.pattern)
+            logger.warning(
+                "AI character integrity breach detected: %s", pattern.pattern
+            )
             return False
     return True
 

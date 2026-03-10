@@ -11,6 +11,6 @@ from django.apps import AppConfig
 class CirclesConfig(AppConfig):
     """Configuration for the Circles application."""
 
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.circles'
-    verbose_name = 'Dream Circles'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.circles"
+    verbose_name = "Dream Circles"

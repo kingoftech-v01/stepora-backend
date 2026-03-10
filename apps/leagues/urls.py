@@ -28,21 +28,24 @@ Routes:
     /league-seasons/<id>/claim-rewards/ - Claim end-of-season rewards
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    LeagueViewSet, LeaderboardViewSet, SeasonViewSet,
-    LeagueSeasonViewSet, LeagueGroupViewSet,
+    LeaderboardViewSet,
+    LeagueGroupViewSet,
+    LeagueSeasonViewSet,
+    LeagueViewSet,
+    SeasonViewSet,
 )
 
 router = DefaultRouter()
-router.register(r'leagues', LeagueViewSet, basename='league')
-router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
-router.register(r'seasons', SeasonViewSet, basename='season')
-router.register(r'groups', LeagueGroupViewSet, basename='league-group')
-router.register(r'league-seasons', LeagueSeasonViewSet, basename='league-season')
+router.register(r"leagues", LeagueViewSet, basename="league")
+router.register(r"leaderboard", LeaderboardViewSet, basename="leaderboard")
+router.register(r"seasons", SeasonViewSet, basename="season")
+router.register(r"groups", LeagueGroupViewSet, basename="league-group")
+router.register(r"league-seasons", LeagueSeasonViewSet, basename="league-season")
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("", include(router.urls)),
 ]

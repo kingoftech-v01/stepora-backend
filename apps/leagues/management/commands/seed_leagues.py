@@ -15,140 +15,139 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone as django_timezone
 
-from apps.leagues.models import League, Season, LeagueSeason
-
+from apps.leagues.models import League, LeagueSeason, Season
 
 # League seed data: tier, name, min_xp, max_xp, color_hex, description, rewards
 LEAGUE_SEED_DATA = [
     {
-        'tier': 'bronze',
-        'name': 'Bronze League',
-        'min_xp': 0,
-        'max_xp': 499,
-        'color_hex': '#CD7F32',
-        'icon_url': '',
-        'description': (
-            'The starting league for all dreamers. Complete tasks and earn XP '
-            'to climb the ranks. Every journey begins with a single step.'
+        "tier": "bronze",
+        "name": "Bronze League",
+        "min_xp": 0,
+        "max_xp": 499,
+        "color_hex": "#CD7F32",
+        "icon_url": "",
+        "description": (
+            "The starting league for all dreamers. Complete tasks and earn XP "
+            "to climb the ranks. Every journey begins with a single step."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Bronze Dreamer', 'icon': 'badge_bronze'},
-            {'type': 'title', 'name': 'Apprentice Dreamer'},
+        "rewards": [
+            {"type": "badge", "name": "Bronze Dreamer", "icon": "badge_bronze"},
+            {"type": "title", "name": "Apprentice Dreamer"},
         ],
     },
     {
-        'tier': 'silver',
-        'name': 'Silver League',
-        'min_xp': 500,
-        'max_xp': 1499,
-        'color_hex': '#C0C0C0',
-        'icon_url': '',
-        'description': (
-            'You have proven your dedication. Silver League dreamers are building '
-            'momentum and developing strong habits.'
+        "tier": "silver",
+        "name": "Silver League",
+        "min_xp": 500,
+        "max_xp": 1499,
+        "color_hex": "#C0C0C0",
+        "icon_url": "",
+        "description": (
+            "You have proven your dedication. Silver League dreamers are building "
+            "momentum and developing strong habits."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Silver Dreamer', 'icon': 'badge_silver'},
-            {'type': 'title', 'name': 'Dedicated Dreamer'},
-            {'type': 'xp_boost', 'name': '5% XP Boost', 'value': 0.05},
+        "rewards": [
+            {"type": "badge", "name": "Silver Dreamer", "icon": "badge_silver"},
+            {"type": "title", "name": "Dedicated Dreamer"},
+            {"type": "xp_boost", "name": "5% XP Boost", "value": 0.05},
         ],
     },
     {
-        'tier': 'gold',
-        'name': 'Gold League',
-        'min_xp': 1500,
-        'max_xp': 3499,
-        'color_hex': '#FFD700',
-        'icon_url': '',
-        'description': (
-            'Gold League is for committed achievers. You are consistently '
-            'turning dreams into reality with determination and focus.'
+        "tier": "gold",
+        "name": "Gold League",
+        "min_xp": 1500,
+        "max_xp": 3499,
+        "color_hex": "#FFD700",
+        "icon_url": "",
+        "description": (
+            "Gold League is for committed achievers. You are consistently "
+            "turning dreams into reality with determination and focus."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Gold Dreamer', 'icon': 'badge_gold'},
-            {'type': 'title', 'name': 'Ambitious Dreamer'},
-            {'type': 'xp_boost', 'name': '10% XP Boost', 'value': 0.10},
-            {'type': 'feature', 'name': 'Custom Profile Frame'},
+        "rewards": [
+            {"type": "badge", "name": "Gold Dreamer", "icon": "badge_gold"},
+            {"type": "title", "name": "Ambitious Dreamer"},
+            {"type": "xp_boost", "name": "10% XP Boost", "value": 0.10},
+            {"type": "feature", "name": "Custom Profile Frame"},
         ],
     },
     {
-        'tier': 'platinum',
-        'name': 'Platinum League',
-        'min_xp': 3500,
-        'max_xp': 6999,
-        'color_hex': '#E5E4E2',
-        'icon_url': '',
-        'description': (
-            'Platinum League dreamers are elite achievers. Your consistency '
-            'and dedication set you apart from the crowd.'
+        "tier": "platinum",
+        "name": "Platinum League",
+        "min_xp": 3500,
+        "max_xp": 6999,
+        "color_hex": "#E5E4E2",
+        "icon_url": "",
+        "description": (
+            "Platinum League dreamers are elite achievers. Your consistency "
+            "and dedication set you apart from the crowd."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Platinum Dreamer', 'icon': 'badge_platinum'},
-            {'type': 'title', 'name': 'Elite Dreamer'},
-            {'type': 'xp_boost', 'name': '15% XP Boost', 'value': 0.15},
-            {'type': 'feature', 'name': 'Animated Profile Frame'},
-            {'type': 'streak_joker', 'name': 'Bonus Streak Joker', 'value': 1},
+        "rewards": [
+            {"type": "badge", "name": "Platinum Dreamer", "icon": "badge_platinum"},
+            {"type": "title", "name": "Elite Dreamer"},
+            {"type": "xp_boost", "name": "15% XP Boost", "value": 0.15},
+            {"type": "feature", "name": "Animated Profile Frame"},
+            {"type": "streak_joker", "name": "Bonus Streak Joker", "value": 1},
         ],
     },
     {
-        'tier': 'diamond',
-        'name': 'Diamond League',
-        'min_xp': 7000,
-        'max_xp': 11999,
-        'color_hex': '#B9F2FF',
-        'icon_url': '',
-        'description': (
-            'Diamond League is reserved for exceptional dreamers. You have '
-            'demonstrated extraordinary commitment to your goals.'
+        "tier": "diamond",
+        "name": "Diamond League",
+        "min_xp": 7000,
+        "max_xp": 11999,
+        "color_hex": "#B9F2FF",
+        "icon_url": "",
+        "description": (
+            "Diamond League is reserved for exceptional dreamers. You have "
+            "demonstrated extraordinary commitment to your goals."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Diamond Dreamer', 'icon': 'badge_diamond'},
-            {'type': 'title', 'name': 'Visionary Dreamer'},
-            {'type': 'xp_boost', 'name': '20% XP Boost', 'value': 0.20},
-            {'type': 'feature', 'name': 'Diamond Profile Effects'},
-            {'type': 'streak_joker', 'name': 'Bonus Streak Jokers', 'value': 2},
+        "rewards": [
+            {"type": "badge", "name": "Diamond Dreamer", "icon": "badge_diamond"},
+            {"type": "title", "name": "Visionary Dreamer"},
+            {"type": "xp_boost", "name": "20% XP Boost", "value": 0.20},
+            {"type": "feature", "name": "Diamond Profile Effects"},
+            {"type": "streak_joker", "name": "Bonus Streak Jokers", "value": 2},
         ],
     },
     {
-        'tier': 'master',
-        'name': 'Master League',
-        'min_xp': 12000,
-        'max_xp': 19999,
-        'color_hex': '#9B59B6',
-        'icon_url': '',
-        'description': (
-            'Master League dreamers are among the very best. Your mastery '
-            'of goal-setting and execution is truly inspiring.'
+        "tier": "master",
+        "name": "Master League",
+        "min_xp": 12000,
+        "max_xp": 19999,
+        "color_hex": "#9B59B6",
+        "icon_url": "",
+        "description": (
+            "Master League dreamers are among the very best. Your mastery "
+            "of goal-setting and execution is truly inspiring."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Master Dreamer', 'icon': 'badge_master'},
-            {'type': 'title', 'name': 'Master Dreamer'},
-            {'type': 'xp_boost', 'name': '25% XP Boost', 'value': 0.25},
-            {'type': 'feature', 'name': 'Master Profile Aura'},
-            {'type': 'streak_joker', 'name': 'Bonus Streak Jokers', 'value': 3},
-            {'type': 'feature', 'name': 'Priority AI Coaching'},
+        "rewards": [
+            {"type": "badge", "name": "Master Dreamer", "icon": "badge_master"},
+            {"type": "title", "name": "Master Dreamer"},
+            {"type": "xp_boost", "name": "25% XP Boost", "value": 0.25},
+            {"type": "feature", "name": "Master Profile Aura"},
+            {"type": "streak_joker", "name": "Bonus Streak Jokers", "value": 3},
+            {"type": "feature", "name": "Priority AI Coaching"},
         ],
     },
     {
-        'tier': 'legend',
-        'name': 'Legend League',
-        'min_xp': 20000,
-        'max_xp': None,
-        'color_hex': '#FF6B35',
-        'icon_url': '',
-        'description': (
-            'Legend League is the pinnacle of achievement. You are a living '
-            'testament to what happens when dreams meet relentless action. '
-            'Your legacy inspires others to dream bigger.'
+        "tier": "legend",
+        "name": "Legend League",
+        "min_xp": 20000,
+        "max_xp": None,
+        "color_hex": "#FF6B35",
+        "icon_url": "",
+        "description": (
+            "Legend League is the pinnacle of achievement. You are a living "
+            "testament to what happens when dreams meet relentless action. "
+            "Your legacy inspires others to dream bigger."
         ),
-        'rewards': [
-            {'type': 'badge', 'name': 'Legend Dreamer', 'icon': 'badge_legend'},
-            {'type': 'title', 'name': 'Living Legend'},
-            {'type': 'xp_boost', 'name': '30% XP Boost', 'value': 0.30},
-            {'type': 'feature', 'name': 'Legendary Profile Effects'},
-            {'type': 'streak_joker', 'name': 'Bonus Streak Jokers', 'value': 5},
-            {'type': 'feature', 'name': 'Priority AI Coaching'},
-            {'type': 'feature', 'name': 'Legend Hall of Fame'},
+        "rewards": [
+            {"type": "badge", "name": "Legend Dreamer", "icon": "badge_legend"},
+            {"type": "title", "name": "Living Legend"},
+            {"type": "xp_boost", "name": "30% XP Boost", "value": 0.30},
+            {"type": "feature", "name": "Legendary Profile Effects"},
+            {"type": "streak_joker", "name": "Bonus Streak Jokers", "value": 5},
+            {"type": "feature", "name": "Priority AI Coaching"},
+            {"type": "feature", "name": "Legend Hall of Fame"},
         ],
     },
 ]
@@ -163,26 +162,28 @@ class Command(BaseCommand):
     initial active season if none exists.
     """
 
-    help = 'Seed league tiers and create an initial season.'
+    help = "Seed league tiers and create an initial season."
 
     def add_arguments(self, parser):
         """Add command-line arguments."""
         parser.add_argument(
-            '--force',
-            action='store_true',
-            help='Delete existing leagues and recreate them.',
+            "--force",
+            action="store_true",
+            help="Delete existing leagues and recreate them.",
         )
 
     def handle(self, *args, **options):
         """Execute the command."""
-        force = options.get('force', False)
+        force = options.get("force", False)
 
         self._seed_leagues(force)
         self._seed_initial_season()
         self._seed_league_season()
 
         self.stdout.write(
-            self.style.SUCCESS('Successfully seeded leagues, initial season, and league season.')
+            self.style.SUCCESS(
+                "Successfully seeded leagues, initial season, and league season."
+            )
         )
 
     def _seed_leagues(self, force: bool) -> None:
@@ -195,37 +196,37 @@ class Command(BaseCommand):
         if force:
             deleted_count, _ = League.objects.all().delete()
             self.stdout.write(
-                self.style.WARNING(f'Deleted {deleted_count} existing leagues.')
+                self.style.WARNING(f"Deleted {deleted_count} existing leagues.")
             )
 
         existing_count = League.objects.count()
         if existing_count > 0 and not force:
             self.stdout.write(
                 self.style.NOTICE(
-                    f'{existing_count} leagues already exist. '
-                    'Use --force to recreate them.'
+                    f"{existing_count} leagues already exist. "
+                    "Use --force to recreate them."
                 )
             )
             return
 
         for data in LEAGUE_SEED_DATA:
             league, created = League.objects.update_or_create(
-                tier=data['tier'],
+                tier=data["tier"],
                 defaults={
-                    'name': data['name'],
-                    'min_xp': data['min_xp'],
-                    'max_xp': data['max_xp'],
-                    'color_hex': data['color_hex'],
-                    'icon_url': data['icon_url'],
-                    'description': data['description'],
-                    'rewards': data['rewards'],
+                    "name": data["name"],
+                    "min_xp": data["min_xp"],
+                    "max_xp": data["max_xp"],
+                    "color_hex": data["color_hex"],
+                    "icon_url": data["icon_url"],
+                    "description": data["description"],
+                    "rewards": data["rewards"],
                 },
             )
 
-            action_str = 'Created' if created else 'Updated'
+            action_str = "Created" if created else "Updated"
             xp_range = (
                 f"{data['min_xp']}-{data['max_xp']}"
-                if data['max_xp'] is not None
+                if data["max_xp"] is not None
                 else f"{data['min_xp']}+"
             )
             self.stdout.write(
@@ -233,7 +234,7 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(
-            self.style.SUCCESS(f'Seeded {len(LEAGUE_SEED_DATA)} leagues.')
+            self.style.SUCCESS(f"Seeded {len(LEAGUE_SEED_DATA)} leagues.")
         )
 
     def _seed_initial_season(self) -> None:
@@ -243,7 +244,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.NOTICE(
                     f'Active season already exists: "{active_season.name}". '
-                    'Skipping initial season creation.'
+                    "Skipping initial season creation."
                 )
             )
             return
@@ -254,53 +255,73 @@ class Command(BaseCommand):
         month = now.month
         year = now.year
         if month <= 3:
-            quarter = 'Winter'
+            quarter = "Winter"
         elif month <= 6:
-            quarter = 'Spring'
+            quarter = "Spring"
         elif month <= 9:
-            quarter = 'Summer'
+            quarter = "Summer"
         else:
-            quarter = 'Fall'
+            quarter = "Fall"
 
         # Determine season number from existing ended seasons
-        ended_count = Season.objects.filter(status='ended').count()
+        ended_count = Season.objects.filter(status="ended").count()
         season_number = ended_count + 1
 
         season = Season.objects.create(
-            name=f'Season {season_number} - {quarter} {year}',
+            name=f"Season {season_number} - {quarter} {year}",
             start_date=now,
             end_date=now + timedelta(days=180),
             is_active=True,
-            status='active',
+            status="active",
             duration_days=180,
             rewards=[
                 {
-                    'tier': 'bronze',
-                    'rewards': ['Bronze Season Badge'],
+                    "tier": "bronze",
+                    "rewards": ["Bronze Season Badge"],
                 },
                 {
-                    'tier': 'silver',
-                    'rewards': ['Silver Season Badge', '100 Bonus XP'],
+                    "tier": "silver",
+                    "rewards": ["Silver Season Badge", "100 Bonus XP"],
                 },
                 {
-                    'tier': 'gold',
-                    'rewards': ['Gold Season Badge', '250 Bonus XP', 'Gold Frame'],
+                    "tier": "gold",
+                    "rewards": ["Gold Season Badge", "250 Bonus XP", "Gold Frame"],
                 },
                 {
-                    'tier': 'platinum',
-                    'rewards': ['Platinum Season Badge', '500 Bonus XP', 'Platinum Frame'],
+                    "tier": "platinum",
+                    "rewards": [
+                        "Platinum Season Badge",
+                        "500 Bonus XP",
+                        "Platinum Frame",
+                    ],
                 },
                 {
-                    'tier': 'diamond',
-                    'rewards': ['Diamond Season Badge', '1000 Bonus XP', 'Diamond Frame', 'Streak Joker'],
+                    "tier": "diamond",
+                    "rewards": [
+                        "Diamond Season Badge",
+                        "1000 Bonus XP",
+                        "Diamond Frame",
+                        "Streak Joker",
+                    ],
                 },
                 {
-                    'tier': 'master',
-                    'rewards': ['Master Season Badge', '2000 Bonus XP', 'Master Frame', '2 Streak Jokers'],
+                    "tier": "master",
+                    "rewards": [
+                        "Master Season Badge",
+                        "2000 Bonus XP",
+                        "Master Frame",
+                        "2 Streak Jokers",
+                    ],
                 },
                 {
-                    'tier': 'legend',
-                    'rewards': ['Legend Season Badge', '5000 Bonus XP', 'Legend Frame', '3 Streak Jokers', 'Hall of Fame Entry'],
+                    "tier": "legend",
+                    "rewards": [
+                        "Legend Season Badge",
+                        "5000 Bonus XP",
+                        "Legend Frame",
+                        "3 Streak Jokers",
+                        "Hall of Fame Entry",
+                    ],
                 },
             ],
         )
@@ -319,7 +340,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.NOTICE(
                     f'Active league season already exists: "{active_league_season.name}". '
-                    'Skipping league season creation.'
+                    "Skipping league season creation."
                 )
             )
             return
@@ -327,76 +348,76 @@ class Command(BaseCommand):
         now = django_timezone.now()
         season = LeagueSeason.objects.create(
             name=f'Season of Growth - {now.strftime("%B %Y")}',
-            theme='growth',
+            theme="growth",
             description=(
-                'Spring has arrived, and with it comes the Season of Growth! '
-                'Nurture your dreams like seeds in fertile soil. The more you '
-                'tend to your goals, the higher you\'ll climb. Top performers '
-                'earn exclusive Growth-themed rewards.'
+                "Spring has arrived, and with it comes the Season of Growth! "
+                "Nurture your dreams like seeds in fertile soil. The more you "
+                "tend to your goals, the higher you'll climb. Top performers "
+                "earn exclusive Growth-themed rewards."
             ),
             start_date=now.date(),
             end_date=(now + timedelta(days=90)).date(),
             is_active=True,
             rewards=[
                 {
-                    'rank_min': 1,
-                    'rank_max': 1,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_champion',
-                    'title': 'Growth Champion',
-                    'description': 'First place in the Season of Growth',
-                    'xp_bonus': 5000,
+                    "rank_min": 1,
+                    "rank_max": 1,
+                    "reward_type": "badge",
+                    "reward_id": "growth_champion",
+                    "title": "Growth Champion",
+                    "description": "First place in the Season of Growth",
+                    "xp_bonus": 5000,
                 },
                 {
-                    'rank_min': 2,
-                    'rank_max': 3,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_elite',
-                    'title': 'Growth Elite',
-                    'description': 'Top 3 in the Season of Growth',
-                    'xp_bonus': 2500,
+                    "rank_min": 2,
+                    "rank_max": 3,
+                    "reward_type": "badge",
+                    "reward_id": "growth_elite",
+                    "title": "Growth Elite",
+                    "description": "Top 3 in the Season of Growth",
+                    "xp_bonus": 2500,
                 },
                 {
-                    'rank_min': 4,
-                    'rank_max': 10,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_master',
-                    'title': 'Growth Master',
-                    'description': 'Top 10 in the Season of Growth',
-                    'xp_bonus': 1000,
+                    "rank_min": 4,
+                    "rank_max": 10,
+                    "reward_type": "badge",
+                    "reward_id": "growth_master",
+                    "title": "Growth Master",
+                    "description": "Top 10 in the Season of Growth",
+                    "xp_bonus": 1000,
                 },
                 {
-                    'rank_min': 11,
-                    'rank_max': 25,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_adept',
-                    'title': 'Growth Adept',
-                    'description': 'Top 25 in the Season of Growth',
-                    'xp_bonus': 500,
+                    "rank_min": 11,
+                    "rank_max": 25,
+                    "reward_type": "badge",
+                    "reward_id": "growth_adept",
+                    "title": "Growth Adept",
+                    "description": "Top 25 in the Season of Growth",
+                    "xp_bonus": 500,
                 },
                 {
-                    'rank_min': 26,
-                    'rank_max': 50,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_seeker',
-                    'title': 'Growth Seeker',
-                    'description': 'Top 50 in the Season of Growth',
-                    'xp_bonus': 250,
+                    "rank_min": 26,
+                    "rank_max": 50,
+                    "reward_type": "badge",
+                    "reward_id": "growth_seeker",
+                    "title": "Growth Seeker",
+                    "description": "Top 50 in the Season of Growth",
+                    "xp_bonus": 250,
                 },
                 {
-                    'rank_min': 51,
-                    'rank_max': 9999,
-                    'reward_type': 'badge',
-                    'reward_id': 'growth_participant',
-                    'title': 'Growth Participant',
-                    'description': 'Participated in the Season of Growth',
-                    'xp_bonus': 100,
+                    "rank_min": 51,
+                    "rank_max": 9999,
+                    "reward_type": "badge",
+                    "reward_id": "growth_participant",
+                    "title": "Growth Participant",
+                    "description": "Participated in the Season of Growth",
+                    "xp_bonus": 100,
                 },
             ],
             theme_colors={
-                'primary': '#10B981',
-                'secondary': '#34D399',
-                'accent': '#6EE7B7',
+                "primary": "#10B981",
+                "secondary": "#34D399",
+                "accent": "#6EE7B7",
             },
         )
 

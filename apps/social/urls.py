@@ -29,28 +29,48 @@ Routes:
     /posts/user/<user_id>/                  - User's posts
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    FriendshipViewSet, ActivityFeedView, UserSearchView, FollowSuggestionsView,
-    FeedLikeView, FeedCommentView, RecentSearchViewSet, DreamPostViewSet,
-    SocialEventViewSet, StoryViewSet, FriendSuggestionsView,
+    ActivityFeedView,
+    DreamPostViewSet,
+    FeedCommentView,
+    FeedLikeView,
+    FollowSuggestionsView,
+    FriendshipViewSet,
+    FriendSuggestionsView,
+    RecentSearchViewSet,
+    SocialEventViewSet,
+    StoryViewSet,
+    UserSearchView,
 )
 
 router = DefaultRouter()
-router.register(r'', FriendshipViewSet, basename='social')
-router.register(r'recent-searches', RecentSearchViewSet, basename='recent-searches')
-router.register(r'posts', DreamPostViewSet, basename='dream-post')
-router.register(r'events', SocialEventViewSet, basename='social-event')
-router.register(r'stories', StoryViewSet, basename='story')
+router.register(r"", FriendshipViewSet, basename="social")
+router.register(r"recent-searches", RecentSearchViewSet, basename="recent-searches")
+router.register(r"posts", DreamPostViewSet, basename="dream-post")
+router.register(r"events", SocialEventViewSet, basename="social-event")
+router.register(r"stories", StoryViewSet, basename="story")
 
 urlpatterns = [
-    path('feed/friends/', ActivityFeedView.as_view(), name='friends-feed'),
-    path('feed/<uuid:activity_id>/like/', FeedLikeView.as_view(), name='feed-like'),
-    path('feed/<uuid:activity_id>/comment/', FeedCommentView.as_view(), name='feed-comment'),
-    path('users/search', UserSearchView.as_view(), name='user-search'),
-    path('follow-suggestions/', FollowSuggestionsView.as_view(), name='follow-suggestions'),
-    path('friend-suggestions/', FriendSuggestionsView.as_view(), name='friend-suggestions'),
-    path('', include(router.urls)),
+    path("feed/friends/", ActivityFeedView.as_view(), name="friends-feed"),
+    path("feed/<uuid:activity_id>/like/", FeedLikeView.as_view(), name="feed-like"),
+    path(
+        "feed/<uuid:activity_id>/comment/",
+        FeedCommentView.as_view(),
+        name="feed-comment",
+    ),
+    path("users/search", UserSearchView.as_view(), name="user-search"),
+    path(
+        "follow-suggestions/",
+        FollowSuggestionsView.as_view(),
+        name="follow-suggestions",
+    ),
+    path(
+        "friend-suggestions/",
+        FriendSuggestionsView.as_view(),
+        name="friend-suggestions",
+    ),
+    path("", include(router.urls)),
 ]

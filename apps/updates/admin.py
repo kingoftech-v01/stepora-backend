@@ -6,8 +6,12 @@ from .models import AppBundle
 @admin.register(AppBundle)
 class AppBundleAdmin(admin.ModelAdmin):
     list_display = [
-        "bundle_id", "platform", "strategy", "min_app_version",
-        "is_active", "created_at",
+        "bundle_id",
+        "platform",
+        "strategy",
+        "min_app_version",
+        "is_active",
+        "created_at",
     ]
     list_filter = ["is_active", "platform", "strategy"]
     list_editable = ["is_active", "strategy"]
@@ -15,16 +19,28 @@ class AppBundleAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at"]
     ordering = ["-created_at"]
     fieldsets = [
-        (None, {
-            "fields": ["bundle_id", "bundle_file", "checksum"],
-        }),
-        ("Targeting", {
-            "fields": ["platform", "min_app_version"],
-        }),
-        ("Behavior", {
-            "fields": ["strategy", "message", "is_active"],
-        }),
-        ("Info", {
-            "fields": ["created_at"],
-        }),
+        (
+            None,
+            {
+                "fields": ["bundle_id", "bundle_file", "checksum"],
+            },
+        ),
+        (
+            "Targeting",
+            {
+                "fields": ["platform", "min_app_version"],
+            },
+        ),
+        (
+            "Behavior",
+            {
+                "fields": ["strategy", "message", "is_active"],
+            },
+        ),
+        (
+            "Info",
+            {
+                "fields": ["created_at"],
+            },
+        ),
     ]

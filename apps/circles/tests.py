@@ -1,29 +1,27 @@
 """Tests for circles app."""
-import pytest
+
 import secrets
 from datetime import timedelta
-from unittest.mock import patch
 
+import pytest
 from django.utils import timezone as django_timezone
 from rest_framework import status
-from rest_framework.test import APIClient
 
-from apps.users.models import User
-from apps.circles.models import (
-    Circle,
-    CircleMembership,
-    CirclePost,
-    CircleChallenge,
-    PostReaction,
-    CircleInvitation,
-    ChallengeProgress,
-)
 from apps.circles.admin import (
     CircleAdmin,
-    CirclePostAdmin,
     CircleChallengeAdmin,
+    CirclePostAdmin,
 )
-
+from apps.circles.models import (
+    ChallengeProgress,
+    Circle,
+    CircleChallenge,
+    CircleInvitation,
+    CircleMembership,
+    CirclePost,
+    PostReaction,
+)
+from apps.users.models import User
 
 # ---------------------------------------------------------------------------
 # Local fixtures – override the global ``user`` / ``authenticated_client``
@@ -236,6 +234,7 @@ class TestCircleModel:
 
     def test_uuid_primary_key(self, circle):
         import uuid
+
         assert isinstance(circle.id, uuid.UUID)
 
     def test_ordering_is_newest_first(self, user):
@@ -250,8 +249,16 @@ class TestCircleModel:
 
     def test_category_choices(self, user):
         valid_categories = [
-            "career", "health", "fitness", "education", "finance",
-            "creativity", "relationships", "personal_growth", "hobbies", "other",
+            "career",
+            "health",
+            "fitness",
+            "education",
+            "finance",
+            "creativity",
+            "relationships",
+            "personal_growth",
+            "hobbies",
+            "other",
         ]
         for cat in valid_categories:
             c = Circle.objects.create(name=f"Circle {cat}", creator=user, category=cat)
@@ -282,11 +289,16 @@ class TestCircleMembershipModel:
 
     def test_unique_together(self, circle, membership, other_user):
         from django.db import IntegrityError
+
         with pytest.raises(IntegrityError):
-            CircleMembership.objects.create(circle=circle, user=other_user, role="member")
+            CircleMembership.objects.create(
+                circle=circle, user=other_user, role="member"
+            )
 
     def test_role_choices(self, circle, other_user):
-        m = CircleMembership.objects.create(circle=circle, user=other_user, role="moderator")
+        m = CircleMembership.objects.create(
+            circle=circle, user=other_user, role="moderator"
+        )
         assert m.role == "moderator"
 
     def test_cascade_delete_circle(self, circle, membership):
@@ -404,6 +416,7 @@ class TestPostReactionModel:
     def test_unique_together(self, post, user):
         PostReaction.objects.create(post=post, user=user, reaction_type="fire")
         from django.db import IntegrityError
+
         with pytest.raises(IntegrityError):
             PostReaction.objects.create(post=post, user=user, reaction_type="heart")
 
@@ -464,6 +477,7 @@ class TestCircleInvitationModel:
             expires_at=django_timezone.now() + timedelta(days=7),
         )
         from django.db import IntegrityError
+
         with pytest.raises(IntegrityError):
             CircleInvitation.objects.create(
                 circle=circle,
@@ -505,7 +519,9 @@ class TestChallengeProgressModel:
         assert p.notes == ""
 
     def test_cascade_delete_challenge(self, challenge, user):
-        ChallengeProgress.objects.create(challenge=challenge, user=user, progress_value=5)
+        ChallengeProgress.objects.create(
+            challenge=challenge, user=user, progress_value=5
+        )
         challenge.delete()
         assert ChallengeProgress.objects.filter(user=user).count() == 0
 
@@ -595,6 +611,7 @@ class TestCircleRetrieveView:
 
     def test_retrieve_nonexistent(self, authenticated_client):
         import uuid
+
         url = f"{BASE_URL}{uuid.uuid4()}/"
         resp = authenticated_client.get(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -605,9 +622,7 @@ class TestCircleUpdateView:
 
     def test_update_as_admin(self, authenticated_client, circle):
         url = f"{BASE_URL}{circle.id}/"
-        resp = authenticated_client.put(
-            url, {"name": "Updated Name"}, format="json"
-        )
+        resp = authenticated_client.put(url, {"name": "Updated Name"}, format="json")
         assert resp.status_code == status.HTTP_200_OK
         circle.refresh_from_db()
         assert circle.name == "Updated Name"
@@ -728,9 +743,7 @@ class TestCircleLeaveView:
         self, authenticated_client, circle, other_user
     ):
         """Admin can leave when another admin exists."""
-        CircleMembership.objects.create(
-            circle=circle, user=other_user, role="admin"
-        )
+        CircleMembership.objects.create(circle=circle, user=other_user, role="admin")
         url = f"{BASE_URL}{circle.id}/leave/"
         resp = authenticated_client.post(url)
         assert resp.status_code == status.HTTP_200_OK
@@ -805,9 +818,7 @@ class TestCirclePostEditView:
     ):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/posts/{post.id}/edit/"
-        resp = api_client.put(
-            url, {"content": "Moderated"}, format="json"
-        )
+        resp = api_client.put(url, {"content": "Moderated"}, format="json")
         assert resp.status_code == status.HTTP_200_OK
 
     def test_edit_post_as_regular_member(
@@ -815,17 +826,14 @@ class TestCirclePostEditView:
     ):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/posts/{post.id}/edit/"
-        resp = api_client.put(
-            url, {"content": "Hack"}, format="json"
-        )
+        resp = api_client.put(url, {"content": "Hack"}, format="json")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
     def test_edit_nonexistent_post(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/posts/{uuid.uuid4()}/edit/"
-        resp = authenticated_client.put(
-            url, {"content": "nope"}, format="json"
-        )
+        resp = authenticated_client.put(url, {"content": "nope"}, format="json")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -854,7 +862,7 @@ class TestCirclePostDeleteView:
             circle=circle, author=other_user, content="Delete me"
         )
         # authenticated as `user` who is admin
-        from apps.users.models import User
+
         admin_user = circle.creator
         api_client.force_authenticate(user=admin_user)
         url = f"{BASE_URL}{circle.id}/posts/{other_post.id}/delete/"
@@ -871,6 +879,7 @@ class TestCirclePostDeleteView:
 
     def test_delete_nonexistent_post(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/posts/{uuid.uuid4()}/delete/"
         resp = authenticated_client.delete(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -881,18 +890,14 @@ class TestReactToPostView:
 
     def test_add_reaction(self, authenticated_client, circle, post):
         url = f"{BASE_URL}{circle.id}/posts/{post.id}/react/"
-        resp = authenticated_client.post(
-            url, {"reaction_type": "fire"}, format="json"
-        )
+        resp = authenticated_client.post(url, {"reaction_type": "fire"}, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
         assert PostReaction.objects.filter(post=post, user=circle.creator).exists()
 
     def test_update_reaction(self, authenticated_client, circle, post, user):
         PostReaction.objects.create(post=post, user=user, reaction_type="fire")
         url = f"{BASE_URL}{circle.id}/posts/{post.id}/react/"
-        resp = authenticated_client.post(
-            url, {"reaction_type": "heart"}, format="json"
-        )
+        resp = authenticated_client.post(url, {"reaction_type": "heart"}, format="json")
         assert resp.status_code == status.HTTP_200_OK
         r = PostReaction.objects.get(post=post, user=user)
         assert r.reaction_type == "heart"
@@ -900,9 +905,7 @@ class TestReactToPostView:
     def test_react_non_member(self, api_client, circle, post, other_user):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/posts/{post.id}/react/"
-        resp = api_client.post(
-            url, {"reaction_type": "fire"}, format="json"
-        )
+        resp = api_client.post(url, {"reaction_type": "fire"}, format="json")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
     def test_react_invalid_type(self, authenticated_client, circle, post):
@@ -914,10 +917,9 @@ class TestReactToPostView:
 
     def test_react_nonexistent_post(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/posts/{uuid.uuid4()}/react/"
-        resp = authenticated_client.post(
-            url, {"reaction_type": "fire"}, format="json"
-        )
+        resp = authenticated_client.post(url, {"reaction_type": "fire"}, format="json")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -938,6 +940,7 @@ class TestUnreactToPostView:
 
     def test_unreact_nonexistent_post(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/posts/{uuid.uuid4()}/unreact/"
         resp = authenticated_client.delete(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -991,17 +994,13 @@ class TestPromoteMemberView:
         self, api_client, circle, other_user, membership, third_user
     ):
         # third_user is a regular member trying to promote
-        CircleMembership.objects.create(
-            circle=circle, user=third_user, role="member"
-        )
+        CircleMembership.objects.create(circle=circle, user=third_user, role="member")
         api_client.force_authenticate(user=third_user)
         url = f"{BASE_URL}{circle.id}/members/{membership.id}/promote/"
         resp = api_client.post(url)
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_promote_admin_fails(
-        self, authenticated_client, circle, other_user, user
-    ):
+    def test_promote_admin_fails(self, authenticated_client, circle, other_user, user):
         """Cannot promote an existing admin."""
         admin_membership = CircleMembership.objects.get(circle=circle, user=user)
         url = f"{BASE_URL}{circle.id}/members/{admin_membership.id}/promote/"
@@ -1010,6 +1009,7 @@ class TestPromoteMemberView:
 
     def test_promote_nonexistent_member(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/members/{uuid.uuid4()}/promote/"
         resp = authenticated_client.post(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -1037,9 +1037,7 @@ class TestDemoteMemberView:
     def test_demote_not_admin(
         self, api_client, circle, other_user, moderator_membership, third_user
     ):
-        CircleMembership.objects.create(
-            circle=circle, user=third_user, role="member"
-        )
+        CircleMembership.objects.create(circle=circle, user=third_user, role="member")
         api_client.force_authenticate(user=third_user)
         url = f"{BASE_URL}{circle.id}/members/{moderator_membership.id}/demote/"
         resp = api_client.post(url)
@@ -1047,6 +1045,7 @@ class TestDemoteMemberView:
 
     def test_demote_nonexistent_member(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/members/{uuid.uuid4()}/demote/"
         resp = authenticated_client.post(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -1101,6 +1100,7 @@ class TestRemoveMemberView:
 
     def test_remove_nonexistent_member(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/members/{uuid.uuid4()}/remove/"
         resp = authenticated_client.delete(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -1141,6 +1141,7 @@ class TestInviteView:
 
     def test_invite_nonexistent_user(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/invite/"
         resp = authenticated_client.post(
             url, {"user_id": str(uuid.uuid4())}, format="json"
@@ -1152,9 +1153,7 @@ class TestInviteView:
     ):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/invite/"
-        resp = api_client.post(
-            url, {"user_id": str(third_user.id)}, format="json"
-        )
+        resp = api_client.post(url, {"user_id": str(third_user.id)}, format="json")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
     def test_invite_as_moderator(
@@ -1162,9 +1161,7 @@ class TestInviteView:
     ):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/invite/"
-        resp = api_client.post(
-            url, {"user_id": str(third_user.id)}, format="json"
-        )
+        resp = api_client.post(url, {"user_id": str(third_user.id)}, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
 
 
@@ -1199,9 +1196,7 @@ class TestInviteLinkView:
 class TestInvitationsListView:
     """Tests for listing pending invitations."""
 
-    def test_list_invitations_as_admin(
-        self, authenticated_client, circle, invitation
-    ):
+    def test_list_invitations_as_admin(self, authenticated_client, circle, invitation):
         url = f"{BASE_URL}{circle.id}/invitations/"
         resp = authenticated_client.get(url)
         assert resp.status_code == status.HTTP_200_OK
@@ -1224,9 +1219,7 @@ class TestJoinByInviteCodeView:
         url = f"/api/circles/join/{invitation.invite_code}/"
         resp = api_client.post(url)
         assert resp.status_code == status.HTTP_200_OK
-        assert CircleMembership.objects.filter(
-            circle=circle, user=other_user
-        ).exists()
+        assert CircleMembership.objects.filter(circle=circle, user=other_user).exists()
         invitation.refresh_from_db()
         assert invitation.status == "accepted"
 
@@ -1237,16 +1230,12 @@ class TestJoinByInviteCodeView:
         url = f"/api/circles/join/{link_invitation.invite_code}/"
         resp = api_client.post(url)
         assert resp.status_code == status.HTTP_200_OK
-        assert CircleMembership.objects.filter(
-            circle=circle, user=other_user
-        ).exists()
+        assert CircleMembership.objects.filter(circle=circle, user=other_user).exists()
         # Link invitations stay pending (for reuse) since invitee is None
         link_invitation.refresh_from_db()
         assert link_invitation.status == "pending"
 
-    def test_join_invite_wrong_user(
-        self, api_client, circle, invitation, third_user
-    ):
+    def test_join_invite_wrong_user(self, api_client, circle, invitation, third_user):
         """A direct invite for other_user cannot be used by third_user."""
         api_client.force_authenticate(user=third_user)
         url = f"/api/circles/join/{invitation.invite_code}/"
@@ -1375,9 +1364,7 @@ class TestChallengeJoinView:
 class TestSubmitProgressView:
     """Tests for submitting challenge progress."""
 
-    def test_submit_progress(
-        self, authenticated_client, circle, challenge, user
-    ):
+    def test_submit_progress(self, authenticated_client, circle, challenge, user):
         challenge.participants.add(user)
         url = f"{BASE_URL}{circle.id}/challenges/{challenge.id}/progress/"
         resp = authenticated_client.post(
@@ -1386,9 +1373,7 @@ class TestSubmitProgressView:
             format="json",
         )
         assert resp.status_code == status.HTTP_201_CREATED
-        assert ChallengeProgress.objects.filter(
-            challenge=challenge, user=user
-        ).exists()
+        assert ChallengeProgress.objects.filter(challenge=challenge, user=user).exists()
         p = ChallengeProgress.objects.get(challenge=challenge, user=user)
         assert p.progress_value == 10.5
         assert p.notes == "Ran 10k"
@@ -1397,9 +1382,7 @@ class TestSubmitProgressView:
         self, authenticated_client, circle, challenge
     ):
         url = f"{BASE_URL}{circle.id}/challenges/{challenge.id}/progress/"
-        resp = authenticated_client.post(
-            url, {"progress_value": 5}, format="json"
-        )
+        resp = authenticated_client.post(url, {"progress_value": 5}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
         assert "join the challenge" in resp.data["error"]
 
@@ -1408,19 +1391,14 @@ class TestSubmitProgressView:
     ):
         api_client.force_authenticate(user=other_user)
         url = f"{BASE_URL}{circle.id}/challenges/{challenge.id}/progress/"
-        resp = api_client.post(
-            url, {"progress_value": 5}, format="json"
-        )
+        resp = api_client.post(url, {"progress_value": 5}, format="json")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_submit_progress_nonexistent_challenge(
-        self, authenticated_client, circle
-    ):
+    def test_submit_progress_nonexistent_challenge(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/challenges/{uuid.uuid4()}/progress/"
-        resp = authenticated_client.post(
-            url, {"progress_value": 5}, format="json"
-        )
+        resp = authenticated_client.post(url, {"progress_value": 5}, format="json")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_submit_progress_negative_value(
@@ -1428,9 +1406,7 @@ class TestSubmitProgressView:
     ):
         challenge.participants.add(user)
         url = f"{BASE_URL}{circle.id}/challenges/{challenge.id}/progress/"
-        resp = authenticated_client.post(
-            url, {"progress_value": -1}, format="json"
-        )
+        resp = authenticated_client.post(url, {"progress_value": -1}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_submit_progress_without_notes(
@@ -1438,9 +1414,7 @@ class TestSubmitProgressView:
     ):
         challenge.participants.add(user)
         url = f"{BASE_URL}{circle.id}/challenges/{challenge.id}/progress/"
-        resp = authenticated_client.post(
-            url, {"progress_value": 7}, format="json"
-        )
+        resp = authenticated_client.post(url, {"progress_value": 7}, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
         p = ChallengeProgress.objects.get(challenge=challenge, user=user)
         assert p.notes == ""
@@ -1481,6 +1455,7 @@ class TestChallengeLeaderboardView:
 
     def test_leaderboard_nonexistent_challenge(self, authenticated_client, circle):
         import uuid
+
         url = f"{BASE_URL}{circle.id}/challenges/{uuid.uuid4()}/leaderboard/"
         resp = authenticated_client.get(url)
         assert resp.status_code == status.HTTP_404_NOT_FOUND
@@ -1528,9 +1503,7 @@ class TestCirclePostAdmin:
 
     def test_content_preview_long(self, circle, user):
         long_content = "A" * 100
-        p = CirclePost.objects.create(
-            circle=circle, author=user, content=long_content
-        )
+        p = CirclePost.objects.create(circle=circle, author=user, content=long_content)
         admin_instance = CirclePostAdmin(CirclePost, None)
         result = admin_instance.content_preview(p)
         assert result.endswith("...")
@@ -1597,10 +1570,10 @@ class TestCircleCreateSerializer:
 class TestCirclePostSerializer:
     """Tests for CirclePostSerializer reaction aggregation."""
 
-    def test_reaction_counts(self, authenticated_client, circle, post, user, other_user):
-        CircleMembership.objects.create(
-            circle=circle, user=other_user, role="member"
-        )
+    def test_reaction_counts(
+        self, authenticated_client, circle, post, user, other_user
+    ):
+        CircleMembership.objects.create(circle=circle, user=other_user, role="member")
         PostReaction.objects.create(post=post, user=user, reaction_type="fire")
         PostReaction.objects.create(post=post, user=other_user, reaction_type="fire")
         url = f"{BASE_URL}{circle.id}/feed/"

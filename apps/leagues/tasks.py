@@ -14,7 +14,7 @@ from django.utils import timezone as django_timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='apps.leagues.tasks.check_season_end')
+@shared_task(name="apps.leagues.tasks.check_season_end")
 def check_season_end():
     """
     Check if the active season has ended and trigger processing.
@@ -27,7 +27,7 @@ def check_season_end():
 
     season = Season.get_active_season()
     if not season:
-        logger.info('No active season found.')
+        logger.info("No active season found.")
         return
 
     if not season.has_ended:
@@ -41,19 +41,20 @@ def check_season_end():
     logger.info('Season "%s" has ended. Setting status to processing...', season.name)
 
     # Mark as processing to prevent duplicate runs
-    season.status = 'processing'
+    season.status = "processing"
     season.is_active = False
-    season.save(update_fields=['status', 'is_active', 'updated_at'])
+    season.save(update_fields=["status", "is_active", "updated_at"])
 
     # Invalidate active season cache
     from django.core.cache import cache
-    cache.delete('active_season')
+
+    cache.delete("active_season")
 
     # Trigger the heavy processing task
     process_season_end.delay(str(season.id))
 
 
-@shared_task(name='apps.leagues.tasks.process_season_end')
+@shared_task(name="apps.leagues.tasks.process_season_end")
 def process_season_end(season_id):
     """
     Process a season that has ended.
@@ -74,33 +75,35 @@ def process_season_end(season_id):
     try:
         season = Season.objects.get(id=season_id)
     except Season.DoesNotExist:
-        logger.error('Season %s not found for end processing.', season_id)
+        logger.error("Season %s not found for end processing.", season_id)
         return
 
-    if season.status == 'ended':
-        logger.warning('Season %s already ended. Skipping.', season.name)
+    if season.status == "ended":
+        logger.warning("Season %s already ended. Skipping.", season.name)
         return
 
     logger.info('Processing season end for "%s"...', season.name)
 
     # 1. Calculate rewards
     rewards_count = LeagueService.calculate_season_rewards(season)
-    logger.info('Created %d season rewards.', rewards_count)
+    logger.info("Created %d season rewards.", rewards_count)
 
     # 2. Compute promotion/relegation
     promo_stats = LeagueService.compute_season_end_promotions(season)
     logger.info(
-        'Promotion stats: %d promoted, %d relegated, %d neutral.',
-        promo_stats['promoted'], promo_stats['relegated'], promo_stats['neutral'],
+        "Promotion stats: %d promoted, %d relegated, %d neutral.",
+        promo_stats["promoted"],
+        promo_stats["relegated"],
+        promo_stats["neutral"],
     )
 
     # 3. Send league change notifications
     send_league_change_notifications.delay(str(season.id))
 
     # 4. Mark season as ended
-    season.status = 'ended'
+    season.status = "ended"
     season.is_active = False
-    season.save(update_fields=['status', 'is_active', 'updated_at'])
+    season.save(update_fields=["status", "is_active", "updated_at"])
 
     logger.info('Season "%s" marked as ended.', season.name)
 
@@ -108,7 +111,7 @@ def process_season_end(season_id):
     create_next_season_task.delay(str(season.id))
 
 
-@shared_task(name='apps.leagues.tasks.create_next_season_task')
+@shared_task(name="apps.leagues.tasks.create_next_season_task")
 def create_next_season_task(ended_season_id):
     """
     Create the next season after one has ended.
@@ -125,7 +128,7 @@ def create_next_season_task(ended_season_id):
     try:
         ended_season = Season.objects.get(id=ended_season_id)
     except Season.DoesNotExist:
-        logger.error('Ended season %s not found.', ended_season_id)
+        logger.error("Ended season %s not found.", ended_season_id)
         return
 
     new_season = LeagueService.create_next_season(ended_season)
@@ -133,29 +136,30 @@ def create_next_season_task(ended_season_id):
         logger.info(
             'Created next season "%s" (ends %s).',
             new_season.name,
-            new_season.end_date.strftime('%Y-%m-%d'),
+            new_season.end_date.strftime("%Y-%m-%d"),
         )
     else:
-        logger.info('Auto-create next season is disabled or failed.')
+        logger.info("Auto-create next season is disabled or failed.")
 
 
-@shared_task(name='apps.leagues.tasks.send_league_change_notifications')
+@shared_task(name="apps.leagues.tasks.send_league_change_notifications")
 def send_league_change_notifications(season_id=None):
     """
     Send notifications for league promotions and demotions.
 
     Runs the promote/demote cycle and notifies affected users.
     """
-    from .services import LeagueService
-    from .models import LeagueStanding, Season, League
     from apps.notifications.models import Notification
 
-    season = None
+    from .models import League, LeagueStanding, Season
+    from .services import LeagueService
+
     if season_id:
         try:
-            from .models import Season
-            season = Season.objects.get(id=season_id)
-        except Season.DoesNotExist:
+            from .models import Season as SeasonModel
+
+            SeasonModel.objects.get(id=season_id)
+        except SeasonModel.DoesNotExist:
             pass
 
     # Get current standings before promotion
@@ -165,39 +169,43 @@ def send_league_change_notifications(season_id=None):
 
     # Record old leagues
     old_leagues = {}
-    for standing in LeagueStanding.objects.filter(season=active_season).select_related('league'):
+    for standing in LeagueStanding.objects.filter(season=active_season).select_related(
+        "league"
+    ):
         old_leagues[standing.user_id] = standing.league
 
     # Run promotion/demotion
     result = LeagueService.promote_demote_users()
     logger.info(
-        'Promotion/demotion: %d promoted, %d demoted.',
-        result['promoted'],
-        result['demoted'],
+        "Promotion/demotion: %d promoted, %d demoted.",
+        result["promoted"],
+        result["demoted"],
     )
 
     # Send notifications for changed users
     now = django_timezone.now()
-    for standing in LeagueStanding.objects.filter(season=active_season).select_related('league', 'user'):
+    for standing in LeagueStanding.objects.filter(season=active_season).select_related(
+        "league", "user"
+    ):
         old_league = old_leagues.get(standing.user_id)
         if old_league and old_league.id != standing.league_id:
             old_order = League.TIER_ORDER.get(old_league.tier, 0)
             new_order = League.TIER_ORDER.get(standing.league.tier, 0)
 
             if new_order > old_order:
-                title = f'Promoted to {standing.league.name}!'
+                title = f"Promoted to {standing.league.name}!"
                 body = (
-                    f'Congratulations! You have been promoted from '
-                    f'{old_league.name} to {standing.league.name}. Keep up the great work!'
+                    f"Congratulations! You have been promoted from "
+                    f"{old_league.name} to {standing.league.name}. Keep up the great work!"
                 )
-                notif_type = 'achievement'
+                notif_type = "achievement"
             else:
-                title = f'League changed to {standing.league.name}'
+                title = f"League changed to {standing.league.name}"
                 body = (
-                    f'Your league has changed from {old_league.name} to '
-                    f'{standing.league.name}. Keep working on your dreams to climb back!'
+                    f"Your league has changed from {old_league.name} to "
+                    f"{standing.league.name}. Keep working on your dreams to climb back!"
                 )
-                notif_type = 'system'
+                notif_type = "system"
 
             Notification.objects.create(
                 user=standing.user,
@@ -205,15 +213,15 @@ def send_league_change_notifications(season_id=None):
                 title=title,
                 body=body,
                 data={
-                    'screen': 'leaderboard',
-                    'league_tier': standing.league.tier,
+                    "screen": "leaderboard",
+                    "league_tier": standing.league.tier,
                 },
                 scheduled_for=now,
-                status='sent',
+                status="sent",
             )
 
 
-@shared_task(name='apps.leagues.tasks.create_daily_rank_snapshots')
+@shared_task(name="apps.leagues.tasks.create_daily_rank_snapshots")
 def create_daily_rank_snapshots():
     """
     Create daily rank snapshots for all users with active standings.
@@ -221,21 +229,17 @@ def create_daily_rank_snapshots():
     Records each user's rank and XP for historical tracking.
     Uses update_or_create to be idempotent if run multiple times per day.
     """
-    from .models import LeagueStanding, Season, RankSnapshot
+    from .models import LeagueStanding, RankSnapshot, Season
 
     season = Season.get_active_season()
     if not season:
-        logger.info('No active season. Skipping rank snapshots.')
+        logger.info("No active season. Skipping rank snapshots.")
         return
 
     today = django_timezone.now().date()
     created_count = 0
 
-    standings = (
-        LeagueStanding.objects
-        .filter(season=season)
-        .select_related('league')
-    )
+    standings = LeagueStanding.objects.filter(season=season).select_related("league")
 
     for standing in standings:
         _, created = RankSnapshot.objects.update_or_create(
@@ -243,9 +247,9 @@ def create_daily_rank_snapshots():
             season=season,
             snapshot_date=today,
             defaults={
-                'league': standing.league,
-                'rank': standing.rank,
-                'xp': standing.xp_earned_this_season,
+                "league": standing.league,
+                "rank": standing.rank,
+                "xp": standing.xp_earned_this_season,
             },
         )
         if created:
@@ -259,7 +263,7 @@ def create_daily_rank_snapshots():
     )
 
 
-@shared_task(name='apps.leagues.tasks.rebalance_groups_task')
+@shared_task(name="apps.leagues.tasks.rebalance_groups_task")
 def rebalance_groups_task(season_id=None, league_id=None):
     """
     Rebalance groups for one or all leagues in a season.
@@ -272,31 +276,31 @@ def rebalance_groups_task(season_id=None, league_id=None):
         season_id: Optional UUID string of the season.
         league_id: Optional UUID string of a specific league.
     """
-    from .models import Season, League
+    from .models import League, Season
     from .services import LeagueService
 
     if season_id:
         try:
             season = Season.objects.get(id=season_id)
         except Season.DoesNotExist:
-            logger.error('Season %s not found for rebalance.', season_id)
+            logger.error("Season %s not found for rebalance.", season_id)
             return
     else:
         season = Season.get_active_season()
         if not season:
-            logger.info('No active season. Skipping rebalance.')
+            logger.info("No active season. Skipping rebalance.")
             return
 
     if league_id:
         try:
             leagues = [League.objects.get(id=league_id)]
         except League.DoesNotExist:
-            logger.error('League %s not found for rebalance.', league_id)
+            logger.error("League %s not found for rebalance.", league_id)
             return
     else:
         leagues = League.objects.all()
 
-    total_stats = {'groups_active': 0, 'groups_deactivated': 0, 'members_moved': 0}
+    total_stats = {"groups_active": 0, "groups_deactivated": 0, "members_moved": 0}
 
     for league in leagues:
         stats = LeagueService.rebalance_league_groups(season, league)
@@ -305,15 +309,15 @@ def rebalance_groups_task(season_id=None, league_id=None):
 
     logger.info(
         'Rebalance complete for season "%s": %d groups active, '
-        '%d deactivated, %d members moved.',
+        "%d deactivated, %d members moved.",
         season.name,
-        total_stats['groups_active'],
-        total_stats['groups_deactivated'],
-        total_stats['members_moved'],
+        total_stats["groups_active"],
+        total_stats["groups_deactivated"],
+        total_stats["members_moved"],
     )
 
 
-@shared_task(name='apps.leagues.tasks.auto_activate_pending_seasons')
+@shared_task(name="apps.leagues.tasks.auto_activate_pending_seasons")
 def auto_activate_pending_seasons():
     """
     Activate pending seasons whose start_date has arrived.
@@ -322,12 +326,13 @@ def auto_activate_pending_seasons():
     then sets them to status='active'. Also deactivates any other
     active season to enforce the one-active-at-a-time constraint.
     """
-    from .models import Season
     from django.core.cache import cache
+
+    from .models import Season
 
     now = django_timezone.now()
     pending = Season.objects.filter(
-        status='pending',
+        status="pending",
         start_date__lte=now,
     )
 
@@ -335,26 +340,26 @@ def auto_activate_pending_seasons():
     for season in pending:
         # Deactivate any currently active season
         Season.objects.filter(
-            status='active',
+            status="active",
         ).exclude(id=season.id).update(
-            status='ended',
+            status="ended",
             is_active=False,
         )
 
-        season.status = 'active'
+        season.status = "active"
         season.is_active = True
-        season.save(update_fields=['status', 'is_active', 'updated_at'])
+        season.save(update_fields=["status", "is_active", "updated_at"])
 
-        cache.delete('active_season')
+        cache.delete("active_season")
         activated += 1
 
         logger.info(
             'Auto-activated pending season "%s" (started %s).',
             season.name,
-            season.start_date.strftime('%Y-%m-%d'),
+            season.start_date.strftime("%Y-%m-%d"),
         )
 
     if activated:
-        logger.info('Auto-activated %d pending season(s).', activated)
+        logger.info("Auto-activated %d pending season(s).", activated)
     else:
-        logger.debug('No pending seasons to activate.')
+        logger.debug("No pending seasons to activate.")

@@ -8,7 +8,7 @@ detail serializers include everything.
 
 from rest_framework import serializers
 
-from .models import Category, Tag, Post
+from .models import Category, Post, Tag
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -17,12 +17,12 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = [
-            'id',
-            'name',
-            'slug',
-            'description',
-            'icon',
-            'order',
+            "id",
+            "name",
+            "slug",
+            "description",
+            "icon",
+            "order",
         ]
         read_only_fields = fields
 
@@ -33,9 +33,9 @@ class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = [
-            'id',
-            'name',
-            'slug',
+            "id",
+            "name",
+            "slug",
         ]
         read_only_fields = fields
 
@@ -51,33 +51,35 @@ class PostListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     author = serializers.SerializerMethodField()
-    publishedAt = serializers.DateTimeField(source='published_at', read_only=True)
-    readTimeMinutes = serializers.IntegerField(source='read_time_minutes', read_only=True)
-    coverImage = serializers.URLField(source='cover_image', read_only=True)
+    publishedAt = serializers.DateTimeField(source="published_at", read_only=True)
+    readTimeMinutes = serializers.IntegerField(
+        source="read_time_minutes", read_only=True
+    )
+    coverImage = serializers.URLField(source="cover_image", read_only=True)
 
     class Meta:
         model = Post
         fields = [
-            'id',
-            'title',
-            'slug',
-            'excerpt',
-            'category',
-            'tags',
-            'author',
-            'coverImage',
-            'publishedAt',
-            'readTimeMinutes',
-            'featured',
+            "id",
+            "title",
+            "slug",
+            "excerpt",
+            "category",
+            "tags",
+            "author",
+            "coverImage",
+            "publishedAt",
+            "readTimeMinutes",
+            "featured",
         ]
         read_only_fields = fields
 
     def get_author(self, obj) -> dict:
         """Return the author's public profile info."""
         return {
-            'id': str(obj.author.id),
-            'name': obj.author.display_name or 'Anonymous',
-            'avatar': obj.author.avatar_url or '',
+            "id": str(obj.author.id),
+            "name": obj.author.display_name or "Anonymous",
+            "avatar": obj.author.avatar_url or "",
         }
 
 
@@ -88,15 +90,15 @@ class PostDetailSerializer(PostListSerializer):
     Extends the list serializer with full content and view count.
     """
 
-    viewsCount = serializers.IntegerField(source='views_count', read_only=True)
-    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
-    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    viewsCount = serializers.IntegerField(source="views_count", read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
 
     class Meta(PostListSerializer.Meta):
         fields = PostListSerializer.Meta.fields + [
-            'content',
-            'viewsCount',
-            'createdAt',
-            'updatedAt',
+            "content",
+            "viewsCount",
+            "createdAt",
+            "updatedAt",
         ]
         read_only_fields = fields

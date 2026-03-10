@@ -7,7 +7,7 @@ Includes:
 """
 
 import logging
-import time
+
 from django.conf import settings
 from django.utils import timezone
 
@@ -50,28 +50,28 @@ class SecurityHeadersMiddleware:
         response = self.get_response(request)
 
         # Always set transport/framing headers
-        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response['X-Content-Type-Options'] = 'nosniff'
-        response['X-Frame-Options'] = 'DENY'
-        response['Cross-Origin-Opener-Policy'] = 'same-origin'
-        response['Cross-Origin-Resource-Policy'] = 'cross-origin'
+        response["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response["X-Content-Type-Options"] = "nosniff"
+        response["X-Frame-Options"] = "DENY"
+        response["Cross-Origin-Opener-Policy"] = "same-origin"
+        response["Cross-Origin-Resource-Policy"] = "cross-origin"
 
         # CSP and Permissions-Policy only apply to HTML documents.
         # Setting them on JSON API responses is meaningless and can cause
         # browsers to apply a second, more restrictive policy to the page.
-        content_type = response.get('Content-Type', '')
-        is_api = request.path.startswith('/api/') and 'text/html' not in content_type
+        content_type = response.get("Content-Type", "")
+        is_api = request.path.startswith("/api/") and "text/html" not in content_type
         if not is_api:
-            csp = getattr(settings, 'CSP_POLICY', self.DEFAULT_CSP)
-            response['Content-Security-Policy'] = csp
-            response['Permissions-Policy'] = (
-                'geolocation=(), microphone=(self), camera=(self), payment=()'
+            csp = getattr(settings, "CSP_POLICY", self.DEFAULT_CSP)
+            response["Content-Security-Policy"] = csp
+            response["Permissions-Policy"] = (
+                "geolocation=(), microphone=(self), camera=(self), payment=()"
             )
 
         # HSTS — enforce HTTPS for 1 year, include subdomains
         if not settings.DEBUG:
-            response['Strict-Transport-Security'] = (
-                'max-age=31536000; includeSubDomains; preload'
+            response["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
             )
 
         return response
@@ -93,14 +93,14 @@ class EmailVerificationMiddleware:
     - Non-API paths     (static, media, etc.)
     """
 
-    _EXEMPT_PREFIXES = ('/api/auth/', '/api/users/me/', '/health/', '/admin/')
+    _EXEMPT_PREFIXES = ("/api/auth/", "/api/users/me/", "/health/", "/admin/")
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         # Only check API paths
-        if not request.path.startswith('/api/'):
+        if not request.path.startswith("/api/"):
             return self.get_response(request)
 
         # Skip exempt paths
@@ -109,12 +109,13 @@ class EmailVerificationMiddleware:
                 return self.get_response(request)
 
         # Try to identify the user from JWT token
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if not auth_header.startswith('Bearer '):
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth_header.startswith("Bearer "):
             return self.get_response(request)
 
         try:
             from rest_framework_simplejwt.authentication import JWTAuthentication
+
             jwt_auth = JWTAuthentication()
             validated_token = jwt_auth.get_validated_token(auth_header[7:])
             user = jwt_auth.get_user(validated_token)
@@ -125,8 +126,12 @@ class EmailVerificationMiddleware:
         # Check email verification
         if not user.email_addresses.filter(verified=True, primary=True).exists():
             from django.http import JsonResponse
+
             return JsonResponse(
-                {'detail': 'Please verify your email address to use the platform.', 'code': 'email_not_verified'},
+                {
+                    "detail": "Please verify your email address to use the platform.",
+                    "code": "email_not_verified",
+                },
                 status=403,
             )
 
@@ -145,16 +150,18 @@ class LastActivityMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        if hasattr(request, 'user') and request.user.is_authenticated:
+        if hasattr(request, "user") and request.user.is_authenticated:
             user_id = str(request.user.id)
 
             # Throttle using Django cache (shared across workers) — once per 60s
             try:
                 from django.core.cache import cache
-                cache_key = f'last_activity_{user_id}'
+
+                cache_key = f"last_activity_{user_id}"
                 if not cache.get(cache_key):
                     cache.set(cache_key, True, timeout=60)
                     from apps.users.models import User
+
                     User.objects.filter(id=request.user.id).update(
                         is_online=True,
                         last_seen=timezone.now(),

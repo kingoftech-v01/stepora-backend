@@ -3,9 +3,11 @@ Dreams, Goals, and Tasks models for Stepora.
 """
 
 import uuid
+
 from django.db import models
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
+
 from apps.users.models import User
 
 
@@ -13,7 +15,7 @@ class Dream(models.Model):
     """Main dream/objective model."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dreams')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="dreams")
 
     title = EncryptedCharField(max_length=255)
     description = EncryptedTextField()
@@ -21,30 +23,25 @@ class Dream(models.Model):
     language = models.CharField(
         max_length=10,
         blank=True,
-        default='',
-        help_text='Detected language code (fr, en, es, etc.) from dream title/description'
+        default="",
+        help_text="Detected language code (fr, en, es, etc.) from dream title/description",
     )
     target_date = models.DateTimeField(null=True, blank=True)
     priority = models.IntegerField(default=1)
 
     STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('paused', 'Paused'),
-        ('archived', 'Archived'),
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("paused", "Paused"),
+        ("archived", "Archived"),
     ]
     status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='active',
-        db_index=True
+        max_length=20, choices=STATUS_CHOICES, default="active", db_index=True
     )
 
     # AI analysis
     ai_analysis = models.JSONField(
-        null=True,
-        blank=True,
-        help_text='AI-generated analysis and insights'
+        null=True, blank=True, help_text="AI-generated analysis and insights"
     )
 
     # Vision board
@@ -54,8 +51,8 @@ class Dream(models.Model):
     color = models.CharField(
         max_length=7,
         blank=True,
-        default='',
-        help_text='Hex color for calendar display (e.g. #8B5CF6). Auto-assigned if blank.'
+        default="",
+        help_text="Hex color for calendar display (e.g. #8B5CF6). Auto-assigned if blank.",
     )
 
     # Tracking
@@ -64,14 +61,13 @@ class Dream(models.Model):
 
     # Privacy
     is_public = models.BooleanField(
-        default=False,
-        help_text='Whether this dream is publicly visible to other users'
+        default=False, help_text="Whether this dream is publicly visible to other users"
     )
 
     # Favorites
     is_favorited = models.BooleanField(
         default=False,
-        help_text='Whether the user has favorited this dream on the vision board'
+        help_text="Whether the user has favorited this dream on the vision board",
     )
 
     # 2-minute start
@@ -81,25 +77,25 @@ class Dream(models.Model):
     calibration_status = models.CharField(
         max_length=20,
         choices=[
-            ('pending', 'Pending'),
-            ('in_progress', 'In Progress'),
-            ('completed', 'Completed'),
-            ('skipped', 'Skipped'),
+            ("pending", "Pending"),
+            ("in_progress", "In Progress"),
+            ("completed", "Completed"),
+            ("skipped", "Skipped"),
         ],
-        default='pending',
-        help_text='Status of the calibration questionnaire'
+        default="pending",
+        help_text="Status of the calibration questionnaire",
     )
 
     # Adaptive plan generation fields
     plan_phase = models.CharField(
         max_length=20,
         choices=[
-            ('none', 'No Plan'),
-            ('skeleton', 'Skeleton Only'),
-            ('partial', 'Partial Tasks'),
-            ('full', 'Full Plan'),
+            ("none", "No Plan"),
+            ("skeleton", "Skeleton Only"),
+            ("partial", "Partial Tasks"),
+            ("full", "Full Plan"),
         ],
-        default='none',
+        default="none",
         db_index=True,
     )
     plan_skeleton = models.JSONField(null=True, blank=True)
@@ -109,20 +105,20 @@ class Dream(models.Model):
     checkin_count = models.IntegerField(default=0)
     checkin_interval_days = models.IntegerField(
         default=14,
-        help_text='Days between check-ins (7 if behind, 14 normal, 21 if ahead)'
+        help_text="Days between check-ins (7 if behind, 14 normal, 21 if ahead)",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'dreams'
-        ordering = ['-created_at']
+        db_table = "dreams"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'status']),
-            models.Index(fields=['category']),
-            models.Index(fields=['target_date']),
-            models.Index(fields=['is_public', 'status']),
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["category"]),
+            models.Index(fields=["target_date"]),
+            models.Index(fields=["is_public", "status"]),
         ]
 
     def __str__(self):
@@ -133,7 +129,7 @@ class Dream(models.Model):
         total_milestones = self.milestones.count()
         if total_milestones > 0:
             # New hierarchy: progress based on milestones
-            completed_milestones = self.milestones.filter(status='completed').count()
+            completed_milestones = self.milestones.filter(status="completed").count()
             self.progress_percentage = (completed_milestones / total_milestones) * 100
         else:
             # Legacy path: progress based on goals directly
@@ -141,22 +137,22 @@ class Dream(models.Model):
             if total_goals == 0:
                 self.progress_percentage = 0.0
             else:
-                completed_goals = self.goals.filter(status='completed').count()
+                completed_goals = self.goals.filter(status="completed").count()
                 self.progress_percentage = (completed_goals / total_goals) * 100
 
-        self.save(update_fields=['progress_percentage'])
+        self.save(update_fields=["progress_percentage"])
 
         # Record progress snapshot for sparkline display
         DreamProgressSnapshot.record_snapshot(self)
 
     # Map dream category to gamification attribute
     CATEGORY_TO_ATTRIBUTE = {
-        'health': 'health',
-        'career': 'career',
-        'relationships': 'relationships',
-        'personal': 'personal_growth',
-        'finance': 'finance',
-        'hobbies': 'hobbies',
+        "health": "health",
+        "career": "career",
+        "relationships": "relationships",
+        "personal": "personal_growth",
+        "finance": "finance",
+        "hobbies": "hobbies",
     }
 
     def _award_category_xp(self, amount):
@@ -165,15 +161,16 @@ class Dream(models.Model):
         if not attr:
             return
         from apps.users.models import GamificationProfile
+
         profile, _ = GamificationProfile.objects.get_or_create(user=self.user)
         profile.add_attribute_xp(attr, amount)
 
     def complete(self):
         """Mark dream as completed."""
-        if self.status == 'completed':
+        if self.status == "completed":
             return  # Already completed, idempotent no-op
 
-        self.status = 'completed'
+        self.status = "completed"
         self.completed_at = timezone.now()
         self.progress_percentage = 100.0
         self.save()
@@ -186,6 +183,7 @@ class Dream(models.Model):
 
         # Check achievements
         from apps.users.services import AchievementService
+
         AchievementService.check_achievements(self.user)
 
 
@@ -204,37 +202,39 @@ class DreamMilestone(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='milestones')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="milestones"
+    )
 
     title = EncryptedCharField(max_length=255)
-    description = EncryptedTextField(blank=True, default='')
-    order = models.IntegerField(help_text='Order within the dream (1 = first milestone)')
+    description = EncryptedTextField(blank=True, default="")
+    order = models.IntegerField(
+        help_text="Order within the dream (1 = first milestone)"
+    )
 
     # Timeline for this milestone
     target_date = models.DateTimeField(
-        null=True, blank=True,
-        help_text='Date by which this milestone should be achieved'
+        null=True,
+        blank=True,
+        help_text="Date by which this milestone should be achieved",
     )
     expected_date = models.DateField(
-        null=True, blank=True,
-        help_text='Ideal/soft date to complete this milestone (no penalty if missed)'
+        null=True,
+        blank=True,
+        help_text="Ideal/soft date to complete this milestone (no penalty if missed)",
     )
     deadline_date = models.DateField(
-        null=True, blank=True,
-        help_text='Hard deadline — must be done by this date'
+        null=True, blank=True, help_text="Hard deadline — must be done by this date"
     )
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('in_progress', 'In Progress'),
-        ('completed', 'Completed'),
-        ('skipped', 'Skipped'),
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+        ("skipped", "Skipped"),
     ]
     status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending',
-        db_index=True
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
     )
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -247,14 +247,14 @@ class DreamMilestone(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'milestones'
-        ordering = ['dream', 'order']
+        db_table = "milestones"
+        ordering = ["dream", "order"]
         indexes = [
-            models.Index(fields=['dream', 'order']),
-            models.Index(fields=['status']),
-            models.Index(fields=['target_date']),
-            models.Index(fields=['expected_date']),
-            models.Index(fields=['deadline_date']),
+            models.Index(fields=["dream", "order"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["target_date"]),
+            models.Index(fields=["expected_date"]),
+            models.Index(fields=["deadline_date"]),
         ]
 
     def __str__(self):
@@ -266,20 +266,20 @@ class DreamMilestone(models.Model):
         if total_goals == 0:
             self.progress_percentage = 0.0
         else:
-            completed_goals = self.goals.filter(status='completed').count()
+            completed_goals = self.goals.filter(status="completed").count()
             self.progress_percentage = (completed_goals / total_goals) * 100
 
-        self.save(update_fields=['progress_percentage'])
+        self.save(update_fields=["progress_percentage"])
 
         # Update parent dream progress
         self.dream.update_progress()
 
     def complete(self):
         """Mark milestone as completed."""
-        if self.status == 'completed':
+        if self.status == "completed":
             return
 
-        self.status = 'completed'
+        self.status = "completed"
         self.completed_at = timezone.now()
         self.progress_percentage = 100.0
         self.save()
@@ -293,6 +293,7 @@ class DreamMilestone(models.Model):
 
         # Check achievements
         from apps.users.services import AchievementService
+
         AchievementService.check_achievements(self.dream.user)
 
 
@@ -300,40 +301,40 @@ class Goal(models.Model):
     """Goal within a milestone."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='goals')
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="goals")
     milestone = models.ForeignKey(
-        DreamMilestone, on_delete=models.CASCADE, related_name='goals',
-        null=True, blank=True,
-        help_text='The milestone this goal belongs to (null for legacy goals without milestones)'
+        DreamMilestone,
+        on_delete=models.CASCADE,
+        related_name="goals",
+        null=True,
+        blank=True,
+        help_text="The milestone this goal belongs to (null for legacy goals without milestones)",
     )
 
     title = EncryptedCharField(max_length=255)
-    description = EncryptedTextField(blank=True, default='')
+    description = EncryptedTextField(blank=True, default="")
     order = models.IntegerField()
 
     estimated_minutes = models.IntegerField(null=True, blank=True)
     scheduled_start = models.DateTimeField(null=True, blank=True)
     scheduled_end = models.DateTimeField(null=True, blank=True)
     expected_date = models.DateField(
-        null=True, blank=True,
-        help_text='Ideal/soft date to complete this goal (no penalty if missed)'
+        null=True,
+        blank=True,
+        help_text="Ideal/soft date to complete this goal (no penalty if missed)",
     )
     deadline_date = models.DateField(
-        null=True, blank=True,
-        help_text='Hard deadline — must be done by this date'
+        null=True, blank=True, help_text="Hard deadline — must be done by this date"
     )
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('in_progress', 'In Progress'),
-        ('completed', 'Completed'),
-        ('skipped', 'Skipped'),
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+        ("skipped", "Skipped"),
     ]
     status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending',
-        db_index=True
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
     )
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -348,15 +349,15 @@ class Goal(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'goals'
-        ordering = ['dream', 'milestone__order', 'order']
+        db_table = "goals"
+        ordering = ["dream", "milestone__order", "order"]
         indexes = [
-            models.Index(fields=['dream', 'order']),
-            models.Index(fields=['status']),
-            models.Index(fields=['scheduled_start']),
-            models.Index(fields=['milestone', 'order']),
-            models.Index(fields=['expected_date']),
-            models.Index(fields=['deadline_date']),
+            models.Index(fields=["dream", "order"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["scheduled_start"]),
+            models.Index(fields=["milestone", "order"]),
+            models.Index(fields=["expected_date"]),
+            models.Index(fields=["deadline_date"]),
         ]
 
     def __str__(self):
@@ -368,10 +369,10 @@ class Goal(models.Model):
         if total_tasks == 0:
             self.progress_percentage = 0.0
         else:
-            completed_tasks = self.tasks.filter(status='completed').count()
+            completed_tasks = self.tasks.filter(status="completed").count()
             self.progress_percentage = (completed_tasks / total_tasks) * 100
 
-        self.save(update_fields=['progress_percentage'])
+        self.save(update_fields=["progress_percentage"])
 
         # Update parent milestone progress if linked
         if self.milestone:
@@ -382,10 +383,10 @@ class Goal(models.Model):
 
     def complete(self):
         """Mark goal as completed."""
-        if self.status == 'completed':
+        if self.status == "completed":
             return  # Already completed, idempotent no-op
 
-        self.status = 'completed'
+        self.status = "completed"
         self.completed_at = timezone.now()
         self.progress_percentage = 100.0
         self.save()
@@ -402,6 +403,7 @@ class Goal(models.Model):
 
         # Check achievements
         from apps.users.services import AchievementService
+
         AchievementService.check_achievements(self.dream.user)
 
 
@@ -409,41 +411,40 @@ class Task(models.Model):
     """Individual task within a goal."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='tasks')
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name="tasks")
 
     title = EncryptedCharField(max_length=255)
-    description = EncryptedTextField(blank=True, default='')
+    description = EncryptedTextField(blank=True, default="")
     order = models.IntegerField()
 
     scheduled_date = models.DateTimeField(null=True, blank=True, db_index=True)
-    scheduled_time = models.CharField(max_length=5, blank=True, help_text='HH:MM format')
+    scheduled_time = models.CharField(
+        max_length=5, blank=True, help_text="HH:MM format"
+    )
     duration_mins = models.IntegerField(null=True, blank=True)
     expected_date = models.DateField(
-        null=True, blank=True,
-        help_text='Ideal/soft date to do this task (no penalty if missed)'
+        null=True,
+        blank=True,
+        help_text="Ideal/soft date to do this task (no penalty if missed)",
     )
     deadline_date = models.DateField(
-        null=True, blank=True,
-        help_text='Hard deadline — must be done by this date'
+        null=True, blank=True, help_text="Hard deadline — must be done by this date"
     )
 
     # Recurrence
     recurrence = models.JSONField(
         null=True,
         blank=True,
-        help_text='Recurrence pattern: {type: "daily|weekly|monthly", interval: 1, ...}'
+        help_text='Recurrence pattern: {type: "daily|weekly|monthly", interval: 1, ...}',
     )
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('skipped', 'Skipped'),
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("skipped", "Skipped"),
     ]
     status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending',
-        db_index=True
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
     )
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -452,37 +453,42 @@ class Task(models.Model):
 
     # ── Chain (recurring task chains) ──
     chain_next_delay_days = models.IntegerField(
-        null=True, blank=True,
-        help_text='Days after completion to schedule the next task in the chain'
+        null=True,
+        blank=True,
+        help_text="Days after completion to schedule the next task in the chain",
     )
     chain_template_title = models.CharField(
-        max_length=255, blank=True, default='',
-        help_text='Custom title for the next task in the chain (uses current title if blank)'
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Custom title for the next task in the chain (uses current title if blank)",
     )
     chain_parent = models.ForeignKey(
-        'self', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='chain_children',
-        help_text='The previous task in this chain'
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chain_children",
+        help_text="The previous task in this chain",
     )
     is_chain = models.BooleanField(
-        default=False,
-        help_text='Whether this task is part of a recurring chain'
+        default=False, help_text="Whether this task is part of a recurring chain"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'tasks'
-        ordering = ['goal', 'scheduled_date', 'order']
+        db_table = "tasks"
+        ordering = ["goal", "scheduled_date", "order"]
         indexes = [
-            models.Index(fields=['goal', 'scheduled_date']),
-            models.Index(fields=['status']),
-            models.Index(fields=['scheduled_date']),
-            models.Index(fields=['status', '-created_at']),
-            models.Index(fields=['expected_date']),
-            models.Index(fields=['deadline_date']),
-            models.Index(fields=['chain_parent']),
+            models.Index(fields=["goal", "scheduled_date"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["scheduled_date"]),
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["expected_date"]),
+            models.Index(fields=["deadline_date"]),
+            models.Index(fields=["chain_parent"]),
         ]
 
     def __str__(self):
@@ -490,10 +496,10 @@ class Task(models.Model):
 
     def complete(self):
         """Mark task as completed."""
-        if self.status == 'completed':
+        if self.status == "completed":
             return  # Already completed, idempotent no-op
 
-        self.status = 'completed'
+        self.status = "completed"
         self.completed_at = timezone.now()
         self.save()
 
@@ -513,6 +519,7 @@ class Task(models.Model):
 
         # Record daily activity for heatmap
         from apps.users.models import DailyActivity
+
         DailyActivity.record_task_completion(
             user=self.goal.dream.user,
             xp_earned=xp_amount,
@@ -521,6 +528,7 @@ class Task(models.Model):
 
         # Check achievements
         from apps.users.services import AchievementService
+
         AchievementService.check_achievements(self.goal.dream.user)
 
         # ── Chain: auto-create next task if this is a chain task ──
@@ -529,8 +537,9 @@ class Task(models.Model):
 
     def _update_streak(self):
         """Update user's streak based on consecutive day completions (atomic)."""
-        from django.db.models import F
         from django.contrib.auth import get_user_model
+        from django.db.models import F
+
         User = get_user_model()
 
         user = self.goal.dream.user
@@ -542,18 +551,22 @@ class Task(models.Model):
             return
         elif last_activity_date == today - timezone.timedelta(days=1):
             # Consecutive day — atomic increment
-            User.objects.filter(id=user.id).update(streak_days=F('streak_days') + 1)
+            User.objects.filter(id=user.id).update(streak_days=F("streak_days") + 1)
         else:
             # Streak broken — reset
             User.objects.filter(id=user.id).update(streak_days=1)
 
-        user.refresh_from_db(fields=['streak_days'])
+        user.refresh_from_db(fields=["streak_days"])
 
     def _create_chain_next(self):
         """Auto-create the next task in a recurring chain."""
         from datetime import timedelta
 
-        next_title = self.chain_template_title.strip() if self.chain_template_title else self.title
+        next_title = (
+            self.chain_template_title.strip()
+            if self.chain_template_title
+            else self.title
+        )
         next_date = self.completed_at + timedelta(days=self.chain_next_delay_days)
 
         # Determine next order
@@ -575,20 +588,20 @@ class Task(models.Model):
 
         # Create notification for the user
         from apps.notifications.models import Notification
+
         Notification.objects.create(
             user=self.goal.dream.user,
-            notification_type='system',
-            title='Next task in chain created',
+            notification_type="system",
+            title="Next task in chain created",
             body='"{}" has been scheduled for {}.'.format(
-                next_task.title,
-                next_date.strftime('%b %d, %Y')
+                next_task.title, next_date.strftime("%b %d, %Y")
             ),
             scheduled_for=timezone.now(),
             data={
-                'screen': 'dream',
-                'dreamId': str(self.goal.dream.id),
-                'goalId': str(self.goal.id),
-                'taskId': str(next_task.id),
+                "screen": "dream",
+                "dreamId": str(self.goal.dream.id),
+                "goalId": str(self.goal.id),
+                "taskId": str(next_task.id),
             },
         )
 
@@ -620,47 +633,55 @@ class Obstacle(models.Model):
     """Predicted or actual obstacles for dreams, milestones, or goals."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='obstacles')
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="obstacles")
     milestone = models.ForeignKey(
-        DreamMilestone, on_delete=models.CASCADE, related_name='obstacles',
-        null=True, blank=True,
-        help_text='The milestone this obstacle is linked to (optional)'
+        DreamMilestone,
+        on_delete=models.CASCADE,
+        related_name="obstacles",
+        null=True,
+        blank=True,
+        help_text="The milestone this obstacle is linked to (optional)",
     )
     goal = models.ForeignKey(
-        Goal, on_delete=models.CASCADE, related_name='obstacles',
-        null=True, blank=True,
-        help_text='The goal this obstacle is linked to (optional)'
+        Goal,
+        on_delete=models.CASCADE,
+        related_name="obstacles",
+        null=True,
+        blank=True,
+        help_text="The goal this obstacle is linked to (optional)",
     )
 
     title = EncryptedCharField(max_length=255)
     description = EncryptedTextField()
 
     TYPE_CHOICES = [
-        ('predicted', 'Predicted'),
-        ('actual', 'Actual'),
+        ("predicted", "Predicted"),
+        ("actual", "Actual"),
     ]
-    obstacle_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='predicted')
+    obstacle_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default="predicted"
+    )
 
     # AI-generated solution
-    solution = EncryptedTextField(blank=True, default='')
+    solution = EncryptedTextField(blank=True, default="")
 
     # Status
     STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('resolved', 'Resolved'),
-        ('ignored', 'Ignored'),
+        ("active", "Active"),
+        ("resolved", "Resolved"),
+        ("ignored", "Ignored"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'obstacles'
-        ordering = ['-created_at']
+        db_table = "obstacles"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['milestone']),
-            models.Index(fields=['goal']),
+            models.Index(fields=["milestone"]),
+            models.Index(fields=["goal"]),
         ]
 
     def __str__(self):
@@ -671,26 +692,34 @@ class CalibrationResponse(models.Model):
     """Stores a calibration Q&A pair for a dream."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='calibration_responses')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="calibration_responses"
+    )
 
-    question = models.TextField(help_text='AI-generated calibration question')
-    answer = EncryptedTextField(blank=True, default='', help_text='User response to the question (encrypted at rest)')
-    question_number = models.IntegerField(help_text='Order of question in the calibration flow')
+    question = models.TextField(help_text="AI-generated calibration question")
+    answer = EncryptedTextField(
+        blank=True,
+        default="",
+        help_text="User response to the question (encrypted at rest)",
+    )
+    question_number = models.IntegerField(
+        help_text="Order of question in the calibration flow"
+    )
 
     # Metadata about the question
     category = models.CharField(
         max_length=30,
         blank=True,
-        help_text='Question category: experience, timeline, resources, motivation, constraints, specifics, lifestyle, preferences'
+        help_text="Question category: experience, timeline, resources, motivation, constraints, specifics, lifestyle, preferences",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'calibration_responses'
-        ordering = ['dream', 'question_number']
+        db_table = "calibration_responses"
+        ordering = ["dream", "question_number"]
         indexes = [
-            models.Index(fields=['dream', 'question_number']),
+            models.Index(fields=["dream", "question_number"]),
         ]
 
     def __str__(self):
@@ -706,8 +735,8 @@ class DreamTag(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_tags'
-        ordering = ['name']
+        db_table = "dream_tags"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -717,15 +746,15 @@ class DreamTagging(models.Model):
     """M2M through model for Dream-Tag relationship."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='taggings')
-    tag = models.ForeignKey(DreamTag, on_delete=models.CASCADE, related_name='taggings')
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="taggings")
+    tag = models.ForeignKey(DreamTag, on_delete=models.CASCADE, related_name="taggings")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_taggings'
+        db_table = "dream_taggings"
         constraints = [
-            models.UniqueConstraint(fields=['dream', 'tag'], name='unique_dream_tag'),
+            models.UniqueConstraint(fields=["dream", "tag"], name="unique_dream_tag"),
         ]
 
     def __str__(self):
@@ -741,16 +770,16 @@ class DreamTemplate(models.Model):
     """
 
     CATEGORY_CHOICES = [
-        ('health', 'Health & Fitness'),
-        ('career', 'Career & Business'),
-        ('education', 'Education & Learning'),
-        ('finance', 'Finance & Savings'),
-        ('creative', 'Creative & Arts'),
-        ('personal', 'Personal Growth'),
-        ('hobbies', 'Hobbies & Skills'),
-        ('social', 'Social & Relationships'),
-        ('relationships', 'Relationships'),
-        ('travel', 'Travel & Adventure'),
+        ("health", "Health & Fitness"),
+        ("career", "Career & Business"),
+        ("education", "Education & Learning"),
+        ("finance", "Finance & Savings"),
+        ("creative", "Creative & Arts"),
+        ("personal", "Personal Growth"),
+        ("hobbies", "Hobbies & Skills"),
+        ("social", "Social & Relationships"),
+        ("relationships", "Relationships"),
+        ("travel", "Travel & Adventure"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -763,11 +792,11 @@ class DreamTemplate(models.Model):
     )
     template_goals = models.JSONField(
         default=list,
-        help_text='JSON array of goal templates: [{title, description, order, tasks: [{title, description, order, duration_mins}]}]',
+        help_text="JSON array of goal templates: [{title, description, order, tasks: [{title, description, order, duration_mins}]}]",
     )
     estimated_duration_days = models.IntegerField(
         default=90,
-        help_text='Estimated number of days to complete this dream.',
+        help_text="Estimated number of days to complete this dream.",
     )
     suggested_timeline = models.CharField(
         max_length=50,
@@ -777,14 +806,18 @@ class DreamTemplate(models.Model):
     difficulty = models.CharField(
         max_length=20,
         choices=[
-            ('beginner', 'Beginner'),
-            ('intermediate', 'Intermediate'),
-            ('advanced', 'Advanced'),
+            ("beginner", "Beginner"),
+            ("intermediate", "Intermediate"),
+            ("advanced", "Advanced"),
         ],
-        default='intermediate',
+        default="intermediate",
     )
     icon = models.CharField(max_length=100, blank=True)
-    color = models.CharField(max_length=20, default='#8B5CF6', help_text='Accent color for template card display')
+    color = models.CharField(
+        max_length=20,
+        default="#8B5CF6",
+        help_text="Accent color for template card display",
+    )
     is_featured = models.BooleanField(default=False, db_index=True)
     is_active = models.BooleanField(default=True)
     usage_count = models.IntegerField(default=0)
@@ -793,11 +826,11 @@ class DreamTemplate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'dream_templates'
-        ordering = ['-is_featured', '-usage_count']
+        db_table = "dream_templates"
+        ordering = ["-is_featured", "-usage_count"]
         indexes = [
-            models.Index(fields=['category', 'is_active']),
-            models.Index(fields=['is_featured', 'is_active']),
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["is_featured", "is_active"]),
         ]
 
     def __str__(self):
@@ -815,27 +848,33 @@ class DreamCollaborator(models.Model):
     """
 
     ROLE_CHOICES = [
-        ('owner', 'Owner'),
-        ('collaborator', 'Collaborator'),
-        ('viewer', 'Viewer'),
+        ("owner", "Owner"),
+        ("collaborator", "Collaborator"),
+        ("viewer", "Viewer"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='collaborators')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dream_collaborations')
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='viewer')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="collaborators"
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="dream_collaborations"
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="viewer")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_collaborators'
+        db_table = "dream_collaborators"
         constraints = [
-            models.UniqueConstraint(fields=['dream', 'user'], name='unique_dream_collaborator'),
+            models.UniqueConstraint(
+                fields=["dream", "user"], name="unique_dream_collaborator"
+            ),
         ]
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user', 'role'], name='idx_collab_user_role'),
-            models.Index(fields=['dream', 'user'], name='idx_collab_dream_user'),
+            models.Index(fields=["user", "role"], name="idx_collab_user_role"),
+            models.Index(fields=["dream", "user"], name="idx_collab_dream_user"),
         ]
 
     def __str__(self):
@@ -846,36 +885,42 @@ class SharedDream(models.Model):
     """Represents a dream shared with another user."""
 
     PERMISSION_CHOICES = [
-        ('view', 'View Only'),
-        ('comment', 'Can Comment'),
+        ("view", "View Only"),
+        ("comment", "Can Comment"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='shares')
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="shares")
     shared_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='dreams_shared',
-        help_text='The user who shared the dream.'
+        User,
+        on_delete=models.CASCADE,
+        related_name="dreams_shared",
+        help_text="The user who shared the dream.",
     )
     shared_with = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='dreams_shared_with_me',
-        help_text='The user the dream was shared with.'
+        User,
+        on_delete=models.CASCADE,
+        related_name="dreams_shared_with_me",
+        help_text="The user the dream was shared with.",
     )
     permission = models.CharField(
         max_length=20,
         choices=PERMISSION_CHOICES,
-        default='view',
+        default="view",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'shared_dreams'
-        ordering = ['-created_at']
+        db_table = "shared_dreams"
+        ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=['dream', 'shared_with'], name='unique_shared_dream'),
+            models.UniqueConstraint(
+                fields=["dream", "shared_with"], name="unique_shared_dream"
+            ),
         ]
         indexes = [
-            models.Index(fields=['shared_with'], name='idx_shared_dream_recipient'),
+            models.Index(fields=["shared_with"], name="idx_shared_dream_recipient"),
         ]
 
     def __str__(self):
@@ -886,20 +931,24 @@ class DreamProgressSnapshot(models.Model):
     """Daily snapshot of dream progress for sparkline charts."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='progress_snapshots')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="progress_snapshots"
+    )
     date = models.DateField()
     progress_percentage = models.FloatField()
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'dream_progress_snapshots'
+        db_table = "dream_progress_snapshots"
         constraints = [
-            models.UniqueConstraint(fields=['dream', 'date'], name='unique_dream_progress_date'),
+            models.UniqueConstraint(
+                fields=["dream", "date"], name="unique_dream_progress_date"
+            ),
         ]
-        ordering = ['-date']
+        ordering = ["-date"]
         indexes = [
-            models.Index(fields=['dream', '-date']),
+            models.Index(fields=["dream", "-date"]),
         ]
 
     def __str__(self):
@@ -912,7 +961,7 @@ class DreamProgressSnapshot(models.Model):
         cls.objects.update_or_create(
             dream=dream,
             date=today,
-            defaults={'progress_percentage': dream.progress_percentage},
+            defaults={"progress_percentage": dream.progress_percentage},
         )
 
 
@@ -920,37 +969,40 @@ class FocusSession(models.Model):
     """Pomodoro-style focus session linked to a user and optionally a task."""
 
     SESSION_TYPE_CHOICES = [
-        ('work', 'Work'),
-        ('break', 'Break'),
+        ("work", "Work"),
+        ("break", "Break"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        'users.User', on_delete=models.CASCADE, related_name='focus_sessions'
+        "users.User", on_delete=models.CASCADE, related_name="focus_sessions"
     )
     task = models.ForeignKey(
-        'Task', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='focus_sessions'
+        "Task",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="focus_sessions",
     )
     duration_minutes = models.PositiveIntegerField(
-        help_text='Planned duration in minutes'
+        help_text="Planned duration in minutes"
     )
     actual_minutes = models.PositiveIntegerField(
-        default=0, help_text='Actual time focused in minutes'
+        default=0, help_text="Actual time focused in minutes"
     )
     session_type = models.CharField(
-        max_length=20, choices=SESSION_TYPE_CHOICES, default='work'
+        max_length=20, choices=SESSION_TYPE_CHOICES, default="work"
     )
     completed = models.BooleanField(default=False)
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'focus_sessions'
-        ordering = ['-started_at']
+        db_table = "focus_sessions"
+        ordering = ["-started_at"]
         indexes = [
-            models.Index(fields=['user', '-started_at']),
-            models.Index(fields=['user', 'completed']),
+            models.Index(fields=["user", "-started_at"]),
+            models.Index(fields=["user", "completed"]),
         ]
 
     def __str__(self):
@@ -961,28 +1013,32 @@ class DreamJournal(models.Model):
     """Journal/notes entry associated with a dream."""
 
     MOOD_CHOICES = [
-        ('excited', 'Excited'),
-        ('happy', 'Happy'),
-        ('neutral', 'Neutral'),
-        ('frustrated', 'Frustrated'),
-        ('motivated', 'Motivated'),
-        ('reflective', 'Reflective'),
+        ("excited", "Excited"),
+        ("happy", "Happy"),
+        ("neutral", "Neutral"),
+        ("frustrated", "Frustrated"),
+        ("motivated", "Motivated"),
+        ("reflective", "Reflective"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='journal_entries')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="journal_entries"
+    )
     title = models.CharField(max_length=200, blank=True)
-    content = models.TextField(help_text='Journal entry content stored as HTML or markdown')
+    content = models.TextField(
+        help_text="Journal entry content stored as HTML or markdown"
+    )
     mood = models.CharField(max_length=20, blank=True, choices=MOOD_CHOICES)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'dream_journal_entries'
-        ordering = ['-created_at']
+        db_table = "dream_journal_entries"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['dream', '-created_at']),
+            models.Index(fields=["dream", "-created_at"]),
         ]
 
     def __str__(self):
@@ -994,21 +1050,23 @@ class ProgressPhoto(models.Model):
     """Progress photo for visual tracking of dream progress via AI analysis."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='progress_photos')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="progress_photos"
+    )
 
-    image = models.ImageField(upload_to='progress_photos/')
-    caption = EncryptedTextField(blank=True, default='')
-    ai_analysis = EncryptedTextField(blank=True, default='')
+    image = models.ImageField(upload_to="progress_photos/")
+    caption = EncryptedTextField(blank=True, default="")
+    ai_analysis = EncryptedTextField(blank=True, default="")
 
-    taken_at = models.DateTimeField(help_text='When the progress photo was taken')
+    taken_at = models.DateTimeField(help_text="When the progress photo was taken")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'progress_photos'
-        ordering = ['-taken_at']
+        db_table = "progress_photos"
+        ordering = ["-taken_at"]
         indexes = [
-            models.Index(fields=['dream', '-taken_at']),
+            models.Index(fields=["dream", "-taken_at"]),
         ]
 
     def __str__(self):
@@ -1019,10 +1077,12 @@ class VisionBoardImage(models.Model):
     """Image in a dream's vision board gallery."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='vision_images')
+    dream = models.ForeignKey(
+        Dream, on_delete=models.CASCADE, related_name="vision_images"
+    )
 
     image_url = models.URLField(max_length=500, blank=True)
-    image_file = models.ImageField(upload_to='vision_boards/', blank=True)
+    image_file = models.ImageField(upload_to="vision_boards/", blank=True)
     caption = models.CharField(max_length=500, blank=True)
     is_ai_generated = models.BooleanField(default=False)
     order = models.IntegerField(default=0)
@@ -1030,10 +1090,10 @@ class VisionBoardImage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'vision_board_images'
-        ordering = ['order', '-created_at']
+        db_table = "vision_board_images"
+        ordering = ["order", "-created_at"]
         indexes = [
-            models.Index(fields=['dream', 'order']),
+            models.Index(fields=["dream", "order"]),
         ]
 
     def __str__(self):
@@ -1042,53 +1102,64 @@ class VisionBoardImage(models.Model):
 
 class PlanCheckIn(models.Model):
     """Record of each AI check-in session for a dream (interactive or autonomous)."""
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name='checkins')
+    dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="checkins")
     conversation = models.ForeignKey(
-        'conversations.Conversation', on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='checkin_records',
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checkin_records",
     )
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('questionnaire_generating', 'Generating Questionnaire'),
-        ('awaiting_user', 'Awaiting User Response'),
-        ('ai_processing', 'AI Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('skipped', 'Skipped'),
+        ("pending", "Pending"),
+        ("questionnaire_generating", "Generating Questionnaire"),
+        ("awaiting_user", "Awaiting User Response"),
+        ("ai_processing", "AI Processing"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("skipped", "Skipped"),
     ]
-    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending', db_index=True)
+    status = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default="pending", db_index=True
+    )
 
     TRIGGERED_BY_CHOICES = [
-        ('schedule', 'Scheduled'),
-        ('manual', 'Manual'),
-        ('auto_expire', 'Auto Expired'),
+        ("schedule", "Scheduled"),
+        ("manual", "Manual"),
+        ("auto_expire", "Auto Expired"),
     ]
-    triggered_by = models.CharField(max_length=20, choices=TRIGGERED_BY_CHOICES, default='schedule')
+    triggered_by = models.CharField(
+        max_length=20, choices=TRIGGERED_BY_CHOICES, default="schedule"
+    )
 
     # Interactive questionnaire
     questionnaire = models.JSONField(
-        null=True, blank=True,
-        help_text='AI-generated questions: [{id, question_type, question, options, ...}]'
+        null=True,
+        blank=True,
+        help_text="AI-generated questions: [{id, question_type, question, options, ...}]",
     )
     user_responses = models.JSONField(
-        null=True, blank=True,
-        help_text='User answers: {question_id: answer_value}'
+        null=True, blank=True, help_text="User answers: {question_id: answer_value}"
     )
     questionnaire_expires_at = models.DateTimeField(
-        null=True, blank=True,
-        help_text='After this time, check-in runs autonomously if user has not responded'
+        null=True,
+        blank=True,
+        help_text="After this time, check-in runs autonomously if user has not responded",
     )
 
     # Pace analysis
     PACE_CHOICES = [
-        ('significantly_behind', 'Significantly Behind'),
-        ('behind', 'Behind'),
-        ('on_track', 'On Track'),
-        ('ahead', 'Ahead'),
-        ('significantly_ahead', 'Significantly Ahead'),
+        ("significantly_behind", "Significantly Behind"),
+        ("behind", "Behind"),
+        ("on_track", "On Track"),
+        ("ahead", "Ahead"),
+        ("significantly_ahead", "Significantly Ahead"),
     ]
-    pace_status = models.CharField(max_length=25, choices=PACE_CHOICES, blank=True, default='')
+    pace_status = models.CharField(
+        max_length=25, choices=PACE_CHOICES, blank=True, default=""
+    )
     next_checkin_interval_days = models.IntegerField(default=14)
 
     # Progress snapshot
@@ -1112,8 +1183,8 @@ class PlanCheckIn(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'plan_checkins'
-        ordering = ['-scheduled_for']
+        db_table = "plan_checkins"
+        ordering = ["-scheduled_for"]
 
     def __str__(self):
         return f"CheckIn for {self.dream_id} ({self.status})"

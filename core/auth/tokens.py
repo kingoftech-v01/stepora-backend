@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
-_EMAIL_VERIFY_SALT = 'dp-email-verify'
-_EMAIL_VERIFY_MAX_AGE = getattr(settings, 'DP_AUTH', {}).get(
-    'VERIFICATION_KEY_MAX_AGE', 60 * 60 * 24 * 3  # 3 days
+_EMAIL_VERIFY_SALT = "dp-email-verify"
+_EMAIL_VERIFY_MAX_AGE = getattr(settings, "DP_AUTH", {}).get(
+    "VERIFICATION_KEY_MAX_AGE", 60 * 60 * 24 * 3  # 3 days
 )
 
-_PASSWORD_RESET_MAX_AGE = getattr(settings, 'DP_AUTH', {}).get(
-    'PASSWORD_RESET_MAX_AGE', 60 * 60  # 1 hour
+_PASSWORD_RESET_MAX_AGE = getattr(settings, "DP_AUTH", {}).get(
+    "PASSWORD_RESET_MAX_AGE", 60 * 60  # 1 hour
 )
 
 _password_reset_generator = PasswordResetTokenGenerator()
@@ -33,10 +33,11 @@ _password_reset_generator = PasswordResetTokenGenerator()
 
 # ── Email verification ─────────────────────────────────────────────
 
+
 def make_email_verification_key(email_address_id):
     """Create a stateless HMAC key for verifying an email address."""
     return signing.dumps(
-        {'ea': str(email_address_id)},
+        {"ea": str(email_address_id)},
         salt=_EMAIL_VERIFY_SALT,
     )
 
@@ -51,10 +52,11 @@ def verify_email_verification_key(key):
         salt=_EMAIL_VERIFY_SALT,
         max_age=_EMAIL_VERIFY_MAX_AGE,
     )
-    return int(data['ea'])
+    return int(data["ea"])
 
 
 # ── Password reset ─────────────────────────────────────────────────
+
 
 def make_password_reset_token(user):
     """

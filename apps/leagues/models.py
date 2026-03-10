@@ -18,11 +18,11 @@ League Tiers (by XP):
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.core.cache import cache
 from django.core.validators import MinValueValidator
+from django.db import models
 from django.utils import timezone as django_timezone
 
-from django.core.cache import cache
 from apps.users.models import User
 
 
@@ -35,80 +35,76 @@ class League(models.Model):
     """
 
     TIER_CHOICES = [
-        ('bronze', 'Bronze'),
-        ('silver', 'Silver'),
-        ('gold', 'Gold'),
-        ('platinum', 'Platinum'),
-        ('diamond', 'Diamond'),
-        ('master', 'Master'),
-        ('legend', 'Legend'),
+        ("bronze", "Bronze"),
+        ("silver", "Silver"),
+        ("gold", "Gold"),
+        ("platinum", "Platinum"),
+        ("diamond", "Diamond"),
+        ("master", "Master"),
+        ("legend", "Legend"),
     ]
 
     TIER_ORDER = {
-        'bronze': 0,
-        'silver': 1,
-        'gold': 2,
-        'platinum': 3,
-        'diamond': 4,
-        'master': 5,
-        'legend': 6,
+        "bronze": 0,
+        "silver": 1,
+        "gold": 2,
+        "platinum": 3,
+        "diamond": 4,
+        "master": 5,
+        "legend": 6,
     }
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this league.'
+        help_text="Unique identifier for this league.",
     )
     name = models.CharField(
-        max_length=100,
-        help_text='Display name of the league (e.g., "Bronze League").'
+        max_length=100, help_text='Display name of the league (e.g., "Bronze League").'
     )
     tier = models.CharField(
         max_length=20,
         choices=TIER_CHOICES,
         unique=True,
         db_index=True,
-        help_text='The tier level of this league.'
+        help_text="The tier level of this league.",
     )
     min_xp = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
-        help_text='Minimum XP required to enter this league.'
+        help_text="Minimum XP required to enter this league.",
     )
     max_xp = models.IntegerField(
         null=True,
         blank=True,
-        help_text='Maximum XP for this league. Null for the top league (Legend).'
+        help_text="Maximum XP for this league. Null for the top league (Legend).",
     )
     icon_url = models.URLField(
-        max_length=500,
-        blank=True,
-        help_text='URL to the league icon/badge image.'
+        max_length=500, blank=True, help_text="URL to the league icon/badge image."
     )
     color_hex = models.CharField(
         max_length=7,
         blank=True,
-        help_text='Hex color code for the league (e.g., "#CD7F32" for Bronze).'
+        help_text='Hex color code for the league (e.g., "#CD7F32" for Bronze).',
     )
     description = models.TextField(
-        blank=True,
-        help_text='Description of the league and what it represents.'
+        blank=True, help_text="Description of the league and what it represents."
     )
     rewards = models.JSONField(
         default=list,
         blank=True,
-        help_text='List of rewards for reaching this league (e.g., badges, titles).'
+        help_text="List of rewards for reaching this league (e.g., badges, titles).",
     )
 
     class Meta:
-        db_table = 'leagues'
-        ordering = ['min_xp']
-        verbose_name = 'League'
-        verbose_name_plural = 'Leagues'
+        db_table = "leagues"
+        ordering = ["min_xp"]
+        verbose_name = "League"
+        verbose_name_plural = "Leagues"
         indexes = [
-            models.Index(fields=['min_xp', 'max_xp'], name='idx_league_xp_range'),
-            models.Index(fields=['tier'], name='idx_league_tier'),
+            models.Index(fields=["min_xp", "max_xp"], name="idx_league_xp_range"),
+            models.Index(fields=["tier"], name="idx_league_tier"),
         ]
 
     def __str__(self):
@@ -134,18 +130,83 @@ class League(models.Model):
             return cls.objects.all()
 
         leagues = [
-            {'tier': 'bronze',   'defaults': {'name': 'Bronze League',   'min_xp': 0,     'max_xp': 499,   'color_hex': '#CD7F32', 'description': 'Every dreamer starts here.'}},
-            {'tier': 'silver',   'defaults': {'name': 'Silver League',   'min_xp': 500,   'max_xp': 1499,  'color_hex': '#C0C0C0', 'description': 'Building momentum.'}},
-            {'tier': 'gold',     'defaults': {'name': 'Gold League',     'min_xp': 1500,  'max_xp': 3499,  'color_hex': '#FFD700', 'description': 'Consistent progress.'}},
-            {'tier': 'platinum', 'defaults': {'name': 'Platinum League', 'min_xp': 3500,  'max_xp': 6999,  'color_hex': '#E5E4E2', 'description': 'Dedicated achiever.'}},
-            {'tier': 'diamond',  'defaults': {'name': 'Diamond League',  'min_xp': 7000,  'max_xp': 11999, 'color_hex': '#B9F2FF', 'description': 'Elite dreamer.'}},
-            {'tier': 'master',   'defaults': {'name': 'Master League',   'min_xp': 12000, 'max_xp': 19999, 'color_hex': '#9B59B6', 'description': 'Dream master.'}},
-            {'tier': 'legend',   'defaults': {'name': 'Legend League',   'min_xp': 20000, 'max_xp': None,  'color_hex': '#FF4500', 'description': 'Living legend.'}},
+            {
+                "tier": "bronze",
+                "defaults": {
+                    "name": "Bronze League",
+                    "min_xp": 0,
+                    "max_xp": 499,
+                    "color_hex": "#CD7F32",
+                    "description": "Every dreamer starts here.",
+                },
+            },
+            {
+                "tier": "silver",
+                "defaults": {
+                    "name": "Silver League",
+                    "min_xp": 500,
+                    "max_xp": 1499,
+                    "color_hex": "#C0C0C0",
+                    "description": "Building momentum.",
+                },
+            },
+            {
+                "tier": "gold",
+                "defaults": {
+                    "name": "Gold League",
+                    "min_xp": 1500,
+                    "max_xp": 3499,
+                    "color_hex": "#FFD700",
+                    "description": "Consistent progress.",
+                },
+            },
+            {
+                "tier": "platinum",
+                "defaults": {
+                    "name": "Platinum League",
+                    "min_xp": 3500,
+                    "max_xp": 6999,
+                    "color_hex": "#E5E4E2",
+                    "description": "Dedicated achiever.",
+                },
+            },
+            {
+                "tier": "diamond",
+                "defaults": {
+                    "name": "Diamond League",
+                    "min_xp": 7000,
+                    "max_xp": 11999,
+                    "color_hex": "#B9F2FF",
+                    "description": "Elite dreamer.",
+                },
+            },
+            {
+                "tier": "master",
+                "defaults": {
+                    "name": "Master League",
+                    "min_xp": 12000,
+                    "max_xp": 19999,
+                    "color_hex": "#9B59B6",
+                    "description": "Dream master.",
+                },
+            },
+            {
+                "tier": "legend",
+                "defaults": {
+                    "name": "Legend League",
+                    "min_xp": 20000,
+                    "max_xp": None,
+                    "color_hex": "#FF4500",
+                    "description": "Living legend.",
+                },
+            },
         ]
 
         created = []
         for data in leagues:
-            obj, _ = cls.objects.update_or_create(tier=data['tier'], defaults=data['defaults'])
+            obj, _ = cls.objects.update_or_create(
+                tier=data["tier"], defaults=data["defaults"]
+            )
             created.append(obj)
         return created
 
@@ -167,39 +228,39 @@ class SeasonConfig(models.Model):
     )
     season_duration_days = models.PositiveIntegerField(
         default=180,
-        help_text='Default duration in days for new seasons.',
+        help_text="Default duration in days for new seasons.",
     )
     group_target_size = models.PositiveIntegerField(
         default=20,
-        help_text='Target number of members per group.',
+        help_text="Target number of members per group.",
     )
     group_max_size = models.PositiveIntegerField(
         default=30,
-        help_text='Maximum number of members allowed per group.',
+        help_text="Maximum number of members allowed per group.",
     )
     group_min_size = models.PositiveIntegerField(
         default=5,
-        help_text='Minimum number of members to keep a group active.',
+        help_text="Minimum number of members to keep a group active.",
     )
     promotion_xp_threshold = models.PositiveIntegerField(
         default=1000,
-        help_text='XP earned this season to be eligible for promotion.',
+        help_text="XP earned this season to be eligible for promotion.",
     )
     relegation_xp_threshold = models.PositiveIntegerField(
         default=100,
-        help_text='XP below this threshold triggers relegation risk.',
+        help_text="XP below this threshold triggers relegation risk.",
     )
     auto_create_next_season = models.BooleanField(
         default=True,
-        help_text='Automatically create the next season when one ends.',
+        help_text="Automatically create the next season when one ends.",
     )
 
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'season_config'
-        verbose_name = 'Season Config'
-        verbose_name_plural = 'Season Config'
+        db_table = "season_config"
+        verbose_name = "Season Config"
+        verbose_name_plural = "Season Config"
 
     def __str__(self):
         return (
@@ -214,11 +275,11 @@ class SeasonConfig(models.Model):
 
         Caches the result for 5 minutes to avoid repeated DB hits.
         """
-        key = 'season_config_singleton'
+        key = "season_config_singleton"
         config = cache.get(key)
         if config is None:
             config, _ = cls.objects.get_or_create(
-                pk=cls.objects.values_list('pk', flat=True).first() or uuid.uuid4()
+                pk=cls.objects.values_list("pk", flat=True).first() or uuid.uuid4()
             )
             cache.set(key, config, 300)
         return config
@@ -226,7 +287,7 @@ class SeasonConfig(models.Model):
     def save(self, *args, **kwargs):
         """Invalidate cache on save."""
         super().save(*args, **kwargs)
-        cache.delete('season_config_singleton')
+        cache.delete("season_config_singleton")
 
 
 class Season(models.Model):
@@ -239,74 +300,74 @@ class Season(models.Model):
     """
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('active', 'Active'),
-        ('processing', 'Processing'),
-        ('ended', 'Ended'),
+        ("pending", "Pending"),
+        ("active", "Active"),
+        ("processing", "Processing"),
+        ("ended", "Ended"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this season.'
+        help_text="Unique identifier for this season.",
     )
     name = models.CharField(
         max_length=200,
-        help_text='Display name of the season (e.g., "Season 1 - Winter 2026").'
+        help_text='Display name of the season (e.g., "Season 1 - Winter 2026").',
     )
-    start_date = models.DateTimeField(
-        help_text='When this season starts.'
-    )
-    end_date = models.DateTimeField(
-        help_text='When this season ends.'
-    )
+    start_date = models.DateTimeField(help_text="When this season starts.")
+    end_date = models.DateTimeField(help_text="When this season ends.")
     is_active = models.BooleanField(
         default=False,
         db_index=True,
-        help_text='Whether this season is currently active. Only one season should be active at a time.'
+        help_text="Whether this season is currently active. Only one season should be active at a time.",
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='pending',
+        default="pending",
         db_index=True,
-        help_text='Lifecycle status of the season.',
+        help_text="Lifecycle status of the season.",
     )
     duration_days = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text='Duration of the season in days (stored at creation time).',
+        help_text="Duration of the season in days (stored at creation time).",
     )
     rewards = models.JSONField(
         default=list,
         blank=True,
-        help_text='List of rewards available for this season (varies by league achieved).'
+        help_text="List of rewards available for this season (varies by league achieved).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'seasons'
-        ordering = ['-start_date']
-        verbose_name = 'Season'
-        verbose_name_plural = 'Seasons'
+        db_table = "seasons"
+        ordering = ["-start_date"]
+        verbose_name = "Season"
+        verbose_name_plural = "Seasons"
         indexes = [
-            models.Index(fields=['is_active'], name='idx_season_active'),
-            models.Index(fields=['start_date', 'end_date'], name='idx_season_dates'),
-            models.Index(fields=['status'], name='idx_season_status'),
+            models.Index(fields=["is_active"], name="idx_season_active"),
+            models.Index(fields=["start_date", "end_date"], name="idx_season_dates"),
+            models.Index(fields=["status"], name="idx_season_status"),
         ]
 
     def __str__(self):
-        label = self.get_status_display() if self.status else ("Active" if self.is_active else "Inactive")
+        label = (
+            self.get_status_display()
+            if self.status
+            else ("Active" if self.is_active else "Inactive")
+        )
         return f"{self.name} ({label})"
 
     def save(self, *args, **kwargs):
         """Keep is_active in sync with status for backward compatibility."""
-        if self.status == 'active':
+        if self.status == "active":
             self.is_active = True
-        elif self.status in ('processing', 'ended'):
+        elif self.status in ("processing", "ended"):
             self.is_active = False
         super().save(*args, **kwargs)
 
@@ -345,7 +406,7 @@ class Season(models.Model):
     @classmethod
     def get_active_season(cls):
         """Return the currently active season, or None if none is active."""
-        key = 'active_season'
+        key = "active_season"
         season = cache.get(key)
         if season is None:
             season = cls.objects.filter(is_active=True).first()
@@ -371,88 +432,81 @@ class LeagueStanding(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this standing record.'
+        help_text="Unique identifier for this standing record.",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='league_standings',
-        help_text='The user this standing belongs to.'
+        related_name="league_standings",
+        help_text="The user this standing belongs to.",
     )
     league = models.ForeignKey(
         League,
         on_delete=models.CASCADE,
-        related_name='standings',
-        help_text='The league this user is currently in.'
+        related_name="standings",
+        help_text="The league this user is currently in.",
     )
     season = models.ForeignKey(
         Season,
         on_delete=models.CASCADE,
-        related_name='standings',
-        help_text='The season this standing applies to.'
+        related_name="standings",
+        help_text="The season this standing applies to.",
     )
     rank = models.IntegerField(
         default=0,
         db_index=True,
-        help_text='Current rank within the league for this season (1 = top).'
+        help_text="Current rank within the league for this season (1 = top).",
     )
     xp_earned_this_season = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
-        help_text='Total XP earned during this season.'
+        help_text="Total XP earned during this season.",
     )
     tasks_completed = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
-        help_text='Number of tasks completed during this season.'
+        help_text="Number of tasks completed during this season.",
     )
     dreams_completed = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
-        help_text='Number of dreams completed during this season.'
+        help_text="Number of dreams completed during this season.",
     )
     streak_best = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
-        help_text='Best streak (consecutive days) during this season.'
+        help_text="Best streak (consecutive days) during this season.",
     )
 
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'league_standings'
-        ordering = ['rank']
-        verbose_name = 'League Standing'
-        verbose_name_plural = 'League Standings'
+        db_table = "league_standings"
+        ordering = ["rank"]
+        verbose_name = "League Standing"
+        verbose_name_plural = "League Standings"
         constraints = [
-            models.UniqueConstraint(fields=['user', 'season'], name='unique_league_standing'),
+            models.UniqueConstraint(
+                fields=["user", "season"], name="unique_league_standing"
+            ),
         ]
         indexes = [
             # Primary leaderboard query: rank within a season
-            models.Index(
-                fields=['season', 'rank'],
-                name='idx_standing_season_rank'
-            ),
+            models.Index(fields=["season", "rank"], name="idx_standing_season_rank"),
             # League-specific leaderboard: users in same league, sorted by XP
             models.Index(
-                fields=['season', 'league', '-xp_earned_this_season'],
-                name='idx_standing_league_xp'
+                fields=["season", "league", "-xp_earned_this_season"],
+                name="idx_standing_league_xp",
             ),
             # Global leaderboard: top users by XP across all leagues
             models.Index(
-                fields=['season', '-xp_earned_this_season'],
-                name='idx_standing_season_xp'
+                fields=["season", "-xp_earned_this_season"],
+                name="idx_standing_season_xp",
             ),
             # User lookup: find a specific user's standing quickly
-            models.Index(
-                fields=['user', 'season'],
-                name='idx_standing_user_season'
-            ),
+            models.Index(fields=["user", "season"], name="idx_standing_user_season"),
             # Rank ordering within league
-            models.Index(
-                fields=['league', 'rank'],
-                name='idx_standing_league_rank'
-            ),
+            models.Index(fields=["league", "rank"], name="idx_standing_league_rank"),
         ]
 
     def __str__(self):
@@ -476,54 +530,51 @@ class SeasonReward(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this reward record.'
+        help_text="Unique identifier for this reward record.",
     )
     season = models.ForeignKey(
         Season,
         on_delete=models.CASCADE,
-        related_name='season_rewards',
-        help_text='The season this reward is from.'
+        related_name="season_rewards",
+        help_text="The season this reward is from.",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='season_rewards',
-        help_text='The user who earned this reward.'
+        related_name="season_rewards",
+        help_text="The user who earned this reward.",
     )
     league_achieved = models.ForeignKey(
         League,
         on_delete=models.CASCADE,
-        related_name='season_rewards',
-        help_text='The league the user was in when the season ended.'
+        related_name="season_rewards",
+        help_text="The league the user was in when the season ended.",
     )
     rewards_claimed = models.BooleanField(
-        default=False,
-        help_text='Whether the user has claimed their rewards.'
+        default=False, help_text="Whether the user has claimed their rewards."
     )
     claimed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='Timestamp when the rewards were claimed.'
+        null=True, blank=True, help_text="Timestamp when the rewards were claimed."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'season_rewards'
-        ordering = ['-created_at']
-        verbose_name = 'Season Reward'
-        verbose_name_plural = 'Season Rewards'
+        db_table = "season_rewards"
+        ordering = ["-created_at"]
+        verbose_name = "Season Reward"
+        verbose_name_plural = "Season Rewards"
         constraints = [
-            models.UniqueConstraint(fields=['season', 'user'], name='unique_season_reward'),
+            models.UniqueConstraint(
+                fields=["season", "user"], name="unique_season_reward"
+            ),
         ]
         indexes = [
             models.Index(
-                fields=['user', 'rewards_claimed'],
-                name='idx_reward_user_claimed'
+                fields=["user", "rewards_claimed"], name="idx_reward_user_claimed"
             ),
             models.Index(
-                fields=['season', 'league_achieved'],
-                name='idx_reward_season_league'
+                fields=["season", "league_achieved"], name="idx_reward_season_league"
             ),
         ]
 
@@ -539,7 +590,7 @@ class SeasonReward(models.Model):
         if not self.rewards_claimed:
             self.rewards_claimed = True
             self.claimed_at = django_timezone.now()
-            self.save(update_fields=['rewards_claimed', 'claimed_at'])
+            self.save(update_fields=["rewards_claimed", "claimed_at"])
             return True
         return False
 
@@ -559,43 +610,43 @@ class LeagueGroup(models.Model):
         editable=False,
     )
     season = models.ForeignKey(
-        'Season',
+        "Season",
         on_delete=models.CASCADE,
-        related_name='groups',
-        help_text='The season this group belongs to.',
+        related_name="groups",
+        help_text="The season this group belongs to.",
     )
     league = models.ForeignKey(
         League,
         on_delete=models.CASCADE,
-        related_name='groups',
-        help_text='The league tier this group is in.',
+        related_name="groups",
+        help_text="The league tier this group is in.",
     )
     group_number = models.PositiveIntegerField(
-        help_text='Group number within this season+league (1-indexed).',
+        help_text="Group number within this season+league (1-indexed).",
     )
     is_active = models.BooleanField(
         default=True,
         db_index=True,
-        help_text='Whether this group is active (False after season ends or rebalance empties it).',
+        help_text="Whether this group is active (False after season ends or rebalance empties it).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'league_groups'
-        ordering = ['season', 'league', 'group_number']
-        verbose_name = 'League Group'
-        verbose_name_plural = 'League Groups'
+        db_table = "league_groups"
+        ordering = ["season", "league", "group_number"]
+        verbose_name = "League Group"
+        verbose_name_plural = "League Groups"
         constraints = [
             models.UniqueConstraint(
-                fields=['season', 'league', 'group_number'],
-                name='unique_league_group',
+                fields=["season", "league", "group_number"],
+                name="unique_league_group",
             ),
         ]
         indexes = [
             models.Index(
-                fields=['season', 'league', 'is_active'],
-                name='idx_lg_season_league_active',
+                fields=["season", "league", "is_active"],
+                name="idx_lg_season_league_active",
             ),
         ]
 
@@ -624,36 +675,36 @@ class LeagueGroupMembership(models.Model):
     group = models.ForeignKey(
         LeagueGroup,
         on_delete=models.CASCADE,
-        related_name='memberships',
-        help_text='The group this membership belongs to.',
+        related_name="memberships",
+        help_text="The group this membership belongs to.",
     )
     standing = models.OneToOneField(
-        'LeagueStanding',
+        "LeagueStanding",
         on_delete=models.CASCADE,
-        related_name='group_membership',
-        help_text='The league standing this membership is for.',
+        related_name="group_membership",
+        help_text="The league standing this membership is for.",
     )
     joined_at = models.DateTimeField(
         auto_now_add=True,
-        help_text='When the user was assigned to this group.',
+        help_text="When the user was assigned to this group.",
     )
     promoted_from_group = models.ForeignKey(
         LeagueGroup,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='promotions_out',
-        help_text='The group the user was promoted from, if any.',
+        related_name="promotions_out",
+        help_text="The group the user was promoted from, if any.",
     )
 
     class Meta:
-        db_table = 'league_group_memberships'
-        verbose_name = 'League Group Membership'
-        verbose_name_plural = 'League Group Memberships'
+        db_table = "league_group_memberships"
+        verbose_name = "League Group Membership"
+        verbose_name_plural = "League Group Memberships"
         indexes = [
             models.Index(
-                fields=['group'],
-                name='idx_lgm_group',
+                fields=["group"],
+                name="idx_lgm_group",
             ),
         ]
 
@@ -677,40 +728,42 @@ class RankSnapshot(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='rank_snapshots',
+        related_name="rank_snapshots",
     )
     season = models.ForeignKey(
         Season,
         on_delete=models.CASCADE,
-        related_name='rank_snapshots',
+        related_name="rank_snapshots",
     )
     league = models.ForeignKey(
         League,
         on_delete=models.CASCADE,
-        related_name='rank_snapshots',
+        related_name="rank_snapshots",
     )
     rank = models.IntegerField(
-        help_text='Rank at the time of snapshot.',
+        help_text="Rank at the time of snapshot.",
     )
     xp = models.IntegerField(
-        help_text='XP earned this season at the time of snapshot.',
+        help_text="XP earned this season at the time of snapshot.",
     )
     snapshot_date = models.DateField(
         db_index=True,
-        help_text='Date of this snapshot.',
+        help_text="Date of this snapshot.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'rank_snapshots'
-        ordering = ['-snapshot_date']
+        db_table = "rank_snapshots"
+        ordering = ["-snapshot_date"]
         constraints = [
-            models.UniqueConstraint(fields=['user', 'season', 'snapshot_date'], name='unique_rank_snapshot'),
+            models.UniqueConstraint(
+                fields=["user", "season", "snapshot_date"], name="unique_rank_snapshot"
+            ),
         ]
         indexes = [
             models.Index(
-                fields=['user', 'season', '-snapshot_date'],
-                name='idx_snapshot_user_season_date',
+                fields=["user", "season", "-snapshot_date"],
+                name="idx_snapshot_user_season_date",
             ),
         ]
 
@@ -732,72 +785,68 @@ class LeagueSeason(models.Model):
     """
 
     THEME_CHOICES = [
-        ('growth', 'Growth'),
-        ('fire', 'Fire'),
-        ('ocean', 'Ocean'),
-        ('cosmic', 'Cosmic'),
-        ('aurora', 'Aurora'),
-        ('crystal', 'Crystal'),
-        ('storm', 'Storm'),
-        ('bloom', 'Bloom'),
+        ("growth", "Growth"),
+        ("fire", "Fire"),
+        ("ocean", "Ocean"),
+        ("cosmic", "Cosmic"),
+        ("aurora", "Aurora"),
+        ("crystal", "Crystal"),
+        ("storm", "Storm"),
+        ("bloom", "Bloom"),
     ]
 
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this league season.'
+        help_text="Unique identifier for this league season.",
     )
     name = models.CharField(
         max_length=200,
-        help_text='Display name of the season (e.g., "Season of Growth - Spring 2026").'
+        help_text='Display name of the season (e.g., "Season of Growth - Spring 2026").',
     )
     theme = models.CharField(
         max_length=50,
         choices=THEME_CHOICES,
-        default='growth',
-        help_text='Visual theme for the season (growth, fire, ocean, cosmic, etc.).'
+        default="growth",
+        help_text="Visual theme for the season (growth, fire, ocean, cosmic, etc.).",
     )
     description = models.TextField(
         blank=True,
-        help_text='Description of the season theme and what makes it special.'
+        help_text="Description of the season theme and what makes it special.",
     )
-    start_date = models.DateField(
-        help_text='When this season starts.'
-    )
-    end_date = models.DateField(
-        help_text='When this season ends.'
-    )
+    start_date = models.DateField(help_text="When this season starts.")
+    end_date = models.DateField(help_text="When this season ends.")
     is_active = models.BooleanField(
         default=False,
         db_index=True,
-        help_text='Whether this season is currently active. Only one should be active at a time.'
+        help_text="Whether this season is currently active. Only one should be active at a time.",
     )
     rewards = models.JSONField(
         default=list,
         blank=True,
         help_text=(
-            'Tiered reward definitions. Each entry: '
+            "Tiered reward definitions. Each entry: "
             '{"rank_min": 1, "rank_max": 3, "reward_type": "badge", '
             '"reward_id": "gold_crown", "title": "Gold Crown Badge"}.'
-        )
+        ),
     )
     theme_colors = models.JSONField(
         default=dict,
         blank=True,
-        help_text='Theme color palette: {"primary": "#hex", "secondary": "#hex", "accent": "#hex"}.'
+        help_text='Theme color palette: {"primary": "#hex", "secondary": "#hex", "accent": "#hex"}.',
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'league_seasons'
-        ordering = ['-start_date']
-        verbose_name = 'League Season'
-        verbose_name_plural = 'League Seasons'
+        db_table = "league_seasons"
+        ordering = ["-start_date"]
+        verbose_name = "League Season"
+        verbose_name_plural = "League Seasons"
         indexes = [
-            models.Index(fields=['is_active'], name='idx_lseason_active'),
-            models.Index(fields=['start_date', 'end_date'], name='idx_lseason_dates'),
+            models.Index(fields=["is_active"], name="idx_lseason_active"),
+            models.Index(fields=["start_date", "end_date"], name="idx_lseason_dates"),
         ]
 
     def __str__(self):
@@ -826,7 +875,7 @@ class LeagueSeason(models.Model):
     @classmethod
     def get_active_league_season(cls):
         """Return the currently active league season, or None."""
-        key = 'active_league_season'
+        key = "active_league_season"
         season = cache.get(key)
         if season is None:
             season = cls.objects.filter(is_active=True).first()
@@ -836,9 +885,9 @@ class LeagueSeason(models.Model):
 
     def get_reward_for_rank(self, rank):
         """Return the reward definition matching a given rank, or None."""
-        for reward in (self.rewards or []):
-            rank_min = reward.get('rank_min', 0)
-            rank_max = reward.get('rank_max', 0)
+        for reward in self.rewards or []:
+            rank_min = reward.get("rank_min", 0)
+            rank_max = reward.get("rank_max", 0)
             if rank_min <= rank <= rank_max:
                 return reward
         return None
@@ -856,56 +905,49 @@ class SeasonParticipant(models.Model):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text='Unique identifier for this participant record.'
+        help_text="Unique identifier for this participant record.",
     )
     season = models.ForeignKey(
         LeagueSeason,
         on_delete=models.CASCADE,
-        related_name='participants',
-        help_text='The league season this participation belongs to.'
+        related_name="participants",
+        help_text="The league season this participation belongs to.",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='season_participations',
-        help_text='The user participating in the season.'
+        related_name="season_participations",
+        help_text="The user participating in the season.",
     )
     xp_earned = models.PositiveIntegerField(
-        default=0,
-        help_text='Total XP earned during this season.'
+        default=0, help_text="Total XP earned during this season."
     )
     rank = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text='Final rank in the season (computed from XP).'
+        null=True, blank=True, help_text="Final rank in the season (computed from XP)."
     )
     rewards_claimed = models.BooleanField(
         default=False,
-        help_text='Whether the user has claimed their end-of-season rewards.'
+        help_text="Whether the user has claimed their end-of-season rewards.",
     )
     joined_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text='When the user joined this season.'
+        auto_now_add=True, help_text="When the user joined this season."
     )
 
     class Meta:
-        db_table = 'season_participants'
-        unique_together = ('season', 'user')
-        ordering = ['-xp_earned']
-        verbose_name = 'Season Participant'
-        verbose_name_plural = 'Season Participants'
+        db_table = "season_participants"
+        unique_together = ("season", "user")
+        ordering = ["-xp_earned"]
+        verbose_name = "Season Participant"
+        verbose_name_plural = "Season Participants"
         indexes = [
             models.Index(
-                fields=['season', '-xp_earned'],
-                name='idx_sparticipant_season_xp'
+                fields=["season", "-xp_earned"], name="idx_sparticipant_season_xp"
             ),
             models.Index(
-                fields=['season', 'rank'],
-                name='idx_sparticipant_season_rank'
+                fields=["season", "rank"], name="idx_sparticipant_season_rank"
             ),
             models.Index(
-                fields=['user', 'season'],
-                name='idx_sparticipant_user_season'
+                fields=["user", "season"], name="idx_sparticipant_user_season"
             ),
         ]
 
@@ -920,6 +962,6 @@ class SeasonParticipant(models.Model):
         """Mark rewards as claimed if not already done."""
         if not self.rewards_claimed:
             self.rewards_claimed = True
-            self.save(update_fields=['rewards_claimed'])
+            self.save(update_fields=["rewards_claimed"])
             return True
         return False

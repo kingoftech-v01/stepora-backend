@@ -5,7 +5,7 @@ Firebase Cloud Messaging service for push notification delivery.
 import json
 import logging
 import os
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 from django.conf import settings
 
@@ -28,12 +28,14 @@ def get_firebase_app():
     from firebase_admin import credentials
 
     # Prefer FIREBASE_CREDENTIALS_JSON env var (JSON string, e.g. for ECS)
-    cred_json = os.environ.get('FIREBASE_CREDENTIALS_JSON', '')
-    cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', '')
+    cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
+    cred_path = getattr(settings, "FIREBASE_CREDENTIALS_PATH", "")
 
     if cred_json:
         cred = credentials.Certificate(json.loads(cred_json))
-        logger.info("Firebase Admin SDK using credentials from FIREBASE_CREDENTIALS_JSON env var")
+        logger.info(
+            "Firebase Admin SDK using credentials from FIREBASE_CREDENTIALS_JSON env var"
+        )
     elif cred_path:
         cred = credentials.Certificate(cred_path)
         logger.info("Firebase Admin SDK using credentials from file: %s", cred_path)
@@ -91,7 +93,7 @@ class FCMService:
         title: str,
         body: str,
         data: Optional[Dict[str, str]] = None,
-        image_url: str = '',
+        image_url: str = "",
     ):
         """
         Build a base FCM Message (without token/topic).
@@ -110,11 +112,11 @@ class FCMService:
         )
 
         android_config = messaging.AndroidConfig(
-            priority='high',
+            priority="high",
             notification=messaging.AndroidNotification(
-                channel_id='stepora_default',
-                icon='ic_notification',
-                color='#6C63FF',
+                channel_id="stepora_default",
+                icon="ic_notification",
+                color="#6C63FF",
             ),
         )
 
@@ -122,7 +124,7 @@ class FCMService:
             payload=messaging.APNSPayload(
                 aps=messaging.Aps(
                     alert=messaging.ApsAlert(title=title, body=body),
-                    sound='default',
+                    sound="default",
                     mutable_content=True,
                     content_available=True,
                 ),
@@ -133,7 +135,7 @@ class FCMService:
             notification=messaging.WebpushNotification(
                 title=title,
                 body=body,
-                icon='/static/icon-192.png',
+                icon="/static/icon-192.png",
             ),
         )
 
@@ -151,7 +153,7 @@ class FCMService:
         title: str,
         body: str,
         data: Optional[Dict[str, str]] = None,
-        image_url: str = '',
+        image_url: str = "",
     ) -> Optional[str]:
         """
         Send a push notification to a single FCM registration token.
@@ -172,7 +174,9 @@ class FCMService:
         except messaging.SenderIdMismatchError:
             raise InvalidTokenError(token)
         except Exception as e:
-            logger.error(f"FCM send failed for token {token[:20]}...: {e}", exc_info=True)
+            logger.error(
+                f"FCM send failed for token {token[:20]}...: {e}", exc_info=True
+            )
             raise
 
     def send_multicast(
@@ -181,7 +185,7 @@ class FCMService:
         title: str,
         body: str,
         data: Optional[Dict[str, str]] = None,
-        image_url: str = '',
+        image_url: str = "",
     ) -> MulticastResult:
         """
         Send a push notification to multiple tokens via FCM multicast.
@@ -190,7 +194,7 @@ class FCMService:
         result = MulticastResult()
 
         for i in range(0, len(tokens), self.MAX_MULTICAST_SIZE):
-            chunk = tokens[i:i + self.MAX_MULTICAST_SIZE]
+            chunk = tokens[i : i + self.MAX_MULTICAST_SIZE]
             self._send_multicast_chunk(chunk, title, body, data, image_url, result)
 
         return result
@@ -225,10 +229,13 @@ class FCMService:
             for idx, send_response in enumerate(response.responses):
                 if send_response.exception is not None:
                     exc = send_response.exception
-                    if isinstance(exc, (
-                        messaging.UnregisteredError,
-                        messaging.SenderIdMismatchError,
-                    )):
+                    if isinstance(
+                        exc,
+                        (
+                            messaging.UnregisteredError,
+                            messaging.SenderIdMismatchError,
+                        ),
+                    ):
                         result.invalid_tokens.append(tokens[idx])
                     else:
                         logger.warning(

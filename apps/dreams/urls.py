@@ -24,34 +24,47 @@ Routes:
     /focus/stats/                   - Weekly focus statistics
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from .views import (
-    DreamViewSet, DreamMilestoneViewSet, GoalViewSet, TaskViewSet, ObstacleViewSet,
-    SharedWithMeView, DreamTagListView, DreamTemplateViewSet,
-    DreamPDFExportView,
     DreamJournalViewSet,
-    FocusSessionStartView, FocusSessionCompleteView,
-    FocusSessionHistoryView, FocusSessionStatsView,
+    DreamMilestoneViewSet,
+    DreamPDFExportView,
+    DreamTagListView,
+    DreamTemplateViewSet,
+    DreamViewSet,
+    FocusSessionCompleteView,
+    FocusSessionHistoryView,
+    FocusSessionStartView,
+    FocusSessionStatsView,
+    GoalViewSet,
+    ObstacleViewSet,
+    SharedWithMeView,
+    TaskViewSet,
 )
 
 router = DefaultRouter()
-router.register(r'dreams', DreamViewSet, basename='dream')
-router.register(r'milestones', DreamMilestoneViewSet, basename='milestone')
-router.register(r'goals', GoalViewSet, basename='goal')
-router.register(r'tasks', TaskViewSet, basename='task')
-router.register(r'obstacles', ObstacleViewSet, basename='obstacle')
-router.register(r'dreams/templates', DreamTemplateViewSet, basename='dream-template')
-router.register(r'journal', DreamJournalViewSet, basename='dream-journal')
+router.register(r"dreams", DreamViewSet, basename="dream")
+router.register(r"milestones", DreamMilestoneViewSet, basename="milestone")
+router.register(r"goals", GoalViewSet, basename="goal")
+router.register(r"tasks", TaskViewSet, basename="task")
+router.register(r"obstacles", ObstacleViewSet, basename="obstacle")
+router.register(r"dreams/templates", DreamTemplateViewSet, basename="dream-template")
+router.register(r"journal", DreamJournalViewSet, basename="dream-journal")
 
 urlpatterns = [
-    path('dreams/shared-with-me/', SharedWithMeView.as_view(), name='shared-with-me'),
-    path('dreams/tags/', DreamTagListView.as_view(), name='dream-tags'),
-    path('dreams/<uuid:dream_id>/export-pdf/', DreamPDFExportView.as_view(), name='dream-export-pdf'),
+    path("dreams/shared-with-me/", SharedWithMeView.as_view(), name="shared-with-me"),
+    path("dreams/tags/", DreamTagListView.as_view(), name="dream-tags"),
+    path(
+        "dreams/<uuid:dream_id>/export-pdf/",
+        DreamPDFExportView.as_view(),
+        name="dream-export-pdf",
+    ),
     # Focus sessions
-    path('focus/start/', FocusSessionStartView.as_view(), name='focus-start'),
-    path('focus/complete/', FocusSessionCompleteView.as_view(), name='focus-complete'),
-    path('focus/history/', FocusSessionHistoryView.as_view(), name='focus-history'),
-    path('focus/stats/', FocusSessionStatsView.as_view(), name='focus-stats'),
-    path('', include(router.urls)),
+    path("focus/start/", FocusSessionStartView.as_view(), name="focus-start"),
+    path("focus/complete/", FocusSessionCompleteView.as_view(), name="focus-complete"),
+    path("focus/history/", FocusSessionHistoryView.as_view(), name="focus-history"),
+    path("focus/stats/", FocusSessionStatsView.as_view(), name="focus-stats"),
+    path("", include(router.urls)),
 ]

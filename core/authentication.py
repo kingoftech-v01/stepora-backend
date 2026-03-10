@@ -17,7 +17,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
 
-security_logger = logging.getLogger('security')
+security_logger = logging.getLogger("security")
 
 
 class ExpiringTokenAuthentication(TokenAuthentication):
@@ -28,38 +28,36 @@ class ExpiringTokenAuthentication(TokenAuthentication):
     Accepts both 'Bearer' and 'Token' prefixes.
     """
 
-    keyword = 'Token'
+    keyword = "Token"
 
     def authenticate(self, request):
         """Try both 'Token' and 'Bearer' prefixes."""
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
 
-        if auth_header.startswith('Bearer '):
-            request.META['HTTP_AUTHORIZATION'] = 'Token ' + auth_header[7:]
+        if auth_header.startswith("Bearer "):
+            request.META["HTTP_AUTHORIZATION"] = "Token " + auth_header[7:]
 
         return super().authenticate(request)
 
     def authenticate_credentials(self, key):
         """Validate token and check expiration."""
         try:
-            token = Token.objects.select_related('user').get(key=key)
+            token = Token.objects.select_related("user").get(key=key)
         except Token.DoesNotExist:
-            security_logger.warning('auth_failure: invalid token attempted')
-            raise AuthenticationFailed('Invalid or expired token.')
+            security_logger.warning("auth_failure: invalid token attempted")
+            raise AuthenticationFailed("Invalid or expired token.")
 
         if not token.user.is_active:
             security_logger.warning(
-                'auth_failure: inactive user token used, user_id=%s', token.user.id
+                "auth_failure: inactive user token used, user_id=%s", token.user.id
             )
-            raise AuthenticationFailed('User account is disabled.')
+            raise AuthenticationFailed("User account is disabled.")
 
-        expiry_hours = getattr(settings, 'TOKEN_EXPIRY_HOURS', 24)
+        expiry_hours = getattr(settings, "TOKEN_EXPIRY_HOURS", 24)
         if token.created < timezone.now() - timedelta(hours=expiry_hours):
             token.delete()
-            security_logger.info(
-                'auth_token_expired: user_id=%s', token.user.id
-            )
-            raise AuthenticationFailed('Token has expired. Please log in again.')
+            security_logger.info("auth_token_expired: user_id=%s", token.user.id)
+            raise AuthenticationFailed("Token has expired. Please log in again.")
 
         return (token.user, token)
 
@@ -79,8 +77,8 @@ class CsrfExemptAPIMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith('/api/'):
-            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-            if auth_header.startswith(('Token ', 'Bearer ')):
-                setattr(request, '_dont_enforce_csrf_checks', True)
+        if request.path.startswith("/api/"):
+            auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+            if auth_header.startswith(("Token ", "Bearer ")):
+                setattr(request, "_dont_enforce_csrf_checks", True)
         return self.get_response(request)

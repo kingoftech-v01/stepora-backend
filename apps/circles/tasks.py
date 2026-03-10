@@ -12,7 +12,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='apps.circles.tasks.update_challenge_statuses')
+@shared_task(name="apps.circles.tasks.update_challenge_statuses")
 def update_challenge_statuses():
     """
     Transition circle challenges from 'upcoming' to 'active' or 'completed'
@@ -26,25 +26,26 @@ def update_challenge_statuses():
 
     # upcoming -> active
     activated = CircleChallenge.objects.filter(
-        status='upcoming',
+        status="upcoming",
         start_date__lte=now,
         end_date__gt=now,
-    ).update(status='active')
+    ).update(status="active")
 
     # active (or upcoming that already passed) -> completed
     completed = CircleChallenge.objects.filter(
-        status__in=['upcoming', 'active'],
+        status__in=["upcoming", "active"],
         end_date__lte=now,
-    ).update(status='completed')
+    ).update(status="completed")
 
     logger.info(
         "Challenge status transitions: %d activated, %d completed",
-        activated, completed,
+        activated,
+        completed,
     )
-    return {'activated': activated, 'completed': completed}
+    return {"activated": activated, "completed": completed}
 
 
-@shared_task(name='apps.circles.tasks.expire_circle_invitations')
+@shared_task(name="apps.circles.tasks.expire_circle_invitations")
 def expire_circle_invitations():
     """
     Mark expired circle invitations as 'expired'.
@@ -56,9 +57,9 @@ def expire_circle_invitations():
 
     now = timezone.now()
     expired = CircleInvitation.objects.filter(
-        status='pending',
+        status="pending",
         expires_at__lt=now,
-    ).update(status='expired')
+    ).update(status="expired")
 
     logger.info("Expired %d circle invitations", expired)
     return expired

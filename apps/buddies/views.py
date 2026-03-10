@@ -7,36 +7,41 @@ partnerships. All endpoints require authentication.
 """
 
 import logging
-import random
 from datetime import timedelta
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import Q, Count
+from django.db.models import Q
 from django.utils import timezone
 from django.utils import timezone as django_timezone
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import (
-    extend_schema,
     OpenApiResponse,
+    extend_schema,
 )
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from apps.users.models import User
-from .models import BuddyPairing, BuddyEncouragement, AccountabilityContract, ContractCheckIn
-from core.permissions import CanUseBuddy, CanUseAI
+from core.permissions import CanUseAI, CanUseBuddy
 from core.sanitizers import sanitize_text
+
+from .models import (
+    AccountabilityContract,
+    BuddyEncouragement,
+    BuddyPairing,
+    ContractCheckIn,
+)
 from .serializers import (
-    BuddyPairingSerializer,
-    BuddyProgressSerializer,
-    BuddyMatchSerializer,
+    AccountabilityContractSerializer,
     AIBuddyMatchSerializer,
-    BuddyPairRequestSerializer,
     BuddyEncourageSerializer,
     BuddyHistorySerializer,
-    AccountabilityContractSerializer,
+    BuddyMatchSerializer,
+    BuddyPairingSerializer,
+    BuddyPairRequestSerializer,
+    BuddyProgressSerializer,
     ContractCheckInCreateSerializer,
     ContractCheckInSerializer,
     ContractProgressSerializer,
@@ -62,34 +67,35 @@ class BuddyViewSet(viewsets.GenericViewSet):
         """Build partner data dict from a User object."""
         level = user.level
         if level >= 50:
-            title = 'Legend'
+            title = "Legend"
         elif level >= 30:
-            title = 'Master'
+            title = "Master"
         elif level >= 20:
-            title = 'Expert'
+            title = "Expert"
         elif level >= 10:
-            title = 'Achiever'
+            title = "Achiever"
         elif level >= 5:
-            title = 'Explorer'
+            title = "Explorer"
         else:
-            title = 'Dreamer'
+            title = "Dreamer"
 
         return {
-            'id': user.id,
-            'username': user.display_name or 'Anonymous',
-            'avatar': user.avatar_url or '',
-            'title': title,
-            'currentLevel': user.level,
-            'influenceScore': user.xp,
-            'currentStreak': user.streak_days,
+            "id": user.id,
+            "username": user.display_name or "Anonymous",
+            "avatar": user.avatar_url or "",
+            "title": title,
+            "currentLevel": user.level,
+            "influenceScore": user.xp,
+            "currentStreak": user.streak_days,
         }
 
     def _get_active_pairing(self, user):
         """Find the user's current active buddy pairing."""
-        return BuddyPairing.objects.filter(
-            Q(user1=user) | Q(user2=user),
-            status='active'
-        ).select_related('user1', 'user2').first()
+        return (
+            BuddyPairing.objects.filter(Q(user1=user) | Q(user2=user), status="active")
+            .select_related("user1", "user2")
+            .first()
+        )
 
     def _get_partner_user(self, pairing, user):
         """Get the partner user from a pairing."""
@@ -103,17 +109,17 @@ class BuddyViewSet(viewsets.GenericViewSet):
         ),
         responses={
             200: BuddyPairingSerializer,
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['get'], url_path='current')
+    @action(detail=False, methods=["get"], url_path="current")
     def current(self, request):
         """Get the current active buddy pairing."""
         pairing = self._get_active_pairing(request.user)
 
         if not pairing:
-            return Response({'buddy': None})
+            return Response({"buddy": None})
 
         partner = self._get_partner_user(pairing, request.user)
 
@@ -122,52 +128,58 @@ class BuddyViewSet(viewsets.GenericViewSet):
         recent_tasks = 0
         try:
             from apps.dreams.models import Task
+
             recent_tasks = Task.objects.filter(
                 dream__user=partner,
                 dream__is_public=True,
                 completed_at__gte=week_ago,
-                status='completed'
+                status="completed",
             ).count()
         except (ImportError, Exception):
             logger.debug("Failed to compute shared interests", exc_info=True)
             recent_tasks = 0
 
         buddy_data = {
-            'id': pairing.id,
-            'partner': self._get_partner_data(partner),
-            'compatibilityScore': pairing.compatibility_score,
-            'status': pairing.status,
-            'recentActivity': recent_tasks,
-            'encouragementStreak': pairing.encouragement_streak,
-            'bestEncouragementStreak': pairing.best_encouragement_streak,
-            'createdAt': pairing.created_at,
+            "id": pairing.id,
+            "partner": self._get_partner_data(partner),
+            "compatibilityScore": pairing.compatibility_score,
+            "status": pairing.status,
+            "recentActivity": recent_tasks,
+            "encouragementStreak": pairing.encouragement_streak,
+            "bestEncouragementStreak": pairing.best_encouragement_streak,
+            "createdAt": pairing.created_at,
         }
 
         serializer = BuddyPairingSerializer(buddy_data)
-        return Response({'buddy': serializer.data})
+        return Response({"buddy": serializer.data})
 
     @extend_schema(
         summary="Find or create buddy chat",
         description="Find or create a buddy_chat conversation with a specific user.",
         responses={
             200: OpenApiResponse(description="Conversation found or created."),
-            404: OpenApiResponse(description="User not found or no active buddy pairing."),
+            404: OpenApiResponse(
+                description="User not found or no active buddy pairing."
+            ),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['post'], url_path='chat')
+    @action(detail=False, methods=["post"], url_path="chat")
     def chat(self, request):
         """Find or create a buddy_chat conversation for the given user."""
         from apps.conversations.models import Conversation
+
         target_user_id = (
-            request.data.get('userId')
-            or request.data.get('user_id')
-            or request.data.get('targetUserId')
-            or request.data.get('target_user_id')
+            request.data.get("userId")
+            or request.data.get("user_id")
+            or request.data.get("targetUserId")
+            or request.data.get("target_user_id")
         )
 
-        if not target_user_id or target_user_id == 'undefined':
-            return Response({'error': _('userId is required.')}, status=status.HTTP_400_BAD_REQUEST)
+        if not target_user_id or target_user_id == "undefined":
+            return Response(
+                {"error": _("userId is required.")}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         target_user = None
         try:
@@ -179,50 +191,69 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if not target_user:
             try:
                 conv = Conversation.objects.get(
-                    id=target_user_id, conversation_type='buddy_chat'
+                    id=target_user_id, conversation_type="buddy_chat"
                 )
                 # Find the buddy (the other user in the pairing)
                 buddy_user = None
                 if conv.buddy_pairing:
                     bp = conv.buddy_pairing
-                    buddy_user = bp.user2 if bp.user1_id == request.user.id else bp.user1
+                    buddy_user = (
+                        bp.user2 if bp.user1_id == request.user.id else bp.user1
+                    )
                 if not buddy_user and conv.user_id != request.user.id:
                     buddy_user = conv.user
-                return Response({
-                    'conversationId': str(conv.id),
-                    'buddy': {
-                        'id': str(buddy_user.id) if buddy_user else '',
-                        'displayName': (buddy_user.display_name if buddy_user else '') or 'Buddy',
-                        'isOnline': buddy_user.is_online if buddy_user else False,
-                        'level': buddy_user.level if buddy_user else 0,
-                        'streak': buddy_user.streak_days if buddy_user else 0,
-                    },
-                })
+                return Response(
+                    {
+                        "conversationId": str(conv.id),
+                        "buddy": {
+                            "id": str(buddy_user.id) if buddy_user else "",
+                            "displayName": (
+                                buddy_user.display_name if buddy_user else ""
+                            )
+                            or "Buddy",
+                            "isOnline": buddy_user.is_online if buddy_user else False,
+                            "level": buddy_user.level if buddy_user else 0,
+                            "streak": buddy_user.streak_days if buddy_user else 0,
+                        },
+                    }
+                )
             except Conversation.DoesNotExist:
-                return Response({'error': _('User not found.')}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": _("User not found.")}, status=status.HTTP_404_NOT_FOUND
+                )
 
         # Find active buddy pairing between the two users
         pairing = BuddyPairing.objects.filter(
-            Q(user1=request.user, user2=target_user) | Q(user1=target_user, user2=request.user),
-            status='active'
+            Q(user1=request.user, user2=target_user)
+            | Q(user1=target_user, user2=request.user),
+            status="active",
         ).first()
 
         # Look for existing buddy_chat conversation
         existing = None
         if pairing:
-            existing = Conversation.objects.filter(
-                conversation_type='buddy_chat',
-                buddy_pairing=pairing,
-            ).filter(Q(user=request.user) | Q(user=target_user)).first()
+            existing = (
+                Conversation.objects.filter(
+                    conversation_type="buddy_chat",
+                    buddy_pairing=pairing,
+                )
+                .filter(Q(user=request.user) | Q(user=target_user))
+                .first()
+            )
 
         if not existing:
             # Also try to find by user + type (no pairing link)
-            existing = Conversation.objects.filter(
-                user=request.user,
-                conversation_type='buddy_chat',
-            ).filter(
-                Q(buddy_pairing__user1=target_user) | Q(buddy_pairing__user2=target_user)
-            ).first()
+            existing = (
+                Conversation.objects.filter(
+                    user=request.user,
+                    conversation_type="buddy_chat",
+                )
+                .filter(
+                    Q(buddy_pairing__user1=target_user)
+                    | Q(buddy_pairing__user2=target_user)
+                )
+                .first()
+            )
 
         if existing:
             conv = existing
@@ -230,7 +261,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             # Create new buddy_chat conversation
             conv = Conversation.objects.create(
                 user=request.user,
-                conversation_type='buddy_chat',
+                conversation_type="buddy_chat",
                 title=target_user.display_name or "Buddy",
                 buddy_pairing=pairing,
                 total_messages=0,
@@ -238,23 +269,26 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
             # Store target user as a system message so send_message can resolve recipient
             from apps.conversations.models import Message
+
             Message.objects.create(
                 conversation=conv,
-                role='system',
-                content='',
-                metadata={'target_user_id': str(target_user.id)},
+                role="system",
+                content="",
+                metadata={"target_user_id": str(target_user.id)},
             )
 
-        return Response({
-            'conversationId': str(conv.id),
-            'buddy': {
-                'id': str(target_user.id),
-                'displayName': target_user.display_name or 'Buddy',
-                'isOnline': target_user.is_online,
-                'level': target_user.level,
-                'streak': target_user.streak_days,
-            },
-        })
+        return Response(
+            {
+                "conversationId": str(conv.id),
+                "buddy": {
+                    "id": str(target_user.id),
+                    "displayName": target_user.display_name or "Buddy",
+                    "isOnline": target_user.is_online,
+                    "level": target_user.level,
+                    "streak": target_user.streak_days,
+                },
+            }
+        )
 
     @extend_schema(
         summary="Send buddy chat message",
@@ -265,32 +299,48 @@ class BuddyViewSet(viewsets.GenericViewSet):
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['post'], url_path='send-message')
+    @action(detail=False, methods=["post"], url_path="send-message")
     def send_message(self, request):
         """Send a buddy chat message (REST fallback when WebSocket unavailable)."""
-        from apps.conversations.models import Conversation, Message
         from django.db.models import F
 
-        conv_id = request.data.get('conversationId') or request.data.get('conversation_id')
-        content = sanitize_text((request.data.get('content') or '').strip())
+        from apps.conversations.models import Conversation, Message
 
-        if not conv_id or conv_id == 'undefined' or not content:
-            return Response({'error': _('conversationId and content are required.')}, status=status.HTTP_400_BAD_REQUEST)
+        conv_id = request.data.get("conversationId") or request.data.get(
+            "conversation_id"
+        )
+        content = sanitize_text((request.data.get("content") or "").strip())
+
+        if not conv_id or conv_id == "undefined" or not content:
+            return Response(
+                {"error": _("conversationId and content are required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Limit message length to prevent storage abuse
         if len(content) > 5000:
-            return Response({'error': _('Message too long. Maximum 5000 characters.')}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Message too long. Maximum 5000 characters.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         import uuid
+
         try:
             uuid.UUID(str(conv_id))
         except (ValueError, AttributeError):
-            return Response({'error': _('Invalid conversationId.')}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Invalid conversationId.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            conv = Conversation.objects.get(id=conv_id, conversation_type='buddy_chat')
+            conv = Conversation.objects.get(id=conv_id, conversation_type="buddy_chat")
         except Conversation.DoesNotExist:
-            return Response({'error': _('Conversation not found.')}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": _("Conversation not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Verify user has access (is part of the buddy pairing or owns the conversation)
         has_access = conv.user_id == request.user.id
@@ -298,7 +348,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
             bp = conv.buddy_pairing
             has_access = request.user.id in (bp.user1_id, bp.user2_id)
         if not has_access:
-            return Response({'error': _('Access denied.')}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN
+            )
 
         # Block enforcement: determine the other user and check
         other_user = None
@@ -311,57 +363,77 @@ class BuddyViewSet(viewsets.GenericViewSet):
         # Fallback: check the system message metadata for target_user_id
         if not other_user:
             from apps.conversations.models import Message as ConvMessage
-            sys_msg = ConvMessage.objects.filter(
-                conversation=conv, role='system',
-            ).exclude(metadata={}).first()
-            if sys_msg and sys_msg.metadata and sys_msg.metadata.get('target_user_id'):
+
+            sys_msg = (
+                ConvMessage.objects.filter(
+                    conversation=conv,
+                    role="system",
+                )
+                .exclude(metadata={})
+                .first()
+            )
+            if sys_msg and sys_msg.metadata and sys_msg.metadata.get("target_user_id"):
                 try:
-                    other_user = User.objects.get(id=sys_msg.metadata['target_user_id'])
+                    other_user = User.objects.get(id=sys_msg.metadata["target_user_id"])
                 except User.DoesNotExist:
                     pass
 
         if not other_user:
-            return Response({'error': _('Cannot determine recipient. The other user may no longer exist.')}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": _(
+                        "Cannot determine recipient. The other user may no longer exist."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         from apps.social.models import BlockedUser
+
         if BlockedUser.is_blocked(request.user, other_user):
-            return Response({'detail': _('Cannot send message')}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": _("Cannot send message")}, status=status.HTTP_403_FORBIDDEN
+            )
 
         msg = Message.objects.create(
             conversation=conv,
-            role='user',
+            role="user",
             content=content,
-            metadata={'sender_id': str(request.user.id)},
+            metadata={"sender_id": str(request.user.id)},
         )
         Conversation.objects.filter(id=conv.id).update(
-            total_messages=F('total_messages') + 1,
+            total_messages=F("total_messages") + 1,
             updated_at=django_timezone.now(),
         )
 
         # Send push notification to the other user
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=other_user,
-                notification_type='buddy',
-                title=_('Message from %(name)s') % {'name': request.user.display_name or _("Your buddy")},
+                notification_type="buddy",
+                title=_("Message from %(name)s")
+                % {"name": request.user.display_name or _("Your buddy")},
                 body=content[:100],
                 scheduled_for=django_timezone.now(),
                 data={
-                    'conversation_id': str(conv.id),
-                    'sender_id': str(request.user.id),
-                    'screen': 'BuddyChat',
+                    "conversation_id": str(conv.id),
+                    "sender_id": str(request.user.id),
+                    "screen": "BuddyChat",
                 },
             )
         except Exception:
             logger.warning("Failed to send buddy notification", exc_info=True)
 
-        return Response({
-            'id': str(msg.id),
-            'content': msg.content,
-            'senderId': str(request.user.id),
-            'createdAt': msg.created_at.isoformat(),
-        })
+        return Response(
+            {
+                "id": str(msg.id),
+                "content": msg.content,
+                "senderId": str(request.user.id),
+                "createdAt": msg.created_at.isoformat(),
+            }
+        )
 
     @extend_schema(
         summary="Send buddy voice message",
@@ -373,50 +445,84 @@ class BuddyViewSet(viewsets.GenericViewSet):
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['post'], url_path='send-voice',
-            parser_classes=[MultiPartParser, FormParser])
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="send-voice",
+        parser_classes=[MultiPartParser, FormParser],
+    )
     def send_voice(self, request):
         """Send a voice message in buddy chat (file upload via multipart form data)."""
         import re
         import uuid as uuid_mod
+
         from django.core.files.storage import default_storage
-        from apps.conversations.models import Conversation, Message
         from django.db.models import F
 
-        conv_id = request.data.get('conversationId') or request.data.get('conversation_id')
-        audio_file = request.FILES.get('audio')
+        from apps.conversations.models import Conversation, Message
 
-        if not conv_id or conv_id == 'undefined':
-            return Response({'error': _('conversationId is required.')}, status=status.HTTP_400_BAD_REQUEST)
-        if not audio_file:
-            return Response({'error': _('No audio file provided.')}, status=status.HTTP_400_BAD_REQUEST)
+        conv_id = request.data.get("conversationId") or request.data.get(
+            "conversation_id"
+        )
+        audio_file = request.FILES.get("audio")
 
-        try:
-            uuid_mod.UUID(str(conv_id))
-        except (ValueError, AttributeError):
-            return Response({'error': _('Invalid conversationId.')}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validate file size (max 25MB)
-        if audio_file.size > 25 * 1024 * 1024:
-            return Response({'error': _('Audio file too large. Max 25MB.')}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validate audio MIME type
-        ALLOWED_AUDIO_TYPES = {
-            'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a',
-            'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg',
-            'audio/flac', 'audio/aac',
-        }
-        content_type = getattr(audio_file, 'content_type', '')
-        if content_type not in ALLOWED_AUDIO_TYPES:
+        if not conv_id or conv_id == "undefined":
             return Response(
-                {'error': _('Unsupported audio format. Allowed: mp3, m4a, wav, webm, ogg, flac, aac.')},
+                {"error": _("conversationId is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not audio_file:
+            return Response(
+                {"error": _("No audio file provided.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            conv = Conversation.objects.get(id=conv_id, conversation_type='buddy_chat')
+            uuid_mod.UUID(str(conv_id))
+        except (ValueError, AttributeError):
+            return Response(
+                {"error": _("Invalid conversationId.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate file size (max 25MB)
+        if audio_file.size > 25 * 1024 * 1024:
+            return Response(
+                {"error": _("Audio file too large. Max 25MB.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate audio MIME type
+        ALLOWED_AUDIO_TYPES = {
+            "audio/mpeg",
+            "audio/mp3",
+            "audio/mp4",
+            "audio/m4a",
+            "audio/wav",
+            "audio/x-wav",
+            "audio/webm",
+            "audio/ogg",
+            "audio/flac",
+            "audio/aac",
+        }
+        content_type = getattr(audio_file, "content_type", "")
+        if content_type not in ALLOWED_AUDIO_TYPES:
+            return Response(
+                {
+                    "error": _(
+                        "Unsupported audio format. Allowed: mp3, m4a, wav, webm, ogg, flac, aac."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            conv = Conversation.objects.get(id=conv_id, conversation_type="buddy_chat")
         except Conversation.DoesNotExist:
-            return Response({'error': _('Conversation not found.')}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": _("Conversation not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Verify user has access
         has_access = conv.user_id == request.user.id
@@ -424,7 +530,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
             bp = conv.buddy_pairing
             has_access = request.user.id in (bp.user1_id, bp.user2_id)
         if not has_access:
-            return Response({'error': _('Access denied.')}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN
+            )
 
         # Determine the other user and check blocks
         other_user = None
@@ -435,30 +543,42 @@ class BuddyViewSet(viewsets.GenericViewSet):
             other_user = conv.user
         if not other_user:
             from apps.conversations.models import Message as ConvMessage
-            sys_msg = ConvMessage.objects.filter(
-                conversation=conv, role='system',
-            ).exclude(metadata={}).first()
-            if sys_msg and sys_msg.metadata and sys_msg.metadata.get('target_user_id'):
+
+            sys_msg = (
+                ConvMessage.objects.filter(
+                    conversation=conv,
+                    role="system",
+                )
+                .exclude(metadata={})
+                .first()
+            )
+            if sys_msg and sys_msg.metadata and sys_msg.metadata.get("target_user_id"):
                 try:
-                    other_user = User.objects.get(id=sys_msg.metadata['target_user_id'])
+                    other_user = User.objects.get(id=sys_msg.metadata["target_user_id"])
                 except User.DoesNotExist:
                     pass
         if not other_user:
-            return Response({'error': _('Cannot determine recipient.')}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Cannot determine recipient.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         from apps.social.models import BlockedUser
+
         if BlockedUser.is_blocked(request.user, other_user):
-            return Response({'detail': _('Cannot send message')}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": _("Cannot send message")}, status=status.HTTP_403_FORBIDDEN
+            )
 
         # Save audio file
-        safe_name = re.sub(r'[^\w\-.]', '_', audio_file.name)[:100]
-        file_path = f'voice_messages/{conv.id}/{safe_name}'
+        safe_name = re.sub(r"[^\w\-.]", "_", audio_file.name)[:100]
+        file_path = f"voice_messages/{conv.id}/{safe_name}"
         saved_path = default_storage.save(file_path, audio_file)
         audio_url = default_storage.url(saved_path)
 
         # Parse optional duration
         audio_duration = None
-        raw_duration = request.data.get('duration')
+        raw_duration = request.data.get("duration")
         if raw_duration is not None:
             try:
                 audio_duration = int(raw_duration)
@@ -468,75 +588,77 @@ class BuddyViewSet(viewsets.GenericViewSet):
         # Create the message
         msg = Message.objects.create(
             conversation=conv,
-            role='user',
-            content='[Voice message]',
+            role="user",
+            content="[Voice message]",
             audio_url=audio_url,
             audio_duration=audio_duration,
-            metadata={'sender_id': str(request.user.id), 'type': 'voice'},
+            metadata={"sender_id": str(request.user.id), "type": "voice"},
         )
         Conversation.objects.filter(id=conv.id).update(
-            total_messages=F('total_messages') + 1,
+            total_messages=F("total_messages") + 1,
             updated_at=django_timezone.now(),
         )
 
         # Send push notification
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=other_user,
-                notification_type='buddy',
-                title=_('Voice message from %(name)s') % {'name': request.user.display_name or _("Your buddy")},
-                body=_('Sent a voice message'),
+                notification_type="buddy",
+                title=_("Voice message from %(name)s")
+                % {"name": request.user.display_name or _("Your buddy")},
+                body=_("Sent a voice message"),
                 scheduled_for=django_timezone.now(),
                 data={
-                    'conversation_id': str(conv.id),
-                    'sender_id': str(request.user.id),
-                    'screen': 'BuddyChat',
+                    "conversation_id": str(conv.id),
+                    "sender_id": str(request.user.id),
+                    "screen": "BuddyChat",
                 },
             )
         except Exception:
             logger.warning("Failed to send buddy voice notification", exc_info=True)
 
-        return Response({
-            'id': str(msg.id),
-            'content': msg.content,
-            'audioUrl': audio_url,
-            'audioDuration': audio_duration,
-            'senderId': str(request.user.id),
-            'createdAt': msg.created_at.isoformat(),
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "id": str(msg.id),
+                "content": msg.content,
+                "audioUrl": audio_url,
+                "audioDuration": audio_duration,
+                "senderId": str(request.user.id),
+                "createdAt": msg.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @extend_schema(
         summary="Get buddy progress",
         description="Retrieve progress comparison between the current user and their buddy.",
         responses={
             200: BuddyProgressSerializer,
-            400: OpenApiResponse(description='Validation error.'),
-            403: OpenApiResponse(description='Subscription required.'),
-            404: OpenApiResponse(description='Resource not found.'),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Subscription required."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['get'], url_path='progress')
+    @action(detail=True, methods=["get"], url_path="progress")
     def progress(self, request, pk=None):
         """Get progress comparison for a buddy pairing."""
         try:
-            pairing = BuddyPairing.objects.select_related(
-                'user1', 'user2'
-            ).get(
-                id=pk,
-                status='active'
+            pairing = BuddyPairing.objects.select_related("user1", "user2").get(
+                id=pk, status="active"
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Active buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         partner = self._get_partner_user(pairing, request.user)
@@ -547,35 +669,34 @@ class BuddyViewSet(viewsets.GenericViewSet):
         partner_tasks_week = 0
         try:
             from apps.dreams.models import Task
+
             user_tasks_week = Task.objects.filter(
-                dream__user=request.user,
-                completed_at__gte=week_ago,
-                status='completed'
+                dream__user=request.user, completed_at__gte=week_ago, status="completed"
             ).count()
             partner_tasks_week = Task.objects.filter(
                 dream__user=partner,
                 dream__is_public=True,
                 completed_at__gte=week_ago,
-                status='completed'
+                status="completed",
             ).count()
         except (ImportError, Exception):
             logger.debug("Failed to compute shared interests", exc_info=True)
 
         progress_data = {
-            'user': {
-                'currentStreak': request.user.streak_days,
-                'tasksThisWeek': user_tasks_week,
-                'influenceScore': request.user.xp,
+            "user": {
+                "currentStreak": request.user.streak_days,
+                "tasksThisWeek": user_tasks_week,
+                "influenceScore": request.user.xp,
             },
-            'partner': {
-                'currentStreak': partner.streak_days,
-                'tasksThisWeek': partner_tasks_week,
-                'influenceScore': partner.xp,
+            "partner": {
+                "currentStreak": partner.streak_days,
+                "tasksThisWeek": partner_tasks_week,
+                "influenceScore": partner.xp,
             },
         }
 
         serializer = BuddyProgressSerializer(progress_data)
-        return Response({'progress': serializer.data})
+        return Response({"progress": serializer.data})
 
     @extend_schema(
         summary="Find a buddy match",
@@ -585,37 +706,36 @@ class BuddyViewSet(viewsets.GenericViewSet):
         responses={
             200: BuddyMatchSerializer,
             400: OpenApiResponse(description="Already have an active buddy."),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['post'], url_path='find-match')
+    @action(detail=False, methods=["post"], url_path="find-match")
     def find_match(self, request):
         """Find a compatible buddy match."""
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
-                {'error': _('You already have an active buddy pairing.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("You already have an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Find users without active pairings
         active_pairing_user_ids = set()
-        active_pairings = BuddyPairing.objects.filter(status='active')
+        active_pairings = BuddyPairing.objects.filter(status="active")
         for p in active_pairings:
             active_pairing_user_ids.add(p.user1_id)
             active_pairing_user_ids.add(p.user2_id)
 
-        candidates = User.objects.filter(
-            is_active=True
-        ).exclude(
-            id__in=active_pairing_user_ids
-        ).exclude(
-            id=request.user.id
-        ).order_by('-last_activity')[:50]
+        candidates = (
+            User.objects.filter(is_active=True)
+            .exclude(id__in=active_pairing_user_ids)
+            .exclude(id=request.user.id)
+            .order_by("-last_activity")[:50]
+        )
 
         if not candidates.exists():
-            return Response({'match': None})
+            return Response({"match": None})
 
         best_match = None
         best_score = 0.0
@@ -636,16 +756,23 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 best_match = candidate
 
         if not best_match:
-            return Response({'match': None})
+            return Response({"match": None})
 
         shared_interests = []
         try:
             user_gam = request.user.gamification
             match_gam = best_match.gamification
-            categories = ['health', 'career', 'relationships', 'personal_growth', 'finance', 'hobbies']
+            categories = [
+                "health",
+                "career",
+                "relationships",
+                "personal_growth",
+                "finance",
+                "hobbies",
+            ]
             for cat in categories:
-                user_xp_attr = getattr(user_gam, f'{cat}_xp', 0)
-                match_xp_attr = getattr(match_gam, f'{cat}_xp', 0)
+                user_xp_attr = getattr(user_gam, f"{cat}_xp", 0)
+                match_xp_attr = getattr(match_gam, f"{cat}_xp", 0)
                 if user_xp_attr > 0 and match_xp_attr > 0:
                     shared_interests.append(cat)
         except Exception:
@@ -653,15 +780,15 @@ class BuddyViewSet(viewsets.GenericViewSet):
             shared_interests = []
 
         match_data = {
-            'userId': best_match.id,
-            'username': best_match.display_name or 'Anonymous',
-            'avatar': best_match.avatar_url or '',
-            'compatibilityScore': round(best_score, 2),
-            'sharedInterests': shared_interests,
+            "userId": best_match.id,
+            "username": best_match.display_name or "Anonymous",
+            "avatar": best_match.avatar_url or "",
+            "compatibilityScore": round(best_score, 2),
+            "sharedInterests": shared_interests,
         }
 
         serializer = BuddyMatchSerializer(match_data)
-        return Response({'match': serializer.data})
+        return Response({"match": serializer.data})
 
     def _build_user_profile_for_ai(self, user):
         """Build a profile dict for AI compatibility scoring."""
@@ -670,7 +797,10 @@ class BuddyViewSet(viewsets.GenericViewSet):
         dream_categories = []
         try:
             from apps.dreams.models import Dream
-            dreams = Dream.objects.filter(user=user, status='active').values_list('title', 'category')
+
+            dreams = Dream.objects.filter(user=user, status="active").values_list(
+                "title", "category"
+            )
             for title, category in dreams:
                 if title:
                     dream_titles.append(title)
@@ -682,23 +812,23 @@ class BuddyViewSet(viewsets.GenericViewSet):
         # Determine activity level from streak and last activity
         days_since_activity = (django_timezone.now() - user.last_activity).days
         if days_since_activity <= 1 and user.streak_days >= 7:
-            activity_level = 'very active'
+            activity_level = "very active"
         elif days_since_activity <= 3 and user.streak_days >= 3:
-            activity_level = 'active'
+            activity_level = "active"
         elif days_since_activity <= 7:
-            activity_level = 'moderate'
+            activity_level = "moderate"
         else:
-            activity_level = 'low'
+            activity_level = "low"
 
         return {
-            'name': user.display_name or 'Anonymous',
-            'dreams': dream_titles[:10],
-            'categories': dream_categories[:10],
-            'activity_level': activity_level,
-            'personality': user.dreamer_type or 'unknown',
-            'level': user.level,
-            'streak': user.streak_days,
-            'bio': user.bio or '',
+            "name": user.display_name or "Anonymous",
+            "dreams": dream_titles[:10],
+            "categories": dream_categories[:10],
+            "activity_level": activity_level,
+            "personality": user.dreamer_type or "unknown",
+            "level": user.level,
+            "streak": user.streak_days,
+            "bio": user.bio or "",
         }
 
     @extend_schema(
@@ -711,38 +841,41 @@ class BuddyViewSet(viewsets.GenericViewSet):
         responses={
             200: AIBuddyMatchSerializer(many=True),
             400: OpenApiResponse(description="Already have an active buddy."),
-            403: OpenApiResponse(description='Subscription or AI access required.'),
+            403: OpenApiResponse(description="Subscription or AI access required."),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['get'], url_path='ai-matches',
-            permission_classes=[IsAuthenticated, CanUseBuddy, CanUseAI])
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="ai-matches",
+        permission_classes=[IsAuthenticated, CanUseBuddy, CanUseAI],
+    )
     def ai_matches(self, request):
         """Find compatible buddies with AI-powered compatibility scoring."""
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
-                {'error': _('You already have an active buddy pairing.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("You already have an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Find candidate users (same logic as find_match but get top 50)
         active_pairing_user_ids = set()
-        active_pairings = BuddyPairing.objects.filter(status='active')
+        active_pairings = BuddyPairing.objects.filter(status="active")
         for p in active_pairings:
             active_pairing_user_ids.add(p.user1_id)
             active_pairing_user_ids.add(p.user2_id)
 
-        candidates = User.objects.filter(
-            is_active=True
-        ).exclude(
-            id__in=active_pairing_user_ids
-        ).exclude(
-            id=request.user.id
-        ).order_by('-last_activity')[:50]
+        candidates = (
+            User.objects.filter(is_active=True)
+            .exclude(id__in=active_pairing_user_ids)
+            .exclude(id=request.user.id)
+            .order_by("-last_activity")[:50]
+        )
 
         if not candidates.exists():
-            return Response({'results': []})
+            return Response({"results": []})
 
         # Basic scoring to pick top 10 for AI scoring
         user_level = request.user.level
@@ -766,51 +899,57 @@ class BuddyViewSet(viewsets.GenericViewSet):
         user_profile = self._build_user_profile_for_ai(request.user)
 
         # Score each candidate with AI
-        from integrations.openai_service import OpenAIService
         from core.exceptions import OpenAIError
+        from integrations.openai_service import OpenAIService
+
         ai_service = OpenAIService()
         ai_results = []
 
         for candidate, base_score in top_candidates:
             candidate_profile = self._build_user_profile_for_ai(candidate)
             try:
-                ai_result = ai_service.score_buddy_compatibility(user_profile, candidate_profile)
+                ai_result = ai_service.score_buddy_compatibility(
+                    user_profile, candidate_profile
+                )
             except OpenAIError:
                 logger.warning(
                     "AI scoring failed for candidate %s, using base score",
-                    candidate.id, exc_info=True,
+                    candidate.id,
+                    exc_info=True,
                 )
                 ai_result = {
-                    'compatibility_score': round(base_score, 2),
-                    'reasons': [],
-                    'shared_interests': [],
-                    'potential_challenges': [],
-                    'suggested_icebreaker': 'Hey! Want to be accountability buddies?',
+                    "compatibility_score": round(base_score, 2),
+                    "reasons": [],
+                    "shared_interests": [],
+                    "potential_challenges": [],
+                    "suggested_icebreaker": "Hey! Want to be accountability buddies?",
                 }
 
-            ai_results.append({
-                'userId': candidate.id,
-                'username': candidate.display_name or 'Anonymous',
-                'avatar': candidate.avatar_url or '',
-                'bio': candidate.bio or '',
-                'level': candidate.level,
-                'streak': candidate.streak_days,
-                'xp': candidate.xp,
-                'dreamerType': candidate.dreamer_type or '',
-                'compatibilityScore': ai_result['compatibility_score'],
-                'reasons': ai_result['reasons'],
-                'sharedInterests': ai_result['shared_interests'],
-                'potentialChallenges': ai_result['potential_challenges'],
-                'suggestedIcebreaker': ai_result['suggested_icebreaker'],
-                'dreams': candidate_profile['dreams'],
-                'categories': candidate_profile['categories'],
-            })
+            ai_results.append(
+                {
+                    "userId": candidate.id,
+                    "username": candidate.display_name or "Anonymous",
+                    "avatar": candidate.avatar_url or "",
+                    "bio": candidate.bio or "",
+                    "level": candidate.level,
+                    "streak": candidate.streak_days,
+                    "xp": candidate.xp,
+                    "dreamerType": candidate.dreamer_type or "",
+                    "compatibilityScore": ai_result["compatibility_score"],
+                    "reasons": ai_result["reasons"],
+                    "sharedInterests": ai_result["shared_interests"],
+                    "potentialChallenges": ai_result["potential_challenges"],
+                    "suggestedIcebreaker": ai_result["suggested_icebreaker"],
+                    "dreams": candidate_profile["dreams"],
+                    "categories": candidate_profile["categories"],
+                }
+            )
 
         # Sort by AI compatibility score descending
-        ai_results.sort(key=lambda x: x['compatibilityScore'], reverse=True)
+        ai_results.sort(key=lambda x: x["compatibilityScore"], reverse=True)
 
         serializer = AIBuddyMatchSerializer(ai_results, many=True)
-        return Response({'results': serializer.data})
+        return Response({"results": serializer.data})
 
     @extend_schema(
         summary="Create a buddy pairing",
@@ -818,50 +957,51 @@ class BuddyViewSet(viewsets.GenericViewSet):
         request=BuddyPairRequestSerializer,
         responses={
             201: OpenApiResponse(description="Buddy pairing created."),
-            400: OpenApiResponse(description="Already have a buddy or invalid partner."),
-            403: OpenApiResponse(description='Subscription required.'),
-            404: OpenApiResponse(description='Resource not found.'),
+            400: OpenApiResponse(
+                description="Already have a buddy or invalid partner."
+            ),
+            403: OpenApiResponse(description="Subscription required."),
+            404: OpenApiResponse(description="Resource not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['post'], url_path='pair')
+    @action(detail=False, methods=["post"], url_path="pair")
     def pair(self, request):
         """Create a buddy pairing with a specific user."""
         serializer = BuddyPairRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        partner_id = serializer.validated_data['partner_id']
+        partner_id = serializer.validated_data["partner_id"]
 
         if partner_id == request.user.id:
             return Response(
-                {'error': _('You cannot pair with yourself.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("You cannot pair with yourself.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         existing = self._get_active_pairing(request.user)
         if existing:
             return Response(
-                {'error': _('You already have an active buddy pairing.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("You already have an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             partner = User.objects.get(id=partner_id)
         except User.DoesNotExist:
             return Response(
-                {'error': _('Partner user not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Partner user not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         partner_pairing = BuddyPairing.objects.filter(
-            Q(user1=partner) | Q(user2=partner),
-            status='active'
+            Q(user1=partner) | Q(user2=partner), status="active"
         ).exists()
 
         if partner_pairing:
             return Response(
-                {'error': _('This user already has an active buddy pairing.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("This user already has an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         level_diff = abs(partner.level - request.user.level)
@@ -873,17 +1013,18 @@ class BuddyViewSet(viewsets.GenericViewSet):
         pairing = BuddyPairing.objects.create(
             user1=request.user,
             user2=partner,
-            status='pending',
+            status="pending",
             compatibility_score=compatibility,
             expires_at=timezone.now() + timedelta(days=7),
         )
 
         return Response(
             {
-                'message': _('Buddy pairing created with %(name)s.') % {'name': partner.display_name or _("user")},
-                'pairing_id': str(pairing.id),
+                "message": _("Buddy pairing created with %(name)s.")
+                % {"name": partner.display_name or _("user")},
+                "pairing_id": str(pairing.id),
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
     @extend_schema(
@@ -891,57 +1032,57 @@ class BuddyViewSet(viewsets.GenericViewSet):
         description="Accept a pending buddy pairing request.",
         responses={
             200: OpenApiResponse(description="Pairing accepted."),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['post'], url_path='accept')
+    @action(detail=True, methods=["post"], url_path="accept")
     def accept(self, request, pk=None):
         """Accept a pending buddy pairing."""
         try:
             pairing = BuddyPairing.objects.get(
-                id=pk, user2=request.user, status='pending'
+                id=pk, user2=request.user, status="pending"
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Pending buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Pending buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        pairing.status = 'active'
-        pairing.save(update_fields=['status', 'updated_at'])
+        pairing.status = "active"
+        pairing.save(update_fields=["status", "updated_at"])
 
-        return Response({'message': _('Buddy pairing accepted.')})
+        return Response({"message": _("Buddy pairing accepted.")})
 
     @extend_schema(
         summary="Reject buddy pairing",
         description="Reject a pending buddy pairing request.",
         responses={
             200: OpenApiResponse(description="Pairing rejected."),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['post'], url_path='reject')
+    @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
         """Reject a pending buddy pairing."""
         try:
             pairing = BuddyPairing.objects.get(
-                id=pk, user2=request.user, status='pending'
+                id=pk, user2=request.user, status="pending"
             )
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Pending buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Pending buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        pairing.status = 'cancelled'
+        pairing.status = "cancelled"
         pairing.ended_at = django_timezone.now()
-        pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
+        pairing.save(update_fields=["status", "ended_at", "updated_at"])
 
-        return Response({'message': _('Buddy pairing rejected.')})
+        return Response({"message": _("Buddy pairing rejected.")})
 
     @extend_schema(
         summary="Send encouragement",
@@ -949,30 +1090,27 @@ class BuddyViewSet(viewsets.GenericViewSet):
         request=BuddyEncourageSerializer,
         responses={
             200: OpenApiResponse(description="Encouragement sent."),
-            400: OpenApiResponse(description='Validation error.'),
-            403: OpenApiResponse(description='Subscription required.'),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Subscription required."),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['post'], url_path='encourage')
+    @action(detail=True, methods=["post"], url_path="encourage")
     def encourage(self, request, pk=None):
         """Send encouragement to a buddy with streak tracking."""
         try:
-            pairing = BuddyPairing.objects.get(
-                id=pk,
-                status='active'
-            )
+            pairing = BuddyPairing.objects.get(id=pk, status="active")
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Active buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = BuddyEncourageSerializer(data=request.data)
@@ -981,7 +1119,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         BuddyEncouragement.objects.create(
             pairing=pairing,
             sender=request.user,
-            message=serializer.validated_data.get('message', '')
+            message=serializer.validated_data.get("message", ""),
         )
 
         # Update encouragement streak
@@ -1000,42 +1138,53 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if pairing.encouragement_streak > pairing.best_encouragement_streak:
             pairing.best_encouragement_streak = pairing.encouragement_streak
 
-        pairing.save(update_fields=[
-            'encouragement_streak', 'best_encouragement_streak',
-            'last_encouragement_at', 'updated_at'
-        ])
+        pairing.save(
+            update_fields=[
+                "encouragement_streak",
+                "best_encouragement_streak",
+                "last_encouragement_at",
+                "updated_at",
+            ]
+        )
 
         # Determine the partner
-        partner = pairing.user2 if pairing.user1_id == request.user.id else pairing.user1
+        partner = (
+            pairing.user2 if pairing.user1_id == request.user.id else pairing.user1
+        )
 
         # Try to send a notification (best-effort)
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=partner,
-                title=_('Buddy Encouragement'),
-                body=serializer.validated_data.get('message', '') or
-                     _('%(name)s sent you encouragement!') % {'name': request.user.display_name or _("Your buddy")},
-                notification_type='buddy',
+                title=_("Buddy Encouragement"),
+                body=serializer.validated_data.get("message", "")
+                or _("%(name)s sent you encouragement!")
+                % {"name": request.user.display_name or _("Your buddy")},
+                notification_type="buddy",
                 scheduled_for=now,
-                status='sent',
-                data={'pairing_id': str(pairing.id)},
+                status="sent",
+                data={"pairing_id": str(pairing.id)},
             )
         except (ImportError, Exception):
             logger.warning("Failed to send buddy notification", exc_info=True)
 
-        return Response({
-            'message': _('Encouragement sent to %(name)s.') % {'name': partner.display_name or _("your buddy")},
-            'encouragement_streak': pairing.encouragement_streak,
-            'best_encouragement_streak': pairing.best_encouragement_streak,
-        })
+        return Response(
+            {
+                "message": _("Encouragement sent to %(name)s.")
+                % {"name": partner.display_name or _("your buddy")},
+                "encouragement_streak": pairing.encouragement_streak,
+                "best_encouragement_streak": pairing.best_encouragement_streak,
+            }
+        )
 
     @extend_schema(
         summary="End buddy pairing",
         description="End an active buddy pairing. Sets status to cancelled.",
         responses={
             200: OpenApiResponse(description="Pairing ended."),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
             404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
@@ -1043,43 +1192,44 @@ class BuddyViewSet(viewsets.GenericViewSet):
     def destroy(self, request, pk=None):
         """End a buddy pairing."""
         try:
-            pairing = BuddyPairing.objects.get(
-                id=pk,
-                status='active'
-            )
+            pairing = BuddyPairing.objects.get(id=pk, status="active")
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Active buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        pairing.status = 'cancelled'
+        pairing.status = "cancelled"
         pairing.ended_at = django_timezone.now()
-        pairing.save(update_fields=['status', 'ended_at', 'updated_at'])
+        pairing.save(update_fields=["status", "ended_at", "updated_at"])
 
-        return Response({'message': _('Buddy pairing ended.')})
+        return Response({"message": _("Buddy pairing ended.")})
 
     @extend_schema(
         summary="Buddy pairing history",
         description="Get the user's past buddy pairings with stats.",
         responses={
             200: BuddyHistorySerializer(many=True),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
         },
         tags=["Buddies"],
     )
-    @action(detail=False, methods=['get'], url_path='history')
+    @action(detail=False, methods=["get"], url_path="history")
     def history(self, request):
         """Get past buddy pairings with stats."""
-        pairings = BuddyPairing.objects.filter(
-            Q(user1=request.user) | Q(user2=request.user),
-        ).select_related('user1', 'user2').order_by('-created_at')
+        pairings = (
+            BuddyPairing.objects.filter(
+                Q(user1=request.user) | Q(user2=request.user),
+            )
+            .select_related("user1", "user2")
+            .order_by("-created_at")
+        )
 
         results = []
         for pairing in pairings:
@@ -1089,21 +1239,23 @@ class BuddyViewSet(viewsets.GenericViewSet):
             if pairing.ended_at:
                 duration_days = (pairing.ended_at - pairing.created_at).days
 
-            results.append({
-                'id': pairing.id,
-                'partner': self._get_partner_data(partner),
-                'status': pairing.status,
-                'compatibilityScore': pairing.compatibility_score,
-                'encouragementCount': encouragement_count,
-                'encouragementStreak': pairing.encouragement_streak,
-                'bestEncouragementStreak': pairing.best_encouragement_streak,
-                'durationDays': duration_days,
-                'createdAt': pairing.created_at,
-                'endedAt': pairing.ended_at,
-            })
+            results.append(
+                {
+                    "id": pairing.id,
+                    "partner": self._get_partner_data(partner),
+                    "status": pairing.status,
+                    "compatibilityScore": pairing.compatibility_score,
+                    "encouragementCount": encouragement_count,
+                    "encouragementStreak": pairing.encouragement_streak,
+                    "bestEncouragementStreak": pairing.best_encouragement_streak,
+                    "durationDays": duration_days,
+                    "createdAt": pairing.created_at,
+                    "endedAt": pairing.ended_at,
+                }
+            )
 
         serializer = BuddyHistorySerializer(results, many=True)
-        return Response({'pairings': serializer.data})
+        return Response({"pairings": serializer.data})
 
 
 class ContractViewSet(viewsets.GenericViewSet):
@@ -1121,8 +1273,7 @@ class ContractViewSet(viewsets.GenericViewSet):
     def _get_user_pairings(self, user):
         """Get all active buddy pairing IDs for a user."""
         return BuddyPairing.objects.filter(
-            Q(user1=user) | Q(user2=user),
-            status='active'
+            Q(user1=user) | Q(user2=user), status="active"
         )
 
     def _get_partner_user(self, pairing, user):
@@ -1137,42 +1288,48 @@ class ContractViewSet(viewsets.GenericViewSet):
         ),
         responses={
             200: AccountabilityContractSerializer(many=True),
-            403: OpenApiResponse(description='Subscription required.'),
+            403: OpenApiResponse(description="Subscription required."),
         },
         tags=["Buddies"],
     )
     def list(self, request):
         """List active contracts for the current user's buddy pairings."""
-        pairing_ids = self._get_user_pairings(request.user).values_list('id', flat=True)
+        pairing_ids = self._get_user_pairings(request.user).values_list("id", flat=True)
 
-        contracts = AccountabilityContract.objects.filter(
-            pairing_id__in=pairing_ids,
-        ).select_related('pairing', 'created_by').order_by('-created_at')
+        contracts = (
+            AccountabilityContract.objects.filter(
+                pairing_id__in=pairing_ids,
+            )
+            .select_related("pairing", "created_by")
+            .order_by("-created_at")
+        )
 
         # Allow filtering by status (default: show active only)
-        status_filter = request.query_params.get('status', 'active')
-        if status_filter != 'all':
+        status_filter = request.query_params.get("status", "active")
+        if status_filter != "all":
             contracts = contracts.filter(status=status_filter)
 
         results = []
         for contract in contracts:
-            results.append({
-                'id': contract.id,
-                'pairing_id': contract.pairing_id,
-                'title': contract.title,
-                'description': contract.description,
-                'goals': contract.goals,
-                'check_in_frequency': contract.check_in_frequency,
-                'start_date': contract.start_date,
-                'end_date': contract.end_date,
-                'status': contract.status,
-                'created_by_id': contract.created_by_id,
-                'accepted_by_partner': contract.accepted_by_partner,
-                'created_at': contract.created_at,
-            })
+            results.append(
+                {
+                    "id": contract.id,
+                    "pairing_id": contract.pairing_id,
+                    "title": contract.title,
+                    "description": contract.description,
+                    "goals": contract.goals,
+                    "check_in_frequency": contract.check_in_frequency,
+                    "start_date": contract.start_date,
+                    "end_date": contract.end_date,
+                    "status": contract.status,
+                    "created_by_id": contract.created_by_id,
+                    "accepted_by_partner": contract.accepted_by_partner,
+                    "created_at": contract.created_at,
+                }
+            )
 
         serializer = AccountabilityContractSerializer(results, many=True)
-        return Response({'contracts': serializer.data})
+        return Response({"contracts": serializer.data})
 
     @extend_schema(
         summary="Create accountability contract",
@@ -1180,9 +1337,9 @@ class ContractViewSet(viewsets.GenericViewSet):
         request=AccountabilityContractSerializer,
         responses={
             201: AccountabilityContractSerializer,
-            400: OpenApiResponse(description='Validation error.'),
-            403: OpenApiResponse(description='Subscription required.'),
-            404: OpenApiResponse(description='Pairing not found.'),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Subscription required."),
+            404: OpenApiResponse(description="Pairing not found."),
         },
         tags=["Buddies"],
     )
@@ -1191,32 +1348,34 @@ class ContractViewSet(viewsets.GenericViewSet):
         serializer = AccountabilityContractSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        pairing_id = serializer.validated_data.get('pairing_id')
+        pairing_id = serializer.validated_data.get("pairing_id")
 
         # Verify the pairing exists and is active
         try:
-            pairing = BuddyPairing.objects.get(id=pairing_id, status='active')
+            pairing = BuddyPairing.objects.get(id=pairing_id, status="active")
         except BuddyPairing.DoesNotExist:
             return Response(
-                {'error': _('Active buddy pairing not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active buddy pairing not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         # Verify user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         contract = AccountabilityContract.objects.create(
             pairing=pairing,
-            title=serializer.validated_data['title'],
-            description=serializer.validated_data.get('description', ''),
-            goals=serializer.validated_data['goals'],
-            check_in_frequency=serializer.validated_data.get('check_in_frequency', 'weekly'),
-            start_date=serializer.validated_data['start_date'],
-            end_date=serializer.validated_data['end_date'],
+            title=serializer.validated_data["title"],
+            description=serializer.validated_data.get("description", ""),
+            goals=serializer.validated_data["goals"],
+            check_in_frequency=serializer.validated_data.get(
+                "check_in_frequency", "weekly"
+            ),
+            start_date=serializer.validated_data["start_date"],
+            end_date=serializer.validated_data["end_date"],
             created_by=request.user,
         )
 
@@ -1224,66 +1383,70 @@ class ContractViewSet(viewsets.GenericViewSet):
         partner = self._get_partner_user(pairing, request.user)
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=partner,
-                notification_type='buddy',
-                title=_('New Accountability Contract'),
-                body=_('%(name)s created a contract: %(title)s') % {
-                    'name': request.user.display_name or _("Your buddy"),
-                    'title': contract.title,
+                notification_type="buddy",
+                title=_("New Accountability Contract"),
+                body=_("%(name)s created a contract: %(title)s")
+                % {
+                    "name": request.user.display_name or _("Your buddy"),
+                    "title": contract.title,
                 },
                 scheduled_for=django_timezone.now(),
                 data={
-                    'contract_id': str(contract.id),
-                    'pairing_id': str(pairing.id),
-                    'screen': 'AccountabilityContract',
+                    "contract_id": str(contract.id),
+                    "pairing_id": str(pairing.id),
+                    "screen": "AccountabilityContract",
                 },
             )
         except Exception:
             logger.warning("Failed to send contract notification", exc_info=True)
 
         result = {
-            'id': contract.id,
-            'pairing_id': contract.pairing_id,
-            'title': contract.title,
-            'description': contract.description,
-            'goals': contract.goals,
-            'check_in_frequency': contract.check_in_frequency,
-            'start_date': contract.start_date,
-            'end_date': contract.end_date,
-            'status': contract.status,
-            'created_by_id': contract.created_by_id,
-            'accepted_by_partner': contract.accepted_by_partner,
-            'created_at': contract.created_at,
+            "id": contract.id,
+            "pairing_id": contract.pairing_id,
+            "title": contract.title,
+            "description": contract.description,
+            "goals": contract.goals,
+            "check_in_frequency": contract.check_in_frequency,
+            "start_date": contract.start_date,
+            "end_date": contract.end_date,
+            "status": contract.status,
+            "created_by_id": contract.created_by_id,
+            "accepted_by_partner": contract.accepted_by_partner,
+            "created_at": contract.created_at,
         }
 
         return Response(
-            {'contract': AccountabilityContractSerializer(result).data},
-            status=status.HTTP_201_CREATED
+            {"contract": AccountabilityContractSerializer(result).data},
+            status=status.HTTP_201_CREATED,
         )
 
     @extend_schema(
         summary="Accept accountability contract",
         description="Partner accepts an accountability contract.",
         responses={
-            200: OpenApiResponse(description='Contract accepted.'),
-            400: OpenApiResponse(description='Already accepted.'),
-            403: OpenApiResponse(description='Not the partner or subscription required.'),
-            404: OpenApiResponse(description='Contract not found.'),
+            200: OpenApiResponse(description="Contract accepted."),
+            400: OpenApiResponse(description="Already accepted."),
+            403: OpenApiResponse(
+                description="Not the partner or subscription required."
+            ),
+            404: OpenApiResponse(description="Contract not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['post'], url_path='accept')
+    @action(detail=True, methods=["post"], url_path="accept")
     def accept(self, request, pk=None):
         """Accept an accountability contract (partner only)."""
         try:
-            contract = AccountabilityContract.objects.select_related('pairing').get(
-                id=pk, status='active'
+            contract = AccountabilityContract.objects.select_related("pairing").get(
+                id=pk, status="active"
             )
         except AccountabilityContract.DoesNotExist:
             return Response(
-                {'error': _('Active contract not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active contract not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         pairing = contract.pairing
@@ -1291,47 +1454,55 @@ class ContractViewSet(viewsets.GenericViewSet):
         # Verify user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         # Only the partner (not the creator) can accept
         if contract.created_by_id == request.user.id:
             return Response(
-                {'error': _('You created this contract. Only your partner can accept it.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "error": _(
+                        "You created this contract. Only your partner can accept it."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if contract.accepted_by_partner:
             return Response(
-                {'error': _('Contract already accepted.')},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": _("Contract already accepted.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         contract.accepted_by_partner = True
-        contract.save(update_fields=['accepted_by_partner'])
+        contract.save(update_fields=["accepted_by_partner"])
 
         # Notify the creator
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=contract.created_by,
-                notification_type='buddy',
-                title=_('Contract Accepted'),
-                body=_('%(name)s accepted your contract: %(title)s') % {
-                    'name': request.user.display_name or _("Your buddy"),
-                    'title': contract.title,
+                notification_type="buddy",
+                title=_("Contract Accepted"),
+                body=_("%(name)s accepted your contract: %(title)s")
+                % {
+                    "name": request.user.display_name or _("Your buddy"),
+                    "title": contract.title,
                 },
                 scheduled_for=django_timezone.now(),
                 data={
-                    'contract_id': str(contract.id),
-                    'screen': 'AccountabilityContract',
+                    "contract_id": str(contract.id),
+                    "screen": "AccountabilityContract",
                 },
             )
         except Exception:
-            logger.warning("Failed to send contract acceptance notification", exc_info=True)
+            logger.warning(
+                "Failed to send contract acceptance notification", exc_info=True
+            )
 
-        return Response({'message': _('Contract accepted.')})
+        return Response({"message": _("Contract accepted.")})
 
     @extend_schema(
         summary="Submit contract check-in",
@@ -1339,23 +1510,25 @@ class ContractViewSet(viewsets.GenericViewSet):
         request=ContractCheckInCreateSerializer,
         responses={
             201: ContractCheckInSerializer,
-            400: OpenApiResponse(description='Validation error.'),
-            403: OpenApiResponse(description='Not part of the pairing or subscription required.'),
-            404: OpenApiResponse(description='Contract not found.'),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(
+                description="Not part of the pairing or subscription required."
+            ),
+            404: OpenApiResponse(description="Contract not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['post'], url_path='check-in')
+    @action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
         """Submit a check-in for a contract."""
         try:
-            contract = AccountabilityContract.objects.select_related('pairing').get(
-                id=pk, status='active'
+            contract = AccountabilityContract.objects.select_related("pairing").get(
+                id=pk, status="active"
             )
         except AccountabilityContract.DoesNotExist:
             return Response(
-                {'error': _('Active contract not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Active contract not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         pairing = contract.pairing
@@ -1363,8 +1536,8 @@ class ContractViewSet(viewsets.GenericViewSet):
         # Verify user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = ContractCheckInCreateSerializer(data=request.data)
@@ -1373,45 +1546,47 @@ class ContractViewSet(viewsets.GenericViewSet):
         check_in = ContractCheckIn.objects.create(
             contract=contract,
             user=request.user,
-            progress=serializer.validated_data.get('progress', {}),
-            note=serializer.validated_data.get('note', ''),
-            mood=serializer.validated_data.get('mood', ''),
+            progress=serializer.validated_data.get("progress", {}),
+            note=serializer.validated_data.get("note", ""),
+            mood=serializer.validated_data.get("mood", ""),
         )
 
         # Notify the partner
         partner = self._get_partner_user(pairing, request.user)
         try:
             from apps.notifications.models import Notification
+
             Notification.objects.create(
                 user=partner,
-                notification_type='buddy',
-                title=_('Buddy Check-In'),
-                body=_('%(name)s checked in on "%(title)s"') % {
-                    'name': request.user.display_name or _("Your buddy"),
-                    'title': contract.title,
+                notification_type="buddy",
+                title=_("Buddy Check-In"),
+                body=_('%(name)s checked in on "%(title)s"')
+                % {
+                    "name": request.user.display_name or _("Your buddy"),
+                    "title": contract.title,
                 },
                 scheduled_for=django_timezone.now(),
                 data={
-                    'contract_id': str(contract.id),
-                    'screen': 'AccountabilityContract',
+                    "contract_id": str(contract.id),
+                    "screen": "AccountabilityContract",
                 },
             )
         except Exception:
             logger.warning("Failed to send check-in notification", exc_info=True)
 
         result = {
-            'id': check_in.id,
-            'user_id': check_in.user_id,
-            'username': request.user.display_name or request.user.email,
-            'progress': check_in.progress,
-            'note': check_in.note,
-            'mood': check_in.mood,
-            'created_at': check_in.created_at,
+            "id": check_in.id,
+            "user_id": check_in.user_id,
+            "username": request.user.display_name or request.user.email,
+            "progress": check_in.progress,
+            "note": check_in.note,
+            "mood": check_in.mood,
+            "created_at": check_in.created_at,
         }
 
         return Response(
-            {'checkIn': ContractCheckInSerializer(result).data},
-            status=status.HTTP_201_CREATED
+            {"checkIn": ContractCheckInSerializer(result).data},
+            status=status.HTTP_201_CREATED,
         )
 
     @extend_schema(
@@ -1419,22 +1594,23 @@ class ContractViewSet(viewsets.GenericViewSet):
         description="View both partners' progress for an accountability contract.",
         responses={
             200: ContractProgressSerializer,
-            403: OpenApiResponse(description='Not part of the pairing or subscription required.'),
-            404: OpenApiResponse(description='Contract not found.'),
+            403: OpenApiResponse(
+                description="Not part of the pairing or subscription required."
+            ),
+            404: OpenApiResponse(description="Contract not found."),
         },
         tags=["Buddies"],
     )
-    @action(detail=True, methods=['get'], url_path='progress')
+    @action(detail=True, methods=["get"], url_path="progress")
     def progress(self, request, pk=None):
         """View progress for both partners on a contract."""
         try:
             contract = AccountabilityContract.objects.select_related(
-                'pairing', 'pairing__user1', 'pairing__user2', 'created_by'
+                "pairing", "pairing__user1", "pairing__user2", "created_by"
             ).get(id=pk)
         except AccountabilityContract.DoesNotExist:
             return Response(
-                {'error': _('Contract not found.')},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": _("Contract not found.")}, status=status.HTTP_404_NOT_FOUND
             )
 
         pairing = contract.pairing
@@ -1442,29 +1618,29 @@ class ContractViewSet(viewsets.GenericViewSet):
         # Verify user is part of this pairing
         if pairing.user1_id != request.user.id and pairing.user2_id != request.user.id:
             return Response(
-                {'error': _('You are not part of this pairing.')},
-                status=status.HTTP_403_FORBIDDEN
+                {"error": _("You are not part of this pairing.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        partner = self._get_partner_user(pairing, request.user)
-
         # Fetch check-ins for both users
-        all_check_ins = ContractCheckIn.objects.filter(
-            contract=contract
-        ).select_related('user').order_by('-created_at')
+        all_check_ins = (
+            ContractCheckIn.objects.filter(contract=contract)
+            .select_related("user")
+            .order_by("-created_at")
+        )
 
         user_check_ins = []
         partner_check_ins = []
 
         for ci in all_check_ins:
             entry = {
-                'id': ci.id,
-                'user_id': ci.user_id,
-                'username': ci.user.display_name or ci.user.email,
-                'progress': ci.progress,
-                'note': ci.note,
-                'mood': ci.mood,
-                'created_at': ci.created_at,
+                "id": ci.id,
+                "user_id": ci.user_id,
+                "username": ci.user.display_name or ci.user.email,
+                "progress": ci.progress,
+                "note": ci.note,
+                "mood": ci.mood,
+                "created_at": ci.created_at,
             }
             if ci.user_id == request.user.id:
                 user_check_ins.append(entry)
@@ -1492,26 +1668,26 @@ class ContractViewSet(viewsets.GenericViewSet):
                         pass
 
         contract_data = {
-            'id': contract.id,
-            'pairing_id': contract.pairing_id,
-            'title': contract.title,
-            'description': contract.description,
-            'goals': contract.goals,
-            'check_in_frequency': contract.check_in_frequency,
-            'start_date': contract.start_date,
-            'end_date': contract.end_date,
-            'status': contract.status,
-            'created_by_id': contract.created_by_id,
-            'accepted_by_partner': contract.accepted_by_partner,
-            'created_at': contract.created_at,
+            "id": contract.id,
+            "pairing_id": contract.pairing_id,
+            "title": contract.title,
+            "description": contract.description,
+            "goals": contract.goals,
+            "check_in_frequency": contract.check_in_frequency,
+            "start_date": contract.start_date,
+            "end_date": contract.end_date,
+            "status": contract.status,
+            "created_by_id": contract.created_by_id,
+            "accepted_by_partner": contract.accepted_by_partner,
+            "created_at": contract.created_at,
         }
 
         result = {
-            'contract': contract_data,
-            'userCheckIns': user_check_ins,
-            'partnerCheckIns': partner_check_ins,
-            'userTotals': user_totals,
-            'partnerTotals': partner_totals,
+            "contract": contract_data,
+            "userCheckIns": user_check_ins,
+            "partnerCheckIns": partner_check_ins,
+            "userTotals": user_totals,
+            "partnerTotals": partner_totals,
         }
 
         serializer = ContractProgressSerializer(result)

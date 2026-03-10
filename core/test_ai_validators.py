@@ -6,44 +6,40 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from .ai_validators import (
-    _clamp_int,
-    _sanitize_str,
-    PlanTaskSchema,
-    PlanGoalSchema,
-    PlanObstacleSchema,
-    PlanResponseSchema,
-    AnalysisResponseSchema,
-    CalibrationQuestionSchema,
-    CalibrationQuestionsResponseSchema,
-    UserProfileSchema,
-    PlanRecommendationsSchema,
-    CalibrationSummaryResponseSchema,
-    ChatResponseSchema,
-    FunctionCallSchema,
-    AIValidationError,
-    validate_plan_response,
-    validate_analysis_response,
-    validate_calibration_questions,
-    validate_calibration_summary,
-    validate_chat_response,
-    validate_function_call,
-    check_plan_calibration_coherence,
+    VALID_CALIBRATION_CATEGORIES,
     VALID_CATEGORIES,
     VALID_DIFFICULTIES,
     VALID_EXPERIENCE_LEVELS,
     VALID_PACES,
     VALID_RISK_LEVELS,
-    VALID_CALIBRATION_CATEGORIES,
-    MAX_TITLE_LEN,
-    MAX_DESCRIPTION_LEN,
-    MAX_TEXT_LEN,
-    MAX_SHORT_TEXT_LEN,
+    AIValidationError,
+    AnalysisResponseSchema,
+    CalibrationQuestionSchema,
+    CalibrationQuestionsResponseSchema,
+    CalibrationSummaryResponseSchema,
+    ChatResponseSchema,
+    FunctionCallSchema,
+    PlanGoalSchema,
+    PlanObstacleSchema,
+    PlanRecommendationsSchema,
+    PlanResponseSchema,
+    PlanTaskSchema,
+    UserProfileSchema,
+    _clamp_int,
+    _sanitize_str,
+    check_plan_calibration_coherence,
+    validate_analysis_response,
+    validate_calibration_questions,
+    validate_calibration_summary,
+    validate_chat_response,
+    validate_function_call,
+    validate_plan_response,
 )
-
 
 # ===================================================================
 # Helper functions
 # ===================================================================
+
 
 class TestClampInt:
     """Test _clamp_int helper."""
@@ -73,8 +69,8 @@ class TestSanitizeStr:
 
     def test_strips_html(self):
         result = _sanitize_str('<script>alert("xss")</script>Hello')
-        assert '<script>' not in result
-        assert 'Hello' in result
+        assert "<script>" not in result
+        assert "Hello" in result
 
     def test_truncates_to_max_len(self):
         long_str = "a" * 20000
@@ -89,6 +85,7 @@ class TestSanitizeStr:
 # ===================================================================
 # PlanTaskSchema
 # ===================================================================
+
 
 class TestPlanTaskSchema:
     """Test PlanTaskSchema validation."""
@@ -107,11 +104,11 @@ class TestPlanTaskSchema:
 
     def test_sanitizes_title(self):
         task = PlanTaskSchema(
-            title='<b>Bold task</b>',
+            title="<b>Bold task</b>",
             order=0,
         )
-        assert '<b>' not in task.title
-        assert 'Bold task' in task.title
+        assert "<b>" not in task.title
+        assert "Bold task" in task.title
 
     def test_coerces_order_from_string(self):
         task = PlanTaskSchema(title="Task", order="5", duration_mins=30)
@@ -145,6 +142,7 @@ class TestPlanTaskSchema:
 # PlanGoalSchema
 # ===================================================================
 
+
 class TestPlanGoalSchema:
     """Test PlanGoalSchema validation."""
 
@@ -162,11 +160,11 @@ class TestPlanGoalSchema:
 
     def test_sanitizes_strings(self):
         goal = PlanGoalSchema(
-            title='<script>alert(1)</script>Goal',
+            title="<script>alert(1)</script>Goal",
             order=0,
             tasks=[{"title": "Task 1", "order": 0}],
         )
-        assert '<script>' not in goal.title
+        assert "<script>" not in goal.title
 
     def test_coerces_order(self):
         goal = PlanGoalSchema(
@@ -190,7 +188,8 @@ class TestPlanGoalSchema:
 
     def test_estimated_minutes_none(self):
         goal = PlanGoalSchema(
-            title="Goal", order=0,
+            title="Goal",
+            order=0,
             estimated_minutes=None,
             tasks=[{"title": "Task", "order": 0}],
         )
@@ -198,7 +197,8 @@ class TestPlanGoalSchema:
 
     def test_coerces_estimated_minutes_from_string(self):
         goal = PlanGoalSchema(
-            title="Goal", order=0,
+            title="Goal",
+            order=0,
             estimated_minutes="120",
             tasks=[{"title": "Task", "order": 0}],
         )
@@ -206,7 +206,8 @@ class TestPlanGoalSchema:
 
     def test_coerces_invalid_estimated_minutes(self):
         goal = PlanGoalSchema(
-            title="Goal", order=0,
+            title="Goal",
+            order=0,
             estimated_minutes="abc",
             tasks=[{"title": "Task", "order": 0}],
         )
@@ -216,6 +217,7 @@ class TestPlanGoalSchema:
 # ===================================================================
 # PlanObstacleSchema
 # ===================================================================
+
 
 class TestPlanObstacleSchema:
     """Test PlanObstacleSchema validation."""
@@ -231,9 +233,9 @@ class TestPlanObstacleSchema:
 
     def test_sanitizes_strings(self):
         obstacle = PlanObstacleSchema(
-            title='<img onerror=alert(1)>Obstacle',
+            title="<img onerror=alert(1)>Obstacle",
         )
-        assert '<img' not in obstacle.title
+        assert "<img" not in obstacle.title
 
     def test_default_empty_strings(self):
         obstacle = PlanObstacleSchema(title="Obstacle")
@@ -245,6 +247,7 @@ class TestPlanObstacleSchema:
 # ===================================================================
 # PlanResponseSchema
 # ===================================================================
+
 
 class TestPlanResponseSchema:
     """Test PlanResponseSchema validation."""
@@ -273,9 +276,9 @@ class TestPlanResponseSchema:
 
     def test_sanitizes_analysis(self):
         data = self._valid_plan_data()
-        data["analysis"] = '<script>bad</script>Analysis'
+        data["analysis"] = "<script>bad</script>Analysis"
         plan = PlanResponseSchema.model_validate(data)
-        assert '<script>' not in plan.analysis
+        assert "<script>" not in plan.analysis
 
     def test_coerces_duration_from_string(self):
         data = self._valid_plan_data()
@@ -297,17 +300,17 @@ class TestPlanResponseSchema:
 
     def test_sanitizes_tips(self):
         data = self._valid_plan_data()
-        data["tips"] = ['<b>Tip 1</b>', None, '', 'Tip 2']
+        data["tips"] = ["<b>Tip 1</b>", None, "", "Tip 2"]
         plan = PlanResponseSchema.model_validate(data)
-        assert '<b>' not in plan.tips[0]
+        assert "<b>" not in plan.tips[0]
         # None and empty string filtered out
         assert len(plan.tips) == 2
 
     def test_sanitizes_references(self):
         data = self._valid_plan_data()
-        data["calibration_references"] = ['<em>Ref</em>', 'Normal']
+        data["calibration_references"] = ["<em>Ref</em>", "Normal"]
         plan = PlanResponseSchema.model_validate(data)
-        assert '<em>' not in plan.calibration_references[0]
+        assert "<em>" not in plan.calibration_references[0]
 
     def test_tips_non_list_returns_empty(self):
         data = self._valid_plan_data()
@@ -336,6 +339,7 @@ class TestPlanResponseSchema:
 # ===================================================================
 # AnalysisResponseSchema
 # ===================================================================
+
 
 class TestAnalysisResponseSchema:
     """Test AnalysisResponseSchema validation."""
@@ -374,10 +378,8 @@ class TestAnalysisResponseSchema:
         assert analysis.estimated_duration_weeks == 16
 
     def test_sanitizes_challenges(self):
-        analysis = AnalysisResponseSchema(
-            key_challenges=['<b>Challenge</b>', 'Normal']
-        )
-        assert '<b>' not in analysis.key_challenges[0]
+        analysis = AnalysisResponseSchema(key_challenges=["<b>Challenge</b>", "Normal"])
+        assert "<b>" not in analysis.key_challenges[0]
 
     def test_challenges_non_list_returns_empty(self):
         analysis = AnalysisResponseSchema(key_challenges="not a list")
@@ -385,14 +387,15 @@ class TestAnalysisResponseSchema:
 
     def test_sanitizes_approach(self):
         analysis = AnalysisResponseSchema(
-            recommended_approach='<script>alert(1)</script>Approach'
+            recommended_approach="<script>alert(1)</script>Approach"
         )
-        assert '<script>' not in analysis.recommended_approach
+        assert "<script>" not in analysis.recommended_approach
 
 
 # ===================================================================
 # CalibrationQuestionSchema
 # ===================================================================
+
 
 class TestCalibrationQuestionSchema:
     """Test CalibrationQuestionSchema validation."""
@@ -407,10 +410,10 @@ class TestCalibrationQuestionSchema:
 
     def test_sanitizes_question(self):
         q = CalibrationQuestionSchema(
-            question='<b>What</b> is your goal?',
+            question="<b>What</b> is your goal?",
             category="specifics",
         )
-        assert '<b>' not in q.question
+        assert "<b>" not in q.question
 
     def test_invalid_category_defaults_to_specifics(self):
         q = CalibrationQuestionSchema(
@@ -432,6 +435,7 @@ class TestCalibrationQuestionSchema:
 # CalibrationQuestionsResponseSchema
 # ===================================================================
 
+
 class TestCalibrationQuestionsResponseSchema:
     """Test CalibrationQuestionsResponseSchema validation."""
 
@@ -440,9 +444,7 @@ class TestCalibrationQuestionsResponseSchema:
             sufficient=True,
             confidence_score=0.8,
             missing_areas=["timeline"],
-            questions=[
-                {"question": "What is your timeline?", "category": "timeline"}
-            ],
+            questions=[{"question": "What is your timeline?", "category": "timeline"}],
         )
         assert resp.sufficient is True
         assert resp.confidence_score == 0.8
@@ -461,9 +463,9 @@ class TestCalibrationQuestionsResponseSchema:
 
     def test_sanitizes_missing_areas(self):
         resp = CalibrationQuestionsResponseSchema(
-            missing_areas=['<b>Budget</b>', 'Timeline']
+            missing_areas=["<b>Budget</b>", "Timeline"]
         )
-        assert '<b>' not in resp.missing_areas[0]
+        assert "<b>" not in resp.missing_areas[0]
 
     def test_missing_areas_non_list_returns_empty(self):
         resp = CalibrationQuestionsResponseSchema(missing_areas="not a list")
@@ -480,6 +482,7 @@ class TestCalibrationQuestionsResponseSchema:
 # ===================================================================
 # UserProfileSchema
 # ===================================================================
+
 
 class TestUserProfileSchema:
     """Test UserProfileSchema validation."""
@@ -521,19 +524,19 @@ class TestUserProfileSchema:
 
     def test_sanitizes_string_fields(self):
         profile = UserProfileSchema(
-            primary_motivation='<script>alert(1)</script>Career',
+            primary_motivation="<script>alert(1)</script>Career",
         )
-        assert '<script>' not in profile.primary_motivation
+        assert "<script>" not in profile.primary_motivation
 
     def test_sanitizes_list_fields(self):
         profile = UserProfileSchema(
-            tools_available=['<b>Laptop</b>', 'Phone'],
-            secondary_motivations=['<em>Fun</em>'],
-            known_constraints=['<img src=x>Time'],
+            tools_available=["<b>Laptop</b>", "Phone"],
+            secondary_motivations=["<em>Fun</em>"],
+            known_constraints=["<img src=x>Time"],
         )
-        assert '<b>' not in profile.tools_available[0]
-        assert '<em>' not in profile.secondary_motivations[0]
-        assert '<img' not in profile.known_constraints[0]
+        assert "<b>" not in profile.tools_available[0]
+        assert "<em>" not in profile.secondary_motivations[0]
+        assert "<img" not in profile.known_constraints[0]
 
     def test_non_list_returns_empty(self):
         profile = UserProfileSchema(tools_available="not a list")
@@ -562,6 +565,7 @@ class TestUserProfileSchema:
 # PlanRecommendationsSchema
 # ===================================================================
 
+
 class TestPlanRecommendationsSchema:
     """Test PlanRecommendationsSchema validation."""
 
@@ -585,11 +589,11 @@ class TestPlanRecommendationsSchema:
 
     def test_sanitizes_lists(self):
         rec = PlanRecommendationsSchema(
-            focus_areas=['<b>Area</b>'],
-            potential_pitfalls=['<script>pitfall</script>'],
+            focus_areas=["<b>Area</b>"],
+            potential_pitfalls=["<script>pitfall</script>"],
         )
-        assert '<b>' not in rec.focus_areas[0]
-        assert '<script>' not in rec.potential_pitfalls[0]
+        assert "<b>" not in rec.focus_areas[0]
+        assert "<script>" not in rec.potential_pitfalls[0]
 
     def test_non_list_returns_empty(self):
         rec = PlanRecommendationsSchema(focus_areas="not a list")
@@ -597,14 +601,15 @@ class TestPlanRecommendationsSchema:
 
     def test_sanitizes_notes(self):
         rec = PlanRecommendationsSchema(
-            personalization_notes='<script>bad</script>Notes'
+            personalization_notes="<script>bad</script>Notes"
         )
-        assert '<script>' not in rec.personalization_notes
+        assert "<script>" not in rec.personalization_notes
 
 
 # ===================================================================
 # CalibrationSummaryResponseSchema
 # ===================================================================
+
 
 class TestCalibrationSummaryResponseSchema:
     """Test CalibrationSummaryResponseSchema validation."""
@@ -626,14 +631,15 @@ class TestCalibrationSummaryResponseSchema:
 
     def test_sanitizes_description(self):
         summary = CalibrationSummaryResponseSchema(
-            enriched_description='<script>xss</script>Description'
+            enriched_description="<script>xss</script>Description"
         )
-        assert '<script>' not in summary.enriched_description
+        assert "<script>" not in summary.enriched_description
 
 
 # ===================================================================
 # ChatResponseSchema
 # ===================================================================
+
 
 class TestChatResponseSchema:
     """Test ChatResponseSchema validation."""
@@ -675,6 +681,7 @@ class TestChatResponseSchema:
 # FunctionCallSchema
 # ===================================================================
 
+
 class TestFunctionCallSchema:
     """Test FunctionCallSchema validation."""
 
@@ -704,6 +711,7 @@ class TestFunctionCallSchema:
 # AIValidationError
 # ===================================================================
 
+
 class TestAIValidationError:
     """Test AIValidationError exception."""
 
@@ -729,6 +737,7 @@ class TestAIValidationError:
 # ===================================================================
 # Public validation functions
 # ===================================================================
+
 
 class TestValidatePlanResponse:
     """Test validate_plan_response function."""
@@ -833,6 +842,7 @@ class TestValidateFunctionCall:
 # ===================================================================
 # Coherence checker
 # ===================================================================
+
 
 class TestCheckPlanCalibrationCoherence:
     """Test check_plan_calibration_coherence function."""

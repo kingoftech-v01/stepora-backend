@@ -8,16 +8,16 @@ Block filtering: messages from blocked senders are silently dropped.
 import json
 import logging
 
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from channels.generic.websocket import AsyncWebsocketConsumer
 
 from core.consumers import (
-    RateLimitMixin,
+    MAX_MSG_CONTENT_LEN,
+    MAX_MSG_SIZE,
     AuthenticatedConsumerMixin,
     BlockingMixin,
     ModerationMixin,
-    MAX_MSG_SIZE,
-    MAX_MSG_CONTENT_LEN,
+    RateLimitMixin,
 )
 from core.sanitizers import sanitize_text
 
@@ -43,8 +43,8 @@ class CircleChatConsumer(
     rate_limit_window = 60
 
     async def connect(self):
-        self.circle_id = self.scope['url_route']['kwargs']['circle_id']
-        self.room_group_name = f'circle_chat_{self.circle_id}'
+        self.circle_id = self.scope["url_route"]["kwargs"]["circle_id"]
+        self.room_group_name = f"circle_chat_{self.circle_id}"
         self._circle_cache = None
         self._blocked_user_ids = set()
         self._init_rate_limit()
@@ -52,7 +52,7 @@ class CircleChatConsumer(
 
         if self.user.is_authenticated:
             await self._setup_authenticated()
-        elif self.scope.get('_allow_post_auth'):
+        elif self.scope.get("_allow_post_auth"):
             await self.accept()
         else:
             await self.close(code=4003)
@@ -61,7 +61,7 @@ class CircleChatConsumer(
         """Verify membership and join group."""
         is_member = await self._verify_membership()
         if not is_member:
-            await self.send_error('You must be a member of this circle')
+            await self.send_error("You must be a member of this circle")
             await self.close(code=4003)
             return
 
@@ -73,15 +73,19 @@ class CircleChatConsumer(
             self.channel_name,
         )
 
-        await self.send(text_data=json.dumps({
-            'type': 'connection',
-            'status': 'connected',
-            'circle_id': self.circle_id,
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "connection",
+                    "status": "connected",
+                    "circle_id": self.circle_id,
+                }
+            )
+        )
 
     async def disconnect(self, close_code):
         await self._cancel_heartbeat()
-        if hasattr(self, 'room_group_name'):
+        if hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name,
@@ -89,14 +93,14 @@ class CircleChatConsumer(
 
     async def receive(self, text_data):
         if len(text_data) > MAX_MSG_SIZE:
-            await self.send_error('Message too large')
+            await self.send_error("Message too large")
             return
 
         try:
             data = json.loads(text_data)
-            message_type = data.get('type', 'message')
+            message_type = data.get("type", "message")
 
-            if message_type == 'authenticate':
+            if message_type == "authenticate":
                 await self._handle_authenticate_message(data)
                 return
 
@@ -106,43 +110,47 @@ class CircleChatConsumer(
                 )
                 return
 
-            if message_type == 'message':
+            if message_type == "message":
                 await self._handle_chat_message(data)
-            elif message_type == 'typing':
+            elif message_type == "typing":
                 await self._handle_typing(data)
-            elif message_type == 'ping':
-                await self.send(text_data=json.dumps({'type': 'pong'}))
+            elif message_type == "ping":
+                await self.send(text_data=json.dumps({"type": "pong"}))
 
         except json.JSONDecodeError:
-            await self.send_error('Invalid JSON')
+            await self.send_error("Invalid JSON")
         except Exception:
             logger.exception("CircleChatConsumer error")
-            await self.send_error('An unexpected error occurred')
+            await self.send_error("An unexpected error occurred")
 
     async def _handle_chat_message(self, data):
-        content = data.get('message', '').strip()
+        content = data.get("message", "").strip()
 
         if not content:
-            await self.send_error('Message cannot be empty')
+            await self.send_error("Message cannot be empty")
             return
 
         if len(content) > MAX_MSG_CONTENT_LEN:
             await self.send_error(
-                f'Message exceeds {MAX_MSG_CONTENT_LEN} character limit'
+                f"Message exceeds {MAX_MSG_CONTENT_LEN} character limit"
             )
             return
 
         if self._is_rate_limited():
-            await self.send_error('Rate limit exceeded. Please slow down.')
+            await self.send_error("Rate limit exceeded. Please slow down.")
             return
 
         # Moderate
         mod_result = await self._moderate_content(content)
         if mod_result.is_flagged:
-            await self.send(text_data=json.dumps({
-                'type': 'moderation',
-                'message': mod_result.user_message,
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "moderation",
+                        "message": mod_result.user_message,
+                    }
+                )
+            )
             return
 
         # Sanitize
@@ -152,32 +160,32 @@ class CircleChatConsumer(
         message = await self._save_message(content)
 
         # Broadcast to group
-        sender_name = self.user.display_name or 'Anonymous'
+        sender_name = self.user.display_name or "Anonymous"
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'circle_message',
-                'message': {
-                    'id': str(message.id),
-                    'sender_id': str(self.user.id),
-                    'sender_name': sender_name,
-                    'sender_avatar': self.user.avatar_url or '',
-                    'content': content,
-                    'created_at': message.created_at.isoformat(),
+                "type": "circle_message",
+                "message": {
+                    "id": str(message.id),
+                    "sender_id": str(self.user.id),
+                    "sender_name": sender_name,
+                    "sender_avatar": self.user.avatar_url or "",
+                    "content": content,
+                    "created_at": message.created_at.isoformat(),
                 },
             },
         )
 
     async def _handle_typing(self, data):
-        is_typing = data.get('is_typing', False)
-        sender_name = self.user.display_name or 'Anonymous'
+        is_typing = data.get("is_typing", False)
+        sender_name = self.user.display_name or "Anonymous"
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'typing_status',
-                'user_id': str(self.user.id),
-                'user_name': sender_name,
-                'is_typing': is_typing,
+                "type": "typing_status",
+                "user_id": str(self.user.id),
+                "user_name": sender_name,
+                "is_typing": is_typing,
             },
         )
 
@@ -185,38 +193,51 @@ class CircleChatConsumer(
 
     async def circle_message(self, event):
         """Handle incoming circle message — filter blocked senders."""
-        sender_id = event['message'].get('sender_id', '')
+        sender_id = event["message"].get("sender_id", "")
         if sender_id in self._blocked_user_ids:
             return  # Silently drop
-        await self.send(text_data=json.dumps({
-            'type': 'message',
-            'message': event['message'],
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message",
+                    "message": event["message"],
+                }
+            )
+        )
 
     async def typing_status(self, event):
-        if str(event['user_id']) != str(self.user.id):
-            sender_id = event.get('user_id', '')
+        if str(event["user_id"]) != str(self.user.id):
+            sender_id = event.get("user_id", "")
             if sender_id in self._blocked_user_ids:
                 return
-            await self.send(text_data=json.dumps({
-                'type': 'typing',
-                'user_id': event['user_id'],
-                'user_name': event.get('user_name', ''),
-                'is_typing': event['is_typing'],
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "typing",
+                        "user_id": event["user_id"],
+                        "user_name": event.get("user_name", ""),
+                        "is_typing": event["is_typing"],
+                    }
+                )
+            )
 
     async def call_started(self, event):
         """Notify about a circle call starting."""
-        await self.send(text_data=json.dumps({
-            'type': 'call_started',
-            'call': event['call'],
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "call_started",
+                    "call": event["call"],
+                }
+            )
+        )
 
     # ── Database methods ──────────────────────────────────────────────
 
     @database_sync_to_async
     def _verify_membership(self):
         from .models import CircleMembership
+
         return CircleMembership.objects.filter(
             circle_id=self.circle_id, user=self.user
         ).exists()
@@ -224,11 +245,13 @@ class CircleChatConsumer(
     @database_sync_to_async
     def _get_blocked_user_ids(self):
         """Get set of user ID strings that the current user has blocked or is blocked by."""
-        from apps.social.models import BlockedUser
         from django.db.models import Q
+
+        from apps.social.models import BlockedUser
+
         blocked_qs = BlockedUser.objects.filter(
             Q(blocker=self.user) | Q(blocked=self.user)
-        ).values_list('blocker_id', 'blocked_id')
+        ).values_list("blocker_id", "blocked_id")
         ids = set()
         for blocker_id, blocked_id in blocked_qs:
             if blocker_id != self.user.id:
@@ -240,6 +263,7 @@ class CircleChatConsumer(
     @database_sync_to_async
     def _save_message(self, content):
         from .models import CircleMessage
+
         return CircleMessage.objects.create(
             circle_id=self.circle_id,
             sender=self.user,

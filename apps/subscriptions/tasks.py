@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def _get_user(user_id):
     """Fetch user by ID, return None if not found."""
     from apps.users.models import User
+
     try:
         return User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -24,8 +25,10 @@ def _get_user(user_id):
         return None
 
 
-@shared_task(name='apps.subscriptions.tasks.send_payment_receipt_email')
-def send_payment_receipt_email(user_id: str, plan_name: str, amount: str, invoice_url: str = ''):
+@shared_task(name="apps.subscriptions.tasks.send_payment_receipt_email")
+def send_payment_receipt_email(
+    user_id: str, plan_name: str, amount: str, invoice_url: str = ""
+):
     """
     Send an email receipt after a successful subscription payment.
     """
@@ -35,20 +38,20 @@ def send_payment_receipt_email(user_id: str, plan_name: str, amount: str, invoic
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
 
     try:
         send_templated_email(
-            template_name='subscriptions/payment_receipt',
-            subject=f'Stepora — Payment Receipt for {plan_name}',
+            template_name="subscriptions/payment_receipt",
+            subject=f"Stepora — Payment Receipt for {plan_name}",
             to=[user.email],
             context={
-                'user_name': name,
-                'plan_name': plan_name,
-                'amount': amount,
-                'invoice_url': invoice_url,
-                'action_url': invoice_url or frontend,
+                "user_name": name,
+                "plan_name": plan_name,
+                "amount": amount,
+                "invoice_url": invoice_url,
+                "action_url": invoice_url or frontend,
             },
         )
         logger.info("Payment receipt email sent to %s", user.email)
@@ -56,7 +59,7 @@ def send_payment_receipt_email(user_id: str, plan_name: str, amount: str, invoic
         logger.exception("Failed to send payment receipt email to %s", user.email)
 
 
-@shared_task(name='apps.subscriptions.tasks.send_subscription_upgraded_email')
+@shared_task(name="apps.subscriptions.tasks.send_subscription_upgraded_email")
 def send_subscription_upgraded_email(user_id: str, plan_name: str):
     """Notify user that their plan was upgraded."""
     from core.email import send_templated_email
@@ -65,27 +68,31 @@ def send_subscription_upgraded_email(user_id: str, plan_name: str):
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
-    subscription_url = f'{frontend}/#/subscription'
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
+    subscription_url = f"{frontend}/#/subscription"
 
     send_templated_email(
-        template_name='subscriptions/upgraded',
-        subject=f'Stepora — Welcome to {plan_name}!',
+        template_name="subscriptions/upgraded",
+        subject=f"Stepora — Welcome to {plan_name}!",
         to=[user.email],
         context={
-            'user_name': name,
-            'plan_name': plan_name,
-            'subscription_url': subscription_url,
-            'action_url': subscription_url,
+            "user_name": name,
+            "plan_name": plan_name,
+            "subscription_url": subscription_url,
+            "action_url": subscription_url,
         },
         fail_silently=True,
     )
     logger.info("Upgrade email sent to %s (plan: %s)", user.email, plan_name)
 
 
-@shared_task(name='apps.subscriptions.tasks.send_subscription_downgrade_scheduled_email')
-def send_subscription_downgrade_scheduled_email(user_id: str, new_plan_name: str, effective_date: str = ''):
+@shared_task(
+    name="apps.subscriptions.tasks.send_subscription_downgrade_scheduled_email"
+)
+def send_subscription_downgrade_scheduled_email(
+    user_id: str, new_plan_name: str, effective_date: str = ""
+):
     """Notify user that a downgrade has been scheduled."""
     from core.email import send_templated_email
 
@@ -93,35 +100,37 @@ def send_subscription_downgrade_scheduled_email(user_id: str, new_plan_name: str
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
-    subscription_url = f'{frontend}/#/subscription'
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
+    subscription_url = f"{frontend}/#/subscription"
 
-    date_str = ''
+    date_str = ""
     if effective_date:
         try:
             dt = datetime.fromisoformat(effective_date)
-            date_str = dt.strftime('%B %d, %Y')
+            date_str = dt.strftime("%B %d, %Y")
         except (ValueError, TypeError):
             date_str = effective_date
 
     send_templated_email(
-        template_name='subscriptions/downgrade_scheduled',
-        subject='Stepora — Plan change scheduled',
+        template_name="subscriptions/downgrade_scheduled",
+        subject="Stepora — Plan change scheduled",
         to=[user.email],
         context={
-            'user_name': name,
-            'new_plan_name': new_plan_name,
-            'effective_date': date_str,
-            'action_url': subscription_url,
+            "user_name": name,
+            "new_plan_name": new_plan_name,
+            "effective_date": date_str,
+            "action_url": subscription_url,
         },
         fail_silently=True,
     )
     logger.info("Downgrade scheduled email sent to %s", user.email)
 
 
-@shared_task(name='apps.subscriptions.tasks.send_subscription_cancel_scheduled_email')
-def send_subscription_cancel_scheduled_email(user_id: str, plan_name: str, period_end: str = ''):
+@shared_task(name="apps.subscriptions.tasks.send_subscription_cancel_scheduled_email")
+def send_subscription_cancel_scheduled_email(
+    user_id: str, plan_name: str, period_end: str = ""
+):
     """Notify user that their subscription will cancel at period end."""
     from core.email import send_templated_email
 
@@ -129,35 +138,35 @@ def send_subscription_cancel_scheduled_email(user_id: str, plan_name: str, perio
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
-    subscription_url = f'{frontend}/#/subscription'
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
+    subscription_url = f"{frontend}/#/subscription"
 
-    date_str = ''
+    date_str = ""
     if period_end:
         try:
             dt = datetime.fromisoformat(period_end)
-            date_str = dt.strftime('%B %d, %Y')
+            date_str = dt.strftime("%B %d, %Y")
         except (ValueError, TypeError):
             date_str = period_end
 
     send_templated_email(
-        template_name='subscriptions/cancel_scheduled',
-        subject='Stepora — Subscription cancellation scheduled',
+        template_name="subscriptions/cancel_scheduled",
+        subject="Stepora — Subscription cancellation scheduled",
         to=[user.email],
         context={
-            'user_name': name,
-            'plan_name': plan_name,
-            'period_end': date_str,
-            'subscription_url': subscription_url,
-            'action_url': subscription_url,
+            "user_name": name,
+            "plan_name": plan_name,
+            "period_end": date_str,
+            "subscription_url": subscription_url,
+            "action_url": subscription_url,
         },
         fail_silently=True,
     )
     logger.info("Cancel scheduled email sent to %s", user.email)
 
 
-@shared_task(name='apps.subscriptions.tasks.send_subscription_cancelled_email')
+@shared_task(name="apps.subscriptions.tasks.send_subscription_cancelled_email")
 def send_subscription_cancelled_email(user_id: str, old_plan_name: str):
     """Notify user that their subscription has been fully cancelled (reverted to free)."""
     from core.email import send_templated_email
@@ -166,26 +175,26 @@ def send_subscription_cancelled_email(user_id: str, old_plan_name: str):
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
-    subscription_url = f'{frontend}/#/subscription'
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
+    subscription_url = f"{frontend}/#/subscription"
 
     send_templated_email(
-        template_name='subscriptions/cancelled',
-        subject='Stepora — Your subscription has ended',
+        template_name="subscriptions/cancelled",
+        subject="Stepora — Your subscription has ended",
         to=[user.email],
         context={
-            'user_name': name,
-            'old_plan_name': old_plan_name,
-            'subscription_url': subscription_url,
-            'action_url': subscription_url,
+            "user_name": name,
+            "old_plan_name": old_plan_name,
+            "subscription_url": subscription_url,
+            "action_url": subscription_url,
         },
         fail_silently=True,
     )
     logger.info("Subscription cancelled email sent to %s", user.email)
 
 
-@shared_task(name='apps.subscriptions.tasks.send_subscription_reactivated_email')
+@shared_task(name="apps.subscriptions.tasks.send_subscription_reactivated_email")
 def send_subscription_reactivated_email(user_id: str, plan_name: str):
     """Notify user that their cancellation was reversed."""
     from core.email import send_templated_email
@@ -194,17 +203,17 @@ def send_subscription_reactivated_email(user_id: str, plan_name: str):
     if not user:
         return
 
-    name = user.display_name or 'there'
-    frontend = getattr(settings, 'FRONTEND_URL', '')
+    name = user.display_name or "there"
+    frontend = getattr(settings, "FRONTEND_URL", "")
 
     send_templated_email(
-        template_name='subscriptions/reactivated',
-        subject='Stepora — Subscription reactivated',
+        template_name="subscriptions/reactivated",
+        subject="Stepora — Subscription reactivated",
         to=[user.email],
         context={
-            'user_name': name,
-            'plan_name': plan_name,
-            'action_url': frontend,
+            "user_name": name,
+            "plan_name": plan_name,
+            "action_url": frontend,
         },
         fail_silently=True,
     )

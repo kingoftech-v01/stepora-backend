@@ -14,21 +14,21 @@ from django_elasticsearch_dsl.registries import registry
 
 
 class Command(BaseCommand):
-    help = 'Rebuild all Elasticsearch indexes from PostgreSQL data.'
+    help = "Rebuild all Elasticsearch indexes from PostgreSQL data."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--models',
+            "--models",
             type=str,
-            default='',
+            default="",
             help='Comma-separated list of model names to rebuild (e.g. "dream,user"). Empty = all.',
         )
 
     def handle(self, *args, **options):
-        filter_models = options['models']
+        filter_models = options["models"]
         filter_set = set()
         if filter_models:
-            filter_set = {m.strip().lower() for m in filter_models.split(',')}
+            filter_set = {m.strip().lower() for m in filter_models.split(",")}
 
         documents = registry.get_documents()
 
@@ -39,7 +39,7 @@ class Command(BaseCommand):
                 continue
 
             index_name = doc_class.Index.name
-            self.stdout.write(f'Rebuilding index: {index_name} (model: {model_name})')
+            self.stdout.write(f"Rebuilding index: {index_name} (model: {model_name})")
 
             # Delete and recreate the index
             index = doc_class._index
@@ -50,14 +50,16 @@ class Command(BaseCommand):
             # Re-index all objects
             qs = doc_class.Django.model.objects.all()
             count = qs.count()
-            self.stdout.write(f'  Indexing {count} documents...')
+            self.stdout.write(f"  Indexing {count} documents...")
 
             # Bulk index in batches
             batch_size = 500
             for start in range(0, count, batch_size):
-                batch = list(qs[start:start + batch_size])
+                batch = list(qs[start : start + batch_size])
                 doc_class().update(batch)
 
-            self.stdout.write(self.style.SUCCESS(f'  Done: {index_name} ({count} documents)'))
+            self.stdout.write(
+                self.style.SUCCESS(f"  Done: {index_name} ({count} documents)")
+            )
 
-        self.stdout.write(self.style.SUCCESS('All indexes rebuilt successfully.'))
+        self.stdout.write(self.style.SUCCESS("All indexes rebuilt successfully."))

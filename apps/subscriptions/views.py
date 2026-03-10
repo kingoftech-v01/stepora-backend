@@ -7,25 +7,26 @@ initiating Stripe Checkout, and receiving Stripe webhooks.
 
 import logging
 
-from django.utils.translation import gettext as _
 import stripe
 from django.http import HttpResponse
-from rest_framework import viewsets, status, views
+from django.utils.translation import gettext as _
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 
-from .models import SubscriptionPlan, Subscription, Referral
-from .serializers import (
-    SubscriptionPlanSerializer,
-    SubscriptionSerializer,
-    SubscriptionCreateSerializer,
-    InvoiceSerializer,
-)
-from .services import StripeService
 from core.audit import log_webhook_event
 from core.throttles import SearchRateThrottle
+
+from .models import Referral, Subscription, SubscriptionPlan
+from .serializers import (
+    InvoiceSerializer,
+    SubscriptionCreateSerializer,
+    SubscriptionPlanSerializer,
+    SubscriptionSerializer,
+)
+from .services import StripeService
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     throttle_classes = []
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.filter(is_active=True)
-    lookup_field = 'slug'
+    lookup_field = "slug"
 
 
 class SubscriptionViewSet(viewsets.GenericViewSet):
@@ -62,7 +63,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
     def get_queryset(self):
         """Scope to the current user's subscription only."""
-        if getattr(self, 'swagger_fake_view', False):
+        if getattr(self, "swagger_fake_view", False):
             return Subscription.objects.none()
         return Subscription.objects.filter(user=self.request.user)
 
@@ -75,7 +76,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             404: OpenApiResponse(description="No active subscription"),
         },
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def current(self, request):
         """Get the current user's subscription."""
         subscription = Subscription.objects.filter(user=request.user).first()
@@ -86,7 +87,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
                 request.user.id,
             )
             return Response(
-                {'detail': 'No subscription found.'},
+                {"detail": "No subscription found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         serializer = SubscriptionSerializer(subscription)
@@ -103,7 +104,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def checkout(self, request):
         """Create a Stripe Checkout Session for a plan upgrade.
 
@@ -125,46 +126,50 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             except stripe.error.StripeError:
                 logger.exception("Stripe error during downgrade to free")
                 return Response(
-                    {'detail': _('Payment service error. Please try again later.')},
+                    {"detail": _("Payment service error. Please try again later.")},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
 
             if not subscription:
                 return Response(
-                    {'detail': _('No active subscription to cancel.')},
+                    {"detail": _("No active subscription to cancel.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
             sub_serializer = SubscriptionSerializer(subscription)
-            return Response({
-                'action': 'downgrade_scheduled',
-                'subscription': sub_serializer.data,
-            })
+            return Response(
+                {
+                    "action": "downgrade_scheduled",
+                    "subscription": sub_serializer.data,
+                }
+            )
 
         try:
             session = StripeService.create_checkout_session(
                 user=request.user,
                 plan=plan,
-                success_url=serializer.validated_data.get('success_url', ''),
-                cancel_url=serializer.validated_data.get('cancel_url', ''),
-                coupon_code=serializer.validated_data.get('coupon_code', ''),
+                success_url=serializer.validated_data.get("success_url", ""),
+                cancel_url=serializer.validated_data.get("cancel_url", ""),
+                coupon_code=serializer.validated_data.get("coupon_code", ""),
             )
         except ValueError as e:
             return Response(
-                {'detail': str(e)},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except stripe.error.StripeError as e:
+        except stripe.error.StripeError:
             logger.exception("Stripe error during checkout creation")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        return Response({
-            'checkout_url': session.url,
-            'session_id': session.id,
-        })
+        return Response(
+            {
+                "checkout_url": session.url,
+                "session_id": session.id,
+            }
+        )
 
     @extend_schema(
         summary="Create billing portal session",
@@ -176,10 +181,10 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def portal(self, request):
         """Create a Stripe Billing Portal session."""
-        return_url = request.data.get('return_url', '')
+        return_url = request.data.get("return_url", "")
 
         try:
             session = StripeService.create_portal_session(
@@ -188,19 +193,21 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             )
         except ValueError as e:
             return Response(
-                {'detail': str(e)},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except stripe.error.StripeError:
             logger.exception("Stripe error during portal session creation")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        return Response({
-            'portal_url': session.url,
-        })
+        return Response(
+            {
+                "portal_url": session.url,
+            }
+        )
 
     @extend_schema(
         summary="Cancel subscription",
@@ -213,7 +220,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def cancel(self, request):
         """Cancel the current subscription at period end."""
         try:
@@ -221,13 +228,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during cancellation")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': _('No active subscription to cancel.')},
+                {"detail": _("No active subscription to cancel.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -245,7 +252,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def reactivate(self, request):
         """Reactivate a subscription that was set to cancel."""
         try:
@@ -253,13 +260,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during reactivation")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': _('No subscription pending cancellation to reactivate.')},
+                {"detail": _("No subscription pending cancellation to reactivate.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -274,7 +281,12 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             "Downgrades are scheduled for the end of the billing period."
         ),
         tags=["Subscriptions"],
-        request={"application/json": {"type": "object", "properties": {"plan_slug": {"type": "string"}}}},
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"plan_slug": {"type": "string"}},
+            }
+        },
         responses={
             200: OpenApiResponse(description="Plan change result"),
             400: OpenApiResponse(description="Validation error"),
@@ -282,20 +294,23 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error"),
         },
     )
-    @action(detail=False, methods=['post'], url_path='change-plan')
+    @action(detail=False, methods=["post"], url_path="change-plan")
     def change_plan(self, request):
         """Change the user's subscription plan (upgrade or downgrade)."""
-        plan_slug = request.data.get('plan_slug', '')
+        plan_slug = request.data.get("plan_slug", "")
         if not plan_slug:
             return Response(
-                {'detail': _('plan_slug is required.')},
+                {"detail": _("plan_slug is required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         plan = SubscriptionPlan.objects.filter(slug=plan_slug, is_active=True).first()
         if not plan:
             return Response(
-                {'detail': _("No active plan found with slug '%(slug)s'.") % {'slug': plan_slug}},
+                {
+                    "detail": _("No active plan found with slug '%(slug)s'.")
+                    % {"slug": plan_slug}
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -303,21 +318,23 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             result = StripeService.change_plan(request.user, plan)
         except ValueError as e:
             return Response(
-                {'detail': str(e)},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except stripe.error.StripeError:
             logger.exception("Stripe error during plan change")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        serializer = SubscriptionSerializer(result['subscription'])
-        return Response({
-            'action': result['action'],
-            'subscription': serializer.data,
-        })
+        serializer = SubscriptionSerializer(result["subscription"])
+        return Response(
+            {
+                "action": result["action"],
+                "subscription": serializer.data,
+            }
+        )
 
     @extend_schema(
         summary="Cancel pending plan change",
@@ -329,7 +346,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error"),
         },
     )
-    @action(detail=False, methods=['post'], url_path='cancel-pending-change')
+    @action(detail=False, methods=["post"], url_path="cancel-pending-change")
     def cancel_pending_change(self, request):
         """Cancel a pending downgrade."""
         try:
@@ -337,13 +354,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error cancelling pending change")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': _('No pending plan change to cancel.')},
+                {"detail": _("No pending plan change to cancel.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -360,7 +377,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def sync(self, request):
         """Force-sync subscription status from Stripe."""
         try:
@@ -368,13 +385,13 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error during subscription sync")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if not subscription:
             return Response(
-                {'detail': _('No subscription found to sync.')},
+                {"detail": _("No subscription found to sync.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -390,7 +407,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             502: OpenApiResponse(description="Payment service error."),
         },
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def invoices(self, request):
         """Get invoice history for the current user."""
         try:
@@ -398,39 +415,48 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         except stripe.error.StripeError:
             logger.exception("Stripe error fetching invoices")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         serializer = InvoiceSerializer(invoices, many=True)
         # Return in paginated format compatible with useInfiniteList
-        return Response({
-            'results': serializer.data,
-            'count': len(serializer.data),
-            'next': None,
-            'previous': None,
-        })
+        return Response(
+            {
+                "results": serializer.data,
+                "count": len(serializer.data),
+                "next": None,
+                "previous": None,
+            }
+        )
 
     @extend_schema(
         summary="Apply coupon code",
         description="Apply a Stripe coupon/promotion code to the current subscription.",
         tags=["Subscriptions"],
-        request={"application/json": {"type": "object", "properties": {"coupon_code": {"type": "string"}}}},
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"coupon_code": {"type": "string"}},
+            }
+        },
         responses={
             200: OpenApiResponse(description="Coupon applied successfully"),
-            400: OpenApiResponse(description="Invalid coupon or no active subscription"),
+            400: OpenApiResponse(
+                description="Invalid coupon or no active subscription"
+            ),
             502: OpenApiResponse(description="Payment service error"),
         },
     )
-    @action(detail=False, methods=['post'], url_path='current/apply-coupon')
+    @action(detail=False, methods=["post"], url_path="current/apply-coupon")
     def apply_coupon(self, request):
         """Apply a coupon code to the current subscription."""
         from core.validators import validate_coupon_code
 
-        coupon_code = (request.data.get('coupon_code') or '').strip()
+        coupon_code = (request.data.get("coupon_code") or "").strip()
         if not coupon_code:
             return Response(
-                {'detail': _('Coupon code is required.')},
+                {"detail": _("Coupon code is required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -438,7 +464,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             coupon_code = validate_coupon_code(coupon_code)
         except Exception as e:
             return Response(
-                {'detail': str(e)},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -446,21 +472,23 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             subscription = StripeService.apply_coupon(request.user, coupon_code)
         except ValueError as e:
             return Response(
-                {'detail': str(e)},
+                {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except stripe.error.StripeError:
             logger.exception("Stripe error applying coupon")
             return Response(
-                {'detail': _('Payment service error. Please try again later.')},
+                {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         serializer = SubscriptionSerializer(subscription)
-        return Response({
-            'message': _('Coupon applied successfully!'),
-            'subscription': serializer.data,
-        })
+        return Response(
+            {
+                "message": _("Coupon applied successfully!"),
+                "subscription": serializer.data,
+            }
+        )
 
     @extend_schema(
         summary="Subscription analytics",
@@ -468,7 +496,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         tags=["Subscriptions"],
         responses={200: dict},
     )
-    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
     def analytics(self, request):
         """Get subscription analytics (admin only)."""
         analytics = StripeService.get_analytics()
@@ -490,10 +518,12 @@ class ReferralView(views.APIView):
         user = request.user
         code = Referral.get_referral_code(user)
         stats = Referral.get_referrer_stats(user)
-        return Response({
-            "referral_code": code,
-            **stats,
-        })
+        return Response(
+            {
+                "referral_code": code,
+                **stats,
+            }
+        )
 
     @extend_schema(
         summary="Apply referral code",
@@ -536,10 +566,12 @@ class ReferralView(views.APIView):
             referred=request.user,
             referral_code=code,
         )
-        return Response({
-            "message": _("Referral code applied!"),
-            "referrer_name": referrer.display_name or referrer.email.split("@")[0],
-        })
+        return Response(
+            {
+                "message": _("Referral code applied!"),
+                "referrer_name": referrer.display_name or referrer.email.split("@")[0],
+            }
+        )
 
 
 class StripeWebhookView(views.APIView):
@@ -561,28 +593,28 @@ class StripeWebhookView(views.APIView):
     def post(self, request):
         """Handle incoming Stripe webhook events."""
         payload = request.body
-        sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
 
         if not sig_header:
             return HttpResponse(
-                'Missing Stripe-Signature header',
+                "Missing Stripe-Signature header",
                 status=400,
             )
 
         try:
             result = StripeService.handle_webhook_event(payload, sig_header)
             log_webhook_event(
-                result.get('event_type', 'unknown'),
-                result.get('event_id', 'unknown'),
-                'processed',
+                result.get("event_type", "unknown"),
+                result.get("event_id", "unknown"),
+                "processed",
             )
         except ValueError as e:
             logger.warning("Webhook signature verification failed: %s", e)
-            log_webhook_event('unknown', 'unknown', 'signature_failed')
+            log_webhook_event("unknown", "unknown", "signature_failed")
             return HttpResponse(str(e), status=400)
         except Exception:
             logger.exception("Unexpected error processing webhook")
-            log_webhook_event('unknown', 'unknown', 'error')
-            return HttpResponse('Webhook processing error', status=500)
+            log_webhook_event("unknown", "unknown", "error")
+            return HttpResponse("Webhook processing error", status=500)
 
         return Response(result, status=status.HTTP_200_OK)

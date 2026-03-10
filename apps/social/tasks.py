@@ -12,7 +12,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='apps.social.tasks.expire_stories')
+@shared_task(name="apps.social.tasks.expire_stories")
 def expire_stories():
     """
     Delete expired stories (older than 24h).
@@ -31,7 +31,7 @@ def expire_stories():
     return count
 
 
-@shared_task(name='apps.social.tasks.update_event_statuses')
+@shared_task(name="apps.social.tasks.update_event_statuses")
 def update_event_statuses():
     """
     Transition social events from 'upcoming' to 'active' or 'completed'
@@ -45,19 +45,20 @@ def update_event_statuses():
 
     # upcoming -> active
     activated = SocialEvent.objects.filter(
-        status='upcoming',
+        status="upcoming",
         start_time__lte=now,
         end_time__gt=now,
-    ).update(status='active')
+    ).update(status="active")
 
     # active (or upcoming that already passed) -> completed
     completed = SocialEvent.objects.filter(
-        status__in=['upcoming', 'active'],
+        status__in=["upcoming", "active"],
         end_time__lte=now,
-    ).update(status='completed')
+    ).update(status="completed")
 
     logger.info(
         "Event status transitions: %d activated, %d completed",
-        activated, completed,
+        activated,
+        completed,
     )
-    return {'activated': activated, 'completed': completed}
+    return {"activated": activated, "completed": completed}

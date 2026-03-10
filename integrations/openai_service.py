@@ -11,21 +11,40 @@ Handles all OpenAI API interactions including:
 - Vision board image generation via DALL-E
 """
 
-import openai
-from openai import OpenAI, AsyncOpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
 import json
-import asyncio
 import logging
+
+import openai
 from django.conf import settings
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from openai import (
+    APIConnectionError,
+    APIError,
+    APITimeoutError,
+    AsyncOpenAI,
+    OpenAI,
+    RateLimitError,
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 from core.exceptions import OpenAIError
-from integrations.plan_processors import get_processor, detect_category_from_text, detect_category_with_ambiguity, CATEGORY_DISPLAY_NAMES
+from integrations.plan_processors import (
+    CATEGORY_DISPLAY_NAMES,
+    detect_category_from_text,
+    get_processor,
+)
 
 logger = logging.getLogger(__name__)
 
 # Retry decorator for OpenAI calls (openai v1+ exceptions)
 openai_retry = retry(
-    retry=retry_if_exception_type((APIError, APIConnectionError, RateLimitError, APITimeoutError)),
+    retry=retry_if_exception_type(
+        (APIError, APIConnectionError, RateLimitError, APITimeoutError)
+    ),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     before_sleep=lambda retry_state: logger.warning(
@@ -38,20 +57,20 @@ if not settings.OPENAI_API_KEY:
     logger.warning("OPENAI_API_KEY is not set — AI features will fail at runtime")
 
 _client = OpenAI(
-    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
-    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+    api_key=settings.OPENAI_API_KEY or "sk-not-configured",
+    organization=getattr(settings, "OPENAI_ORGANIZATION_ID", None),
 )
 
 # Separate client for long-running plan generation — no SDK retries
 _plan_client = OpenAI(
-    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
-    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+    api_key=settings.OPENAI_API_KEY or "sk-not-configured",
+    organization=getattr(settings, "OPENAI_ORGANIZATION_ID", None),
     max_retries=0,
 )
 
 _async_client = AsyncOpenAI(
-    api_key=settings.OPENAI_API_KEY or 'sk-not-configured',
-    organization=getattr(settings, 'OPENAI_ORGANIZATION_ID', None),
+    api_key=settings.OPENAI_API_KEY or "sk-not-configured",
+    organization=getattr(settings, "OPENAI_ORGANIZATION_ID", None),
 )
 
 
@@ -114,7 +133,8 @@ ANTI-MANIPULATION:
 
     # System prompts for different conversation types
     SYSTEM_PROMPTS = {
-        'dream_creation': ETHICAL_PREAMBLE + """You are Stepora, a caring and motivating personal assistant that helps users transform their dreams into concrete action plans.
+        "dream_creation": ETHICAL_PREAMBLE
+        + """You are Stepora, a caring and motivating personal assistant that helps users transform their dreams into concrete action plans.
 
 Your role in dream creation:
 1. Listen actively and ask clarifying questions
@@ -131,8 +151,8 @@ CONTEXT AWARENESS:
 
 Your tone: empathetic, positive, encouraging but realistic.
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it.""",
-
-        'planning': ETHICAL_PREAMBLE + """You are Stepora, an elite strategic planner that transforms dreams into structured milestone-based action plans.
+        "planning": ETHICAL_PREAMBLE
+        + """You are Stepora, an elite strategic planner that transforms dreams into structured milestone-based action plans.
 
 LANGUAGE RULE (CRITICAL — MUST OBEY):
 Detect the language of the dream title and description. ALL output text (milestone titles, goal titles, task titles, descriptions, analysis, tips, obstacle titles — EVERYTHING) MUST be written in that SAME language. If the dream is in French, write EVERYTHING in French. If in Spanish, write in Spanish. NEVER default to English unless the dream is in English.
@@ -349,8 +369,8 @@ CALIBRATION INTEGRATION (CRITICAL):
 - Do NOT just list calibration references at the end — WEAVE them into the actual tasks
 
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it. Task titles, descriptions, and all text must be in the user's language.""",
-
-        'motivation': ETHICAL_PREAMBLE + """You generate short, personalized motivational messages (1-2 sentences max).
+        "motivation": ETHICAL_PREAMBLE
+        + """You generate short, personalized motivational messages (1-2 sentences max).
 
 Consider:
 - The user's name
@@ -360,8 +380,8 @@ Consider:
 
 Your tone: energetic, encouraging, personal. Use emojis sparingly (1-2 max).
 IMPORTANT: Respond in the user's language.""",
-
-        'check_in': ETHICAL_PREAMBLE + """You are Stepora, performing a regular check-in with the user to:
+        "check_in": ETHICAL_PREAMBLE
+        + """You are Stepora, performing a regular check-in with the user to:
 1. Understand their progress
 2. Identify difficulties
 3. Adjust the plan if needed
@@ -373,8 +393,8 @@ CONTEXT AWARENESS:
 
 Ask 1-2 open questions. Be empathetic and encouraging.
 IMPORTANT: Respond in the user's language.""",
-
-        'rescue': ETHICAL_PREAMBLE + """You are Stepora in "rescue mode" - the user has been inactive for several days.
+        "rescue": ETHICAL_PREAMBLE
+        + """You are Stepora in "rescue mode" - the user has been inactive for several days.
 
 Your role:
 1. Show empathy (no guilt-tripping)
@@ -384,8 +404,8 @@ Your role:
 
 Your message should be short (2-3 sentences), empathetic, and propose ONE concrete action.
 IMPORTANT: Respond in the user's language.""",
-
-        'adaptive_checkin': ETHICAL_PREAMBLE + """You are Stepora's adaptive planning AI performing a bi-weekly check-in.
+        "adaptive_checkin": ETHICAL_PREAMBLE
+        + """You are Stepora's adaptive planning AI performing a bi-weekly check-in.
 
 CONTEXT AWARENESS (CRITICAL):
 The user message contains comprehensive context about this dream:
@@ -421,8 +441,8 @@ RULES:
 - Maximum 12 tool calls per check-in
 
 LANGUAGE RULE: Detect the language of the dream title. ALL output (task titles, descriptions, coaching messages) MUST be in that language.""",
-
-        'checkin_questionnaire_generation': ETHICAL_PREAMBLE + """You are Stepora's check-in questionnaire AI. Your job is to create a personalized questionnaire for a check-in.
+        "checkin_questionnaire_generation": ETHICAL_PREAMBLE
+        + """You are Stepora's check-in questionnaire AI. Your job is to create a personalized questionnaire for a check-in.
 
 CONTEXT AWARENESS (CRITICAL):
 The user message contains comprehensive context: dream description, calibration Q&A, user persona, previous check-in history, and active obstacles.
@@ -453,8 +473,8 @@ Dynamic question IDs: "specific_1", "specific_2", "specific_3"
 
 Maximum 8 questions total. Minimum 3.
 LANGUAGE RULE: ALL question text MUST be in the dream's language.""",
-
-        'interactive_checkin_adaptation': ETHICAL_PREAMBLE + """You are Stepora's adaptive planning AI performing an interactive check-in.
+        "interactive_checkin_adaptation": ETHICAL_PREAMBLE
+        + """You are Stepora's adaptive planning AI performing an interactive check-in.
 You have the user's questionnaire responses, progress data, AND full dream context (description, calibration, persona, previous check-ins, obstacles).
 
 CONTEXT AWARENESS (CRITICAL):
@@ -497,7 +517,7 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
     def __init__(self):
         """Initialize OpenAI service with model and timeout from settings."""
         self.model = settings.OPENAI_MODEL
-        self.timeout = getattr(settings, 'OPENAI_TIMEOUT', 30)
+        self.timeout = getattr(settings, "OPENAI_TIMEOUT", 30)
 
     # --- Function definitions for AI-powered task creation ---
     FUNCTION_DEFINITIONS = [
@@ -508,9 +528,18 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Task title"},
-                    "description": {"type": "string", "description": "Task description"},
-                    "duration_mins": {"type": "integer", "description": "Estimated duration in minutes"},
-                    "scheduled_date": {"type": "string", "description": "ISO date string for when to do it"},
+                    "description": {
+                        "type": "string",
+                        "description": "Task description",
+                    },
+                    "duration_mins": {
+                        "type": "integer",
+                        "description": "Estimated duration in minutes",
+                    },
+                    "scheduled_date": {
+                        "type": "string",
+                        "description": "ISO date string for when to do it",
+                    },
                 },
                 "required": ["title"],
             },
@@ -521,7 +550,10 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "UUID of the task to complete"},
+                    "task_id": {
+                        "type": "string",
+                        "description": "UUID of the task to complete",
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -534,7 +566,10 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "properties": {
                     "dream_id": {"type": "string", "description": "UUID of the dream"},
                     "title": {"type": "string", "description": "Goal title"},
-                    "description": {"type": "string", "description": "Goal description"},
+                    "description": {
+                        "type": "string",
+                        "description": "Goal description",
+                    },
                     "order": {"type": "integer", "description": "Goal order number"},
                 },
                 "required": ["dream_id", "title"],
@@ -552,11 +587,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dream_id": {"type": "string", "description": "UUID of the dream"}
+                        "dream_id": {
+                            "type": "string",
+                            "description": "UUID of the dream",
+                        }
                     },
-                    "required": ["dream_id"]
-                }
-            }
+                    "required": ["dream_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -566,12 +604,18 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dream_id": {"type": "string", "description": "UUID of the dream"},
-                        "since_date": {"type": "string", "description": "ISO date (YYYY-MM-DD) to look back from"}
+                        "dream_id": {
+                            "type": "string",
+                            "description": "UUID of the dream",
+                        },
+                        "since_date": {
+                            "type": "string",
+                            "description": "ISO date (YYYY-MM-DD) to look back from",
+                        },
                     },
-                    "required": ["dream_id", "since_date"]
-                }
-            }
+                    "required": ["dream_id", "since_date"],
+                },
+            },
         },
         {
             "type": "function",
@@ -581,11 +625,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dream_id": {"type": "string", "description": "UUID of the dream"}
+                        "dream_id": {
+                            "type": "string",
+                            "description": "UUID of the dream",
+                        }
                     },
-                    "required": ["dream_id"]
-                }
-            }
+                    "required": ["dream_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -595,7 +642,10 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "goal_id": {"type": "string", "description": "UUID of the goal"},
+                        "goal_id": {
+                            "type": "string",
+                            "description": "UUID of the goal",
+                        },
                         "tasks": {
                             "type": "array",
                             "items": {
@@ -606,15 +656,15 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                                     "duration_mins": {"type": "integer"},
                                     "day_number": {"type": "integer"},
                                     "expected_date": {"type": "string"},
-                                    "deadline_date": {"type": "string"}
+                                    "deadline_date": {"type": "string"},
                                 },
-                                "required": ["title"]
-                            }
-                        }
+                                "required": ["title"],
+                            },
+                        },
                     },
-                    "required": ["goal_id", "tasks"]
-                }
-            }
+                    "required": ["goal_id", "tasks"],
+                },
+            },
         },
         {
             "type": "function",
@@ -627,11 +677,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                         "milestone_id": {"type": "string"},
                         "new_expected_date": {"type": "string"},
                         "new_deadline_date": {"type": "string"},
-                        "new_description": {"type": "string"}
+                        "new_description": {"type": "string"},
                     },
-                    "required": ["milestone_id"]
-                }
-            }
+                    "required": ["milestone_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -643,11 +693,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "properties": {
                         "user_id": {"type": "string"},
                         "start_date": {"type": "string"},
-                        "end_date": {"type": "string"}
+                        "end_date": {"type": "string"},
                     },
-                    "required": ["user_id", "start_date", "end_date"]
-                }
-            }
+                    "required": ["user_id", "start_date", "end_date"],
+                },
+            },
         },
         {
             "type": "function",
@@ -656,12 +706,10 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "description": "Mark a goal as completed",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "goal_id": {"type": "string"}
-                    },
-                    "required": ["goal_id"]
-                }
-            }
+                    "properties": {"goal_id": {"type": "string"}},
+                    "required": ["goal_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -676,11 +724,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                         "description": {"type": "string"},
                         "expected_date": {"type": "string"},
                         "deadline_date": {"type": "string"},
-                        "estimated_minutes": {"type": "integer"}
+                        "estimated_minutes": {"type": "integer"},
                     },
-                    "required": ["milestone_id", "title", "description"]
-                }
-            }
+                    "required": ["milestone_id", "title", "description"],
+                },
+            },
         },
         {
             "type": "function",
@@ -690,15 +738,30 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "coaching_message": {"type": "string", "description": "Personalized coaching message for the user"},
-                        "months_now_covered_through": {"type": "integer", "description": "How many months now have tasks generated"},
-                        "adjustment_summary": {"type": "string", "description": "Summary of what was adjusted"},
-                        "pace_status": {"type": "string", "description": "One of: significantly_behind, behind, on_track, ahead, significantly_ahead"},
-                        "next_checkin_days": {"type": "integer", "description": "Days until next check-in (7 if behind, 14 normal, 21 if ahead)"}
+                        "coaching_message": {
+                            "type": "string",
+                            "description": "Personalized coaching message for the user",
+                        },
+                        "months_now_covered_through": {
+                            "type": "integer",
+                            "description": "How many months now have tasks generated",
+                        },
+                        "adjustment_summary": {
+                            "type": "string",
+                            "description": "Summary of what was adjusted",
+                        },
+                        "pace_status": {
+                            "type": "string",
+                            "description": "One of: significantly_behind, behind, on_track, ahead, significantly_ahead",
+                        },
+                        "next_checkin_days": {
+                            "type": "integer",
+                            "description": "Days until next check-in (7 if behind, 14 normal, 21 if ahead)",
+                        },
                     },
-                    "required": ["coaching_message", "months_now_covered_through"]
-                }
-            }
+                    "required": ["coaching_message", "months_now_covered_through"],
+                },
+            },
         },
         {
             "type": "function",
@@ -708,11 +771,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "milestone_id": {"type": "string", "description": "UUID of the milestone"}
+                        "milestone_id": {
+                            "type": "string",
+                            "description": "UUID of the milestone",
+                        }
                     },
-                    "required": ["milestone_id"]
-                }
-            }
+                    "required": ["milestone_id"],
+                },
+            },
         },
         # --- Skeleton evolution tools ---
         {
@@ -725,13 +791,22 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "properties": {
                         "title": {"type": "string"},
                         "description": {"type": "string"},
-                        "order": {"type": "integer", "description": "Position to insert at (1-based)"},
-                        "expected_date": {"type": "string", "description": "YYYY-MM-DD"},
-                        "deadline_date": {"type": "string", "description": "YYYY-MM-DD"}
+                        "order": {
+                            "type": "integer",
+                            "description": "Position to insert at (1-based)",
+                        },
+                        "expected_date": {
+                            "type": "string",
+                            "description": "YYYY-MM-DD",
+                        },
+                        "deadline_date": {
+                            "type": "string",
+                            "description": "YYYY-MM-DD",
+                        },
                     },
-                    "required": ["title", "description", "order"]
-                }
-            }
+                    "required": ["title", "description", "order"],
+                },
+            },
         },
         {
             "type": "function",
@@ -742,11 +817,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "type": "object",
                     "properties": {
                         "milestone_id": {"type": "string"},
-                        "reason": {"type": "string", "description": "Why this milestone is being removed"}
+                        "reason": {
+                            "type": "string",
+                            "description": "Why this milestone is being removed",
+                        },
                     },
-                    "required": ["milestone_id"]
-                }
-            }
+                    "required": ["milestone_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -757,11 +835,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "type": "object",
                     "properties": {
                         "milestone_id": {"type": "string"},
-                        "new_order": {"type": "integer"}
+                        "new_order": {"type": "integer"},
                     },
-                    "required": ["milestone_id", "new_order"]
-                }
-            }
+                    "required": ["milestone_id", "new_order"],
+                },
+            },
         },
         {
             "type": "function",
@@ -772,11 +850,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "type": "object",
                     "properties": {
                         "milestone_id": {"type": "string"},
-                        "shift_days": {"type": "integer", "description": "Days to shift (positive=delay, negative=advance)"}
+                        "shift_days": {
+                            "type": "integer",
+                            "description": "Days to shift (positive=delay, negative=advance)",
+                        },
                     },
-                    "required": ["milestone_id", "shift_days"]
-                }
-            }
+                    "required": ["milestone_id", "shift_days"],
+                },
+            },
         },
         {
             "type": "function",
@@ -786,7 +867,10 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "goal_id": {"type": "string", "description": "UUID of the goal"},
+                        "goal_id": {
+                            "type": "string",
+                            "description": "UUID of the goal",
+                        },
                         "tasks": {
                             "type": "array",
                             "items": {
@@ -797,15 +881,15 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                                     "duration_mins": {"type": "integer"},
                                     "day_number": {"type": "integer"},
                                     "expected_date": {"type": "string"},
-                                    "deadline_date": {"type": "string"}
+                                    "deadline_date": {"type": "string"},
                                 },
-                                "required": ["title"]
-                            }
-                        }
+                                "required": ["title"],
+                            },
+                        },
                     },
-                    "required": ["goal_id", "tasks"]
-                }
-            }
+                    "required": ["goal_id", "tasks"],
+                },
+            },
         },
     ]
 
@@ -819,11 +903,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dream_id": {"type": "string", "description": "UUID of the dream"}
+                        "dream_id": {
+                            "type": "string",
+                            "description": "UUID of the dream",
+                        }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         },
         {
             "type": "function",
@@ -833,11 +920,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dream_id": {"type": "string", "description": "UUID of the dream"}
+                        "dream_id": {
+                            "type": "string",
+                            "description": "UUID of the dream",
+                        }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         },
         {
             "type": "function",
@@ -853,28 +943,47 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                                 "type": "object",
                                 "properties": {
                                     "id": {"type": "string"},
-                                    "question_type": {"type": "string", "description": "slider, choice, or text"},
+                                    "question_type": {
+                                        "type": "string",
+                                        "description": "slider, choice, or text",
+                                    },
                                     "question": {"type": "string"},
-                                    "options": {"type": "array", "items": {"type": "string"}},
+                                    "options": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
                                     "scale_min": {"type": "integer"},
                                     "scale_max": {"type": "integer"},
                                     "scale_labels": {"type": "object"},
-                                    "is_required": {"type": "boolean"}
+                                    "is_required": {"type": "boolean"},
                                 },
-                                "required": ["id", "question_type", "question"]
-                            }
+                                "required": ["id", "question_type", "question"],
+                            },
                         },
-                        "opening_message": {"type": "string", "description": "Warm greeting for the user"},
-                        "pace_summary": {"type": "string", "description": "Brief pace analysis"}
+                        "opening_message": {
+                            "type": "string",
+                            "description": "Warm greeting for the user",
+                        },
+                        "pace_summary": {
+                            "type": "string",
+                            "description": "Brief pace analysis",
+                        },
                     },
-                    "required": ["questions", "opening_message"]
-                }
-            }
+                    "required": ["questions", "opening_message"],
+                },
+            },
         },
     ]
 
     @openai_retry
-    def chat(self, messages, conversation_type='general', temperature=0.7, max_tokens=1000, functions=None):
+    def chat(
+        self,
+        messages,
+        conversation_type="general",
+        temperature=0.7,
+        max_tokens=1000,
+        functions=None,
+    ):
         """
         Synchronous chat completion with optional function calling.
 
@@ -889,35 +998,35 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             Dict with 'content', 'tokens_used', 'model', and optionally 'function_call'
         """
         try:
-            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
-            full_messages = [{'role': 'system', 'content': system_prompt}] + messages
+            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
 
             kwargs = {
-                'model': self.model,
-                'messages': full_messages,
-                'temperature': temperature,
-                'max_tokens': max_tokens,
-                'timeout': self.timeout,
+                "model": self.model,
+                "messages": full_messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "timeout": self.timeout,
             }
 
             if functions:
-                kwargs['functions'] = functions
-                kwargs['function_call'] = 'auto'
+                kwargs["functions"] = functions
+                kwargs["function_call"] = "auto"
 
             response = _client.chat.completions.create(**kwargs)
 
             result = {
-                'content': response.choices[0].message.content or '',
-                'tokens_used': response.usage.total_tokens,
-                'model': response.model,
+                "content": response.choices[0].message.content or "",
+                "tokens_used": response.usage.total_tokens,
+                "model": response.model,
             }
 
             # Check for function call
             if response.choices[0].message.function_call:
                 fc = response.choices[0].message.function_call
-                result['function_call'] = {
-                    'name': fc.name,
-                    'arguments': json.loads(fc.arguments),
+                result["function_call"] = {
+                    "name": fc.name,
+                    "arguments": json.loads(fc.arguments),
                 }
 
             return result
@@ -927,11 +1036,13 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
-    async def chat_async(self, messages, conversation_type='general', temperature=0.7, max_tokens=1000):
+    async def chat_async(
+        self, messages, conversation_type="general", temperature=0.7, max_tokens=1000
+    ):
         """Async version of chat completion."""
         try:
-            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
-            full_messages = [{'role': 'system', 'content': system_prompt}] + messages
+            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
 
             response = await _async_client.chat.completions.create(
                 model=self.model,
@@ -942,9 +1053,9 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             )
 
             return {
-                'content': response.choices[0].message.content,
-                'tokens_used': response.usage.total_tokens,
-                'model': response.model,
+                "content": response.choices[0].message.content,
+                "tokens_used": response.usage.total_tokens,
+                "model": response.model,
             }
 
         except openai.APIError as e:
@@ -952,7 +1063,9 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         except Exception as e:
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
-    async def chat_stream_async(self, messages, conversation_type='general', temperature=0.7):
+    async def chat_stream_async(
+        self, messages, conversation_type="general", temperature=0.7
+    ):
         """
         Async streaming chat completion. Yields response chunks as they arrive.
 
@@ -960,8 +1073,8 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             String chunks of the streamed response
         """
         try:
-            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, '')
-            full_messages = [{'role': 'system', 'content': system_prompt}] + messages
+            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
 
             response = await _async_client.chat.completions.create(
                 model=self.model,
@@ -999,8 +1112,7 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                        suggested_icebreaker (str)
         """
         system_prompt = (
-            self.ETHICAL_PREAMBLE
-            + "You are Stepora's buddy-matching AI. "
+            self.ETHICAL_PREAMBLE + "You are Stepora's buddy-matching AI. "
             "Score the compatibility between these two dream accountability buddies. "
             "Consider dream alignment, activity levels, personality compatibility, "
             "and how well they could motivate each other.\n\n"
@@ -1012,13 +1124,13 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             "- suggested_icebreaker: a friendly opening message one could send to the other.\n"
             "- Return ONLY a valid JSON object, nothing else.\n\n"
             "RESPONSE FORMAT:\n"
-            '{\n'
+            "{\n"
             '  "compatibility_score": 0.82,\n'
             '  "reasons": ["Both are focused on health and fitness goals", "Similar activity levels"],\n'
             '  "shared_interests": ["health", "personal_growth"],\n'
             '  "potential_challenges": ["Different experience levels might cause pacing issues"],\n'
             '  "suggested_icebreaker": "Hey! I noticed we both have fitness goals — want to keep each other accountable?"\n'
-            '}\n'
+            "}\n"
         )
 
         user_message = (
@@ -1046,8 +1158,8 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_message},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
                 ],
                 temperature=0.4,
                 max_tokens=600,
@@ -1056,47 +1168,52 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
 
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
-            if content.startswith('```'):
-                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             result = json.loads(content)
             if not isinstance(result, dict):
                 return self._default_compatibility_result()
 
             # Validate and sanitize the response
-            score = result.get('compatibility_score', 0.5)
+            score = result.get("compatibility_score", 0.5)
             if not isinstance(score, (int, float)) or score < 0 or score > 1:
                 score = 0.5
 
-            reasons = result.get('reasons', [])
+            reasons = result.get("reasons", [])
             if not isinstance(reasons, list):
                 reasons = []
             reasons = [str(r)[:300] for r in reasons if r][:5]
 
-            shared_interests = result.get('shared_interests', [])
+            shared_interests = result.get("shared_interests", [])
             if not isinstance(shared_interests, list):
                 shared_interests = []
             shared_interests = [str(s)[:100] for s in shared_interests if s][:10]
 
-            potential_challenges = result.get('potential_challenges', [])
+            potential_challenges = result.get("potential_challenges", [])
             if not isinstance(potential_challenges, list):
                 potential_challenges = []
             potential_challenges = [str(c)[:300] for c in potential_challenges if c][:5]
 
-            suggested_icebreaker = result.get('suggested_icebreaker', '')
-            if not isinstance(suggested_icebreaker, str) or len(suggested_icebreaker) > 500:
-                suggested_icebreaker = 'Hey! I think we have similar goals — want to be accountability buddies?'
+            suggested_icebreaker = result.get("suggested_icebreaker", "")
+            if (
+                not isinstance(suggested_icebreaker, str)
+                or len(suggested_icebreaker) > 500
+            ):
+                suggested_icebreaker = "Hey! I think we have similar goals — want to be accountability buddies?"
 
             return {
-                'compatibility_score': round(score, 2),
-                'reasons': reasons,
-                'shared_interests': shared_interests,
-                'potential_challenges': potential_challenges,
-                'suggested_icebreaker': suggested_icebreaker,
+                "compatibility_score": round(score, 2),
+                "reasons": reasons,
+                "shared_interests": shared_interests,
+                "potential_challenges": potential_challenges,
+                "suggested_icebreaker": suggested_icebreaker,
             }
 
         except (json.JSONDecodeError, KeyError):
-            logger.warning("Failed to parse buddy compatibility JSON, returning defaults")
+            logger.warning(
+                "Failed to parse buddy compatibility JSON, returning defaults"
+            )
             return self._default_compatibility_result()
         except openai.APIError as e:
             raise OpenAIError(f"Buddy compatibility scoring failed: {str(e)}")
@@ -1105,17 +1222,17 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
     def _default_compatibility_result():
         """Return a safe default when AI scoring fails."""
         return {
-            'compatibility_score': 0.5,
-            'reasons': ['Could not determine detailed compatibility at this time.'],
-            'shared_interests': [],
-            'potential_challenges': [],
-            'suggested_icebreaker': 'Hey! Want to be accountability buddies and help each other reach our goals?',
+            "compatibility_score": 0.5,
+            "reasons": ["Could not determine detailed compatibility at this time."],
+            "shared_interests": [],
+            "potential_challenges": [],
+            "suggested_icebreaker": "Hey! Want to be accountability buddies and help each other reach our goals?",
         }
 
     # ── Chat Memory Methods ────────────────────────────────────────
 
     @openai_retry
-    def summarize_voice_note(self, transcript, conversation_context=''):
+    def summarize_voice_note(self, transcript, conversation_context=""):
         """
         Summarize a voice note transcript with key points and action items.
 
@@ -1126,7 +1243,7 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         Returns:
             Dict with 'summary', 'key_points', 'action_items', and 'mood'.
         """
-        context_section = ''
+        context_section = ""
         if conversation_context:
             context_section = (
                 f"\n\nCONVERSATION CONTEXT (for reference):\n{conversation_context}\n"
@@ -1145,12 +1262,12 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             "- If the voice note is very short or trivial, still provide a brief summary.\n"
             "- Return ONLY a valid JSON object.\n\n"
             "RESPONSE FORMAT:\n"
-            '{\n'
+            "{\n"
             '  "summary": "Brief summary of the voice note",\n'
             '  "key_points": ["Point 1", "Point 2"],\n'
             '  "action_items": [{"item": "Do something", "priority": "high"}],\n'
             '  "mood": "motivated"\n'
-            '}\n'
+            "}\n"
             f"{context_section}"
         )
 
@@ -1158,8 +1275,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f"Summarize this voice note transcript:\n\n{transcript}"},
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": f"Summarize this voice note transcript:\n\n{transcript}",
+                    },
                 ],
                 temperature=0.3,
                 max_tokens=600,
@@ -1168,62 +1288,66 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
 
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
-            if content.startswith('```'):
-                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             result = json.loads(content)
             if not isinstance(result, dict):
                 return {
-                    'summary': transcript[:200],
-                    'key_points': [],
-                    'action_items': [],
-                    'mood': 'neutral',
+                    "summary": transcript[:200],
+                    "key_points": [],
+                    "action_items": [],
+                    "mood": "neutral",
                 }
 
             # Validate and sanitize the response
-            summary = result.get('summary', transcript[:200])
+            summary = result.get("summary", transcript[:200])
             if not isinstance(summary, str) or len(summary) > 1000:
                 summary = transcript[:200]
 
-            key_points = result.get('key_points', [])
+            key_points = result.get("key_points", [])
             if not isinstance(key_points, list):
                 key_points = []
             key_points = [str(p)[:300] for p in key_points if p][:5]
 
-            action_items = result.get('action_items', [])
+            action_items = result.get("action_items", [])
             if not isinstance(action_items, list):
                 action_items = []
-            valid_priorities = {'high', 'medium', 'low'}
+            valid_priorities = {"high", "medium", "low"}
             validated_actions = []
             for item in action_items[:10]:
-                if isinstance(item, dict) and item.get('item'):
-                    priority = item.get('priority', 'medium')
+                if isinstance(item, dict) and item.get("item"):
+                    priority = item.get("priority", "medium")
                     if priority not in valid_priorities:
-                        priority = 'medium'
-                    validated_actions.append({
-                        'item': str(item['item'])[:300],
-                        'priority': priority,
-                    })
+                        priority = "medium"
+                    validated_actions.append(
+                        {
+                            "item": str(item["item"])[:300],
+                            "priority": priority,
+                        }
+                    )
             action_items = validated_actions
 
-            mood = result.get('mood', 'neutral')
+            mood = result.get("mood", "neutral")
             if not isinstance(mood, str) or len(mood) > 30:
-                mood = 'neutral'
+                mood = "neutral"
 
             return {
-                'summary': summary,
-                'key_points': key_points,
-                'action_items': action_items,
-                'mood': mood,
+                "summary": summary,
+                "key_points": key_points,
+                "action_items": action_items,
+                "mood": mood,
             }
 
         except (json.JSONDecodeError, KeyError):
-            logger.warning("Failed to parse voice note summary JSON, returning basic summary")
+            logger.warning(
+                "Failed to parse voice note summary JSON, returning basic summary"
+            )
             return {
-                'summary': transcript[:200],
-                'key_points': [],
-                'action_items': [],
-                'mood': 'neutral',
+                "summary": transcript[:200],
+                "key_points": [],
+                "action_items": [],
+                "mood": "neutral",
             }
         except openai.APIError as e:
             raise OpenAIError(f"Voice note summarization failed: {str(e)}")
@@ -1246,8 +1370,9 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             )
 
         conversation_text = "\n".join(
-            f"{m['role']}: {m['content']}" for m in messages
-            if m['role'] in ('user', 'assistant')
+            f"{m['role']}: {m['content']}"
+            for m in messages
+            if m["role"] in ("user", "assistant")
         )
 
         system_prompt = (
@@ -1275,8 +1400,11 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f"Extract memories from this conversation:\n\n{conversation_text}"},
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": f"Extract memories from this conversation:\n\n{conversation_text}",
+                    },
                 ],
                 temperature=0.3,
                 max_tokens=800,
@@ -1285,32 +1413,34 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
 
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
-            if content.startswith('```'):
-                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             memories = json.loads(content)
             if not isinstance(memories, list):
                 return []
 
             # Validate and sanitize each memory
-            valid_keys = {'preference', 'fact', 'goal_context', 'style'}
+            valid_keys = {"preference", "fact", "goal_context", "style"}
             validated = []
             for m in memories:
                 if not isinstance(m, dict):
                     continue
-                key = m.get('key', 'fact')
+                key = m.get("key", "fact")
                 if key not in valid_keys:
-                    key = 'fact'
-                importance = m.get('importance', 3)
+                    key = "fact"
+                importance = m.get("importance", 3)
                 if not isinstance(importance, int) or importance < 1 or importance > 5:
                     importance = 3
-                content_text = m.get('content', '').strip()
+                content_text = m.get("content", "").strip()
                 if content_text and len(content_text) <= 500:
-                    validated.append({
-                        'key': key,
-                        'content': content_text,
-                        'importance': importance,
-                    })
+                    validated.append(
+                        {
+                            "key": key,
+                            "content": content_text,
+                            "importance": importance,
+                        }
+                    )
 
             return validated
 
@@ -1335,19 +1465,19 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         """
         from apps.conversations.models import ChatMemory
 
-        memories = ChatMemory.objects.filter(
-            user=user, is_active=True
-        ).order_by('-importance', '-updated_at')[:30]
+        memories = ChatMemory.objects.filter(user=user, is_active=True).order_by(
+            "-importance", "-updated_at"
+        )[:30]
 
         if not memories:
-            return ''
+            return ""
 
         lines = []
         category_labels = {
-            'preference': 'Preference',
-            'fact': 'Personal Fact',
-            'goal_context': 'Goal Context',
-            'style': 'Communication Style',
+            "preference": "Preference",
+            "fact": "Personal Fact",
+            "goal_context": "Goal Context",
+            "style": "Communication Style",
         }
         for m in memories:
             label = category_labels.get(m.key, m.key.title())
@@ -1359,7 +1489,14 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             "unless relevant):\n" + "\n".join(lines)
         )
 
-    def generate_plan(self, dream_title, dream_description, user_context, target_date=None, progress_callback=None):
+    def generate_plan(
+        self,
+        dream_title,
+        dream_description,
+        user_context,
+        target_date=None,
+        progress_callback=None,
+    ):
         """
         Generate a complete structured plan for a dream.
 
@@ -1380,14 +1517,18 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             Dict with structured plan including milestones, goals, tasks, tips, obstacles
         """
         # Build calibration context if available
-        calibration_section = self._build_calibration_section(user_context, dream_description)
+        calibration_section = self._build_calibration_section(
+            user_context, dream_description
+        )
 
         # Detect category and get specialized processor
-        category = user_context.get('category', '')
-        if not category or category == 'other':
+        category = user_context.get("category", "")
+        if not category or category == "other":
             category = detect_category_from_text(dream_title, dream_description)
         processor = get_processor(category)
-        logger.info(f"generate_plan: using processor '{processor.display_name}' for category '{category}'")
+        logger.info(
+            f"generate_plan: using processor '{processor.display_name}' for category '{category}'"
+        )
 
         # Inject domain-specific rules into calibration section
         domain_rules = processor.get_planning_rules()
@@ -1395,39 +1536,62 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             calibration_section = domain_rules + "\n" + calibration_section
 
         # Inject explicit language instruction if detected
-        lang = user_context.get('language', '')
+        lang = user_context.get("language", "")
         if lang:
-            lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'pt': 'Portuguese', 'it': 'Italian'}
+            lang_names = {
+                "fr": "French",
+                "en": "English",
+                "es": "Spanish",
+                "de": "German",
+                "pt": "Portuguese",
+                "it": "Italian",
+            }
             lang_name = lang_names.get(lang, lang)
             lang_instruction = f"\nLANGUAGE OVERRIDE (MANDATORY): ALL output MUST be in {lang_name}. This overrides any other language detection.\n"
             calibration_section = lang_instruction + calibration_section
 
         # Parse target_date and calculate duration
         total_days, total_months = self._parse_duration(target_date)
-        logger.info(f"generate_plan: target_date={target_date} total_days={total_days} total_months={total_months}")
+        logger.info(
+            f"generate_plan: target_date={target_date} total_days={total_days} total_months={total_months}"
+        )
 
         if total_months is None or total_months <= 2:
             # Very short dream (1-2 months): single call
             return self._generate_plan_single(
-                dream_title, dream_description, user_context,
-                calibration_section, target_date, total_days, total_months
+                dream_title,
+                dream_description,
+                user_context,
+                calibration_section,
+                target_date,
+                total_days,
+                total_months,
             )
         else:
             # 3+ months: per-month chunked generation for maximum detail
             return self._generate_plan_chunked(
-                dream_title, dream_description, user_context,
-                calibration_section, target_date, total_days, total_months,
+                dream_title,
+                dream_description,
+                user_context,
+                calibration_section,
+                target_date,
+                total_days,
+                total_months,
                 progress_callback=progress_callback,
             )
 
-    def _get_calibration_processor_hints(self, dream_title, dream_description, category=None):
+    def _get_calibration_processor_hints(
+        self, dream_title, dream_description, category=None
+    ):
         """Get category-specific calibration question hints."""
-        if not category or category == 'other':
+        if not category or category == "other":
             category = detect_category_from_text(dream_title, dream_description)
         processor = get_processor(category)
         return processor.get_calibration_hints()
 
-    def generate_disambiguation_question(self, dream_title, dream_description, candidates):
+    def generate_disambiguation_question(
+        self, dream_title, dream_description, candidates
+    ):
         """
         Generate ONE targeted question to disambiguate between two possible categories.
         Returns a question string, or None if generation fails.
@@ -1456,10 +1620,10 @@ Respond ONLY with JSON:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': 'You generate a single disambiguation question. Be concise and natural. Respond only in JSON.'
+                        "role": "system",
+                        "content": "You generate a single disambiguation question. Be concise and natural. Respond only in JSON.",
                     },
-                    {'role': 'user', 'content': prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
                 max_tokens=200,
@@ -1467,27 +1631,27 @@ Respond ONLY with JSON:
                 timeout=15,
             )
             result = json.loads(response.choices[0].message.content)
-            return result.get('question')
+            return result.get("question")
         except Exception as e:
             logger.warning(f"Disambiguation question generation failed: {e}")
             return None
 
     def _build_persona_section(self, user_context):
         """Build persona context string from user's persona data."""
-        persona = user_context.get('persona', {})
+        persona = user_context.get("persona", {})
         if not persona:
             return ""
         lines = ["USER PERSONA (pre-filled profile — use this to personalize):"]
         field_labels = {
-            'available_hours_per_week': 'Available Hours/Week',
-            'preferred_schedule': 'Preferred Schedule',
-            'budget_range': 'Budget Range',
-            'fitness_level': 'Fitness Level',
-            'learning_style': 'Learning Style',
-            'typical_day': 'Typical Day',
-            'occupation': 'Occupation',
-            'global_motivation': 'Global Motivation',
-            'global_constraints': 'Global Constraints',
+            "available_hours_per_week": "Available Hours/Week",
+            "preferred_schedule": "Preferred Schedule",
+            "budget_range": "Budget Range",
+            "fitness_level": "Fitness Level",
+            "learning_style": "Learning Style",
+            "typical_day": "Typical Day",
+            "occupation": "Occupation",
+            "global_motivation": "Global Motivation",
+            "global_constraints": "Global Constraints",
         }
         for key, label in field_labels.items():
             val = persona.get(key)
@@ -1499,14 +1663,16 @@ Respond ONLY with JSON:
         """Build calibration context string from user_context."""
         persona_section = self._build_persona_section(user_context)
 
-        if not user_context.get('calibration_profile'):
+        if not user_context.get("calibration_profile"):
             return persona_section
 
-        profile = user_context['calibration_profile']
-        recommendations = user_context.get('plan_recommendations', {})
-        enriched = user_context.get('enriched_description', '')
+        profile = user_context["calibration_profile"]
+        recommendations = user_context.get("plan_recommendations", {})
+        enriched = user_context.get("enriched_description", "")
 
-        return persona_section + f"""
+        return (
+            persona_section
+            + f"""
 CALIBRATION PROFILE (from user interview):
 - Experience Level: {profile.get('experience_level', 'unknown')}
 - Experience Details: {profile.get('experience_details', 'N/A')}
@@ -1539,12 +1705,14 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
 - For EVERY goal and task, include a "reasoning" field that references specific calibration data
 - Fill "calibration_references" with every calibration answer you used (e.g. "User said X -> plan does Y")
 - Do NOT produce a generic plan. Every element must trace back to something the user told you"""
+        )
 
     def _parse_duration(self, target_date):
         """Parse target_date and return (total_days, total_months) or (None, None)."""
         if not target_date:
             return None, None
         from datetime import date
+
         if isinstance(target_date, str):
             try:
                 # Handle both "YYYY-MM-DD" and "YYYY-MM-DD HH:MM:SS+TZ" formats
@@ -1556,8 +1724,16 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
         total_months = max(1, total_days // 30)
         return total_days, total_months
 
-    def _generate_plan_single(self, dream_title, dream_description, user_context,
-                               calibration_section, target_date, total_days, total_months):
+    def _generate_plan_single(
+        self,
+        dream_title,
+        dream_description,
+        user_context,
+        calibration_section,
+        target_date,
+        total_days,
+        total_months,
+    ):
         """Generate plan in a single API call (for dreams <= 6 months)."""
         duration_info = ""
         if total_days and total_months:
@@ -1566,20 +1742,27 @@ IMPORTANT: Use ALL the calibration data above to create a HIGHLY PERSONALIZED pl
             min_tasks = min_goals * 4
             total_weeks = max(1, total_days // 7)
 
-            from datetime import date, timedelta
+            from datetime import date
+
             today = date.today()
 
             # Calculate target weekly hours from persona
-            persona = user_context.get('persona', {})
-            available_hours = persona.get('available_hours_per_week', 0)
-            calibration_hours = (user_context.get('calibration_profile') or {}).get('available_hours_per_week', '')
+            persona = user_context.get("persona", {})
+            available_hours = persona.get("available_hours_per_week", 0)
+            calibration_hours = (user_context.get("calibration_profile") or {}).get(
+                "available_hours_per_week", ""
+            )
             if calibration_hours and str(calibration_hours).strip():
                 try:
-                    available_hours = max(available_hours or 0, int(str(calibration_hours).strip().split('-')[0].split()[0]))
+                    available_hours = max(
+                        available_hours or 0,
+                        int(str(calibration_hours).strip().split("-")[0].split()[0]),
+                    )
                 except (ValueError, IndexError):
                     pass
-            target_weekly_hours = max(3, int(available_hours * 0.6)) if available_hours else 5
-            target_weekly_mins = target_weekly_hours * 60
+            target_weekly_hours = (
+                max(3, int(available_hours * 0.6)) if available_hours else 5
+            )
             total_target_hours = target_weekly_hours * total_weeks
 
             duration_info = f"""
@@ -1637,8 +1820,8 @@ Respond ONLY with the plan JSON."""
         response = _plan_client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
-                {'role': 'user', 'content': prompt}
+                {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                {"role": "user", "content": prompt},
             ],
             temperature=0.5,
             max_tokens=16384,
@@ -1648,9 +1831,11 @@ Respond ONLY with the plan JSON."""
         logger.info("generate_plan: single plan response received")
 
         finish_reason = response.choices[0].finish_reason
-        if finish_reason == 'length':
+        if finish_reason == "length":
             logger.warning("generate_plan: single response truncated (hit max_tokens)")
-            raise OpenAIError("Plan generation output was truncated — response too large")
+            raise OpenAIError(
+                "Plan generation output was truncated — response too large"
+            )
 
         content = response.choices[0].message.content
         try:
@@ -1658,9 +1843,17 @@ Respond ONLY with the plan JSON."""
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Failed to parse JSON response: {str(e)}")
 
-    def _generate_plan_chunked(self, dream_title, dream_description, user_context,
-                                calibration_section, target_date, total_days, total_months,
-                                progress_callback=None):
+    def _generate_plan_chunked(
+        self,
+        dream_title,
+        dream_description,
+        user_context,
+        calibration_section,
+        target_date,
+        total_days,
+        total_months,
+        progress_callback=None,
+    ):
         """
         Generate plan in chunks of 3 months for long dreams.
 
@@ -1688,12 +1881,14 @@ Respond ONLY with the plan JSON."""
         last_day_used = 0  # Track actual last day from previous chunk
 
         from datetime import date, timedelta
+
         today = date.today()
 
         for chunk_idx, (month_start, month_end) in enumerate(chunks):
-            chunk_milestones_count = month_end - month_start + 1
             # Use actual last day from previous chunk to prevent overlap
-            day_start = last_day_used + 1 if last_day_used > 0 else (month_start - 1) * 30 + 1
+            day_start = (
+                last_day_used + 1 if last_day_used > 0 else (month_start - 1) * 30 + 1
+            )
             day_end = min(month_end * 30, total_days)
             milestone_order_start = month_start
 
@@ -1705,15 +1900,22 @@ Respond ONLY with the plan JSON."""
             is_last_chunk = chunk_idx == len(chunks) - 1
 
             # Calculate effort targets for this chunk
-            persona = user_context.get('persona', {})
-            available_hours = persona.get('available_hours_per_week', 0)
-            calibration_hours = (user_context.get('calibration_profile') or {}).get('available_hours_per_week', '')
+            persona = user_context.get("persona", {})
+            available_hours = persona.get("available_hours_per_week", 0)
+            calibration_hours = (user_context.get("calibration_profile") or {}).get(
+                "available_hours_per_week", ""
+            )
             if calibration_hours and str(calibration_hours).strip():
                 try:
-                    available_hours = max(available_hours or 0, int(str(calibration_hours).strip().split('-')[0].split()[0]))
+                    available_hours = max(
+                        available_hours or 0,
+                        int(str(calibration_hours).strip().split("-")[0].split()[0]),
+                    )
                 except (ValueError, IndexError):
                     pass
-            target_weekly_hours = max(3, int(available_hours * 0.6)) if available_hours else 5
+            target_weekly_hours = (
+                max(3, int(available_hours * 0.6)) if available_hours else 5
+            )
             chunk_weeks = max(1, (day_end - day_start + 1) // 7)
             chunk_target_hours = target_weekly_hours * chunk_weeks
 
@@ -1750,9 +1952,11 @@ USER CONTEXT:
 
             if previous_summary:
                 # Keep only last 3 month summaries to avoid prompt bloat
-                summary_lines = previous_summary.strip().split('\n\n')
+                summary_lines = previous_summary.strip().split("\n\n")
                 if len(summary_lines) > 3:
-                    trimmed = "(...earlier months omitted...)\n\n" + "\n\n".join(summary_lines[-3:])
+                    trimmed = "(...earlier months omitted...)\n\n" + "\n\n".join(
+                        summary_lines[-3:]
+                    )
                 else:
                     trimmed = previous_summary
                 chunk_prompt += f"""
@@ -1799,15 +2003,19 @@ Respond ONLY with JSON:
 
             # Notify progress
             if progress_callback:
-                progress_callback(f"AI is building month {month_start} of {total_months}...")
+                progress_callback(
+                    f"AI is building month {month_start} of {total_months}..."
+                )
 
             # Generate this chunk — use _plan_client (no SDK retries) with long timeout
-            logger.info(f"generate_plan: sending chunk {chunk_idx + 1}/{len(chunks)} to OpenAI")
+            logger.info(
+                f"generate_plan: sending chunk {chunk_idx + 1}/{len(chunks)} to OpenAI"
+            )
             response = _plan_client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
-                    {'role': 'user', 'content': chunk_prompt}
+                    {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                    {"role": "user", "content": chunk_prompt},
                 ],
                 temperature=0.5,
                 max_tokens=16384,
@@ -1817,42 +2025,48 @@ Respond ONLY with JSON:
             logger.info(f"generate_plan: chunk {chunk_idx + 1}/{len(chunks)} received")
 
             finish_reason = response.choices[0].finish_reason
-            if finish_reason == 'length':
-                logger.warning(f"generate_plan: chunk {chunk_idx + 1} truncated (hit max_tokens)")
-                raise OpenAIError(f"Chunk {chunk_idx + 1} output was truncated — response too large")
+            if finish_reason == "length":
+                logger.warning(
+                    f"generate_plan: chunk {chunk_idx + 1} truncated (hit max_tokens)"
+                )
+                raise OpenAIError(
+                    f"Chunk {chunk_idx + 1} output was truncated — response too large"
+                )
 
             content = response.choices[0].message.content
             try:
                 chunk_plan = json.loads(content)
             except json.JSONDecodeError as e:
-                raise OpenAIError(f"Failed to parse chunk {chunk_idx + 1} JSON: {str(e)}")
+                raise OpenAIError(
+                    f"Failed to parse chunk {chunk_idx + 1} JSON: {str(e)}"
+                )
 
             # Collect results
-            chunk_ms = chunk_plan.get('milestones', [])
+            chunk_ms = chunk_plan.get("milestones", [])
             all_milestones.extend(chunk_ms)
 
             # Track goal titles for deduplication
             for ms in chunk_ms:
-                for goal in ms.get('goals', []):
-                    gt = goal.get('title', '')
+                for goal in ms.get("goals", []):
+                    gt = goal.get("title", "")
                     if gt:
                         all_goal_titles.append(gt)
 
-            if chunk_plan.get('analysis'):
-                analysis = chunk_plan['analysis']
-            if chunk_plan.get('tips'):
-                all_tips.extend(chunk_plan['tips'])
-            if chunk_plan.get('potential_obstacles'):
-                all_potential_obstacles.extend(chunk_plan['potential_obstacles'])
-            if chunk_plan.get('calibration_references'):
-                all_calibration_references.extend(chunk_plan['calibration_references'])
+            if chunk_plan.get("analysis"):
+                analysis = chunk_plan["analysis"]
+            if chunk_plan.get("tips"):
+                all_tips.extend(chunk_plan["tips"])
+            if chunk_plan.get("potential_obstacles"):
+                all_potential_obstacles.extend(chunk_plan["potential_obstacles"])
+            if chunk_plan.get("calibration_references"):
+                all_calibration_references.extend(chunk_plan["calibration_references"])
 
             # Find the highest day_number actually used in this chunk
             max_day = day_start  # minimum fallback
             for ms in chunk_ms:
-                for goal in ms.get('goals', []):
-                    for task in goal.get('tasks', []):
-                        dn = task.get('day_number')
+                for goal in ms.get("goals", []):
+                    for task in goal.get("tasks", []):
+                        dn = task.get("day_number")
                         if dn and isinstance(dn, int) and dn > max_day:
                             max_day = dn
             # Use the actual last day from AI output to prevent gaps.
@@ -1860,12 +2074,14 @@ Respond ONLY with JSON:
             # starts at day 86, not 91 — preventing 5-day dead zones.
             # Only fall back to day_end if AI somehow used no days at all.
             last_day_used = max_day if max_day > day_start else day_end
-            logger.info(f"generate_plan: chunk {chunk_idx + 1} max_day={max_day} day_end={day_end} last_day_used={last_day_used}")
+            logger.info(
+                f"generate_plan: chunk {chunk_idx + 1} max_day={max_day} day_end={day_end} last_day_used={last_day_used}"
+            )
 
             # Build summary of this chunk for next iteration — include key metrics
-            chunk_summary = chunk_plan.get('chunk_summary', '')
+            chunk_summary = chunk_plan.get("chunk_summary", "")
             if not chunk_summary:
-                ms_titles = [ms.get('title', '') for ms in chunk_ms]
+                ms_titles = [ms.get("title", "") for ms in chunk_ms]
                 chunk_summary = (
                     f"Last day_number: {last_day_used}. "
                     f"Milestones: {', '.join(ms_titles)}."
@@ -1876,26 +2092,39 @@ Respond ONLY with JSON:
             else:
                 previous_summary = f"Chunk {chunk_idx + 1} (months {month_start}-{month_end}): {chunk_summary}"
 
-            logger.info(f"Plan chunk {chunk_idx + 1}/{len(chunks)} generated: {len(chunk_ms)} milestones")
+            logger.info(
+                f"Plan chunk {chunk_idx + 1}/{len(chunks)} generated: {len(chunk_ms)} milestones"
+            )
 
         # Merge all chunks into a single plan
         merged_plan = {
-            'analysis': analysis,
-            'estimated_duration_weeks': max(1, total_days // 7),
-            'milestones': all_milestones,
-            'tips': all_tips,
-            'potential_obstacles': all_potential_obstacles,
-            'calibration_references': list(dict.fromkeys(all_calibration_references)),  # deduplicate while preserving order
-            'generation_info': {
-                'total_chunks': len(chunks),
-                'total_milestones': len(all_milestones),
-                'total_months': total_months,
+            "analysis": analysis,
+            "estimated_duration_weeks": max(1, total_days // 7),
+            "milestones": all_milestones,
+            "tips": all_tips,
+            "potential_obstacles": all_potential_obstacles,
+            "calibration_references": list(
+                dict.fromkeys(all_calibration_references)
+            ),  # deduplicate while preserving order
+            "generation_info": {
+                "total_chunks": len(chunks),
+                "total_milestones": len(all_milestones),
+                "total_months": total_months,
             },
         }
 
         return merged_plan
 
-    def generate_calibration_questions(self, dream_title, dream_description, existing_qa=None, batch_size=7, target_date=None, category=None, persona=None):
+    def generate_calibration_questions(
+        self,
+        dream_title,
+        dream_description,
+        existing_qa=None,
+        batch_size=7,
+        target_date=None,
+        category=None,
+        persona=None,
+    ):
         """
         Generate calibration questions to deeply understand the user's dream.
 
@@ -1913,10 +2142,12 @@ Respond ONLY with JSON:
             Dict with 'questions' list and 'sufficient' boolean
         """
         if existing_qa:
-            qa_context = "\n".join([
-                f"Q{i+1}: {qa['question']}\nA{i+1}: {qa['answer']}"
-                for i, qa in enumerate(existing_qa)
-            ])
+            qa_context = "\n".join(
+                [
+                    f"Q{i+1}: {qa['question']}\nA{i+1}: {qa['answer']}"
+                    for i, qa in enumerate(existing_qa)
+                ]
+            )
             prompt = f"""The user wants to achieve this dream/goal:
 TITLE: {dream_title}
 DESCRIPTION: {dream_description}
@@ -1979,24 +2210,33 @@ Respond ONLY with JSON (do NOT copy the example values — compute your own):
                 already_known += f"\nCATEGORY: {category}"
             if persona:
                 persona_lines = []
-                if persona.get('available_hours_per_week'):
-                    persona_lines.append(f"Available hours/week: {persona['available_hours_per_week']}")
-                if persona.get('preferred_schedule'):
-                    persona_lines.append(f"Preferred schedule: {persona['preferred_schedule']}")
-                if persona.get('budget_range'):
+                if persona.get("available_hours_per_week"):
+                    persona_lines.append(
+                        f"Available hours/week: {persona['available_hours_per_week']}"
+                    )
+                if persona.get("preferred_schedule"):
+                    persona_lines.append(
+                        f"Preferred schedule: {persona['preferred_schedule']}"
+                    )
+                if persona.get("budget_range"):
                     persona_lines.append(f"Budget range: {persona['budget_range']}")
-                if persona.get('fitness_level'):
+                if persona.get("fitness_level"):
                     persona_lines.append(f"Fitness level: {persona['fitness_level']}")
-                if persona.get('learning_style'):
+                if persona.get("learning_style"):
                     persona_lines.append(f"Learning style: {persona['learning_style']}")
-                if persona.get('typical_day'):
+                if persona.get("typical_day"):
                     persona_lines.append(f"Typical day: {persona['typical_day']}")
-                if persona.get('occupation'):
+                if persona.get("occupation"):
                     persona_lines.append(f"Occupation: {persona['occupation']}")
-                if persona.get('global_constraints'):
-                    persona_lines.append(f"General constraints: {persona['global_constraints']}")
+                if persona.get("global_constraints"):
+                    persona_lines.append(
+                        f"General constraints: {persona['global_constraints']}"
+                    )
                 if persona_lines:
-                    already_known += "\n\nUSER PERSONA (already known — do NOT ask about these topics, they are pre-filled):\n" + "\n".join(f"- {l}" for l in persona_lines)
+                    already_known += (
+                        "\n\nUSER PERSONA (already known — do NOT ask about these topics, they are pre-filled):\n"
+                        + "\n".join(f"- {line}" for line in persona_lines)
+                    )
 
             prompt = f"""The user wants to achieve this dream/goal:
 TITLE: {dream_title}
@@ -2041,28 +2281,28 @@ Respond ONLY with JSON:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
-                            self.ETHICAL_PREAMBLE +
-                            'You are an expert interviewer and life coach working within Stepora. '
-                            'Your job is to understand the user at 100% — every detail, every nuance, every constraint — '
-                            'BEFORE any plan is generated. A plan based on incomplete understanding will fail. '
-                            'You MUST dig deep. Surface-level answers are NOT acceptable. '
+                        "role": "system",
+                        "content": (
+                            self.ETHICAL_PREAMBLE
+                            + "You are an expert interviewer and life coach working within Stepora. "
+                            "Your job is to understand the user at 100% — every detail, every nuance, every constraint — "
+                            "BEFORE any plan is generated. A plan based on incomplete understanding will fail. "
+                            "You MUST dig deep. Surface-level answers are NOT acceptable. "
                             'If an answer is vague ("some", "a few", "maybe", "I think"), you MUST ask a follow-up '
-                            'that forces a specific, measurable answer. '
-                            'You are relentless in your pursuit of understanding, but always kind and conversational. '
-                            'LANGUAGE RULE: You MUST detect the language of the user\'s dream title and description, '
-                            'and ask ALL questions in that SAME language. If the user writes in French, ask in French. '
-                            'If in Spanish, ask in Spanish. Always match the user\'s language. '
-                            'Never accept vague answers - always dig deeper. '
-                            'Never ask questions about violent, sexual, illegal, or coercive aspects of a goal. '
-                            'If the dream itself seems harmful, unethical, or involves hurting/controlling others, '
+                            "that forces a specific, measurable answer. "
+                            "You are relentless in your pursuit of understanding, but always kind and conversational. "
+                            "LANGUAGE RULE: You MUST detect the language of the user's dream title and description, "
+                            "and ask ALL questions in that SAME language. If the user writes in French, ask in French. "
+                            "If in Spanish, ask in Spanish. Always match the user's language. "
+                            "Never accept vague answers - always dig deeper. "
+                            "Never ask questions about violent, sexual, illegal, or coercive aspects of a goal. "
+                            "If the dream itself seems harmful, unethical, or involves hurting/controlling others, "
                             'respond with: {"sufficient": true, "questions": [], "confidence_score": 0, '
                             '"missing_areas": [], "refusal_reason": "This goal falls outside Stepora\'s scope of positive personal development."}. '
-                            'Respond only in JSON.'
-                        )
+                            "Respond only in JSON."
+                        ),
                     },
-                    {'role': 'user', 'content': prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
                 max_tokens=2500,
@@ -2088,10 +2328,9 @@ Respond ONLY with JSON:
         Returns:
             Dict with structured user profile for plan generation
         """
-        qa_text = "\n".join([
-            f"Q: {qa['question']}\nA: {qa['answer']}"
-            for qa in qa_pairs
-        ])
+        qa_text = "\n".join(
+            [f"Q: {qa['question']}\nA: {qa['answer']}" for qa in qa_pairs]
+        )
 
         prompt = f"""Based on the following dream and calibration interview, create a structured user profile for personalized plan generation.
 
@@ -2133,10 +2372,10 @@ Create a structured JSON profile that captures everything needed for a highly pe
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': 'You are an expert at synthesizing interview data into actionable profiles. Extract maximum insight from the Q&A pairs and create a comprehensive profile. Respond only in JSON.'
+                        "role": "system",
+                        "content": "You are an expert at synthesizing interview data into actionable profiles. Extract maximum insight from the Q&A pairs and create a comprehensive profile. Respond only in JSON.",
                     },
-                    {'role': 'user', 'content': prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
                 max_tokens=1500,
@@ -2192,8 +2431,11 @@ Reference the actual goal details. Provide at least 3 key_challenges."""
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': 'You analyze goals and respond only in JSON. Always respond in the same language as the user\'s dream title and description.'},
-                {'role': 'user', 'content': prompt}
+                {
+                    "role": "system",
+                    "content": "You analyze goals and respond only in JSON. Always respond in the same language as the user's dream title and description.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
             max_tokens=500,
@@ -2218,7 +2460,14 @@ Reference the actual goal details. Provide at least 3 key_challenges."""
         Returns:
             Dict with category, confidence, tags (with relevance scores), and reasoning
         """
-        valid_categories = ['health', 'career', 'finance', 'hobbies', 'personal', 'relationships']
+        valid_categories = [
+            "health",
+            "career",
+            "finance",
+            "hobbies",
+            "personal",
+            "relationships",
+        ]
 
         prompt = f"""Analyze this dream/goal and suggest the best category and relevant tags.
 
@@ -2249,8 +2498,12 @@ RULES:
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You analyze dreams/goals and suggest categories and tags. Respond only in JSON.'},
-                {'role': 'user', 'content': prompt}
+                {
+                    "role": "system",
+                    "content": self.ETHICAL_PREAMBLE
+                    + "You analyze dreams/goals and suggest categories and tags. Respond only in JSON.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
             max_tokens=500,
@@ -2264,36 +2517,38 @@ RULES:
             raise OpenAIError(f"Auto-categorize failed: {str(e)}")
 
         # Validate and sanitize the response
-        category = result.get('category', '')
+        category = result.get("category", "")
         if category not in valid_categories:
             # Fall back to closest match or 'personal'
-            category = 'personal'
+            category = "personal"
 
-        confidence = result.get('confidence', 0.5)
+        confidence = result.get("confidence", 0.5)
         if not isinstance(confidence, (int, float)):
             confidence = 0.5
         confidence = max(0.0, min(1.0, float(confidence)))
 
-        tags = result.get('tags', [])
+        tags = result.get("tags", [])
         sanitized_tags = []
         for tag in tags[:6]:  # Max 6 tags
-            if isinstance(tag, dict) and 'name' in tag:
-                tag_name = str(tag['name']).lower().strip()[:50]
-                tag_relevance = tag.get('relevance', 0.5)
+            if isinstance(tag, dict) and "name" in tag:
+                tag_name = str(tag["name"]).lower().strip()[:50]
+                tag_relevance = tag.get("relevance", 0.5)
                 if not isinstance(tag_relevance, (int, float)):
                     tag_relevance = 0.5
                 tag_relevance = max(0.0, min(1.0, float(tag_relevance)))
                 if tag_name:
-                    sanitized_tags.append({
-                        'name': tag_name,
-                        'relevance': tag_relevance,
-                    })
+                    sanitized_tags.append(
+                        {
+                            "name": tag_name,
+                            "relevance": tag_relevance,
+                        }
+                    )
 
         return {
-            'category': category,
-            'confidence': confidence,
-            'tags': sanitized_tags,
-            'reasoning': str(result.get('reasoning', ''))[:500],
+            "category": category,
+            "confidence": confidence,
+            "tags": sanitized_tags,
+            "reasoning": str(result.get("reasoning", ""))[:500],
         }
 
     @openai_retry
@@ -2310,7 +2565,9 @@ RULES:
         """
         dreams_summary = json.dumps(dreams_data, indent=2, default=str)
 
-        system_prompt = self.ETHICAL_PREAMBLE + """You are Stepora's Smart Analysis engine. You analyze ALL of a user's dreams together to find cross-dream patterns, synergies, and risks.
+        system_prompt = (
+            self.ETHICAL_PREAMBLE
+            + """You are Stepora's Smart Analysis engine. You analyze ALL of a user's dreams together to find cross-dream patterns, synergies, and risks.
 
 Your job is to look across the user's entire dream portfolio and identify:
 1. PATTERNS — recurring themes, behaviors, or tendencies across dreams
@@ -2320,6 +2577,7 @@ Your job is to look across the user's entire dream portfolio and identify:
 
 Be specific, actionable, and reference actual dream titles. Do NOT be generic.
 Respond ONLY with valid JSON in the exact format specified."""
+        )
 
         prompt = f"""Analyze these dreams together and find cross-dream patterns:
 
@@ -2366,8 +2624,8 @@ Rules:
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': prompt}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
             ],
             temperature=0.4,
             max_tokens=2000,
@@ -2380,7 +2638,9 @@ Rules:
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Smart analysis failed: {str(e)}")
 
-    def generate_motivational_message(self, user_name, goal_title, progress_percentage, streak_days):
+    def generate_motivational_message(
+        self, user_name, goal_title, progress_percentage, streak_days
+    ):
         """Generate a short motivational message personalized for the user."""
         prompt = f"""User: {user_name}
 Goal: {goal_title}
@@ -2393,8 +2653,8 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['motivation']},
-                    {'role': 'user', 'content': prompt}
+                    {"role": "system", "content": self.SYSTEM_PROMPTS["motivation"]},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.8,
                 max_tokens=60,
@@ -2403,7 +2663,7 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
             return response.choices[0].message.content
 
-        except openai.APIError as e:
+        except openai.APIError:
             # Fallback message if API fails
             return f"Great job {user_name}! Keep going!"
 
@@ -2415,8 +2675,11 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': 'You generate quick micro-actions (30s-2min). Respond in the same language as the goal description.'},
-                    {'role': 'user', 'content': prompt}
+                    {
+                        "role": "system",
+                        "content": "You generate quick micro-actions (30s-2min). Respond in the same language as the goal description.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
                 max_tokens=50,
@@ -2425,12 +2688,14 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
             return response.choices[0].message.content
 
-        except openai.APIError as e:
+        except openai.APIError:
             # Fallback
             return "Take 2 minutes to write down 3 reasons why this goal is important to you"
 
     @openai_retry
-    def generate_motivation(self, mood, dream_progress_summary, recent_completions, current_streak):
+    def generate_motivation(
+        self, mood, dream_progress_summary, recent_completions, current_streak
+    ):
         """
         Generate a personalized motivational message based on the user's current mood
         and dream progress.
@@ -2445,13 +2710,13 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
             Dict with 'message', 'affirmation', 'suggested_action', 'mood_emoji'
         """
         mood_emojis = {
-            'excited': '\U0001f929',
-            'motivated': '\U0001f4aa',
-            'neutral': '\U0001f610',
-            'tired': '\U0001f634',
-            'frustrated': '\U0001f624',
-            'anxious': '\U0001f630',
-            'sad': '\U0001f622',
+            "excited": "\U0001f929",
+            "motivated": "\U0001f4aa",
+            "neutral": "\U0001f610",
+            "tired": "\U0001f634",
+            "frustrated": "\U0001f624",
+            "anxious": "\U0001f630",
+            "sad": "\U0001f622",
         }
 
         system_prompt = (
@@ -2481,8 +2746,8 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': prompt},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.8,
                 max_tokens=400,
@@ -2494,20 +2759,26 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
             # Ensure all expected keys are present with fallbacks
             return {
-                'message': result.get('message', 'Keep going, you are doing great!'),
-                'affirmation': result.get('affirmation', 'You have the power to achieve your dreams.'),
-                'suggested_action': result.get('suggested_action', 'Take a moment to review your next task.'),
-                'mood_emoji': result.get('mood_emoji', mood_emojis.get(mood, '\U0001f31f')),
+                "message": result.get("message", "Keep going, you are doing great!"),
+                "affirmation": result.get(
+                    "affirmation", "You have the power to achieve your dreams."
+                ),
+                "suggested_action": result.get(
+                    "suggested_action", "Take a moment to review your next task."
+                ),
+                "mood_emoji": result.get(
+                    "mood_emoji", mood_emojis.get(mood, "\U0001f31f")
+                ),
             }
 
         except (json.JSONDecodeError, openai.APIError) as e:
             logger.warning(f"generate_motivation failed: {e}")
             # Return a sensible fallback so the user still gets something
             return {
-                'message': 'Every step forward counts, no matter how small. You are making progress!',
-                'affirmation': 'You are capable of amazing things.',
-                'suggested_action': 'Take 5 minutes to review your goals and celebrate how far you have come.',
-                'mood_emoji': mood_emojis.get(mood, '\U0001f31f'),
+                "message": "Every step forward counts, no matter how small. You are making progress!",
+                "affirmation": "You are capable of amazing things.",
+                "suggested_action": "Take 5 minutes to review your goals and celebrate how far you have come.",
+                "mood_emoji": mood_emojis.get(mood, "\U0001f31f"),
             }
 
     def generate_rescue_message(self, user_name, days_inactive, last_goal_title):
@@ -2523,8 +2794,8 @@ Generate an empathetic message (2-3 sentences) that:
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['rescue']},
-                    {'role': 'user', 'content': prompt}
+                    {"role": "system", "content": self.SYSTEM_PROMPTS["rescue"]},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
                 max_tokens=150,
@@ -2536,15 +2807,24 @@ Generate an empathetic message (2-3 sentences) that:
         except openai.APIError:
             return f"Hey {user_name}, we're still here! Life is full of surprises, and that's okay. How about starting fresh with just 5 minutes today?"
 
-    def generate_skeleton(self, dream_title, dream_description, user_context, target_date=None, progress_callback=None):
+    def generate_skeleton(
+        self,
+        dream_title,
+        dream_description,
+        user_context,
+        target_date=None,
+        progress_callback=None,
+    ):
         """
         Phase 1: Generate skeleton plan (milestones + goals, NO tasks).
         Used for dreams > 4 months. Returns the full roadmap without task details.
         """
-        calibration_section = self._build_calibration_section(user_context, dream_description)
+        calibration_section = self._build_calibration_section(
+            user_context, dream_description
+        )
 
-        category = user_context.get('category', '')
-        if not category or category == 'other':
+        category = user_context.get("category", "")
+        if not category or category == "other":
             category = detect_category_from_text(dream_title, dream_description)
         processor = get_processor(category)
 
@@ -2552,18 +2832,29 @@ Generate an empathetic message (2-3 sentences) that:
         if domain_rules:
             calibration_section = domain_rules + "\n" + calibration_section
 
-        lang = user_context.get('language', '')
+        lang = user_context.get("language", "")
         if lang:
-            lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'pt': 'Portuguese', 'it': 'Italian'}
+            lang_names = {
+                "fr": "French",
+                "en": "English",
+                "es": "Spanish",
+                "de": "German",
+                "pt": "Portuguese",
+                "it": "Italian",
+            }
             lang_name = lang_names.get(lang, lang)
-            calibration_section = f"\nLANGUAGE OVERRIDE (MANDATORY): ALL output MUST be in {lang_name}.\n" + calibration_section
+            calibration_section = (
+                f"\nLANGUAGE OVERRIDE (MANDATORY): ALL output MUST be in {lang_name}.\n"
+                + calibration_section
+            )
 
         total_days, total_months = self._parse_duration(target_date)
         if not total_months:
             total_months = 12
             total_days = 365
 
-        from datetime import date, timedelta
+        from datetime import date
+
         today = date.today()
 
         if progress_callback:
@@ -2631,8 +2922,8 @@ Respond ONLY with JSON:
         response = _plan_client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
-                {'role': 'user', 'content': prompt}
+                {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                {"role": "user", "content": prompt},
             ],
             temperature=0.5,
             max_tokens=16384,
@@ -2641,7 +2932,7 @@ Respond ONLY with JSON:
         )
 
         finish_reason = response.choices[0].finish_reason
-        if finish_reason == 'length':
+        if finish_reason == "length":
             logger.warning("generate_skeleton: response truncated")
             raise OpenAIError("Skeleton generation output was truncated")
 
@@ -2651,52 +2942,84 @@ Respond ONLY with JSON:
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Failed to parse skeleton JSON: {e}")
 
-    def generate_tasks_for_months(self, dream_title, dream_description, skeleton, user_context,
-                                   month_start, month_end, target_date=None, progress_callback=None):
+    def generate_tasks_for_months(
+        self,
+        dream_title,
+        dream_description,
+        skeleton,
+        user_context,
+        month_start,
+        month_end,
+        target_date=None,
+        progress_callback=None,
+    ):
         """
         Phase 2: Generate detailed tasks for specific months of the skeleton.
         Returns list of task patches: [{milestone_order, goal_order, tasks: [...]}]
         """
-        calibration_section = self._build_calibration_section(user_context, dream_description)
+        calibration_section = self._build_calibration_section(
+            user_context, dream_description
+        )
 
-        lang = user_context.get('language', '')
+        lang = user_context.get("language", "")
         if lang:
-            lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'pt': 'Portuguese', 'it': 'Italian'}
+            lang_names = {
+                "fr": "French",
+                "en": "English",
+                "es": "Spanish",
+                "de": "German",
+                "pt": "Portuguese",
+                "it": "Italian",
+            }
             lang_name = lang_names.get(lang, lang)
-            calibration_section = f"\nLANGUAGE OVERRIDE: ALL output MUST be in {lang_name}.\n" + calibration_section
+            calibration_section = (
+                f"\nLANGUAGE OVERRIDE: ALL output MUST be in {lang_name}.\n"
+                + calibration_section
+            )
 
         total_days, total_months = self._parse_duration(target_date)
         from datetime import date, timedelta
+
         today = date.today()
 
         relevant_milestones = [
-            ms for ms in skeleton.get('milestones', [])
-            if month_start <= ms.get('order', 0) <= month_end
+            ms
+            for ms in skeleton.get("milestones", [])
+            if month_start <= ms.get("order", 0) <= month_end
         ]
 
         if not relevant_milestones:
-            raise OpenAIError(f"No milestones found for months {month_start}-{month_end}")
+            raise OpenAIError(
+                f"No milestones found for months {month_start}-{month_end}"
+            )
 
-        persona = user_context.get('persona', {})
-        available_hours = persona.get('available_hours_per_week', 0)
-        calibration_hours = (user_context.get('calibration_profile') or {}).get('available_hours_per_week', '')
+        persona = user_context.get("persona", {})
+        available_hours = persona.get("available_hours_per_week", 0)
+        calibration_hours = (user_context.get("calibration_profile") or {}).get(
+            "available_hours_per_week", ""
+        )
         if calibration_hours and str(calibration_hours).strip():
             try:
-                available_hours = max(available_hours or 0, int(str(calibration_hours).strip().split('-')[0].split()[0]))
+                available_hours = max(
+                    available_hours or 0,
+                    int(str(calibration_hours).strip().split("-")[0].split()[0]),
+                )
             except (ValueError, IndexError):
                 pass
-        target_weekly_hours = max(3, int(available_hours * 0.6)) if available_hours else 5
+        target_weekly_hours = (
+            max(3, int(available_hours * 0.6)) if available_hours else 5
+        )
 
         all_task_patches = []
 
         for ms in relevant_milestones:
-            ms_order = ms.get('order', 1)
+            ms_order = ms.get("order", 1)
             ms_day_start = (ms_order - 1) * 30 + 1
             ms_day_end = min(ms_order * 30, total_days or ms_order * 30)
             ms_date_start = (today + timedelta(days=ms_day_start - 1)).isoformat()
             ms_date_end = (today + timedelta(days=ms_day_end)).isoformat()
 
-            goals_json = json.dumps(ms.get('goals', []), ensure_ascii=False, indent=2)
+            goals_json = json.dumps(ms.get("goals", []), ensure_ascii=False, indent=2)
 
             if progress_callback:
                 progress_callback(f"Generating tasks for month {ms_order}...")
@@ -2755,12 +3078,14 @@ Respond ONLY with JSON:
   ]
 }}"""
 
-            logger.info(f"generate_tasks_for_months: generating tasks for month {ms_order}")
+            logger.info(
+                f"generate_tasks_for_months: generating tasks for month {ms_order}"
+            )
             response = _plan_client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.SYSTEM_PROMPTS['planning']},
-                    {'role': 'user', 'content': prompt}
+                    {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
                 max_tokens=16384,
@@ -2769,16 +3094,18 @@ Respond ONLY with JSON:
             )
 
             finish_reason = response.choices[0].finish_reason
-            if finish_reason == 'length':
+            if finish_reason == "length":
                 logger.warning(f"generate_tasks_for_months: month {ms_order} truncated")
 
             content = response.choices[0].message.content
             try:
                 chunk_data = json.loads(content)
-                patches = chunk_data.get('task_patches', [])
+                patches = chunk_data.get("task_patches", [])
                 all_task_patches.extend(patches)
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse task generation JSON for month {ms_order}: {e}")
+                logger.error(
+                    f"Failed to parse task generation JSON for month {ms_order}: {e}"
+                )
 
         return all_task_patches
 
@@ -2795,15 +3122,17 @@ Respond ONLY with JSON:
 
         executor = CheckInToolExecutor(dream, user)
 
-        lang = dream.language or 'en'
-        lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German'}
+        lang = dream.language or "en"
+        lang_names = {"fr": "French", "en": "English", "es": "Spanish", "de": "German"}
         lang_name = lang_names.get(lang, lang)
 
         dream_context = build_dream_context(dream, user)
 
         messages = [
-            {'role': 'system', 'content': self.SYSTEM_PROMPTS['adaptive_checkin']},
-            {'role': 'user', 'content': f"""Perform a bi-weekly check-in for this dream:
+            {"role": "system", "content": self.SYSTEM_PROMPTS["adaptive_checkin"]},
+            {
+                "role": "user",
+                "content": f"""Perform a bi-weekly check-in for this dream:
 
 {dream_context}
 
@@ -2815,16 +3144,20 @@ TASKS GENERATED THROUGH MONTH: {dream.tasks_generated_through_month}
 CHECK-IN COUNT: {dream.checkin_count}
 CURRENT CHECK-IN INTERVAL: {dream.checkin_interval_days} days
 
-Start by calling get_dream_progress to assess the current state, then take appropriate actions."""}
+Start by calling get_dream_progress to assess the current state, then take appropriate actions.""",
+            },
         ]
 
         actions_taken = []
 
         for iteration in range(max_iterations):
             try:
-                tool_choice = 'auto'
+                tool_choice = "auto"
                 if iteration == max_iterations - 1:
-                    tool_choice = {'type': 'function', 'function': {'name': 'finish_check_in'}}
+                    tool_choice = {
+                        "type": "function",
+                        "function": {"name": "finish_check_in"},
+                    }
 
                 response = _plan_client.chat.completions.create(
                     model=self.model,
@@ -2847,12 +3180,12 @@ Start by calling get_dream_progress to assess the current state, then take appro
             if not assistant_msg.tool_calls:
                 logger.warning("Check-in agent returned no tool calls, forcing finish")
                 return {
-                    'coaching_message': assistant_msg.content or '',
-                    'adjustment_summary': '',
-                    'actions_taken': actions_taken,
-                    'months_generated_through': dream.tasks_generated_through_month,
-                    'pace_status': 'on_track',
-                    'next_checkin_days': dream.checkin_interval_days or 14,
+                    "coaching_message": assistant_msg.content or "",
+                    "adjustment_summary": "",
+                    "actions_taken": actions_taken,
+                    "months_generated_through": dream.tasks_generated_through_month,
+                    "pace_status": "on_track",
+                    "next_checkin_days": dream.checkin_interval_days or 14,
                 }
 
             for tool_call in assistant_msg.tool_calls:
@@ -2863,37 +3196,44 @@ Start by calling get_dream_progress to assess the current state, then take appro
                     fn_args = {}
 
                 logger.info(f"Check-in tool call: {fn_name}({list(fn_args.keys())})")
-                actions_taken.append({'tool': fn_name, 'args': fn_args})
+                actions_taken.append({"tool": fn_name, "args": fn_args})
 
                 result, is_finish = executor.dispatch(fn_name, fn_args)
 
-                messages.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call.id,
-                    'content': json.dumps(result, default=str),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
                 if is_finish:
                     return {
-                        'coaching_message': result.get('coaching_message', ''),
-                        'adjustment_summary': result.get('adjustment_summary', ''),
-                        'actions_taken': actions_taken,
-                        'months_generated_through': max(
+                        "coaching_message": result.get("coaching_message", ""),
+                        "adjustment_summary": result.get("adjustment_summary", ""),
+                        "actions_taken": actions_taken,
+                        "months_generated_through": max(
                             dream.tasks_generated_through_month,
-                            result.get('months_now_covered_through', dream.tasks_generated_through_month),
+                            result.get(
+                                "months_now_covered_through",
+                                dream.tasks_generated_through_month,
+                            ),
                         ),
-                        'pace_status': result.get('pace_status', 'on_track'),
-                        'next_checkin_days': result.get('next_checkin_days', 14),
+                        "pace_status": result.get("pace_status", "on_track"),
+                        "next_checkin_days": result.get("next_checkin_days", 14),
                     }
 
-        logger.warning(f"Check-in agent exhausted {max_iterations} iterations without finishing")
+        logger.warning(
+            f"Check-in agent exhausted {max_iterations} iterations without finishing"
+        )
         return {
-            'coaching_message': 'Check-in completed.',
-            'adjustment_summary': 'Max iterations reached.',
-            'actions_taken': actions_taken,
-            'months_generated_through': dream.tasks_generated_through_month,
-            'pace_status': 'on_track',
-            'next_checkin_days': dream.checkin_interval_days or 14,
+            "coaching_message": "Check-in completed.",
+            "adjustment_summary": "Max iterations reached.",
+            "actions_taken": actions_taken,
+            "months_generated_through": dream.tasks_generated_through_month,
+            "pace_status": "on_track",
+            "next_checkin_days": dream.checkin_interval_days or 14,
         }
 
     def generate_checkin_questionnaire(self, dream, user, pace_analysis):
@@ -2909,15 +3249,20 @@ Start by calling get_dream_progress to assess the current state, then take appro
 
         executor = CheckInToolExecutor(dream, user)
 
-        lang = dream.language or 'en'
-        lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German'}
+        lang = dream.language or "en"
+        lang_names = {"fr": "French", "en": "English", "es": "Spanish", "de": "German"}
         lang_name = lang_names.get(lang, lang)
 
         dream_context = build_dream_context(dream, user)
 
         messages = [
-            {'role': 'system', 'content': self.SYSTEM_PROMPTS['checkin_questionnaire_generation']},
-            {'role': 'user', 'content': f"""Generate a check-in questionnaire for this dream:
+            {
+                "role": "system",
+                "content": self.SYSTEM_PROMPTS["checkin_questionnaire_generation"],
+            },
+            {
+                "role": "user",
+                "content": f"""Generate a check-in questionnaire for this dream:
 
 {dream_context}
 
@@ -2930,15 +3275,19 @@ CHECK-IN COUNT: {dream.checkin_count}
 PACE ANALYSIS:
 {json.dumps(pace_analysis, default=str, ensure_ascii=False)}
 
-Start by calling get_dream_progress to understand the current state, then design the questionnaire."""}
+Start by calling get_dream_progress to understand the current state, then design the questionnaire.""",
+            },
         ]
 
         max_iterations = 5
         for iteration in range(max_iterations):
             try:
-                tool_choice = 'auto'
+                tool_choice = "auto"
                 if iteration == max_iterations - 1:
-                    tool_choice = {'type': 'function', 'function': {'name': 'finish_questionnaire_generation'}}
+                    tool_choice = {
+                        "type": "function",
+                        "function": {"name": "finish_questionnaire_generation"},
+                    }
 
                 response = _plan_client.chat.completions.create(
                     model=self.model,
@@ -2950,7 +3299,9 @@ Start by calling get_dream_progress to understand the current state, then design
                     timeout=60,
                 )
             except Exception as e:
-                logger.error(f"Questionnaire generation API error at iteration {iteration}: {e}")
+                logger.error(
+                    f"Questionnaire generation API error at iteration {iteration}: {e}"
+                )
                 raise OpenAIError(f"Questionnaire generation failed: {e}")
 
             choice = response.choices[0]
@@ -2971,18 +3322,22 @@ Start by calling get_dream_progress to understand the current state, then design
                 logger.info(f"Questionnaire tool call: {fn_name}")
                 result, is_finish = executor.dispatch(fn_name, fn_args)
 
-                messages.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call.id,
-                    'content': json.dumps(result, default=str),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
                 if is_finish:
                     return result
 
         raise OpenAIError("Questionnaire generation did not produce results")
 
-    def run_interactive_checkin_agent(self, dream, user, questionnaire, user_responses, max_iterations=16):
+    def run_interactive_checkin_agent(
+        self, dream, user, questionnaire, user_responses, max_iterations=16
+    ):
         """
         Run the adaptation phase of an interactive check-in.
         Takes user's questionnaire responses and adapts the plan accordingly.
@@ -2996,8 +3351,8 @@ Start by calling get_dream_progress to understand the current state, then design
 
         executor = CheckInToolExecutor(dream, user)
 
-        lang = dream.language or 'en'
-        lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish', 'de': 'German'}
+        lang = dream.language or "en"
+        lang_names = {"fr": "French", "en": "English", "es": "Spanish", "de": "German"}
         lang_name = lang_names.get(lang, lang)
 
         dream_context = build_dream_context(dream, user)
@@ -3005,15 +3360,24 @@ Start by calling get_dream_progress to understand the current state, then design
         # Format user responses for the prompt
         responses_text = "No responses provided (autonomous mode)"
         if user_responses:
-            responses_text = json.dumps(user_responses, default=str, ensure_ascii=False, indent=2)
+            responses_text = json.dumps(
+                user_responses, default=str, ensure_ascii=False, indent=2
+            )
 
         questionnaire_text = "No questionnaire"
         if questionnaire:
-            questionnaire_text = json.dumps(questionnaire, default=str, ensure_ascii=False, indent=2)
+            questionnaire_text = json.dumps(
+                questionnaire, default=str, ensure_ascii=False, indent=2
+            )
 
         messages = [
-            {'role': 'system', 'content': self.SYSTEM_PROMPTS['interactive_checkin_adaptation']},
-            {'role': 'user', 'content': f"""Perform an interactive check-in adaptation for this dream:
+            {
+                "role": "system",
+                "content": self.SYSTEM_PROMPTS["interactive_checkin_adaptation"],
+            },
+            {
+                "role": "user",
+                "content": f"""Perform an interactive check-in adaptation for this dream:
 
 {dream_context}
 
@@ -3033,16 +3397,20 @@ USER RESPONSES:
 
 IMPORTANT: Generate enough tasks to cover at least {dream.checkin_interval_days + 7} days from today. The user must NEVER run out of tasks before the next check-in.
 
-Start by calling get_dream_progress to confirm current state, then adapt the plan based on the user's responses above."""}
+Start by calling get_dream_progress to confirm current state, then adapt the plan based on the user's responses above.""",
+            },
         ]
 
         actions_taken = []
 
         for iteration in range(max_iterations):
             try:
-                tool_choice = 'auto'
+                tool_choice = "auto"
                 if iteration == max_iterations - 1:
-                    tool_choice = {'type': 'function', 'function': {'name': 'finish_check_in'}}
+                    tool_choice = {
+                        "type": "function",
+                        "function": {"name": "finish_check_in"},
+                    }
 
                 response = _plan_client.chat.completions.create(
                     model=self.model,
@@ -3054,7 +3422,9 @@ Start by calling get_dream_progress to confirm current state, then adapt the pla
                     timeout=120,
                 )
             except Exception as e:
-                logger.error(f"Interactive check-in API error at iteration {iteration}: {e}")
+                logger.error(
+                    f"Interactive check-in API error at iteration {iteration}: {e}"
+                )
                 raise OpenAIError(f"Interactive check-in API call failed: {e}")
 
             choice = response.choices[0]
@@ -3062,14 +3432,16 @@ Start by calling get_dream_progress to confirm current state, then adapt the pla
             messages.append(assistant_msg.model_dump(exclude_none=True))
 
             if not assistant_msg.tool_calls:
-                logger.warning("Interactive check-in agent returned no tool calls, forcing finish")
+                logger.warning(
+                    "Interactive check-in agent returned no tool calls, forcing finish"
+                )
                 return {
-                    'coaching_message': assistant_msg.content or '',
-                    'adjustment_summary': '',
-                    'actions_taken': actions_taken,
-                    'months_generated_through': dream.tasks_generated_through_month,
-                    'pace_status': 'on_track',
-                    'next_checkin_days': 14,
+                    "coaching_message": assistant_msg.content or "",
+                    "adjustment_summary": "",
+                    "actions_taken": actions_taken,
+                    "months_generated_through": dream.tasks_generated_through_month,
+                    "pace_status": "on_track",
+                    "next_checkin_days": 14,
                 }
 
             for tool_call in assistant_msg.tool_calls:
@@ -3079,44 +3451,53 @@ Start by calling get_dream_progress to confirm current state, then adapt the pla
                 except json.JSONDecodeError:
                     fn_args = {}
 
-                logger.info(f"Interactive check-in tool call: {fn_name}({list(fn_args.keys())})")
-                actions_taken.append({'tool': fn_name, 'args': fn_args})
+                logger.info(
+                    f"Interactive check-in tool call: {fn_name}({list(fn_args.keys())})"
+                )
+                actions_taken.append({"tool": fn_name, "args": fn_args})
 
                 result, is_finish = executor.dispatch(fn_name, fn_args)
 
-                messages.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call.id,
-                    'content': json.dumps(result, default=str),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
                 if is_finish:
                     return {
-                        'coaching_message': result.get('coaching_message', ''),
-                        'adjustment_summary': result.get('adjustment_summary', ''),
-                        'actions_taken': actions_taken,
-                        'months_generated_through': max(
+                        "coaching_message": result.get("coaching_message", ""),
+                        "adjustment_summary": result.get("adjustment_summary", ""),
+                        "actions_taken": actions_taken,
+                        "months_generated_through": max(
                             dream.tasks_generated_through_month,
-                            result.get('months_now_covered_through', dream.tasks_generated_through_month),
+                            result.get(
+                                "months_now_covered_through",
+                                dream.tasks_generated_through_month,
+                            ),
                         ),
-                        'pace_status': result.get('pace_status', 'on_track'),
-                        'next_checkin_days': result.get('next_checkin_days', 14),
+                        "pace_status": result.get("pace_status", "on_track"),
+                        "next_checkin_days": result.get("next_checkin_days", 14),
                     }
 
-        logger.warning(f"Interactive check-in agent exhausted {max_iterations} iterations")
+        logger.warning(
+            f"Interactive check-in agent exhausted {max_iterations} iterations"
+        )
         return {
-            'coaching_message': 'Check-in completed.',
-            'adjustment_summary': 'Max iterations reached.',
-            'actions_taken': actions_taken,
-            'months_generated_through': dream.tasks_generated_through_month,
-            'pace_status': 'on_track',
-            'next_checkin_days': 14,
+            "coaching_message": "Check-in completed.",
+            "adjustment_summary": "Max iterations reached.",
+            "actions_taken": actions_taken,
+            "months_generated_through": dream.tasks_generated_through_month,
+            "pace_status": "on_track",
+            "next_checkin_days": 14,
         }
 
     def generate_checkin_opening_message(self, dream, progress_data):
         """Generate a short opening message for a check-in notification."""
-        lang = dream.language or 'en'
-        lang_names = {'fr': 'French', 'en': 'English', 'es': 'Spanish'}
+        lang = dream.language or "en"
+        lang_names = {"fr": "French", "en": "English", "es": "Spanish"}
         lang_name = lang_names.get(lang, lang)
 
         prompt = f"""Generate a short (2-3 sentences) check-in opening message for a user working on:
@@ -3132,8 +3513,11 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': 'You are Stepora. Generate a short, warm check-in message. Respond with just the message text.'},
-                    {'role': 'user', 'content': prompt}
+                    {
+                        "role": "system",
+                        "content": "You are Stepora. Generate a short, warm check-in message. Respond with just the message text.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
                 max_tokens=200,
@@ -3155,17 +3539,17 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             Dict with 'text' (transcription) and 'language'.
         """
         try:
-            with open(audio_file_path, 'rb') as audio_file:
+            with open(audio_file_path, "rb") as audio_file:
                 response = _client.audio.transcriptions.create(
-                    model='whisper-1',
+                    model="whisper-1",
                     file=audio_file,
-                    response_format='verbose_json',
+                    response_format="verbose_json",
                     timeout=self.timeout,
                 )
 
             return {
-                'text': response.text if hasattr(response, 'text') else '',
-                'language': response.language if hasattr(response, 'language') else '',
+                "text": response.text if hasattr(response, "text") else "",
+                "language": response.language if hasattr(response, "language") else "",
             }
 
         except openai.APIError as e:
@@ -3174,7 +3558,7 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             raise OpenAIError(f"Audio file not found: {audio_file_path}")
 
     @openai_retry
-    def analyze_image(self, image_url, user_prompt=''):
+    def analyze_image(self, image_url, user_prompt=""):
         """
         Analyze an image using GPT-4 Vision.
 
@@ -3188,28 +3572,31 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
         try:
             user_content = [
                 {
-                    'type': 'image_url',
-                    'image_url': {'url': image_url},
+                    "type": "image_url",
+                    "image_url": {"url": image_url},
                 },
             ]
             if user_prompt:
-                user_content.insert(0, {'type': 'text', 'text': user_prompt})
+                user_content.insert(0, {"type": "text", "text": user_prompt})
             else:
-                user_content.insert(0, {
-                    'type': 'text',
-                    'text': 'Describe this image and how it relates to the user\'s goals or dreams. Provide motivational insights if relevant.',
-                })
+                user_content.insert(
+                    0,
+                    {
+                        "type": "text",
+                        "text": "Describe this image and how it relates to the user's goals or dreams. Provide motivational insights if relevant.",
+                    },
+                )
 
             response = _client.chat.completions.create(
-                model='gpt-4-vision-preview',
+                model="gpt-4-vision-preview",
                 messages=[
                     {
-                        'role': 'system',
-                        'content': 'You are Stepora, a helpful assistant. Analyze images the user shares and relate them to their personal goals and dreams.',
+                        "role": "system",
+                        "content": "You are Stepora, a helpful assistant. Analyze images the user shares and relate them to their personal goals and dreams.",
                     },
                     {
-                        'role': 'user',
-                        'content': user_content,
+                        "role": "user",
+                        "content": user_content,
                     },
                 ],
                 max_tokens=500,
@@ -3217,15 +3604,17 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             )
 
             return {
-                'content': response.choices[0].message.content,
-                'tokens_used': response.usage.total_tokens,
+                "content": response.choices[0].message.content,
+                "tokens_used": response.usage.total_tokens,
             }
 
         except openai.APIError as e:
             raise OpenAIError(f"Image analysis failed: {str(e)}")
 
     @openai_retry
-    def analyze_progress_image(self, image_url, dream_title, dream_description, previous_analyses=None):
+    def analyze_progress_image(
+        self, image_url, dream_title, dream_description, previous_analyses=None
+    ):
         """
         Analyze a progress photo in the context of a user's dream using GPT-4 Vision.
 
@@ -3242,7 +3631,9 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             previous_context = ""
             if previous_analyses and len(previous_analyses) > 0:
                 recent = previous_analyses[-3:]  # Last 3 analyses for context
-                previous_context = "\n\nPrevious progress analyses (most recent last):\n"
+                previous_context = (
+                    "\n\nPrevious progress analyses (most recent last):\n"
+                )
                 for i, analysis in enumerate(recent, 1):
                     previous_context += f"{i}. {analysis}\n"
 
@@ -3264,21 +3655,21 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
 
             user_prompt = (
                 f'Dream: "{dream_title}"\n'
-                f'Description: {dream_description}\n'
-                f'{previous_context}\n'
-                'Analyze this progress photo and provide your assessment.'
+                f"Description: {dream_description}\n"
+                f"{previous_context}\n"
+                "Analyze this progress photo and provide your assessment."
             )
 
             user_content = [
-                {'type': 'text', 'text': user_prompt},
-                {'type': 'image_url', 'image_url': {'url': image_url}},
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
             ]
 
             response = _client.chat.completions.create(
-                model='gpt-4o',
+                model="gpt-4o",
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_content},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
                 ],
                 max_tokens=1000,
                 temperature=0.5,
@@ -3290,28 +3681,28 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
 
             # Normalize the response structure
             return {
-                'analysis': result.get('analysis', ''),
-                'progress_indicators': result.get('progress_indicators', []),
-                'comparison_to_previous': result.get('comparison_to_previous'),
-                'encouragement': result.get('encouragement', ''),
-                'tokens_used': response.usage.total_tokens,
+                "analysis": result.get("analysis", ""),
+                "progress_indicators": result.get("progress_indicators", []),
+                "comparison_to_previous": result.get("comparison_to_previous"),
+                "encouragement": result.get("encouragement", ""),
+                "tokens_used": response.usage.total_tokens,
             }
 
         except json.JSONDecodeError:
             # If JSON parsing fails, return raw content
-            raw = response.choices[0].message.content if response else ''
+            raw = response.choices[0].message.content if response else ""
             return {
-                'analysis': raw,
-                'progress_indicators': [],
-                'comparison_to_previous': None,
-                'encouragement': '',
-                'tokens_used': 0,
+                "analysis": raw,
+                "progress_indicators": [],
+                "comparison_to_previous": None,
+                "encouragement": "",
+                "tokens_used": 0,
             }
         except openai.APIError as e:
             raise OpenAIError(f"Progress image analysis failed: {str(e)}")
 
     @openai_retry
-    def predict_obstacles(self, dream_title, dream_description):
+    def predict_obstacles_simple(self, dream_title, dream_description):
         """
         Predict potential obstacles for a dream and suggest solutions.
 
@@ -3337,8 +3728,12 @@ Respond ONLY with a JSON array:
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You predict realistic obstacles for personal goals and suggest solutions. Respond only in JSON.'},
-                    {'role': 'user', 'content': prompt}
+                    {
+                        "role": "system",
+                        "content": self.ETHICAL_PREAMBLE
+                        + "You predict realistic obstacles for personal goals and suggest solutions. Respond only in JSON.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
                 max_tokens=1500,
@@ -3349,7 +3744,7 @@ Respond ONLY with a JSON array:
             result = json.loads(response.choices[0].message.content)
             # Handle both {"obstacles": [...]} and bare [...] formats
             if isinstance(result, dict):
-                return result.get('obstacles', result.get('potential_obstacles', []))
+                return result.get("obstacles", result.get("potential_obstacles", []))
             return result if isinstance(result, list) else []
 
         except (json.JSONDecodeError, openai.APIError) as e:
@@ -3389,8 +3784,12 @@ Respond ONLY with JSON:
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': self.ETHICAL_PREAMBLE + 'You are a productivity coach analyzing task completion patterns. Be empathetic and constructive. Respond only in JSON.'},
-                    {'role': 'user', 'content': prompt}
+                    {
+                        "role": "system",
+                        "content": self.ETHICAL_PREAMBLE
+                        + "You are a productivity coach analyzing task completion patterns. Be empathetic and constructive. Respond only in JSON.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
                 max_tokens=1000,
@@ -3403,7 +3802,14 @@ Respond ONLY with JSON:
         except (json.JSONDecodeError, openai.APIError) as e:
             raise OpenAIError(f"Task adjustment generation failed: {str(e)}")
 
-    def generate_vision_image(self, dream_title, dream_description, category=None, milestones=None, calibration_profile=None):
+    def generate_vision_image(
+        self,
+        dream_title,
+        dream_description,
+        category=None,
+        milestones=None,
+        calibration_profile=None,
+    ):
         """
         Generate a vision board image using DALL-E 3.
 
@@ -3419,7 +3825,9 @@ Respond ONLY with JSON:
         """
         # Build a rich, contextual scene description
         scene_parts = []
-        scene_parts.append(f"A person who has successfully achieved their dream: {dream_title}")
+        scene_parts.append(
+            f"A person who has successfully achieved their dream: {dream_title}"
+        )
 
         if dream_description:
             # Keep description concise for the prompt (DALL-E has a 4000 char limit)
@@ -3428,29 +3836,35 @@ Respond ONLY with JSON:
 
         if category:
             category_scenes = {
-                'career': 'professional setting, office or workplace achievement',
-                'health': 'healthy lifestyle, fitness achievement, radiant wellbeing',
-                'finance': 'financial success, prosperity, wealth achievement',
-                'hobbies': 'creative pursuit, passionate hobby mastered',
-                'personal': 'personal growth, self-improvement, confident individual',
-                'relationships': 'meaningful connections, social harmony, loved ones',
-                'education': 'academic achievement, graduation, knowledge mastery',
-                'travel': 'travel destination, adventure, exploration achievement',
+                "career": "professional setting, office or workplace achievement",
+                "health": "healthy lifestyle, fitness achievement, radiant wellbeing",
+                "finance": "financial success, prosperity, wealth achievement",
+                "hobbies": "creative pursuit, passionate hobby mastered",
+                "personal": "personal growth, self-improvement, confident individual",
+                "relationships": "meaningful connections, social harmony, loved ones",
+                "education": "academic achievement, graduation, knowledge mastery",
+                "travel": "travel destination, adventure, exploration achievement",
             }
             if category.lower() in category_scenes:
                 scene_parts.append(f"Setting: {category_scenes[category.lower()]}")
 
         if milestones and len(milestones) > 0:
-            final_milestone = milestones[-1] if isinstance(milestones[-1], str) else str(milestones[-1])
+            final_milestone = (
+                milestones[-1]
+                if isinstance(milestones[-1], str)
+                else str(milestones[-1])
+            )
             scene_parts.append(f"The final achievement looks like: {final_milestone}")
 
         if calibration_profile:
-            motivation = calibration_profile.get('primary_motivation', '')
-            success_def = calibration_profile.get('success_definition', '')
+            motivation = calibration_profile.get("primary_motivation", "")
+            success_def = calibration_profile.get("success_definition", "")
             if motivation:
                 scene_parts.append(f"Their motivation: {motivation[:150]}")
             if success_def:
-                scene_parts.append(f"What success looks like to them: {success_def[:150]}")
+                scene_parts.append(
+                    f"What success looks like to them: {success_def[:150]}"
+                )
 
         scene = ". ".join(scene_parts)
 
@@ -3530,15 +3944,15 @@ Respond ONLY with JSON in this exact format:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'You are a productivity coach. Analyze these tasks and suggest '
-                            'the optimal order based on energy levels, deadlines, task '
-                            'dependencies, and the Eisenhower matrix. Respond only in JSON.'
+                            + "You are a productivity coach. Analyze these tasks and suggest "
+                            "the optimal order based on energy levels, deadlines, task "
+                            "dependencies, and the Eisenhower matrix. Respond only in JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
                 max_tokens=2000,
@@ -3549,12 +3963,12 @@ Respond ONLY with JSON in this exact format:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure top-level keys always present
-            if 'prioritized_tasks' not in result:
-                result['prioritized_tasks'] = []
-            if 'focus_task' not in result:
-                result['focus_task'] = None
-            if 'quick_wins' not in result:
-                result['quick_wins'] = []
+            if "prioritized_tasks" not in result:
+                result["prioritized_tasks"] = []
+            if "focus_task" not in result:
+                result["focus_task"] = None
+            if "quick_wins" not in result:
+                result["quick_wins"] = []
 
             return result
 
@@ -3563,7 +3977,9 @@ Respond ONLY with JSON in this exact format:
         except openai.APIError as e:
             raise OpenAIError(f"Task prioritization failed: {str(e)}")
 
-    GOAL_REFINE_SYSTEM_PROMPT = ETHICAL_PREAMBLE + """You are a goal-setting coach using the SMART framework. Ask one clarifying question at a time to help the user refine their goal. After enough information, propose a refined SMART goal with measurable milestones.
+    GOAL_REFINE_SYSTEM_PROMPT = (
+        ETHICAL_PREAMBLE
+        + """You are a goal-setting coach using the SMART framework. Ask one clarifying question at a time to help the user refine their goal. After enough information, propose a refined SMART goal with measurable milestones.
 
 SMART framework:
 - Specific: Clearly defined, not vague
@@ -3609,9 +4025,12 @@ RULES:
 - Suggest 3-5 milestones when proposing the refined goal
 - Make milestones progressive and achievable
 - ALWAYS respond with valid JSON — no text outside the JSON object"""
+    )
 
     @openai_retry
-    def refine_goal(self, goal_title, goal_description, dream_context, conversation_history):
+    def refine_goal(
+        self, goal_title, goal_description, dream_context, conversation_history
+    ):
         """
         Multi-turn conversational goal refinement using the SMART framework.
 
@@ -3629,29 +4048,33 @@ RULES:
         if goal_description:
             context_parts.append(f"Description: {goal_description}")
         if dream_context:
-            context_parts.append(f"\nDREAM CONTEXT:")
-            if dream_context.get('title'):
+            context_parts.append("\nDREAM CONTEXT:")
+            if dream_context.get("title"):
                 context_parts.append(f"Dream: {dream_context['title']}")
-            if dream_context.get('description'):
-                context_parts.append(f"Dream description: {dream_context['description'][:300]}")
-            if dream_context.get('category'):
+            if dream_context.get("description"):
+                context_parts.append(
+                    f"Dream description: {dream_context['description'][:300]}"
+                )
+            if dream_context.get("category"):
                 context_parts.append(f"Category: {dream_context['category']}")
 
         context_message = "\n".join(context_parts)
 
         # Build full messages list
         messages = [
-            {'role': 'system', 'content': self.GOAL_REFINE_SYSTEM_PROMPT},
-            {'role': 'user', 'content': context_message},
+            {"role": "system", "content": self.GOAL_REFINE_SYSTEM_PROMPT},
+            {"role": "user", "content": context_message},
         ]
 
         # Append conversation history (multi-turn)
         if conversation_history:
             for msg in conversation_history:
-                messages.append({
-                    'role': msg.get('role', 'user'),
-                    'content': msg.get('content', ''),
-                })
+                messages.append(
+                    {
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", ""),
+                    }
+                )
 
         try:
             response = _client.chat.completions.create(
@@ -3666,16 +4089,19 @@ RULES:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise keys
-            if 'message' not in result:
-                result['message'] = result.get('response', 'I can help you refine this goal. Could you tell me more about what you want to achieve?')
-            if 'refined_goal' not in result:
-                result['refined_goal'] = None
-            if 'milestones' not in result:
-                result['milestones'] = None
-            if 'is_complete' not in result:
-                result['is_complete'] = False
+            if "message" not in result:
+                result["message"] = result.get(
+                    "response",
+                    "I can help you refine this goal. Could you tell me more about what you want to achieve?",
+                )
+            if "refined_goal" not in result:
+                result["refined_goal"] = None
+            if "milestones" not in result:
+                result["milestones"] = None
+            if "is_complete" not in result:
+                result["is_complete"] = False
 
-            result['tokens_used'] = response.usage.total_tokens
+            result["tokens_used"] = response.usage.total_tokens
 
             return result
 
@@ -3685,7 +4111,9 @@ RULES:
             raise OpenAIError(f"Goal refinement failed: {str(e)}")
 
     @openai_retry
-    def predict_obstacles(self, dream_info, goals_data, tasks_data, existing_obstacles, past_patterns):
+    def predict_obstacles(
+        self, dream_info, goals_data, tasks_data, existing_obstacles, past_patterns
+    ):
         """
         Predict potential obstacles for a dream and suggest preventive measures.
 
@@ -3760,8 +4188,8 @@ Rules:
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': prompt},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
             ],
             temperature=0.4,
             max_tokens=2000,
@@ -3773,8 +4201,8 @@ Rules:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure predictions key exists
-            if 'predictions' not in result:
-                result['predictions'] = []
+            if "predictions" not in result:
+                result["predictions"] = []
 
             return result
 
@@ -3852,16 +4280,16 @@ Rules:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'You are Stepora\'s weekly report analyst. '
-                            'Generate a weekly progress report with trends, achievements, '
-                            'areas for improvement, and specific recommendations for next week. '
-                            'Always be encouraging and constructive. Respond ONLY with valid JSON.'
+                            + "You are Stepora's weekly report analyst. "
+                            "Generate a weekly progress report with trends, achievements, "
+                            "areas for improvement, and specific recommendations for next week. "
+                            "Always be encouraging and constructive. Respond ONLY with valid JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
                 max_tokens=1200,
@@ -3872,21 +4300,23 @@ Rules:
             result = json.loads(response.choices[0].message.content)
 
             # Ensure all expected keys are present
-            if 'summary' not in result:
-                result['summary'] = 'Your week has been recorded. Keep building momentum!'
-            if 'achievements' not in result:
-                result['achievements'] = []
-            if 'trends' not in result:
-                result['trends'] = []
-            if 'recommendations' not in result:
-                result['recommendations'] = []
-            if 'score' not in result:
-                result['score'] = 50
-            if 'encouragement' not in result:
-                result['encouragement'] = 'Every step counts. Keep pushing forward!'
+            if "summary" not in result:
+                result["summary"] = (
+                    "Your week has been recorded. Keep building momentum!"
+                )
+            if "achievements" not in result:
+                result["achievements"] = []
+            if "trends" not in result:
+                result["trends"] = []
+            if "recommendations" not in result:
+                result["recommendations"] = []
+            if "score" not in result:
+                result["score"] = 50
+            if "encouragement" not in result:
+                result["encouragement"] = "Every step counts. Keep pushing forward!"
 
             # Clamp score to 0-100
-            result['score'] = max(0, min(100, int(result['score'])))
+            result["score"] = max(0, min(100, int(result["score"])))
 
             return result
 
@@ -3896,8 +4326,14 @@ Rules:
             raise OpenAIError(f"Weekly report generation failed: {str(e)}")
 
     @openai_retry
-    def generate_checkin(self, dream_progress, days_since_activity, pending_tasks,
-                         streak_data, display_name=''):
+    def generate_checkin(
+        self,
+        dream_progress,
+        days_since_activity,
+        pending_tasks,
+        streak_data,
+        display_name="",
+    ):
         """
         Generate a personalized accountability check-in prompt.
 
@@ -3913,23 +4349,33 @@ Rules:
         """
         # Determine the expected prompt type hint for the AI
         if days_since_activity >= 5:
-            type_hint = 're_engagement'
+            type_hint = "re_engagement"
         elif days_since_activity >= 2:
-            type_hint = 'gentle_nudge'
-        elif streak_data.get('current_streak', 0) >= 7:
-            type_hint = 'celebration'
+            type_hint = "gentle_nudge"
+        elif streak_data.get("current_streak", 0) >= 7:
+            type_hint = "celebration"
         else:
-            type_hint = 'progress_check'
+            type_hint = "progress_check"
 
-        dreams_text = '\n'.join([
-            f"- {d.get('title', 'Untitled')} ({d.get('progress', 0)}% complete, category: {d.get('category', 'general')})"
-            for d in (dream_progress or [])
-        ]) or '(No active dreams)'
+        dreams_text = (
+            "\n".join(
+                [
+                    f"- {d.get('title', 'Untitled')} ({d.get('progress', 0)}% complete, category: {d.get('category', 'general')})"
+                    for d in (dream_progress or [])
+                ]
+            )
+            or "(No active dreams)"
+        )
 
-        tasks_text = '\n'.join([
-            f"- {t.get('title', 'Untitled')} (dream: {t.get('dream_title', '?')}, due: {t.get('due_date', 'unset')})"
-            for t in (pending_tasks or [])[:10]
-        ]) or '(No pending tasks)'
+        tasks_text = (
+            "\n".join(
+                [
+                    f"- {t.get('title', 'Untitled')} (dream: {t.get('dream_title', '?')}, due: {t.get('due_date', 'unset')})"
+                    for t in (pending_tasks or [])[:10]
+                ]
+            )
+            or "(No pending tasks)"
+        )
 
         prompt = f"""Generate an accountability check-in prompt for this user.
 
@@ -3968,16 +4414,16 @@ Rules:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'Generate a friendly accountability check-in prompt. '
-                            'Be encouraging, not nagging. Ask about specific tasks or dreams. '
-                            'Always be warm, personal, and constructive. '
-                            'Respond ONLY with valid JSON.'
+                            + "Generate a friendly accountability check-in prompt. "
+                            "Be encouraging, not nagging. Ask about specific tasks or dreams. "
+                            "Always be warm, personal, and constructive. "
+                            "Respond ONLY with valid JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.8,
                 max_tokens=600,
@@ -3988,20 +4434,35 @@ Rules:
             result = json.loads(response.choices[0].message.content)
 
             # Ensure all expected keys with sensible fallbacks
-            valid_types = {'gentle_nudge', 'progress_check', 'celebration', 're_engagement'}
-            if result.get('prompt_type') not in valid_types:
-                result['prompt_type'] = type_hint
-            if 'message' not in result:
-                result['message'] = 'Hey there! Just checking in on your progress. Every step counts!'
-            if 'suggested_questions' not in result or not isinstance(result['suggested_questions'], list):
-                result['suggested_questions'] = [
-                    'How can I stay motivated this week?',
-                    'What should I focus on next?',
-                    'Can you help me break down my next task?',
+            valid_types = {
+                "gentle_nudge",
+                "progress_check",
+                "celebration",
+                "re_engagement",
+            }
+            if result.get("prompt_type") not in valid_types:
+                result["prompt_type"] = type_hint
+            if "message" not in result:
+                result["message"] = (
+                    "Hey there! Just checking in on your progress. Every step counts!"
+                )
+            if "suggested_questions" not in result or not isinstance(
+                result["suggested_questions"], list
+            ):
+                result["suggested_questions"] = [
+                    "How can I stay motivated this week?",
+                    "What should I focus on next?",
+                    "Can you help me break down my next task?",
                 ]
-            if 'quick_actions' not in result or not isinstance(result['quick_actions'], list):
-                result['quick_actions'] = [
-                    {'label': 'Start a focus session', 'type': 'start_focus', 'target_id': None},
+            if "quick_actions" not in result or not isinstance(
+                result["quick_actions"], list
+            ):
+                result["quick_actions"] = [
+                    {
+                        "label": "Start a focus session",
+                        "type": "start_focus",
+                        "target_id": None,
+                    },
                 ]
 
             return result
@@ -4009,15 +4470,19 @@ Rules:
         except (json.JSONDecodeError, openai.APIError) as e:
             logger.warning(f"generate_checkin failed: {e}")
             return {
-                'message': f'Hey {display_name or "there"}! Just checking in. Every step towards your dreams matters, no matter how small.',
-                'prompt_type': type_hint,
-                'suggested_questions': [
-                    'How can I stay motivated this week?',
-                    'What should I focus on next?',
-                    'Can you help me break down my next task?',
+                "message": f'Hey {display_name or "there"}! Just checking in. Every step towards your dreams matters, no matter how small.',
+                "prompt_type": type_hint,
+                "suggested_questions": [
+                    "How can I stay motivated this week?",
+                    "What should I focus on next?",
+                    "Can you help me break down my next task?",
                 ],
-                'quick_actions': [
-                    {'label': 'Start a focus session', 'type': 'start_focus', 'target_id': None},
+                "quick_actions": [
+                    {
+                        "label": "Start a focus session",
+                        "type": "start_focus",
+                        "target_id": None,
+                    },
                 ],
             }
 
@@ -4086,18 +4551,18 @@ Respond ONLY with JSON:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'You are a productivity expert that estimates task durations. '
-                            'Estimate the time needed for each task in minutes. '
-                            'Consider the user\'s past completion patterns. '
-                            'Provide optimistic, realistic, and pessimistic estimates. '
-                            'Be practical and grounded — never underestimate complex tasks. '
-                            'Respond only in JSON.'
+                            + "You are a productivity expert that estimates task durations. "
+                            "Estimate the time needed for each task in minutes. "
+                            "Consider the user's past completion patterns. "
+                            "Provide optimistic, realistic, and pessimistic estimates. "
+                            "Be practical and grounded — never underestimate complex tasks. "
+                            "Respond only in JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
                 max_tokens=2000,
@@ -4108,11 +4573,11 @@ Respond ONLY with JSON:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure estimates key exists
-            if 'estimates' not in result and isinstance(result, dict):
+            if "estimates" not in result and isinstance(result, dict):
                 # Try to find the list in any key
                 for key, val in result.items():
                     if isinstance(val, list):
-                        result = {'estimates': val}
+                        result = {"estimates": val}
                         break
 
             return result
@@ -4193,8 +4658,8 @@ Rules:
         response = _client.chat.completions.create(
             model=self.model,
             messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': prompt},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
             ],
             temperature=0.4,
             max_tokens=2000,
@@ -4206,12 +4671,12 @@ Rules:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure required keys exist
-            if 'similar_dreams' not in result:
-                result['similar_dreams'] = []
-            if 'related_templates' not in result:
-                result['related_templates'] = []
-            if 'inspiration_tips' not in result:
-                result['inspiration_tips'] = []
+            if "similar_dreams" not in result:
+                result["similar_dreams"] = []
+            if "related_templates" not in result:
+                result["related_templates"] = []
+            if "inspiration_tips" not in result:
+                result["inspiration_tips"] = []
 
             return result
 
@@ -4259,17 +4724,17 @@ Rules:
         )
 
         recent_tasks_str = ""
-        if dream_info.get('recent_tasks'):
+        if dream_info.get("recent_tasks"):
             recent_tasks_str = "\n".join(
                 f"  - {t.get('title', 'Untitled')} ({t.get('status', 'pending')})"
-                for t in dream_info['recent_tasks'][:5]
+                for t in dream_info["recent_tasks"][:5]
             )
 
         obstacles_str = ""
-        if dream_info.get('obstacles'):
+        if dream_info.get("obstacles"):
             obstacles_str = "\n".join(
                 f"  - {o.get('title', 'Unknown')}: {o.get('status', 'active')}"
-                for o in dream_info['obstacles'][:5]
+                for o in dream_info["obstacles"][:5]
             )
 
         prompt = f"""Generate conversation starters for this dream:
@@ -4295,10 +4760,10 @@ Make starters conversational and actionable."""
 
         try:
             response = _client.chat.completions.create(
-                model='gpt-3.5-turbo',  # Use cheaper model for short outputs
+                model="gpt-3.5-turbo",  # Use cheaper model for short outputs
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': prompt},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
                 max_tokens=600,
@@ -4309,39 +4774,49 @@ Make starters conversational and actionable."""
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure starters key exists
-            if 'starters' not in result and isinstance(result, dict):
+            if "starters" not in result and isinstance(result, dict):
                 for key, val in result.items():
                     if isinstance(val, list):
-                        result = {'starters': val}
+                        result = {"starters": val}
                         break
 
             # Validate each starter has required fields
-            starters = result.get('starters', [])
-            valid_categories = {'planning', 'motivation', 'problem_solving', 'reflection', 'celebration'}
+            starters = result.get("starters", [])
+            valid_categories = {
+                "planning",
+                "motivation",
+                "problem_solving",
+                "reflection",
+                "celebration",
+            }
             category_icons = {
-                'planning': '\U0001f4cb',
-                'motivation': '\U0001f525',
-                'problem_solving': '\U0001f9e9',
-                'reflection': '\U0001f4ad',
-                'celebration': '\U0001f389',
+                "planning": "\U0001f4cb",
+                "motivation": "\U0001f525",
+                "problem_solving": "\U0001f9e9",
+                "reflection": "\U0001f4ad",
+                "celebration": "\U0001f389",
             }
             validated = []
             for s in starters:
-                if not isinstance(s, dict) or not s.get('text'):
+                if not isinstance(s, dict) or not s.get("text"):
                     continue
-                cat = s.get('category', 'planning')
+                cat = s.get("category", "planning")
                 if cat not in valid_categories:
-                    cat = 'planning'
-                validated.append({
-                    'text': s['text'],
-                    'category': cat,
-                    'icon': category_icons.get(cat, '\U0001f4cb'),
-                })
+                    cat = "planning"
+                validated.append(
+                    {
+                        "text": s["text"],
+                        "category": cat,
+                        "icon": category_icons.get(cat, "\U0001f4cb"),
+                    }
+                )
 
-            return {'starters': validated}
+            return {"starters": validated}
 
         except json.JSONDecodeError as e:
-            raise OpenAIError(f"Conversation starters generation failed (bad JSON): {str(e)}")
+            raise OpenAIError(
+                f"Conversation starters generation failed (bad JSON): {str(e)}"
+            )
         except openai.APIError as e:
             raise OpenAIError(f"Conversation starters generation failed: {str(e)}")
 
@@ -4376,6 +4851,7 @@ MATCHING RULES:
 """
 
         from datetime import date
+
         today = date.today()
 
         prompt = f"""Parse the following natural language into structured tasks.
@@ -4416,19 +4892,19 @@ Respond ONLY with JSON:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'You are an intelligent task parser for Stepora. '
-                            'Parse natural language into structured tasks. '
-                            'Extract every distinct task the user mentions. '
-                            'Be smart about interpreting durations, priorities, and deadlines from context clues. '
-                            'Match tasks to the user\'s existing dreams/goals when relevant. '
-                            'Always respond in the same language the user writes in. '
-                            'Respond only in JSON.'
+                            + "You are an intelligent task parser for Stepora. "
+                            "Parse natural language into structured tasks. "
+                            "Extract every distinct task the user mentions. "
+                            "Be smart about interpreting durations, priorities, and deadlines from context clues. "
+                            "Match tasks to the user's existing dreams/goals when relevant. "
+                            "Always respond in the same language the user writes in. "
+                            "Respond only in JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
                 max_tokens=2000,
@@ -4439,21 +4915,25 @@ Respond ONLY with JSON:
             result = json.loads(response.choices[0].message.content)
 
             # Normalise: ensure tasks key exists
-            if 'tasks' not in result and isinstance(result, dict):
+            if "tasks" not in result and isinstance(result, dict):
                 for key, val in result.items():
                     if isinstance(val, list):
-                        result = {'tasks': val}
+                        result = {"tasks": val}
                         break
 
             return result
 
         except json.JSONDecodeError as e:
-            raise OpenAIError(f"Natural language task parsing failed (bad JSON): {str(e)}")
+            raise OpenAIError(
+                f"Natural language task parsing failed (bad JSON): {str(e)}"
+            )
         except openai.APIError as e:
             raise OpenAIError(f"Natural language task parsing failed: {str(e)}")
 
     @openai_retry
-    def analyze_productivity(self, activity_data, focus_sessions, task_completion_rates):
+    def analyze_productivity(
+        self, activity_data, focus_sessions, task_completion_rates
+    ):
         """
         Analyze a user's productivity data over the past 30 days and return
         structured insights including trends, peak days, and patterns.
@@ -4511,8 +4991,8 @@ Respond ONLY with JSON:
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_prompt},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.4,
                 max_tokens=1500,
@@ -4521,89 +5001,101 @@ Respond ONLY with JSON:
 
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
-            if content.startswith('```'):
-                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             result = json.loads(content)
             if not isinstance(result, dict):
                 raise ValueError("Response is not a dict")
 
             # Validate and sanitize
-            score = result.get('overall_score', 50)
+            score = result.get("overall_score", 50)
             if not isinstance(score, (int, float)) or score < 0 or score > 100:
                 score = 50
 
-            summary = result.get('summary', '')
+            summary = result.get("summary", "")
             if not isinstance(summary, str) or len(summary) > 500:
-                summary = 'Your productivity data has been analyzed.'
+                summary = "Your productivity data has been analyzed."
 
-            trends = result.get('trends', [])
+            trends = result.get("trends", [])
             if not isinstance(trends, list):
                 trends = []
-            valid_directions = {'up', 'down', 'stable'}
+            valid_directions = {"up", "down", "stable"}
             validated_trends = []
             for t in trends[:5]:
-                if isinstance(t, dict) and t.get('metric'):
-                    direction = t.get('direction', 'stable')
+                if isinstance(t, dict) and t.get("metric"):
+                    direction = t.get("direction", "stable")
                     if direction not in valid_directions:
-                        direction = 'stable'
-                    validated_trends.append({
-                        'metric': str(t['metric'])[:100],
-                        'direction': direction,
-                        'change_pct': float(t.get('change_pct', 0)),
-                        'insight': str(t.get('insight', ''))[:300],
-                    })
+                        direction = "stable"
+                    validated_trends.append(
+                        {
+                            "metric": str(t["metric"])[:100],
+                            "direction": direction,
+                            "change_pct": float(t.get("change_pct", 0)),
+                            "insight": str(t.get("insight", ""))[:300],
+                        }
+                    )
 
-            peak_days = result.get('peak_days', [])
+            peak_days = result.get("peak_days", [])
             if not isinstance(peak_days, list):
                 peak_days = []
             validated_peaks = []
             for p in peak_days[:3]:
-                if isinstance(p, dict) and p.get('day_of_week'):
-                    validated_peaks.append({
-                        'day_of_week': str(p['day_of_week'])[:20],
-                        'reason': str(p.get('reason', ''))[:300],
-                    })
+                if isinstance(p, dict) and p.get("day_of_week"):
+                    validated_peaks.append(
+                        {
+                            "day_of_week": str(p["day_of_week"])[:20],
+                            "reason": str(p.get("reason", ""))[:300],
+                        }
+                    )
 
-            patterns = result.get('productivity_patterns', [])
+            patterns = result.get("productivity_patterns", [])
             if not isinstance(patterns, list):
                 patterns = []
             validated_patterns = []
             for p in patterns[:4]:
-                if isinstance(p, dict) and p.get('pattern'):
-                    validated_patterns.append({
-                        'pattern': str(p['pattern'])[:100],
-                        'description': str(p.get('description', ''))[:300],
-                        'recommendation': str(p.get('recommendation', ''))[:300],
-                    })
+                if isinstance(p, dict) and p.get("pattern"):
+                    validated_patterns.append(
+                        {
+                            "pattern": str(p["pattern"])[:100],
+                            "description": str(p.get("description", ""))[:300],
+                            "recommendation": str(p.get("recommendation", ""))[:300],
+                        }
+                    )
 
-            monthly_comparison = result.get('monthly_comparison', {})
+            monthly_comparison = result.get("monthly_comparison", {})
             if not isinstance(monthly_comparison, dict):
                 monthly_comparison = {}
             validated_comparison = {
-                'improved': [str(x)[:100] for x in monthly_comparison.get('improved', []) if x][:5],
-                'declined': [str(x)[:100] for x in monthly_comparison.get('declined', []) if x][:5],
-                'stable': [str(x)[:100] for x in monthly_comparison.get('stable', []) if x][:5],
+                "improved": [
+                    str(x)[:100] for x in monthly_comparison.get("improved", []) if x
+                ][:5],
+                "declined": [
+                    str(x)[:100] for x in monthly_comparison.get("declined", []) if x
+                ][:5],
+                "stable": [
+                    str(x)[:100] for x in monthly_comparison.get("stable", []) if x
+                ][:5],
             }
 
             return {
-                'overall_score': int(score),
-                'summary': summary,
-                'trends': validated_trends,
-                'peak_days': validated_peaks,
-                'productivity_patterns': validated_patterns,
-                'monthly_comparison': validated_comparison,
+                "overall_score": int(score),
+                "summary": summary,
+                "trends": validated_trends,
+                "peak_days": validated_peaks,
+                "productivity_patterns": validated_patterns,
+                "monthly_comparison": validated_comparison,
             }
 
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"Productivity analysis JSON parse failed: {e}")
             return {
-                'overall_score': 50,
-                'summary': 'Unable to generate detailed analysis at this time.',
-                'trends': [],
-                'peak_days': [],
-                'productivity_patterns': [],
-                'monthly_comparison': {'improved': [], 'declined': [], 'stable': []},
+                "overall_score": 50,
+                "summary": "Unable to generate detailed analysis at this time.",
+                "trends": [],
+                "peak_days": [],
+                "productivity_patterns": [],
+                "monthly_comparison": {"improved": [], "declined": [], "stable": []},
             }
         except openai.APIError as e:
             raise OpenAIError(f"Productivity analysis failed: {str(e)}")
@@ -4622,20 +5114,24 @@ Respond ONLY with JSON:
             Dict with 'message', 'emoji', 'animation_type', 'share_text'
         """
         valid_types = [
-            'task_completed', 'goal_completed', 'milestone_reached',
-            'dream_completed', 'streak_milestone', 'level_up',
+            "task_completed",
+            "goal_completed",
+            "milestone_reached",
+            "dream_completed",
+            "streak_milestone",
+            "level_up",
         ]
         if achievement_type not in valid_types:
-            achievement_type = 'task_completed'
+            achievement_type = "task_completed"
 
         # Map achievement types to suggested animation types
         animation_map = {
-            'task_completed': 'stars',
-            'goal_completed': 'confetti',
-            'milestone_reached': 'fireworks',
-            'dream_completed': 'trophy',
-            'streak_milestone': 'fireworks',
-            'level_up': 'trophy',
+            "task_completed": "stars",
+            "goal_completed": "confetti",
+            "milestone_reached": "fireworks",
+            "dream_completed": "trophy",
+            "streak_milestone": "fireworks",
+            "level_up": "trophy",
         }
 
         system_prompt = (
@@ -4656,22 +5152,23 @@ Respond ONLY with JSON:
             "- IMPORTANT: Always respond in the user's language if detectable from context."
         )
 
-        context_lines = [f"Achievement type: {achievement_type.replace('_', ' ').title()}"]
+        context_lines = [
+            f"Achievement type: {achievement_type.replace('_', ' ').title()}"
+        ]
         if context_data:
             for key, val in context_data.items():
                 context_lines.append(f"{key.replace('_', ' ').title()}: {val}")
 
-        prompt = (
-            "Generate a celebration message for this achievement:\n\n"
-            + "\n".join(context_lines)
+        prompt = "Generate a celebration message for this achievement:\n\n" + "\n".join(
+            context_lines
         )
 
         try:
             response = _client.chat.completions.create(
-                model='gpt-3.5-turbo',  # Use cheaper model for short messages
+                model="gpt-3.5-turbo",  # Use cheaper model for short messages
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': prompt},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.9,
                 max_tokens=300,
@@ -4682,40 +5179,46 @@ Respond ONLY with JSON:
             result = json.loads(response.choices[0].message.content)
 
             return {
-                'message': result.get('message', 'Amazing work! You are crushing it!'),
-                'emoji': result.get('emoji', '\U0001f389'),
-                'animation_type': animation_map.get(achievement_type, 'confetti'),
-                'share_text': result.get('share_text', 'Just hit a new milestone on my journey!'),
+                "message": result.get("message", "Amazing work! You are crushing it!"),
+                "emoji": result.get("emoji", "\U0001f389"),
+                "animation_type": animation_map.get(achievement_type, "confetti"),
+                "share_text": result.get(
+                    "share_text", "Just hit a new milestone on my journey!"
+                ),
             }
 
         except (json.JSONDecodeError, openai.APIError) as e:
             logger.warning(f"generate_celebration failed: {e}")
             # Return sensible fallback
             fallback_messages = {
-                'task_completed': 'One more task down! You are building momentum like a snowball rolling downhill!',
-                'goal_completed': 'Goal achieved! You just planted another flag on your mountain of success!',
-                'milestone_reached': 'Milestone unlocked! You are writing your own success story, one chapter at a time!',
-                'dream_completed': 'DREAM COMPLETE! You turned your vision into reality — that is pure magic!',
-                'streak_milestone': 'Streak on fire! Your consistency is like a river carving through rock — unstoppable!',
-                'level_up': 'LEVEL UP! You just evolved into an even more powerful version of yourself!',
+                "task_completed": "One more task down! You are building momentum like a snowball rolling downhill!",
+                "goal_completed": "Goal achieved! You just planted another flag on your mountain of success!",
+                "milestone_reached": "Milestone unlocked! You are writing your own success story, one chapter at a time!",
+                "dream_completed": "DREAM COMPLETE! You turned your vision into reality — that is pure magic!",
+                "streak_milestone": "Streak on fire! Your consistency is like a river carving through rock — unstoppable!",
+                "level_up": "LEVEL UP! You just evolved into an even more powerful version of yourself!",
             }
             fallback_emojis = {
-                'task_completed': '\u2728',
-                'goal_completed': '\U0001f3af',
-                'milestone_reached': '\U0001f680',
-                'dream_completed': '\U0001f3c6',
-                'streak_milestone': '\U0001f525',
-                'level_up': '\U0001f31f',
+                "task_completed": "\u2728",
+                "goal_completed": "\U0001f3af",
+                "milestone_reached": "\U0001f680",
+                "dream_completed": "\U0001f3c6",
+                "streak_milestone": "\U0001f525",
+                "level_up": "\U0001f31f",
             }
             return {
-                'message': fallback_messages.get(achievement_type, 'Great job! Keep it up!'),
-                'emoji': fallback_emojis.get(achievement_type, '\U0001f389'),
-                'animation_type': animation_map.get(achievement_type, 'confetti'),
-                'share_text': 'Just hit a new milestone on my journey! #Stepora',
+                "message": fallback_messages.get(
+                    achievement_type, "Great job! Keep it up!"
+                ),
+                "emoji": fallback_emojis.get(achievement_type, "\U0001f389"),
+                "animation_type": animation_map.get(achievement_type, "confetti"),
+                "share_text": "Just hit a new milestone on my journey! #Stepora",
             }
 
     @openai_retry
-    def optimize_notification_timing(self, activity_patterns, notification_types, current_preferences):
+    def optimize_notification_timing(
+        self, activity_patterns, notification_types, current_preferences
+    ):
         """
         Analyze user behavior patterns to determine optimal notification times.
 
@@ -4742,18 +5245,18 @@ Respond ONLY with JSON:
             "- If activity data is sparse, make reasonable defaults and lower the engagement score.\n"
             "- Return ONLY a valid JSON object.\n\n"
             "RESPONSE FORMAT:\n"
-            '{\n'
+            "{\n"
             '  "optimal_times": [\n'
-            '    {\n'
+            "    {\n"
             '      "notification_type": "reminder",\n'
             '      "best_hour": 9,\n'
             '      "best_day": "weekday",\n'
             '      "reason": "User is most active at 9am on weekdays"\n'
-            '    }\n'
-            '  ],\n'
+            "    }\n"
+            "  ],\n"
             '  "quiet_hours": {"start": 22, "end": 7},\n'
             '  "engagement_score": 0.85\n'
-            '}\n'
+            "}\n"
         )
 
         user_prompt = (
@@ -4767,8 +5270,8 @@ Respond ONLY with JSON:
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_prompt},
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.3,
                 max_tokens=1200,
@@ -4778,65 +5281,77 @@ Respond ONLY with JSON:
 
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
-            if content.startswith('```'):
-                content = content.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             result = json.loads(content)
             if not isinstance(result, dict):
                 return self._notification_timing_fallback(notification_types)
 
             # Validate optimal_times
-            optimal_times = result.get('optimal_times', [])
+            optimal_times = result.get("optimal_times", [])
             if not isinstance(optimal_times, list):
                 optimal_times = []
             valid_days = {
-                'weekday', 'weekend', 'daily', 'monday', 'tuesday',
-                'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+                "weekday",
+                "weekend",
+                "daily",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
             }
             validated_times = []
             for item in optimal_times[:20]:
                 if not isinstance(item, dict):
                     continue
-                ntype = str(item.get('notification_type', ''))[:30]
-                best_hour = item.get('best_hour', 9)
+                ntype = str(item.get("notification_type", ""))[:30]
+                best_hour = item.get("best_hour", 9)
                 if not isinstance(best_hour, int) or best_hour < 0 or best_hour > 23:
                     best_hour = 9
-                best_day = str(item.get('best_day', 'daily'))[:20]
+                best_day = str(item.get("best_day", "daily"))[:20]
                 if best_day not in valid_days:
-                    best_day = 'daily'
-                reason = str(item.get('reason', ''))[:300]
-                validated_times.append({
-                    'notification_type': ntype,
-                    'best_hour': best_hour,
-                    'best_day': best_day,
-                    'reason': reason,
-                })
+                    best_day = "daily"
+                reason = str(item.get("reason", ""))[:300]
+                validated_times.append(
+                    {
+                        "notification_type": ntype,
+                        "best_hour": best_hour,
+                        "best_day": best_day,
+                        "reason": reason,
+                    }
+                )
 
             # Validate quiet_hours
-            quiet_hours = result.get('quiet_hours', {})
+            quiet_hours = result.get("quiet_hours", {})
             if not isinstance(quiet_hours, dict):
-                quiet_hours = {'start': 22, 'end': 7}
-            qh_start = quiet_hours.get('start', 22)
-            qh_end = quiet_hours.get('end', 7)
+                quiet_hours = {"start": 22, "end": 7}
+            qh_start = quiet_hours.get("start", 22)
+            qh_end = quiet_hours.get("end", 7)
             if not isinstance(qh_start, int) or qh_start < 0 or qh_start > 23:
                 qh_start = 22
             if not isinstance(qh_end, int) or qh_end < 0 or qh_end > 23:
                 qh_end = 7
 
             # Validate engagement_score
-            engagement_score = result.get('engagement_score', 0.5)
+            engagement_score = result.get("engagement_score", 0.5)
             if not isinstance(engagement_score, (int, float)):
                 engagement_score = 0.5
             engagement_score = max(0.0, min(1.0, float(engagement_score)))
 
             return {
-                'optimal_times': validated_times,
-                'quiet_hours': {'start': qh_start, 'end': qh_end},
-                'engagement_score': round(engagement_score, 2),
+                "optimal_times": validated_times,
+                "quiet_hours": {"start": qh_start, "end": qh_end},
+                "engagement_score": round(engagement_score, 2),
             }
 
         except (json.JSONDecodeError, KeyError):
-            logger.warning("Failed to parse notification timing JSON, returning fallback")
+            logger.warning(
+                "Failed to parse notification timing JSON, returning fallback"
+            )
             return self._notification_timing_fallback(notification_types)
         except openai.APIError as e:
             raise OpenAIError(f"Notification timing optimization failed: {str(e)}")
@@ -4844,35 +5359,39 @@ Respond ONLY with JSON:
     def _notification_timing_fallback(self, notification_types):
         """Return sensible default notification timing when AI fails."""
         default_hours = {
-            'reminder': 9,
-            'motivation': 8,
-            'progress': 18,
-            'achievement': 12,
-            'check_in': 10,
-            'rescue': 11,
-            'buddy': 14,
-            'system': 10,
-            'dream_completed': 12,
-            'weekly_report': 9,
-            'daily_summary': 7,
-            'missed_call': 10,
+            "reminder": 9,
+            "motivation": 8,
+            "progress": 18,
+            "achievement": 12,
+            "check_in": 10,
+            "rescue": 11,
+            "buddy": 14,
+            "system": 10,
+            "dream_completed": 12,
+            "weekly_report": 9,
+            "daily_summary": 7,
+            "missed_call": 10,
         }
         optimal_times = []
         for ntype in notification_types:
-            optimal_times.append({
-                'notification_type': ntype,
-                'best_hour': default_hours.get(ntype, 9),
-                'best_day': 'daily',
-                'reason': 'Default recommendation (insufficient activity data).',
-            })
+            optimal_times.append(
+                {
+                    "notification_type": ntype,
+                    "best_hour": default_hours.get(ntype, 9),
+                    "best_day": "daily",
+                    "reason": "Default recommendation (insufficient activity data).",
+                }
+            )
         return {
-            'optimal_times': optimal_times,
-            'quiet_hours': {'start': 22, 'end': 7},
-            'engagement_score': 0.3,
+            "optimal_times": optimal_times,
+            "quiet_hours": {"start": 22, "end": 7},
+            "engagement_score": 0.3,
         }
 
     @openai_retry
-    def calibrate_difficulty(self, completion_rate, avg_completion_time, streak_data, current_tasks):
+    def calibrate_difficulty(
+        self, completion_rate, avg_completion_time, streak_data, current_tasks
+    ):
         """
         Analyze user's task completion patterns and suggest difficulty calibration.
 
@@ -4934,20 +5453,20 @@ Respond ONLY with JSON in this exact format:
                 model=self.model,
                 messages=[
                     {
-                        'role': 'system',
-                        'content': (
+                        "role": "system",
+                        "content": (
                             self.ETHICAL_PREAMBLE
-                            + 'You are a performance calibration coach for Stepora. '
-                            'Analyze the user\'s task completion patterns and suggest difficulty '
+                            + "You are a performance calibration coach for Stepora. "
+                            "Analyze the user's task completion patterns and suggest difficulty "
                             'adjustments. The goal is to keep users in a state of "flow" — '
-                            'tasks should be challenging enough to be engaging but not so hard '
-                            'they cause frustration. Suggest concrete modifications to existing '
-                            'tasks and recommend a personalized daily target. Also propose one '
-                            'stretch challenge to push the user slightly beyond their comfort zone. '
-                            'Respond only in JSON.'
+                            "tasks should be challenging enough to be engaging but not so hard "
+                            "they cause frustration. Suggest concrete modifications to existing "
+                            "tasks and recommend a personalized daily target. Also propose one "
+                            "stretch challenge to push the user slightly beyond their comfort zone. "
+                            "Respond only in JSON."
                         ),
                     },
-                    {'role': 'user', 'content': prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
                 max_tokens=2500,
@@ -4958,57 +5477,77 @@ Respond ONLY with JSON in this exact format:
             result = json.loads(response.choices[0].message.content)
 
             # Validate and normalise
-            valid_levels = {'easy', 'moderate', 'challenging', 'expert'}
-            if result.get('difficulty_level') not in valid_levels:
-                result['difficulty_level'] = 'moderate'
+            valid_levels = {"easy", "moderate", "challenging", "expert"}
+            if result.get("difficulty_level") not in valid_levels:
+                result["difficulty_level"] = "moderate"
 
-            score = result.get('calibration_score', 0.5)
+            score = result.get("calibration_score", 0.5)
             if not isinstance(score, (int, float)) or score < 0 or score > 1:
                 score = 0.5
-            result['calibration_score'] = round(float(score), 2)
+            result["calibration_score"] = round(float(score), 2)
 
-            if not isinstance(result.get('analysis'), str):
-                result['analysis'] = ''
+            if not isinstance(result.get("analysis"), str):
+                result["analysis"] = ""
 
-            if not isinstance(result.get('suggestions'), list):
-                result['suggestions'] = []
+            if not isinstance(result.get("suggestions"), list):
+                result["suggestions"] = []
             validated_suggestions = []
-            for s in result['suggestions'][:10]:
+            for s in result["suggestions"][:10]:
                 if not isinstance(s, dict):
                     continue
-                modified = s.get('modified_task', {})
+                modified = s.get("modified_task", {})
                 if not isinstance(modified, dict):
                     modified = {}
-                validated_suggestions.append({
-                    'task_id': str(s.get('task_id', '')),
-                    'current_difficulty': s.get('current_difficulty', 'moderate'),
-                    'suggested_difficulty': s.get('suggested_difficulty', 'moderate'),
-                    'reason': str(s.get('reason', ''))[:300],
-                    'modified_task': {
-                        'title': str(modified.get('title', ''))[:255],
-                        'description': str(modified.get('description', ''))[:2000],
-                        'duration_mins': int(modified.get('duration_mins', 30)) if modified.get('duration_mins') else 30,
-                    },
-                })
-            result['suggestions'] = validated_suggestions
+                validated_suggestions.append(
+                    {
+                        "task_id": str(s.get("task_id", "")),
+                        "current_difficulty": s.get("current_difficulty", "moderate"),
+                        "suggested_difficulty": s.get(
+                            "suggested_difficulty", "moderate"
+                        ),
+                        "reason": str(s.get("reason", ""))[:300],
+                        "modified_task": {
+                            "title": str(modified.get("title", ""))[:255],
+                            "description": str(modified.get("description", ""))[:2000],
+                            "duration_mins": (
+                                int(modified.get("duration_mins", 30))
+                                if modified.get("duration_mins")
+                                else 30
+                            ),
+                        },
+                    }
+                )
+            result["suggestions"] = validated_suggestions
 
-            daily = result.get('daily_target', {})
+            daily = result.get("daily_target", {})
             if not isinstance(daily, dict):
                 daily = {}
-            result['daily_target'] = {
-                'tasks': int(daily.get('tasks', 5)) if daily.get('tasks') else 5,
-                'focus_minutes': int(daily.get('focus_minutes', 60)) if daily.get('focus_minutes') else 60,
-                'reason': str(daily.get('reason', ''))[:300],
+            result["daily_target"] = {
+                "tasks": int(daily.get("tasks", 5)) if daily.get("tasks") else 5,
+                "focus_minutes": (
+                    int(daily.get("focus_minutes", 60))
+                    if daily.get("focus_minutes")
+                    else 60
+                ),
+                "reason": str(daily.get("reason", ""))[:300],
             }
 
-            challenge = result.get('challenge', {})
+            challenge = result.get("challenge", {})
             if not isinstance(challenge, dict):
                 challenge = {}
-            result['challenge'] = {
-                'title': str(challenge.get('title', 'Push Your Limits'))[:255],
-                'description': str(challenge.get('description', ''))[:500],
-                'reward_xp': int(challenge.get('reward_xp', 50)) if challenge.get('reward_xp') else 50,
-                'deadline_days': int(challenge.get('deadline_days', 7)) if challenge.get('deadline_days') else 7,
+            result["challenge"] = {
+                "title": str(challenge.get("title", "Push Your Limits"))[:255],
+                "description": str(challenge.get("description", ""))[:500],
+                "reward_xp": (
+                    int(challenge.get("reward_xp", 50))
+                    if challenge.get("reward_xp")
+                    else 50
+                ),
+                "deadline_days": (
+                    int(challenge.get("deadline_days", 7))
+                    if challenge.get("deadline_days")
+                    else 7
+                ),
             }
 
             return result

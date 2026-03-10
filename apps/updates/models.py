@@ -1,5 +1,4 @@
 import hashlib
-from datetime import datetime
 
 from django.db import models
 from django.utils import timezone
@@ -37,7 +36,9 @@ class AppBundle(models.Model):
     ]
 
     bundle_id = models.CharField(
-        max_length=50, unique=True, default=_generate_bundle_id,
+        max_length=50,
+        unique=True,
+        default=_generate_bundle_id,
         help_text="Auto-generated unique identifier (e.g. b-20260308-153045)",
     )
     min_app_version = models.PositiveIntegerField(
@@ -45,10 +46,14 @@ class AppBundle(models.Model):
         help_text="Minimum native versionCode required to apply this bundle",
     )
     platform = models.CharField(
-        max_length=10, choices=PLATFORM_CHOICES, default="all",
+        max_length=10,
+        choices=PLATFORM_CHOICES,
+        default="all",
     )
     strategy = models.CharField(
-        max_length=10, choices=STRATEGY_CHOICES, default="notify",
+        max_length=10,
+        choices=STRATEGY_CHOICES,
+        default="notify",
     )
     bundle_file = models.FileField(
         upload_to=_bundle_upload_path,
@@ -56,15 +61,20 @@ class AppBundle(models.Model):
         help_text="The zipped web bundle (dist/)",
     )
     checksum = models.CharField(
-        max_length=128, blank=True, default="",
+        max_length=128,
+        blank=True,
+        default="",
         help_text="SHA-256 hex digest of the zip file (auto-computed on upload)",
     )
     signature = models.TextField(
-        blank=True, default="",
+        blank=True,
+        default="",
         help_text="RSA signature of the checksum (base64, for code signing)",
     )
     message = models.CharField(
-        max_length=255, blank=True, default="",
+        max_length=255,
+        blank=True,
+        default="",
         help_text="Optional message to show with notify strategy",
     )
     is_active = models.BooleanField(

@@ -5,12 +5,11 @@ Each method corresponds to a tool the AI can call during check-ins.
 All methods return JSON-serializable dicts that get fed back to the AI as tool results.
 """
 
-import json
 import logging
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
+
+from django.db.models import Count, F, Q
 from django.utils import timezone
-from django.db import models as db_models
-from django.db.models import Count, Q, Sum, Avg, F
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +21,21 @@ class CheckInToolExecutor:
         self.dream = dream
         self.user = user
 
-    def _assert_owned(self, model_class, pk, field='dream'):
+    def _assert_owned(self, model_class, pk, field="dream"):
         """Verify that the object belongs to this dream. Raises ValueError if not."""
         obj = model_class.objects.filter(pk=pk).first()
         if not obj:
             raise ValueError(f"{model_class.__name__} {pk} not found")
         owner = getattr(obj, field, None)
-        if field == 'dream' and owner != self.dream:
-            raise ValueError(f"{model_class.__name__} {pk} does not belong to this dream")
-        if field == 'goal':
+        if field == "dream" and owner != self.dream:
+            raise ValueError(
+                f"{model_class.__name__} {pk} does not belong to this dream"
+            )
+        if field == "goal":
             if obj.goal.dream != self.dream:
-                raise ValueError(f"{model_class.__name__} {pk} does not belong to this dream")
+                raise ValueError(
+                    f"{model_class.__name__} {pk} does not belong to this dream"
+                )
         return obj
 
     def dispatch(self, tool_name, args):
@@ -46,7 +49,10 @@ class CheckInToolExecutor:
 
         try:
             result = method(**args)
-            is_finish = tool_name in ('finish_check_in', 'finish_questionnaire_generation')
+            is_finish = tool_name in (
+                "finish_check_in",
+                "finish_questionnaire_generation",
+            )
             return result, is_finish
         except Exception as e:
             logger.warning(f"Tool {tool_name} failed: {e}")
@@ -54,28 +60,31 @@ class CheckInToolExecutor:
 
     def get_dream_progress(self, dream_id=None):
         """Returns current progress statistics for the dream, including full skeleton."""
-        from apps.dreams.models import Dream, Goal, Task, DreamMilestone
+        from apps.dreams.models import DreamMilestone, Goal, Task
 
         d = self.dream
-        milestones = DreamMilestone.objects.filter(dream=d).order_by('order')
+        milestones = DreamMilestone.objects.filter(dream=d).order_by("order")
         total_tasks = Task.objects.filter(goal__dream=d).count()
-        completed_tasks = Task.objects.filter(goal__dream=d, status='completed').count()
-        pending_tasks = Task.objects.filter(goal__dream=d, status='pending').count()
+        completed_tasks = Task.objects.filter(goal__dream=d, status="completed").count()
+        pending_tasks = Task.objects.filter(goal__dream=d, status="pending").count()
         overdue = Task.objects.filter(
-            goal__dream=d, status='pending',
-            deadline_date__lt=timezone.now().date()
+            goal__dream=d, status="pending", deadline_date__lt=timezone.now().date()
         ).count()
 
         # Tasks completed in the last 14 days
         two_weeks_ago = timezone.now() - timedelta(days=14)
         recent_completed = Task.objects.filter(
-            goal__dream=d, status='completed',
-            completed_at__gte=two_weeks_ago
+            goal__dream=d, status="completed", completed_at__gte=two_weeks_ago
         ).count()
 
         # Bulk-load goals and task counts to avoid N+1 queries
         from collections import defaultdict
-        all_goals = Goal.objects.filter(dream=d).select_related('milestone').order_by('milestone__order', 'order')
+
+        all_goals = (
+            Goal.objects.filter(dream=d)
+            .select_related("milestone")
+            .order_by("milestone__order", "order")
+        )
         goals_by_milestone = defaultdict(list)
         for g in all_goals:
             if g.milestone_id:
@@ -84,10 +93,10 @@ class CheckInToolExecutor:
         # Build task stats lookup: {goal_id: (total, done)}
         _raw = (
             Task.objects.filter(goal__dream=d)
-            .values('goal_id')
-            .annotate(total=Count('id'), done=Count('id', filter=Q(status='completed')))
+            .values("goal_id")
+            .annotate(total=Count("id"), done=Count("id", filter=Q(status="completed")))
         )
-        task_stats = {row['goal_id']: (row['total'], row['done']) for row in _raw}
+        task_stats = {row["goal_id"]: (row["total"], row["done"]) for row in _raw}
 
         # Milestone progress with goals nested
         ms_progress = []
@@ -100,38 +109,51 @@ class CheckInToolExecutor:
                 g_total, g_done = task_stats.get(g.id, (0, 0))
                 ms_total += g_total
                 ms_done += g_done
-                goals_data.append({
-                    "goal_id": str(g.id),
-                    "title": g.title,
-                    "description": g.description[:200] if g.description else "",
-                    "order": g.order,
-                    "status": g.status,
-                    "expected_date": str(g.expected_date) if g.expected_date else None,
-                    "deadline_date": str(g.deadline_date) if g.deadline_date else None,
-                    "total_tasks": g_total,
-                    "completed_tasks": g_done,
-                })
+                goals_data.append(
+                    {
+                        "goal_id": str(g.id),
+                        "title": g.title,
+                        "description": g.description[:200] if g.description else "",
+                        "order": g.order,
+                        "status": g.status,
+                        "expected_date": (
+                            str(g.expected_date) if g.expected_date else None
+                        ),
+                        "deadline_date": (
+                            str(g.deadline_date) if g.deadline_date else None
+                        ),
+                        "total_tasks": g_total,
+                        "completed_tasks": g_done,
+                    }
+                )
 
-            ms_progress.append({
-                "milestone_id": str(ms.id),
-                "title": ms.title,
-                "description": ms.description[:200] if ms.description else "",
-                "order": ms.order,
-                "has_tasks": ms.has_tasks,
-                "status": ms.status,
-                "expected_date": str(ms.expected_date) if ms.expected_date else None,
-                "deadline_date": str(ms.deadline_date) if ms.deadline_date else None,
-                "total_tasks": ms_total,
-                "completed_tasks": ms_done,
-                "progress": round(ms_done / ms_total * 100, 1) if ms_total > 0 else 0,
-                "goals": goals_data,
-            })
+            ms_progress.append(
+                {
+                    "milestone_id": str(ms.id),
+                    "title": ms.title,
+                    "description": ms.description[:200] if ms.description else "",
+                    "order": ms.order,
+                    "has_tasks": ms.has_tasks,
+                    "status": ms.status,
+                    "expected_date": (
+                        str(ms.expected_date) if ms.expected_date else None
+                    ),
+                    "deadline_date": (
+                        str(ms.deadline_date) if ms.deadline_date else None
+                    ),
+                    "total_tasks": ms_total,
+                    "completed_tasks": ms_done,
+                    "progress": (
+                        round(ms_done / ms_total * 100, 1) if ms_total > 0 else 0
+                    ),
+                    "goals": goals_data,
+                }
+            )
 
         # Calculate velocity (tasks/week over last 4 weeks)
         four_weeks_ago = timezone.now() - timedelta(days=28)
         recent_4w = Task.objects.filter(
-            goal__dream=d, status='completed',
-            completed_at__gte=four_weeks_ago
+            goal__dream=d, status="completed", completed_at__gte=four_weeks_ago
         ).count()
         velocity = round(recent_4w / 4, 1)
 
@@ -161,11 +183,15 @@ class CheckInToolExecutor:
         if not since:
             since = (timezone.now() - timedelta(days=14)).date()
 
-        tasks = Task.objects.filter(
-            goal__dream=self.dream,
-            status='completed',
-            completed_at__date__gte=since,
-        ).select_related('goal', 'goal__milestone').order_by('completed_at')[:50]
+        tasks = (
+            Task.objects.filter(
+                goal__dream=self.dream,
+                status="completed",
+                completed_at__date__gte=since,
+            )
+            .select_related("goal", "goal__milestone")
+            .order_by("completed_at")[:50]
+        )
 
         return {
             "success": True,
@@ -177,7 +203,9 @@ class CheckInToolExecutor:
                     "goal_id": str(t.goal.id),
                     "milestone": t.goal.milestone.title if t.goal.milestone else None,
                     "duration_mins": t.duration_mins,
-                    "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                    "completed_at": (
+                        t.completed_at.isoformat() if t.completed_at else None
+                    ),
                 }
                 for t in tasks
             ],
@@ -188,11 +216,15 @@ class CheckInToolExecutor:
         from apps.dreams.models import Task
 
         today = timezone.now().date()
-        tasks = Task.objects.filter(
-            goal__dream=self.dream,
-            status='pending',
-            deadline_date__lt=today,
-        ).select_related('goal', 'goal__milestone').order_by('deadline_date')[:30]
+        tasks = (
+            Task.objects.filter(
+                goal__dream=self.dream,
+                status="pending",
+                deadline_date__lt=today,
+            )
+            .select_related("goal", "goal__milestone")
+            .order_by("deadline_date")[:30]
+        )
 
         return {
             "success": True,
@@ -218,7 +250,10 @@ class CheckInToolExecutor:
 
         goal = Goal.objects.filter(pk=goal_id, dream=self.dream).first()
         if not goal:
-            return {"error": f"Goal {goal_id} not found or not owned by this dream", "success": False}
+            return {
+                "error": f"Goal {goal_id} not found or not owned by this dream",
+                "success": False,
+            }
 
         plan_start = self.dream.created_at or timezone.now()
         max_order = Task.objects.filter(goal=goal).count()
@@ -226,36 +261,36 @@ class CheckInToolExecutor:
         created = []
         for i, t in enumerate(tasks):
             scheduled = None
-            if t.get('day_number'):
-                scheduled = plan_start + timedelta(days=t['day_number'] - 1)
+            if t.get("day_number"):
+                scheduled = plan_start + timedelta(days=t["day_number"] - 1)
 
             exp_date = None
             dead_date = None
             try:
-                if t.get('expected_date'):
-                    exp_date = date.fromisoformat(t['expected_date'])
-                if t.get('deadline_date'):
-                    dead_date = date.fromisoformat(t['deadline_date'])
+                if t.get("expected_date"):
+                    exp_date = date.fromisoformat(t["expected_date"])
+                if t.get("deadline_date"):
+                    dead_date = date.fromisoformat(t["deadline_date"])
             except (ValueError, TypeError):
                 pass
 
             task = Task.objects.create(
                 goal=goal,
-                title=t['title'],
-                description=t.get('description', ''),
+                title=t["title"],
+                description=t.get("description", ""),
                 order=max_order + i + 1,
-                duration_mins=t.get('duration_mins', 30),
+                duration_mins=t.get("duration_mins", 30),
                 scheduled_date=scheduled,
                 expected_date=exp_date,
                 deadline_date=dead_date,
-                status='pending',
+                status="pending",
             )
             created.append({"id": str(task.id), "title": task.title})
 
         # Mark milestone as having tasks
         if goal.milestone and not goal.milestone.has_tasks:
             goal.milestone.has_tasks = True
-            goal.milestone.save(update_fields=['has_tasks'])
+            goal.milestone.save(update_fields=["has_tasks"])
 
         return {
             "success": True,
@@ -263,7 +298,13 @@ class CheckInToolExecutor:
             "tasks": created,
         }
 
-    def update_milestone(self, milestone_id, new_expected_date=None, new_deadline_date=None, new_description=None):
+    def update_milestone(
+        self,
+        milestone_id,
+        new_expected_date=None,
+        new_deadline_date=None,
+        new_description=None,
+    ):
         """Adjusts a milestone's dates or description."""
         from apps.dreams.models import DreamMilestone
 
@@ -275,18 +316,18 @@ class CheckInToolExecutor:
         if new_expected_date:
             try:
                 ms.expected_date = date.fromisoformat(new_expected_date)
-                updates.append('expected_date')
+                updates.append("expected_date")
             except (ValueError, TypeError):
                 pass
         if new_deadline_date:
             try:
                 ms.deadline_date = date.fromisoformat(new_deadline_date)
-                updates.append('deadline_date')
+                updates.append("deadline_date")
             except (ValueError, TypeError):
                 pass
         if new_description:
             ms.description = new_description
-            updates.append('description')
+            updates.append("description")
 
         if updates:
             ms.save(update_fields=updates)
@@ -300,7 +341,7 @@ class CheckInToolExecutor:
 
     def get_calendar_availability(self, user_id=None, start_date=None, end_date=None):
         """Returns the user's free time slots."""
-        from apps.calendar.models import TimeBlock, CalendarEvent
+        from apps.calendar.models import CalendarEvent, TimeBlock
 
         try:
             start = date.fromisoformat(start_date) if start_date else None
@@ -317,14 +358,16 @@ class CheckInToolExecutor:
         blocks = TimeBlock.objects.filter(user=self.user)
         availability = {}
         for b in blocks:
-            day_name = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][b.day_of_week]
+            day_name = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][b.day_of_week]
             if day_name not in availability:
                 availability[day_name] = []
-            availability[day_name].append({
-                "start": str(b.start_time),
-                "end": str(b.end_time),
-                "type": b.block_type,
-            })
+            availability[day_name].append(
+                {
+                    "start": str(b.start_time),
+                    "end": str(b.end_time),
+                    "type": b.block_type,
+                }
+            )
 
         # Get existing calendar events in the range
         events = CalendarEvent.objects.filter(
@@ -342,13 +385,15 @@ class CheckInToolExecutor:
             "recurring_availability": availability,
             "events_in_range": events,
             "work_schedule": work_schedule,
-            "available_hours_per_week": persona.get('available_hours_per_week', 'unknown'),
-            "preferred_schedule": persona.get('preferred_schedule', 'unknown'),
-            "occupation": persona.get('occupation', 'unknown'),
-            "fitness_level": persona.get('fitness_level', 'unknown'),
-            "learning_style": persona.get('learning_style', 'unknown'),
-            "global_constraints": persona.get('global_constraints', ''),
-            "global_motivation": persona.get('global_motivation', ''),
+            "available_hours_per_week": persona.get(
+                "available_hours_per_week", "unknown"
+            ),
+            "preferred_schedule": persona.get("preferred_schedule", "unknown"),
+            "occupation": persona.get("occupation", "unknown"),
+            "fitness_level": persona.get("fitness_level", "unknown"),
+            "learning_style": persona.get("learning_style", "unknown"),
+            "global_constraints": persona.get("global_constraints", ""),
+            "global_motivation": persona.get("global_motivation", ""),
         }
 
     def mark_goal_completed(self, goal_id):
@@ -359,9 +404,9 @@ class CheckInToolExecutor:
         if not goal:
             return {"error": f"Goal {goal_id} not found", "success": False}
 
-        goal.status = 'completed'
+        goal.status = "completed"
         goal.progress_percentage = 100.0
-        goal.save(update_fields=['status', 'progress_percentage'])
+        goal.save(update_fields=["status", "progress_percentage"])
 
         return {
             "success": True,
@@ -369,7 +414,15 @@ class CheckInToolExecutor:
             "title": goal.title,
         }
 
-    def create_new_goal(self, milestone_id, title, description, expected_date=None, deadline_date=None, estimated_minutes=None):
+    def create_new_goal(
+        self,
+        milestone_id,
+        title,
+        description,
+        expected_date=None,
+        deadline_date=None,
+        estimated_minutes=None,
+    ):
         """Adds a new goal to a milestone."""
         from apps.dreams.models import DreamMilestone, Goal
 
@@ -398,7 +451,7 @@ class CheckInToolExecutor:
             estimated_minutes=estimated_minutes,
             expected_date=exp_date,
             deadline_date=dead_date,
-            status='pending',
+            status="pending",
         )
 
         return {
@@ -412,14 +465,16 @@ class CheckInToolExecutor:
     # Skeleton evolution tools (added for interactive check-ins)
     # ---------------------------------------------------------------
 
-    def add_milestone(self, title, description, order, expected_date=None, deadline_date=None):
+    def add_milestone(
+        self, title, description, order, expected_date=None, deadline_date=None
+    ):
         """Insert a new milestone at the given order, shifting existing ones."""
         from apps.dreams.models import DreamMilestone
 
         # Shift existing milestones at or after this order
-        DreamMilestone.objects.filter(
-            dream=self.dream, order__gte=order
-        ).update(order=F('order') + 1)
+        DreamMilestone.objects.filter(dream=self.dream, order__gte=order).update(
+            order=F("order") + 1
+        )
 
         exp_date = None
         dead_date = None
@@ -457,27 +512,27 @@ class CheckInToolExecutor:
             return {"error": f"Milestone {milestone_id} not found", "success": False}
 
         has_completed = Task.objects.filter(
-            goal__milestone=ms, status='completed'
+            goal__milestone=ms, status="completed"
         ).exists()
 
         title = ms.title
         if has_completed:
-            ms.status = 'skipped'
-            ms.save(update_fields=['status'])
-            action = 'skipped'
+            ms.status = "skipped"
+            ms.save(update_fields=["status"])
+            action = "skipped"
         else:
             Task.objects.filter(goal__milestone=ms).delete()
             Goal.objects.filter(milestone=ms).delete()
             ms.delete()
-            action = 'deleted'
+            action = "deleted"
 
         # Re-sequence remaining milestones
         for i, m in enumerate(
-            DreamMilestone.objects.filter(dream=self.dream).order_by('order'), 1
+            DreamMilestone.objects.filter(dream=self.dream).order_by("order"), 1
         ):
             if m.order != i:
                 m.order = i
-                m.save(update_fields=['order'])
+                m.save(update_fields=["order"])
 
         return {
             "success": True,
@@ -504,14 +559,14 @@ class CheckInToolExecutor:
         if old_order < new_order:
             DreamMilestone.objects.filter(
                 dream=self.dream, order__gt=old_order, order__lte=new_order
-            ).update(order=F('order') - 1)
+            ).update(order=F("order") - 1)
         else:
             DreamMilestone.objects.filter(
                 dream=self.dream, order__gte=new_order, order__lt=old_order
-            ).update(order=F('order') + 1)
+            ).update(order=F("order") + 1)
 
         ms.order = new_order
-        ms.save(update_fields=['order'])
+        ms.save(update_fields=["order"])
 
         return {"success": True, "old_order": old_order, "new_order": new_order}
 
@@ -529,13 +584,13 @@ class CheckInToolExecutor:
         updates = []
         if ms.expected_date:
             ms.expected_date = ms.expected_date + shift
-            updates.append('expected_date')
+            updates.append("expected_date")
         if ms.deadline_date:
             ms.deadline_date = ms.deadline_date + shift
-            updates.append('deadline_date')
+            updates.append("deadline_date")
         if ms.target_date:
             ms.target_date = ms.target_date + shift
-            updates.append('target_date')
+            updates.append("target_date")
         if updates:
             ms.save(update_fields=updates)
 
@@ -545,19 +600,21 @@ class CheckInToolExecutor:
             Q(expected_date__isnull=False) | Q(deadline_date__isnull=False)
         ).count()
         goals_qs.update(
-            expected_date=F('expected_date') + shift,
-            deadline_date=F('deadline_date') + shift,
+            expected_date=F("expected_date") + shift,
+            deadline_date=F("deadline_date") + shift,
         )
 
         # Shift task dates (bulk update instead of N+1)
         tasks_qs = Task.objects.filter(goal__milestone=ms)
         tasks_shifted = tasks_qs.filter(
-            Q(expected_date__isnull=False) | Q(deadline_date__isnull=False) | Q(scheduled_date__isnull=False)
+            Q(expected_date__isnull=False)
+            | Q(deadline_date__isnull=False)
+            | Q(scheduled_date__isnull=False)
         ).count()
         tasks_qs.update(
-            expected_date=F('expected_date') + shift,
-            deadline_date=F('deadline_date') + shift,
-            scheduled_date=F('scheduled_date') + shift,
+            expected_date=F("expected_date") + shift,
+            deadline_date=F("deadline_date") + shift,
+            scheduled_date=F("scheduled_date") + shift,
         )
 
         return {
@@ -576,25 +633,31 @@ class CheckInToolExecutor:
         if not ms:
             return {"error": f"Milestone {milestone_id} not found", "success": False}
 
-        goals = Goal.objects.filter(milestone=ms).annotate(
-            total_tasks=Count('task'),
-            completed_tasks=Count('task', filter=Q(task__status='completed')),
-            pending_tasks=Count('task', filter=Q(task__status='pending')),
-        ).order_by('order')
+        goals = (
+            Goal.objects.filter(milestone=ms)
+            .annotate(
+                total_tasks=Count("task"),
+                completed_tasks=Count("task", filter=Q(task__status="completed")),
+                pending_tasks=Count("task", filter=Q(task__status="pending")),
+            )
+            .order_by("order")
+        )
         goals_data = []
         for g in goals:
-            goals_data.append({
-                "goal_id": str(g.id),
-                "title": g.title,
-                "description": g.description[:300] if g.description else "",
-                "order": g.order,
-                "status": g.status,
-                "expected_date": str(g.expected_date) if g.expected_date else None,
-                "deadline_date": str(g.deadline_date) if g.deadline_date else None,
-                "total_tasks": g.total_tasks,
-                "completed_tasks": g.completed_tasks,
-                "pending_tasks": g.pending_tasks,
-            })
+            goals_data.append(
+                {
+                    "goal_id": str(g.id),
+                    "title": g.title,
+                    "description": g.description[:300] if g.description else "",
+                    "order": g.order,
+                    "status": g.status,
+                    "expected_date": str(g.expected_date) if g.expected_date else None,
+                    "deadline_date": str(g.deadline_date) if g.deadline_date else None,
+                    "total_tasks": g.total_tasks,
+                    "completed_tasks": g.completed_tasks,
+                    "pending_tasks": g.pending_tasks,
+                }
+            )
 
         return {
             "success": True,
@@ -611,8 +674,14 @@ class CheckInToolExecutor:
     # Finish signals
     # ---------------------------------------------------------------
 
-    def finish_check_in(self, coaching_message, months_now_covered_through,
-                        adjustment_summary='', pace_status='on_track', next_checkin_days=14):
+    def finish_check_in(
+        self,
+        coaching_message,
+        months_now_covered_through,
+        adjustment_summary="",
+        pace_status="on_track",
+        next_checkin_days=14,
+    ):
         """Signal that the check-in is complete."""
         return {
             "success": True,
@@ -623,7 +692,9 @@ class CheckInToolExecutor:
             "next_checkin_days": int(next_checkin_days),
         }
 
-    def finish_questionnaire_generation(self, questions, opening_message='', pace_summary=''):
+    def finish_questionnaire_generation(
+        self, questions, opening_message="", pace_summary=""
+    ):
         """Signal that questionnaire generation is complete."""
         return {
             "success": True,

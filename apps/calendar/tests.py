@@ -2,14 +2,16 @@
 Tests for calendar app.
 """
 
-import pytest
-from django.utils import timezone
-from datetime import timedelta, date, time as dt_time, datetime, timezone as dt_timezone
-from rest_framework import status
-from unittest.mock import patch
+from datetime import datetime
+from datetime import time as dt_time
+from datetime import timedelta
+from datetime import timezone as dt_timezone
 
-from apps.dreams.models import Dream, Goal, Task
+from django.utils import timezone
+from rest_framework import status
+
 from apps.calendar.models import CalendarEvent, TimeBlock
+from apps.dreams.models import Dream, Goal, Task
 
 
 class TestCalendarViews:
@@ -18,30 +20,31 @@ class TestCalendarViews:
     def test_get_calendar_view(self, authenticated_client, user):
         """Test GET /api/calendar/view/?start=...&end=..."""
         # Create some scheduled tasks
-        dream = Dream.objects.create(user=user, title='Test Dream', status='active')
-        goal = Goal.objects.create(dream=dream, title='Test Goal', order=0)
+        dream = Dream.objects.create(user=user, title="Test Dream", status="active")
+        goal = Goal.objects.create(dream=dream, title="Test Goal", order=0)
 
         today = timezone.now().date()
         for i in range(5):
             task_date = today + timedelta(days=i)
             Task.objects.create(
                 goal=goal,
-                title=f'Task {i}',
+                title=f"Task {i}",
                 order=i,
                 scheduled_date=timezone.make_aware(
                     datetime.combine(task_date, dt_time(10, 0))
                 ),
-                scheduled_time='10:00',
-                duration_mins=60
+                scheduled_time="10:00",
+                duration_mins=60,
             )
 
         # Request calendar for date range using the view action
-        start_dt = datetime.combine(today, dt_time(0, 0)).strftime('%Y-%m-%dT%H:%M:%S')
-        end_dt = datetime.combine(today + timedelta(days=7), dt_time(0, 0)).strftime('%Y-%m-%dT%H:%M:%S')
+        start_dt = datetime.combine(today, dt_time(0, 0)).strftime("%Y-%m-%dT%H:%M:%S")
+        end_dt = datetime.combine(today + timedelta(days=7), dt_time(0, 0)).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
 
         response = authenticated_client.get(
-            '/api/calendar/view/',
-            {'start': start_dt, 'end': end_dt}
+            "/api/calendar/view/", {"start": start_dt, "end": end_dt}
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -50,14 +53,14 @@ class TestCalendarViews:
 
     def test_get_calendar_view_missing_params(self, authenticated_client):
         """Test GET /api/calendar/view/ without required params returns 400"""
-        response = authenticated_client.get('/api/calendar/view/')
+        response = authenticated_client.get("/api/calendar/view/")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_get_today_tasks(self, authenticated_client, user):
         """Test GET /api/calendar/today/"""
         # Create tasks for today
-        dream = Dream.objects.create(user=user, title='Test Dream', status='active')
-        goal = Goal.objects.create(dream=dream, title='Test Goal', order=0)
+        dream = Dream.objects.create(user=user, title="Test Dream", status="active")
+        goal = Goal.objects.create(dream=dream, title="Test Goal", order=0)
 
         today = timezone.now()
         yesterday = today - timedelta(days=1)
@@ -66,113 +69,126 @@ class TestCalendarViews:
         # Task for today
         Task.objects.create(
             goal=goal,
-            title='Today Task',
+            title="Today Task",
             order=0,
             scheduled_date=today,
-            status='pending'
+            status="pending",
         )
 
         # Task for yesterday (should not appear)
         Task.objects.create(
             goal=goal,
-            title='Yesterday Task',
+            title="Yesterday Task",
             order=1,
             scheduled_date=yesterday,
-            status='pending'
+            status="pending",
         )
 
         # Task for tomorrow (should not appear)
         Task.objects.create(
             goal=goal,
-            title='Tomorrow Task',
+            title="Tomorrow Task",
             order=2,
             scheduled_date=tomorrow,
-            status='pending'
+            status="pending",
         )
 
-        response = authenticated_client.get('/api/calendar/today/')
+        response = authenticated_client.get("/api/calendar/today/")
 
         assert response.status_code == status.HTTP_200_OK
         # The today action returns a plain list
         assert len(response.data) == 1
-        assert response.data[0]['task_title'] == 'Today Task'
+        assert response.data[0]["task_title"] == "Today Task"
 
-    def test_reschedule_task(self, authenticated_client, user, complete_dream_structure):
+    def test_reschedule_task(
+        self, authenticated_client, user, complete_dream_structure
+    ):
         """Test POST /api/calendar/reschedule/"""
-        task = complete_dream_structure['tasks'].first()
+        task = complete_dream_structure["tasks"].first()
 
         new_date = (timezone.now() + timedelta(days=5)).isoformat()
 
         data = {
-            'task_id': str(task.id),
-            'new_date': new_date,
+            "task_id": str(task.id),
+            "new_date": new_date,
         }
 
-        response = authenticated_client.post('/api/calendar/reschedule/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/reschedule/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['message'] == 'Task rescheduled successfully'
-        assert str(response.data['task_id']) == str(task.id)
+        assert response.data["message"] == "Task rescheduled successfully"
+        assert str(response.data["task_id"]) == str(task.id)
 
     def test_reschedule_task_missing_params(self, authenticated_client):
         """Test POST /api/calendar/reschedule/ without required params returns 400"""
-        response = authenticated_client.post('/api/calendar/reschedule/', {}, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/reschedule/", {}, format="json"
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_reschedule_task_not_found(self, authenticated_client, user):
         """Test POST /api/calendar/reschedule/ with nonexistent task returns 404"""
         import uuid
+
         data = {
-            'task_id': str(uuid.uuid4()),
-            'new_date': timezone.now().isoformat(),
+            "task_id": str(uuid.uuid4()),
+            "new_date": timezone.now().isoformat(),
         }
-        response = authenticated_client.post('/api/calendar/reschedule/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/reschedule/", data, format="json"
+        )
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_suggest_time_slots(self, authenticated_client, user):
         """Test GET /api/calendar/suggest-time-slots/?date=...&duration_mins=..."""
-        target_date = (timezone.now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
+        target_date = (timezone.now().date() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         response = authenticated_client.get(
-            f'/api/calendar/suggest-time-slots/?date={target_date}&duration_mins=60'
+            f"/api/calendar/suggest-time-slots/?date={target_date}&duration_mins=60"
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert 'slots' in response.data
-        assert response.data['date'] == target_date
-        assert response.data['duration_mins'] == 60
+        assert "slots" in response.data
+        assert response.data["date"] == target_date
+        assert response.data["duration_mins"] == 60
 
     def test_suggest_time_slots_missing_params(self, authenticated_client):
         """Test GET /api/calendar/suggest-time-slots/ without params returns 400"""
-        response = authenticated_client.get('/api/calendar/suggest-time-slots/')
+        response = authenticated_client.get("/api/calendar/suggest-time-slots/")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_suggest_time_slots_with_existing_events(self, authenticated_client, user):
         """Test time slot suggestions avoid existing events"""
         tomorrow = timezone.now().date() + timedelta(days=1)
-        target_date = tomorrow.strftime('%Y-%m-%d')
+        target_date = tomorrow.strftime("%Y-%m-%d")
 
         # Create an event blocking 10:00-11:00
         CalendarEvent.objects.create(
             user=user,
-            title='Morning Meeting',
+            title="Morning Meeting",
             start_time=timezone.make_aware(datetime.combine(tomorrow, dt_time(10, 0))),
             end_time=timezone.make_aware(datetime.combine(tomorrow, dt_time(11, 0))),
-            status='scheduled',
+            status="scheduled",
         )
 
         response = authenticated_client.get(
-            f'/api/calendar/suggest-time-slots/?date={target_date}&duration_mins=60'
+            f"/api/calendar/suggest-time-slots/?date={target_date}&duration_mins=60"
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert 'slots' in response.data
+        assert "slots" in response.data
         # All suggested slots should not overlap with 10:00-11:00
-        for slot in response.data['slots']:
-            slot_start = datetime.fromisoformat(slot['start'])
-            slot_end = datetime.fromisoformat(slot['end'])
-            event_start = datetime.combine(tomorrow, dt_time(10, 0)).replace(tzinfo=dt_timezone.utc)
-            event_end = datetime.combine(tomorrow, dt_time(11, 0)).replace(tzinfo=dt_timezone.utc)
+        for slot in response.data["slots"]:
+            slot_start = datetime.fromisoformat(slot["start"])
+            slot_end = datetime.fromisoformat(slot["end"])
+            event_start = datetime.combine(tomorrow, dt_time(10, 0)).replace(
+                tzinfo=dt_timezone.utc
+            )
+            event_end = datetime.combine(tomorrow, dt_time(11, 0)).replace(
+                tzinfo=dt_timezone.utc
+            )
             # No overlap: slot ends before event starts or slot starts after event ends
             assert slot_end <= event_start or slot_start >= event_end
 
@@ -185,18 +201,18 @@ class TestCalendarEventViewSet:
         now = timezone.now()
         CalendarEvent.objects.create(
             user=user,
-            title='Event 1',
+            title="Event 1",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
         CalendarEvent.objects.create(
             user=user,
-            title='Event 2',
+            title="Event 2",
             start_time=now + timedelta(hours=2),
             end_time=now + timedelta(hours=3),
         )
 
-        response = authenticated_client.get('/api/calendar/events/')
+        response = authenticated_client.get("/api/calendar/events/")
 
         assert response.status_code == status.HTTP_200_OK
         # CalendarEventViewSet overrides list() and returns a plain list
@@ -206,15 +222,17 @@ class TestCalendarEventViewSet:
         """Test POST /api/calendar/events/"""
         now = timezone.now() + timedelta(hours=1)
         data = {
-            'title': 'New Event',
-            'start_time': now.isoformat(),
-            'end_time': (now + timedelta(hours=1)).isoformat(),
+            "title": "New Event",
+            "start_time": now.isoformat(),
+            "end_time": (now + timedelta(hours=1)).isoformat(),
         }
 
-        response = authenticated_client.post('/api/calendar/events/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/events/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['title'] == 'New Event'
+        assert response.data["title"] == "New Event"
         # title is encrypted — verify event was created via count
         assert CalendarEvent.objects.filter(user=user).count() == 1
 
@@ -223,40 +241,44 @@ class TestCalendarEventViewSet:
         now = timezone.now() + timedelta(hours=1)
         CalendarEvent.objects.create(
             user=user,
-            title='Existing Event',
+            title="Existing Event",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
 
         data = {
-            'title': 'Conflicting Event',
-            'start_time': (now + timedelta(minutes=30)).isoformat(),
-            'end_time': (now + timedelta(hours=2)).isoformat(),
+            "title": "Conflicting Event",
+            "start_time": (now + timedelta(minutes=30)).isoformat(),
+            "end_time": (now + timedelta(hours=2)).isoformat(),
         }
 
-        response = authenticated_client.post('/api/calendar/events/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/events/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert 'conflicts' in response.data
+        assert "conflicts" in response.data
 
     def test_create_event_force_through_conflict(self, authenticated_client, user):
         """Test POST /api/calendar/events/ with force=true bypasses conflict"""
         now = timezone.now() + timedelta(hours=1)
         CalendarEvent.objects.create(
             user=user,
-            title='Existing Event',
+            title="Existing Event",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
 
         data = {
-            'title': 'Forced Event',
-            'start_time': (now + timedelta(minutes=30)).isoformat(),
-            'end_time': (now + timedelta(hours=2)).isoformat(),
-            'force': True,
+            "title": "Forced Event",
+            "start_time": (now + timedelta(minutes=30)).isoformat(),
+            "end_time": (now + timedelta(hours=2)).isoformat(),
+            "force": True,
         }
 
-        response = authenticated_client.post('/api/calendar/events/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/events/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
 
@@ -265,7 +287,7 @@ class TestCalendarEventViewSet:
         now = timezone.now() + timedelta(hours=1)
         event = CalendarEvent.objects.create(
             user=user,
-            title='Event to Reschedule',
+            title="Event to Reschedule",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
@@ -274,14 +296,12 @@ class TestCalendarEventViewSet:
         new_end = new_start + timedelta(hours=1)
 
         data = {
-            'start_time': new_start.isoformat(),
-            'end_time': new_end.isoformat(),
+            "start_time": new_start.isoformat(),
+            "end_time": new_end.isoformat(),
         }
 
         response = authenticated_client.patch(
-            f'/api/calendar/events/{event.id}/reschedule/',
-            data,
-            format='json'
+            f"/api/calendar/events/{event.id}/reschedule/", data, format="json"
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -294,12 +314,12 @@ class TestCalendarEventViewSet:
         now = timezone.now()
         event = CalendarEvent.objects.create(
             user=user,
-            title='Event to Delete',
+            title="Event to Delete",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
 
-        response = authenticated_client.delete(f'/api/calendar/events/{event.id}/')
+        response = authenticated_client.delete(f"/api/calendar/events/{event.id}/")
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not CalendarEvent.objects.filter(id=event.id).exists()
@@ -312,31 +332,33 @@ class TestTimeBlockViewSet:
         """Test GET /api/calendar/timeblocks/"""
         TimeBlock.objects.create(
             user=user,
-            block_type='work',
+            block_type="work",
             day_of_week=0,
             start_time=dt_time(9, 0),
             end_time=dt_time(17, 0),
         )
 
-        response = authenticated_client.get('/api/calendar/timeblocks/')
+        response = authenticated_client.get("/api/calendar/timeblocks/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 1
+        assert len(response.data["results"]) == 1
 
     def test_create_time_block(self, authenticated_client, user):
         """Test POST /api/calendar/timeblocks/"""
         data = {
-            'block_type': 'exercise',
-            'day_of_week': 1,
-            'start_time': '06:00',
-            'end_time': '07:00',
+            "block_type": "exercise",
+            "day_of_week": 1,
+            "start_time": "06:00",
+            "end_time": "07:00",
         }
 
-        response = authenticated_client.post('/api/calendar/timeblocks/', data, format='json')
+        response = authenticated_client.post(
+            "/api/calendar/timeblocks/", data, format="json"
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['block_type'] == 'exercise'
-        assert TimeBlock.objects.filter(user=user, block_type='exercise').exists()
+        assert response.data["block_type"] == "exercise"
+        assert TimeBlock.objects.filter(user=user, block_type="exercise").exists()
 
 
 class TestCalendarEventModel:
@@ -347,7 +369,7 @@ class TestCalendarEventModel:
         now = timezone.now()
         event = CalendarEvent.objects.create(
             user=user,
-            title='Test Event',
+            title="Test Event",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
@@ -358,15 +380,15 @@ class TestCalendarEventModel:
         now = timezone.now()
         event = CalendarEvent.objects.create(
             user=user,
-            title='New Event',
+            title="New Event",
             start_time=now,
             end_time=now + timedelta(hours=1),
         )
-        assert event.status == 'scheduled'
+        assert event.status == "scheduled"
 
     def test_event_with_task_link(self, db, user, complete_dream_structure):
         """Test CalendarEvent linked to a Task"""
-        task = complete_dream_structure['tasks'].first()
+        task = complete_dream_structure["tasks"].first()
         now = timezone.now()
         event = CalendarEvent.objects.create(
             user=user,
@@ -385,7 +407,7 @@ class TestTimeBlockModel:
         """Test TimeBlock string representation"""
         block = TimeBlock.objects.create(
             user=user,
-            block_type='work',
+            block_type="work",
             day_of_week=0,
             start_time=dt_time(9, 0),
             end_time=dt_time(17, 0),

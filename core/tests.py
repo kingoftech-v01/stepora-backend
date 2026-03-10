@@ -2,26 +2,34 @@
 Tests for core utilities.
 """
 
-import pytest
-from django.test import RequestFactory
+from unittest.mock import Mock, patch
+
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
-from unittest.mock import Mock, patch
 
+from apps.dreams.models import Dream
+from apps.users.models import User
+
+from .exceptions import OpenAIError, ValidationError
+from .pagination import LargeResultsSetPagination, StandardResultsSetPagination
 from .permissions import (
-    IsOwner, IsPremiumUser, IsProUser, CanCreateDream,
-    CanUseAI, CanUseBuddy, CanUseCircles, CanUseVisionBoard, CanUseLeague,
+    CanCreateDream,
+    CanUseAI,
+    CanUseBuddy,
+    CanUseCircles,
+    CanUseLeague,
+    CanUseVisionBoard,
+    IsOwner,
+    IsPremiumUser,
+    IsProUser,
 )
 from .throttling import (
-    AIChatThrottle, AIPlanGenerationThrottle,
-    SubscriptionThrottle, StorePurchaseThrottle,
+    AIChatThrottle,
+    AIPlanGenerationThrottle,
+    StorePurchaseThrottle,
+    SubscriptionThrottle,
 )
-from .pagination import StandardResultsSetPagination, LargeResultsSetPagination
-from .exceptions import OpenAIError, ValidationError
-from .views import health_check, liveness_check, readiness_check
-from apps.users.models import User
-from apps.dreams.models import Dream
 
 
 class TestPermissions:
@@ -32,7 +40,7 @@ class TestPermissions:
         permission = IsOwner()
 
         # Create object owned by user
-        dream = Dream.objects.create(user=user, title='Test Dream')
+        dream = Dream.objects.create(user=user, title="Test Dream")
 
         # Mock view with object
         view = Mock()
@@ -50,12 +58,10 @@ class TestPermissions:
         permission = IsOwner()
 
         # Create another user
-        other_user = User.objects.create(
-            email=f'other_{user_data["email"]}'
-        )
+        other_user = User.objects.create(email=f'other_{user_data["email"]}')
 
         # Create object owned by other user
-        dream = Dream.objects.create(user=other_user, title='Test Dream')
+        dream = Dream.objects.create(user=other_user, title="Test Dream")
 
         # Mock request with different user
         request = Mock()
@@ -92,13 +98,13 @@ class TestPagination:
         """Test StandardResultsSetPagination"""
         # Create 50 dreams
         for i in range(50):
-            Dream.objects.create(user=user, title=f'Dream {i}')
+            Dream.objects.create(user=user, title=f"Dream {i}")
 
         pagination = StandardResultsSetPagination()
 
         # Mock request - wrap in DRF Request for query_params support
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/dreams/'))
+        request = Request(factory.get("/api/dreams/"))
 
         queryset = Dream.objects.all()
         paginated_queryset = pagination.paginate_queryset(queryset, request)
@@ -108,19 +114,19 @@ class TestPagination:
 
         response = pagination.get_paginated_response([])
 
-        assert response.data['pagination']['count'] == 50
-        assert response.data['pagination']['page_size'] == 20
-        assert response.data['pagination']['total_pages'] == 3
+        assert response.data["pagination"]["count"] == 50
+        assert response.data["pagination"]["page_size"] == 20
+        assert response.data["pagination"]["total_pages"] == 3
 
     def test_standard_pagination_custom_page_size(self, db, user):
         """Test StandardResultsSetPagination with custom page size"""
         for i in range(50):
-            Dream.objects.create(user=user, title=f'Dream {i}')
+            Dream.objects.create(user=user, title=f"Dream {i}")
 
         pagination = StandardResultsSetPagination()
 
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/dreams/?page_size=30'))
+        request = Request(factory.get("/api/dreams/?page_size=30"))
 
         queryset = Dream.objects.all()
         paginated_queryset = pagination.paginate_queryset(queryset, request)
@@ -130,12 +136,12 @@ class TestPagination:
     def test_large_pagination(self, db, user):
         """Test LargeResultsSetPagination"""
         for i in range(100):
-            Dream.objects.create(user=user, title=f'Dream {i}')
+            Dream.objects.create(user=user, title=f"Dream {i}")
 
         pagination = LargeResultsSetPagination()
 
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/dreams/'))
+        request = Request(factory.get("/api/dreams/"))
 
         queryset = Dream.objects.all()
         paginated_queryset = pagination.paginate_queryset(queryset, request)
@@ -149,16 +155,16 @@ class TestExceptions:
 
     def test_openai_error(self):
         """Test OpenAIError exception"""
-        error = OpenAIError('API rate limit exceeded')
+        error = OpenAIError("API rate limit exceeded")
 
-        assert str(error) == 'API rate limit exceeded'
+        assert str(error) == "API rate limit exceeded"
         assert isinstance(error, Exception)
 
     def test_validation_error(self):
         """Test ValidationError exception"""
-        error = ValidationError('Invalid input data')
+        error = ValidationError("Invalid input data")
 
-        assert str(error) == 'Invalid input data'
+        assert str(error) == "Invalid input data"
         assert isinstance(error, Exception)
 
 
@@ -167,40 +173,43 @@ class TestHealthChecks:
 
     def test_health_check(self, api_client):
         """Test GET /health/"""
-        response = api_client.get('/health/')
+        response = api_client.get("/health/")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['status'] == 'healthy'
-        assert 'timestamp' in data
+        assert data["status"] == "healthy"
+        assert "timestamp" in data
 
     def test_liveness_probe(self, api_client):
         """Test GET /health/liveness/"""
-        response = api_client.get('/health/liveness/')
+        response = api_client.get("/health/liveness/")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['status'] == 'alive'
+        assert data["status"] == "alive"
 
     def test_readiness_probe(self, api_client):
         """Test GET /health/readiness/"""
-        response = api_client.get('/health/readiness/')
+        response = api_client.get("/health/readiness/")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['status'] == 'ready'
+        assert data["status"] == "ready"
 
     def test_readiness_probe_db_failure(self, api_client):
         """Test readiness probe with DB failure"""
-        with patch('core.views._check_database') as mock_db:
-            mock_db.return_value = {'status': 'down', 'error': 'Database connection failed'}
+        with patch("core.views._check_database") as mock_db:
+            mock_db.return_value = {
+                "status": "down",
+                "error": "Database connection failed",
+            }
 
-            response = api_client.get('/health/readiness/')
+            response = api_client.get("/health/readiness/")
 
             assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
             data = response.json()
-            assert data['status'] == 'not ready'
-            assert data['reason'] == 'database unavailable'
+            assert data["status"] == "not ready"
+            assert data["reason"] == "database unavailable"
 
 
 class TestMiddleware:
@@ -210,12 +219,12 @@ class TestMiddleware:
         """Test request logging middleware"""
         # This would test custom middleware if implemented
         # For now, just verify requests work
-        response = api_client.get('/health/')
+        response = api_client.get("/health/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_cors_middleware(self, api_client):
         """Test CORS headers"""
-        response = api_client.get('/health/')
+        response = api_client.get("/health/")
 
         # Check CORS headers are set
         # This depends on CORS configuration
@@ -227,14 +236,14 @@ class TestAuthentication:
 
     def test_get_user_from_request(self, authenticated_client, user):
         """Test extracting user from authenticated request"""
-        response = authenticated_client.get('/api/users/me/')
+        response = authenticated_client.get("/api/users/me/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['email'] == user.email
+        assert response.data["email"] == user.email
 
     def test_unauthenticated_request(self, api_client):
         """Test unauthenticated request handling"""
-        response = api_client.get('/api/users/me/')
+        response = api_client.get("/api/users/me/")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -273,14 +282,14 @@ class TestCanCreateDream:
     def test_allows_get_requests(self, user):
         permission = CanCreateDream()
         request = Mock()
-        request.method = 'GET'
+        request.method = "GET"
         request.user = user
         assert permission.has_permission(request, Mock()) is True
 
     def test_allows_post_when_can_create(self, user):
         permission = CanCreateDream()
         request = Mock()
-        request.method = 'POST'
+        request.method = "POST"
         request.user = user
         request.user.can_create_dream = Mock(return_value=True)
         assert permission.has_permission(request, Mock()) is True
@@ -288,7 +297,7 @@ class TestCanCreateDream:
     def test_denies_post_when_limit_reached(self, user):
         permission = CanCreateDream()
         request = Mock()
-        request.method = 'POST'
+        request.method = "POST"
         request.user = user
         request.user.can_create_dream = Mock(return_value=False)
         assert permission.has_permission(request, Mock()) is False
@@ -344,28 +353,28 @@ class TestCanUseCircles:
     def test_post_allowed_for_pro(self, pro_user):
         permission = CanUseCircles()
         request = Mock()
-        request.method = 'POST'
+        request.method = "POST"
         request.user = pro_user
         assert permission.has_permission(request, Mock()) is True
 
     def test_post_denied_for_premium(self, premium_user):
         permission = CanUseCircles()
         request = Mock()
-        request.method = 'POST'
+        request.method = "POST"
         request.user = premium_user
         assert permission.has_permission(request, Mock()) is False
 
     def test_get_allowed_for_premium(self, premium_user):
         permission = CanUseCircles()
         request = Mock()
-        request.method = 'GET'
+        request.method = "GET"
         request.user = premium_user
         assert permission.has_permission(request, Mock()) is True
 
     def test_get_denied_for_free(self, user):
         permission = CanUseCircles()
         request = Mock()
-        request.method = 'GET'
+        request.method = "GET"
         request.user = user
         assert permission.has_permission(request, Mock()) is False
 
@@ -419,16 +428,16 @@ class TestThrottleClasses:
 
     def test_ai_chat_throttle_scope(self):
         throttle = AIChatThrottle()
-        assert throttle.scope == 'ai_chat'
+        assert throttle.scope == "ai_chat"
 
     def test_ai_plan_generation_throttle_scope(self):
         throttle = AIPlanGenerationThrottle()
-        assert throttle.scope == 'ai_plan'
+        assert throttle.scope == "ai_plan"
 
     def test_subscription_throttle_scope(self):
         throttle = SubscriptionThrottle()
-        assert throttle.scope == 'subscription'
+        assert throttle.scope == "subscription"
 
     def test_store_purchase_throttle_scope(self):
         throttle = StorePurchaseThrottle()
-        assert throttle.scope == 'store_purchase'
+        assert throttle.scope == "store_purchase"

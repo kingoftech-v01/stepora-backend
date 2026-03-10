@@ -91,10 +91,28 @@ jobs:
           flags: backend
           name: django-coverage
 
+  lint:
+    name: Lint Django
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install linters
+        run: pip install black isort flake8
+      - name: Check Black formatting
+        run: black --check --exclude='migrations|venv' .
+      - name: Check isort imports
+        run: isort --check-only --skip-glob='*/migrations/*' --profile black .
+      - name: Run Flake8
+        run: flake8 .
+
   build:
     name: Build Docker
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, lint]
 
     steps:
       - name: Checkout code

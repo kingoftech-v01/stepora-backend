@@ -1,21 +1,18 @@
 import base64
 import hashlib
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.exceptions import InvalidSignature
-
 from django.conf import settings
-
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .models import AppBundle
-
 
 # ── Load public key once at module level ──────────────────────
 
@@ -76,9 +73,13 @@ class UpdateCheckView(APIView):
             "or client already has the latest bundle."
         ),
         parameters=[
-            OpenApiParameter("platform", str, description="Client platform: android, ios"),
+            OpenApiParameter(
+                "platform", str, description="Client platform: android, ios"
+            ),
             OpenApiParameter("app_version", str, description="Native versionCode"),
-            OpenApiParameter("bundle_id", str, description="Currently installed bundle ID"),
+            OpenApiParameter(
+                "bundle_id", str, description="Currently installed bundle ID"
+            ),
         ],
         tags=["Updates"],
     )
@@ -113,15 +114,17 @@ class UpdateCheckView(APIView):
         # Build download URL (S3 signed URL via storage backend)
         download_url = bundle.bundle_file.url
 
-        return Response({
-            "bundleId": bundle.bundle_id,
-            "url": download_url,
-            "strategy": bundle.strategy,
-            "checksum": bundle.checksum or None,
-            "signature": bundle.signature or None,
-            "message": bundle.message or None,
-            "minAppVersion": bundle.min_app_version,
-        })
+        return Response(
+            {
+                "bundleId": bundle.bundle_id,
+                "url": download_url,
+                "strategy": bundle.strategy,
+                "checksum": bundle.checksum or None,
+                "signature": bundle.signature or None,
+                "message": bundle.message or None,
+                "minAppVersion": bundle.min_app_version,
+            }
+        )
 
 
 class BundleUploadView(APIView):
@@ -215,12 +218,15 @@ class BundleUploadView(APIView):
         )
         bundle.save()
 
-        return Response({
-            "bundleId": bundle.bundle_id,
-            "checksum": bundle.checksum,
-            "url": bundle.bundle_file.url,
-            "strategy": bundle.strategy,
-            "platform": bundle.platform,
-            "signed": bool(signature),
-            "createdAt": bundle.created_at.isoformat(),
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "bundleId": bundle.bundle_id,
+                "checksum": bundle.checksum,
+                "url": bundle.bundle_file.url,
+                "strategy": bundle.strategy,
+                "platform": bundle.platform,
+                "signed": bool(signature),
+                "createdAt": bundle.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
+        )

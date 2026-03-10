@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class GoogleCalendarService:
     """Service for interacting with Google Calendar API."""
 
-    SCOPES = ['https://www.googleapis.com/auth/calendar']
+    SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
     def __init__(self, integration=None):
         """
@@ -42,11 +42,11 @@ class GoogleCalendarService:
 
         flow = Flow.from_client_config(
             {
-                'web': {
-                    'client_id': settings.GOOGLE_CALENDAR_CLIENT_ID,
-                    'client_secret': settings.GOOGLE_CALENDAR_CLIENT_SECRET,
-                    'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                    'token_uri': 'https://oauth2.googleapis.com/token',
+                "web": {
+                    "client_id": settings.GOOGLE_CALENDAR_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CALENDAR_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
                 }
             },
             scopes=self.SCOPES,
@@ -54,9 +54,9 @@ class GoogleCalendarService:
         )
 
         auth_url, _ = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent',
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
         )
         return auth_url
 
@@ -75,11 +75,11 @@ class GoogleCalendarService:
 
         flow = Flow.from_client_config(
             {
-                'web': {
-                    'client_id': settings.GOOGLE_CALENDAR_CLIENT_ID,
-                    'client_secret': settings.GOOGLE_CALENDAR_CLIENT_SECRET,
-                    'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                    'token_uri': 'https://oauth2.googleapis.com/token',
+                "web": {
+                    "client_id": settings.GOOGLE_CALENDAR_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CALENDAR_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
                 }
             },
             scopes=self.SCOPES,
@@ -90,9 +90,9 @@ class GoogleCalendarService:
         credentials = flow.credentials
 
         return {
-            'access_token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_expiry': credentials.expiry,
+            "access_token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_expiry": credentials.expiry,
         }
 
     def _get_credentials(self):
@@ -102,7 +102,7 @@ class GoogleCalendarService:
         creds = Credentials(
             token=self.integration.access_token,
             refresh_token=self.integration.refresh_token,
-            token_uri='https://oauth2.googleapis.com/token',
+            token_uri="https://oauth2.googleapis.com/token",
             client_id=settings.GOOGLE_CALENDAR_CLIENT_ID,
             client_secret=settings.GOOGLE_CALENDAR_CLIENT_SECRET,
         )
@@ -110,18 +110,22 @@ class GoogleCalendarService:
         # Refresh if expired
         if self.integration.token_expiry <= timezone.now():
             from google.auth.transport.requests import Request
+
             creds.refresh(Request())
             self.integration.access_token = creds.token
             self.integration.token_expiry = creds.expiry
-            self.integration.save(update_fields=['access_token', 'token_expiry', 'updated_at'])
+            self.integration.save(
+                update_fields=["access_token", "token_expiry", "updated_at"]
+            )
 
         return creds
 
     def _get_service(self):
         """Build the Google Calendar API service."""
         from googleapiclient.discovery import build
+
         creds = self._get_credentials()
-        return build('calendar', 'v3', credentials=creds)
+        return build("calendar", "v3", credentials=creds)
 
     def push_event(self, calendar_event):
         """
@@ -136,40 +140,48 @@ class GoogleCalendarService:
         service = self._get_service()
 
         body = {
-            'summary': calendar_event.title,
-            'description': calendar_event.description,
-            'start': {
-                'dateTime': calendar_event.start_time.isoformat(),
-                'timeZone': 'UTC',
+            "summary": calendar_event.title,
+            "description": calendar_event.description,
+            "start": {
+                "dateTime": calendar_event.start_time.isoformat(),
+                "timeZone": "UTC",
             },
-            'end': {
-                'dateTime': calendar_event.end_time.isoformat(),
-                'timeZone': 'UTC',
+            "end": {
+                "dateTime": calendar_event.end_time.isoformat(),
+                "timeZone": "UTC",
             },
         }
 
         if calendar_event.location:
-            body['location'] = calendar_event.location
+            body["location"] = calendar_event.location
 
         # Check if event already has a Google Calendar ID
         google_id = calendar_event.google_event_id or None
 
         if google_id:
-            event = service.events().update(
-                calendarId=self.integration.calendar_id,
-                eventId=google_id,
-                body=body,
-            ).execute()
+            event = (
+                service.events()
+                .update(
+                    calendarId=self.integration.calendar_id,
+                    eventId=google_id,
+                    body=body,
+                )
+                .execute()
+            )
         else:
-            event = service.events().insert(
-                calendarId=self.integration.calendar_id,
-                body=body,
-            ).execute()
+            event = (
+                service.events()
+                .insert(
+                    calendarId=self.integration.calendar_id,
+                    body=body,
+                )
+                .execute()
+            )
             # Persist the new Google event ID back to the local record
-            calendar_event.google_event_id = event['id']
-            calendar_event.save(update_fields=['google_event_id', 'updated_at'])
+            calendar_event.google_event_id = event["id"]
+            calendar_event.save(update_fields=["google_event_id", "updated_at"])
 
-        return event['id']
+        return event["id"]
 
     def delete_event(self, google_event_id):
         """Delete an event from Google Calendar."""
@@ -191,47 +203,51 @@ class GoogleCalendarService:
         service = self._get_service()
 
         kwargs = {
-            'calendarId': self.integration.calendar_id,
-            'singleEvents': True,
-            'orderBy': 'startTime',
+            "calendarId": self.integration.calendar_id,
+            "singleEvents": True,
+            "orderBy": "startTime",
         }
 
         if self.integration.sync_token:
-            kwargs['syncToken'] = self.integration.sync_token
+            kwargs["syncToken"] = self.integration.sync_token
         else:
             # First sync: pull events from 30 days ago to 90 days ahead
             now = timezone.now()
-            kwargs['timeMin'] = (now - timedelta(days=30)).isoformat()
-            kwargs['timeMax'] = (now + timedelta(days=90)).isoformat()
+            kwargs["timeMin"] = (now - timedelta(days=30)).isoformat()
+            kwargs["timeMax"] = (now + timedelta(days=90)).isoformat()
 
         all_events = []
         page_token = None
 
         while True:
             if page_token:
-                kwargs['pageToken'] = page_token
+                kwargs["pageToken"] = page_token
 
             try:
                 result = service.events().list(**kwargs).execute()
             except Exception as e:
                 # If sync token is invalid, do a full sync
-                if 'fullSyncRequired' in str(e) or '410' in str(e):
-                    logger.warning("Full sync required for user %s", self.integration.user.email)
-                    self.integration.sync_token = ''
-                    self.integration.save(update_fields=['sync_token'])
+                if "fullSyncRequired" in str(e) or "410" in str(e):
+                    logger.warning(
+                        "Full sync required for user %s", self.integration.user.email
+                    )
+                    self.integration.sync_token = ""
+                    self.integration.save(update_fields=["sync_token"])
                     return self.pull_events()
                 raise
 
-            all_events.extend(result.get('items', []))
-            page_token = result.get('nextPageToken')
+            all_events.extend(result.get("items", []))
+            page_token = result.get("nextPageToken")
 
             if not page_token:
                 # Save sync token for next incremental sync
-                new_sync_token = result.get('nextSyncToken', '')
+                new_sync_token = result.get("nextSyncToken", "")
                 if new_sync_token:
                     self.integration.sync_token = new_sync_token
                     self.integration.last_sync_at = timezone.now()
-                    self.integration.save(update_fields=['sync_token', 'last_sync_at', 'updated_at'])
+                    self.integration.save(
+                        update_fields=["sync_token", "last_sync_at", "updated_at"]
+                    )
                 break
 
         return all_events

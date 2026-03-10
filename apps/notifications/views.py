@@ -2,59 +2,97 @@
 Views for Notifications app.
 """
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count
-from django.utils import timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
+import logging
 
-from .models import Notification, NotificationTemplate, WebPushSubscription, UserDevice, NotificationBatch
+from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+
+from .models import (
+    Notification,
+    NotificationBatch,
+    NotificationTemplate,
+    UserDevice,
+    WebPushSubscription,
+)
 from .serializers import (
-    NotificationSerializer, NotificationCreateSerializer,
-    NotificationTemplateSerializer, WebPushSubscriptionSerializer,
-    UserDeviceSerializer, NotificationBatchSerializer,
+    NotificationBatchSerializer,
+    NotificationCreateSerializer,
+    NotificationSerializer,
+    NotificationTemplateSerializer,
+    UserDeviceSerializer,
+    WebPushSubscriptionSerializer,
 )
 
-import logging
 logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List notifications", description="Get all notifications for the current user", tags=["Notifications"]),
-    create=extend_schema(summary="Create notification", description="Create a new notification", responses={400: OpenApiResponse(description='Validation error.')}, tags=["Notifications"]),
-    retrieve=extend_schema(summary="Get notification", description="Get a specific notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
-    update=extend_schema(summary="Update notification", description="Update a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
-    partial_update=extend_schema(summary="Partial update notification", description="Partially update a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
-    destroy=extend_schema(summary="Delete notification", description="Delete a notification", responses={404: OpenApiResponse(description='Resource not found.')}, tags=["Notifications"]),
+    list=extend_schema(
+        summary="List notifications",
+        description="Get all notifications for the current user",
+        tags=["Notifications"],
+    ),
+    create=extend_schema(
+        summary="Create notification",
+        description="Create a new notification",
+        responses={400: OpenApiResponse(description="Validation error.")},
+        tags=["Notifications"],
+    ),
+    retrieve=extend_schema(
+        summary="Get notification",
+        description="Get a specific notification",
+        responses={404: OpenApiResponse(description="Resource not found.")},
+        tags=["Notifications"],
+    ),
+    update=extend_schema(
+        summary="Update notification",
+        description="Update a notification",
+        responses={404: OpenApiResponse(description="Resource not found.")},
+        tags=["Notifications"],
+    ),
+    partial_update=extend_schema(
+        summary="Partial update notification",
+        description="Partially update a notification",
+        responses={404: OpenApiResponse(description="Resource not found.")},
+        tags=["Notifications"],
+    ),
+    destroy=extend_schema(
+        summary="Delete notification",
+        description="Delete a notification",
+        responses={404: OpenApiResponse(description="Resource not found.")},
+        tags=["Notifications"],
+    ),
 )
 class NotificationViewSet(viewsets.ModelViewSet):
     """CRUD operations for notifications."""
 
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['notification_type', 'status']
-    ordering = ['-scheduled_for']
-    lookup_value_regex = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    filterset_fields = ["notification_type", "status"]
+    ordering = ["-scheduled_for"]
+    lookup_value_regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
     # Notification types accessible to free users
-    FREE_TIER_TYPES = {'reminder', 'progress', 'dream_completed', 'system'}
+    FREE_TIER_TYPES = {"reminder", "progress", "dream_completed", "system"}
 
     def get_queryset(self):
         """Get notifications for current user, filtered by subscription tier."""
-        if getattr(self, 'swagger_fake_view', False):
+        if getattr(self, "swagger_fake_view", False):
             return Notification.objects.none()
         qs = Notification.objects.filter(user=self.request.user)
         # Free users only see basic notification types
-        if self.request.user.subscription == 'free':
+        if self.request.user.subscription == "free":
             qs = qs.filter(notification_type__in=self.FREE_TIER_TYPES)
         return qs
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
-        if self.action == 'create':
+        if self.action == "create":
             return NotificationCreateSerializer
         return NotificationSerializer
 
@@ -62,8 +100,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """Create notification for current user."""
         serializer.save(user=self.request.user)
 
-    @extend_schema(summary="Mark as read", description="Mark a notification as read", tags=["Notifications"], responses={200: NotificationSerializer, 404: OpenApiResponse(description='Resource not found.')})
-    @action(detail=True, methods=['post'])
+    @extend_schema(
+        summary="Mark as read",
+        description="Mark a notification as read",
+        tags=["Notifications"],
+        responses={
+            200: NotificationSerializer,
+            404: OpenApiResponse(description="Resource not found."),
+        },
+    )
+    @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
         """Mark notification as read."""
         notification = self.get_object()
@@ -71,65 +117,99 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
         return Response(NotificationSerializer(notification).data)
 
-    @extend_schema(summary="Mark all as read", description="Delete all notifications for the current user (clears the inbox)", tags=["Notifications"], responses={200: dict})
-    @action(detail=False, methods=['post'])
+    @extend_schema(
+        summary="Mark all as read",
+        description="Delete all notifications for the current user (clears the inbox)",
+        tags=["Notifications"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
         """Delete all notifications to free up space."""
         deleted, _ = Notification.objects.filter(
             user=request.user,
         ).delete()
 
-        return Response({'marked_read': deleted})
+        return Response({"marked_read": deleted})
 
-    @extend_schema(summary="Get unread count", description="Get count of unread notifications", tags=["Notifications"], responses={200: dict})
-    @action(detail=False, methods=['get'])
+    @extend_schema(
+        summary="Get unread count",
+        description="Get count of unread notifications",
+        tags=["Notifications"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"])
     def unread_count(self, request):
         """Get count of unread notifications."""
         count = Notification.objects.filter(
-            user=request.user,
-            read_at__isnull=True,
-            status='sent'
+            user=request.user, read_at__isnull=True, status="sent"
         ).count()
 
-        return Response({'unread_count': count})
+        return Response({"unread_count": count})
 
-    @extend_schema(summary="Mark as opened", description="Mark a notification as opened/interacted with", tags=["Notifications"], responses={200: NotificationSerializer, 404: OpenApiResponse(description='Resource not found.')})
-    @action(detail=True, methods=['post'])
+    @extend_schema(
+        summary="Mark as opened",
+        description="Mark a notification as opened/interacted with",
+        tags=["Notifications"],
+        responses={
+            200: NotificationSerializer,
+            404: OpenApiResponse(description="Resource not found."),
+        },
+    )
+    @action(detail=True, methods=["post"])
     def opened(self, request, pk=None):
         """Mark notification as opened (for analytics tracking)."""
         notification = self.get_object()
         notification.mark_opened()
         return Response(NotificationSerializer(notification).data)
 
-    @extend_schema(summary="Grouped notifications", description="Get notifications grouped by type with counts", tags=["Notifications"], responses={200: dict})
-    @action(detail=False, methods=['get'])
+    @extend_schema(
+        summary="Grouped notifications",
+        description="Get notifications grouped by type with counts",
+        tags=["Notifications"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"])
     def grouped(self, request):
         """Get notifications grouped by type."""
         from django.db.models import Q
 
-        groups = Notification.objects.filter(
-            user=request.user,
-            status='sent',
-        ).values('notification_type').annotate(
-            total=Count('id'),
-            unread=Count('id', filter=Q(read_at__isnull=True)),
-        ).order_by('-total')
+        groups = (
+            Notification.objects.filter(
+                user=request.user,
+                status="sent",
+            )
+            .values("notification_type")
+            .annotate(
+                total=Count("id"),
+                unread=Count("id", filter=Q(read_at__isnull=True)),
+            )
+            .order_by("-total")
+        )
 
         result = [
             {
-                'type': g['notification_type'],
-                'total': g['total'],
-                'unread': g['unread'],
+                "type": g["notification_type"],
+                "total": g["total"],
+                "unread": g["unread"],
             }
             for g in groups
         ]
 
-        return Response({'groups': result})
+        return Response({"groups": result})
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List templates", description="Get all notification templates", tags=["Notification Templates"]),
-    retrieve=extend_schema(summary="Get template", description="Get a specific notification template", tags=["Notification Templates"]),
+    list=extend_schema(
+        summary="List templates",
+        description="Get all notification templates",
+        tags=["Notification Templates"],
+    ),
+    retrieve=extend_schema(
+        summary="Get template",
+        description="Get a specific notification template",
+        tags=["Notification Templates"],
+    ),
 )
 class NotificationTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only access to notification templates."""
@@ -140,19 +220,31 @@ class NotificationTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema_view(
-    create=extend_schema(summary="Register push subscription", description="Register a Web Push subscription for the current user", tags=["Notifications"]),
-    destroy=extend_schema(summary="Remove push subscription", description="Remove a Web Push subscription", tags=["Notifications"]),
-    list=extend_schema(summary="List push subscriptions", description="List Web Push subscriptions for the current user", tags=["Notifications"]),
+    create=extend_schema(
+        summary="Register push subscription",
+        description="Register a Web Push subscription for the current user",
+        tags=["Notifications"],
+    ),
+    destroy=extend_schema(
+        summary="Remove push subscription",
+        description="Remove a Web Push subscription",
+        tags=["Notifications"],
+    ),
+    list=extend_schema(
+        summary="List push subscriptions",
+        description="List Web Push subscriptions for the current user",
+        tags=["Notifications"],
+    ),
 )
 class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
     """Manage Web Push subscriptions."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = WebPushSubscriptionSerializer
-    http_method_names = ['get', 'post', 'delete']
+    http_method_names = ["get", "post", "delete"]
 
     def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
+        if getattr(self, "swagger_fake_view", False):
             return WebPushSubscription.objects.none()
         return WebPushSubscription.objects.filter(
             user=self.request.user,
@@ -161,7 +253,9 @@ class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Deactivate existing subscriptions with the same endpoint
-        endpoint = serializer.validated_data.get('subscription_info', {}).get('endpoint')
+        endpoint = serializer.validated_data.get("subscription_info", {}).get(
+            "endpoint"
+        )
         if endpoint:
             WebPushSubscription.objects.filter(
                 user=self.request.user,
@@ -175,7 +269,7 @@ class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
     create=extend_schema(
         summary="Register device for push notifications",
         description="Register an FCM token for the current user's device. "
-                    "If the token already exists, the existing registration is updated.",
+        "If the token already exists, the existing registration is updated.",
         tags=["Notifications"],
     ),
     list=extend_schema(
@@ -194,10 +288,10 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated]
     serializer_class = UserDeviceSerializer
-    http_method_names = ['get', 'post', 'delete']
+    http_method_names = ["get", "post", "delete"]
 
     def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
+        if getattr(self, "swagger_fake_view", False):
             return UserDevice.objects.none()
         return UserDevice.objects.filter(
             user=self.request.user,
@@ -210,7 +304,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         Deletes any existing registration with the same token BEFORE
         serializer validation (to avoid unique constraint rejection).
         """
-        fcm_token = request.data.get('fcm_token', '')
+        fcm_token = request.data.get("fcm_token", "")
         if fcm_token:
             UserDevice.objects.filter(fcm_token=fcm_token).delete()
 
@@ -222,12 +316,14 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         self._subscribe_to_user_topics(device)
 
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
     def perform_destroy(self, instance):
         """Soft-delete: deactivate rather than hard-delete."""
         instance.is_active = False
-        instance.save(update_fields=['is_active'])
+        instance.save(update_fields=["is_active"])
 
         # Unsubscribe from all topics
         self._unsubscribe_from_all_topics(instance)
@@ -236,20 +332,18 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         """Subscribe device to FCM topics based on notification_prefs."""
         try:
             from .fcm_service import FCMService
+
             fcm = FCMService()
 
             # Always subscribe to user-specific topic
-            fcm.subscribe_to_topic(
-                [device.fcm_token],
-                f'user_{device.user.id}'
-            )
+            fcm.subscribe_to_topic([device.fcm_token], f"user_{device.user.id}")
 
             # Subscribe to notification type topics based on prefs
             prefs = device.user.notification_prefs or {}
             topic_map = {
-                'motivation': 'topic_motivation',
-                'weekly_report': 'topic_weekly_report',
-                'achievement': 'topic_achievement',
+                "motivation": "topic_motivation",
+                "weekly_report": "topic_weekly_report",
+                "achievement": "topic_achievement",
             }
             for pref_key, topic_name in topic_map.items():
                 if prefs.get(pref_key, True):
@@ -262,12 +356,13 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         """Unsubscribe device from all known FCM topics."""
         try:
             from .fcm_service import FCMService
+
             fcm = FCMService()
             topics = [
-                f'user_{device.user.id}',
-                'topic_motivation',
-                'topic_weekly_report',
-                'topic_achievement',
+                f"user_{device.user.id}",
+                "topic_motivation",
+                "topic_weekly_report",
+                "topic_achievement",
             ]
             for topic in topics:
                 fcm.unsubscribe_from_topic([device.fcm_token], topic)
@@ -277,18 +372,18 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        summary='List notification batches',
-        description='Retrieve all notification batches. Admin access only.',
-        tags=['Notification Batches'],
+        summary="List notification batches",
+        description="Retrieve all notification batches. Admin access only.",
+        tags=["Notification Batches"],
         responses={200: NotificationBatchSerializer(many=True)},
     ),
     retrieve=extend_schema(
-        summary='Get notification batch',
-        description='Retrieve details of a specific notification batch. Admin access only.',
-        tags=['Notification Batches'],
+        summary="Get notification batch",
+        description="Retrieve details of a specific notification batch. Admin access only.",
+        tags=["Notification Batches"],
         responses={
             200: NotificationBatchSerializer,
-            404: OpenApiResponse(description='Batch not found.'),
+            404: OpenApiResponse(description="Batch not found."),
         },
     ),
 )
@@ -302,11 +397,11 @@ class NotificationBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated, IsAdminUser]
     serializer_class = NotificationBatchSerializer
-    lookup_value_regex = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    lookup_value_regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'notification_type']
+    filterset_fields = ["status", "notification_type"]
 
     def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
+        if getattr(self, "swagger_fake_view", False):
             return NotificationBatch.objects.none()
-        return NotificationBatch.objects.all().order_by('-created_at')
+        return NotificationBatch.objects.all().order_by("-created_at")

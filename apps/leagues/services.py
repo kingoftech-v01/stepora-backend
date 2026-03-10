@@ -14,14 +14,20 @@ from datetime import timedelta
 from typing import Optional
 
 from django.db import transaction
-from django.db.models import F, Window, Count
+from django.db.models import Count, F, Window
 from django.db.models.functions import DenseRank
 from django.utils import timezone as django_timezone
 
 from apps.users.models import User
+
 from .models import (
-    League, LeagueStanding, Season, SeasonReward,
-    SeasonConfig, LeagueGroup, LeagueGroupMembership,
+    League,
+    LeagueGroup,
+    LeagueGroupMembership,
+    LeagueStanding,
+    Season,
+    SeasonConfig,
+    SeasonReward,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,25 +63,23 @@ class LeagueService:
         user_xp = user.xp
 
         # Try exact range match first (leagues with max_xp set)
-        league = League.objects.filter(
-            min_xp__lte=user_xp,
-            max_xp__gte=user_xp
-        ).first()
+        league = League.objects.filter(min_xp__lte=user_xp, max_xp__gte=user_xp).first()
 
         if league:
             return league
 
         # Check the top league (max_xp is null, meaning no upper bound)
-        top_league = League.objects.filter(
-            min_xp__lte=user_xp,
-            max_xp__isnull=True
-        ).order_by('-min_xp').first()
+        top_league = (
+            League.objects.filter(min_xp__lte=user_xp, max_xp__isnull=True)
+            .order_by("-min_xp")
+            .first()
+        )
 
         if top_league:
             return top_league
 
         # Fallback: return the lowest league
-        return League.objects.order_by('min_xp').first()
+        return League.objects.order_by("min_xp").first()
 
     @staticmethod
     @transaction.atomic
@@ -100,16 +104,14 @@ class LeagueService:
         season = Season.get_active_season()
         if not season:
             logger.warning(
-                "No active season found. Cannot update standing for user %s.",
-                user.id
+                "No active season found. Cannot update standing for user %s.", user.id
             )
             return None
 
         league = LeagueService.get_user_league(user)
         if not league:
             logger.warning(
-                "No leagues configured. Cannot update standing for user %s.",
-                user.id
+                "No leagues configured. Cannot update standing for user %s.", user.id
             )
             return None
 
@@ -118,10 +120,10 @@ class LeagueService:
             user=user,
             season=season,
             defaults={
-                'league': league,
-                'xp_earned_this_season': user.xp,
-                'rank': 0,
-            }
+                "league": league,
+                "xp_earned_this_season": user.xp,
+                "rank": 0,
+            },
         )
 
         # Detect tier change
@@ -132,9 +134,14 @@ class LeagueService:
         standing.league = league
         standing.xp_earned_this_season = user.xp
         standing.streak_best = max(standing.streak_best, user.streak_days)
-        standing.save(update_fields=[
-            'league', 'xp_earned_this_season', 'streak_best', 'updated_at'
-        ])
+        standing.save(
+            update_fields=[
+                "league",
+                "xp_earned_this_season",
+                "streak_best",
+                "updated_at",
+            ]
+        )
 
         # Recalculate ranks for all users in this season
         LeagueService._recalculate_ranks(season)
@@ -149,18 +156,24 @@ class LeagueService:
             except Exception:
                 logger.error(
                     "Failed to assign user %s to group after tier change.",
-                    user.id, exc_info=True,
+                    user.id,
+                    exc_info=True,
                 )
 
         if created:
             logger.info(
                 "Created new standing for user %s in season %s (league: %s).",
-                user.id, season.name, league.name
+                user.id,
+                season.name,
+                league.name,
             )
         else:
             logger.info(
                 "Updated standing for user %s in season %s (league: %s, rank: %d).",
-                user.id, season.name, league.name, standing.rank
+                user.id,
+                season.name,
+                league.name,
+                standing.rank,
             )
 
         return standing
@@ -177,14 +190,10 @@ class LeagueService:
         Args:
             season: The Season to recalculate ranks for.
         """
-        ranked = (
-            LeagueStanding.objects
-            .filter(season=season)
-            .annotate(
-                dense_rank=Window(
-                    expression=DenseRank(),
-                    order_by=F('xp_earned_this_season').desc(),
-                )
+        ranked = LeagueStanding.objects.filter(season=season).annotate(
+            dense_rank=Window(
+                expression=DenseRank(),
+                order_by=F("xp_earned_this_season").desc(),
             )
         )
 
@@ -198,7 +207,7 @@ class LeagueService:
     def get_leaderboard(
         league: Optional[League] = None,
         limit: int = 100,
-        season: Optional[Season] = None
+        season: Optional[Season] = None,
     ) -> list:
         """
         Retrieve the leaderboard as a list of ranked user entries.
@@ -222,10 +231,9 @@ class LeagueService:
             return []
 
         queryset = (
-            LeagueStanding.objects
-            .filter(season=season)
-            .select_related('user', 'league', 'user__gamification')
-            .order_by('-xp_earned_this_season', 'updated_at')
+            LeagueStanding.objects.filter(season=season)
+            .select_related("user", "league", "user__gamification")
+            .order_by("-xp_earned_this_season", "updated_at")
         )
 
         if league:
@@ -242,23 +250,27 @@ class LeagueService:
                 badges = gamification.badges or []
                 badges_count = len(badges)
             except Exception:
-                logger.debug("Failed to load badges for user %s", standing.user.id, exc_info=True)
+                logger.debug(
+                    "Failed to load badges for user %s", standing.user.id, exc_info=True
+                )
                 badges_count = 0
 
-            entries.append({
-                'rank': idx,
-                'user_id': standing.user.id,
-                'user_display_name': standing.user.display_name or 'Anonymous',
-                'user_avatar_url': standing.user.avatar_url or '',
-                'user_level': standing.user.level,
-                'league_name': standing.league.name,
-                'league_tier': standing.league.tier,
-                'league_color_hex': standing.league.color_hex,
-                'xp': standing.xp_earned_this_season,
-                'tasks_completed': standing.tasks_completed,
-                'badges_count': badges_count,
-                'is_current_user': False,
-            })
+            entries.append(
+                {
+                    "rank": idx,
+                    "user_id": standing.user.id,
+                    "user_display_name": standing.user.display_name or "Anonymous",
+                    "user_avatar_url": standing.user.avatar_url or "",
+                    "user_level": standing.user.level,
+                    "league_name": standing.league.name,
+                    "league_tier": standing.league.tier,
+                    "league_color_hex": standing.league.color_hex,
+                    "xp": standing.xp_earned_this_season,
+                    "tasks_completed": standing.tasks_completed,
+                    "badges_count": badges_count,
+                    "is_current_user": False,
+                }
+            )
 
         return entries
 
@@ -278,15 +290,13 @@ class LeagueService:
         season = Season.get_active_season()
         if not season:
             logger.warning("No active season found for promotion/demotion cycle.")
-            return {'promoted': 0, 'demoted': 0}
+            return {"promoted": 0, "demoted": 0}
 
         promoted = 0
         demoted = 0
 
-        standings = (
-            LeagueStanding.objects
-            .filter(season=season)
-            .select_related('league', 'user')
+        standings = LeagueStanding.objects.filter(season=season).select_related(
+            "league", "user"
         )
 
         for standing in standings:
@@ -299,27 +309,32 @@ class LeagueService:
                     promoted += 1
                     logger.info(
                         "User %s promoted from %s to %s.",
-                        standing.user.id, standing.league.name, new_league.name
+                        standing.user.id,
+                        standing.league.name,
+                        new_league.name,
                     )
                 elif new_tier_order < old_tier_order:
                     demoted += 1
                     logger.info(
                         "User %s demoted from %s to %s.",
-                        standing.user.id, standing.league.name, new_league.name
+                        standing.user.id,
+                        standing.league.name,
+                        new_league.name,
                     )
 
                 standing.league = new_league
-                standing.save(update_fields=['league', 'updated_at'])
+                standing.save(update_fields=["league", "updated_at"])
 
         # Recalculate ranks after promotion/demotion
         LeagueService._recalculate_ranks(season)
 
         logger.info(
             "Promotion/demotion cycle complete: %d promoted, %d demoted.",
-            promoted, demoted
+            promoted,
+            demoted,
         )
 
-        return {'promoted': promoted, 'demoted': demoted}
+        return {"promoted": promoted, "demoted": demoted}
 
     @staticmethod
     @transaction.atomic
@@ -339,15 +354,12 @@ class LeagueService:
         """
         if not season.has_ended:
             logger.warning(
-                "Season %s has not ended yet. Cannot calculate rewards.",
-                season.name
+                "Season %s has not ended yet. Cannot calculate rewards.", season.name
             )
             return 0
 
-        standings = (
-            LeagueStanding.objects
-            .filter(season=season)
-            .select_related('league', 'user')
+        standings = LeagueStanding.objects.filter(season=season).select_related(
+            "league", "user"
         )
 
         rewards_created = 0
@@ -357,20 +369,21 @@ class LeagueService:
                 season=season,
                 user=standing.user,
                 defaults={
-                    'league_achieved': standing.league,
-                    'rewards_claimed': False,
-                }
+                    "league_achieved": standing.league,
+                    "rewards_claimed": False,
+                },
             )
             if created:
                 rewards_created += 1
 
         # Deactivate the season
         season.is_active = False
-        season.save(update_fields=['is_active', 'updated_at'])
+        season.save(update_fields=["is_active", "updated_at"])
 
         logger.info(
             "Season %s rewards calculated: %d records created.",
-            season.name, rewards_created
+            season.name,
+            rewards_created,
         )
 
         return rewards_created
@@ -393,29 +406,29 @@ class LeagueService:
         """
         season = Season.get_active_season()
         if not season:
-            return {'above': [], 'current': None, 'below': []}
+            return {"above": [], "current": None, "below": []}
 
         try:
             standing = LeagueStanding.objects.get(user=user, season=season)
         except LeagueStanding.DoesNotExist:
-            return {'above': [], 'current': None, 'below': []}
+            return {"above": [], "current": None, "below": []}
 
         current_rank = standing.rank
 
         # Users ranked above (lower rank number = higher position)
         above = (
-            LeagueStanding.objects
-            .filter(season=season, rank__lt=current_rank, rank__gt=0)
-            .select_related('user', 'league', 'user__gamification')
-            .order_by('-rank')[:count]
+            LeagueStanding.objects.filter(
+                season=season, rank__lt=current_rank, rank__gt=0
+            )
+            .select_related("user", "league", "user__gamification")
+            .order_by("-rank")[:count]
         )
 
         # Users ranked below (higher rank number = lower position)
         below = (
-            LeagueStanding.objects
-            .filter(season=season, rank__gt=current_rank)
-            .select_related('user', 'league', 'user__gamification')
-            .order_by('rank')[:count]
+            LeagueStanding.objects.filter(season=season, rank__gt=current_rank)
+            .select_related("user", "league", "user__gamification")
+            .order_by("rank")[:count]
         )
 
         def _standing_to_entry(s, is_current=False):
@@ -424,28 +437,30 @@ class LeagueService:
             try:
                 badges_count = len(s.user.gamification.badges or [])
             except Exception:
-                logger.debug("Failed to load badges for user %s", s.user.id, exc_info=True)
+                logger.debug(
+                    "Failed to load badges for user %s", s.user.id, exc_info=True
+                )
                 badges_count = 0
 
             return {
-                'rank': s.rank,
-                'user_id': s.user.id,
-                'user_display_name': s.user.display_name or 'Anonymous',
-                'user_avatar_url': s.user.avatar_url or '',
-                'user_level': s.user.level,
-                'league_name': s.league.name,
-                'league_tier': s.league.tier,
-                'league_color_hex': s.league.color_hex,
-                'xp': s.xp_earned_this_season,
-                'tasks_completed': s.tasks_completed,
-                'badges_count': badges_count,
-                'is_current_user': is_current,
+                "rank": s.rank,
+                "user_id": s.user.id,
+                "user_display_name": s.user.display_name or "Anonymous",
+                "user_avatar_url": s.user.avatar_url or "",
+                "user_level": s.user.level,
+                "league_name": s.league.name,
+                "league_tier": s.league.tier,
+                "league_color_hex": s.league.color_hex,
+                "xp": s.xp_earned_this_season,
+                "tasks_completed": s.tasks_completed,
+                "badges_count": badges_count,
+                "is_current_user": is_current,
             }
 
         return {
-            'above': [_standing_to_entry(s) for s in reversed(list(above))],
-            'current': _standing_to_entry(standing, is_current=True),
-            'below': [_standing_to_entry(s) for s in below],
+            "above": [_standing_to_entry(s) for s in reversed(list(above))],
+            "current": _standing_to_entry(standing, is_current=True),
+            "below": [_standing_to_entry(s) for s in below],
         }
 
     @staticmethod
@@ -462,10 +477,9 @@ class LeagueService:
         if not season:
             return
 
-        LeagueStanding.objects.filter(
-            user=user,
-            season=season
-        ).update(tasks_completed=F('tasks_completed') + 1)
+        LeagueStanding.objects.filter(user=user, season=season).update(
+            tasks_completed=F("tasks_completed") + 1
+        )
 
     @staticmethod
     def increment_dreams_completed(user: User) -> None:
@@ -481,10 +495,9 @@ class LeagueService:
         if not season:
             return
 
-        LeagueStanding.objects.filter(
-            user=user,
-            season=season
-        ).update(dreams_completed=F('dreams_completed') + 1)
+        LeagueStanding.objects.filter(user=user, season=season).update(
+            dreams_completed=F("dreams_completed") + 1
+        )
 
     # ------------------------------------------------------------------
     # Auto-Grouping Methods
@@ -519,12 +532,11 @@ class LeagueService:
 
         # Find active groups with room, ordered by member count (fewest first)
         groups = (
-            LeagueGroup.objects
-            .filter(season=season, league=league, is_active=True)
+            LeagueGroup.objects.filter(season=season, league=league, is_active=True)
             .select_for_update()
-            .annotate(member_count=Count('memberships'))
+            .annotate(member_count=Count("memberships"))
             .filter(member_count__lt=config.group_max_size)
-            .order_by('member_count', 'group_number')
+            .order_by("member_count", "group_number")
         )
 
         group = groups.first()
@@ -532,10 +544,9 @@ class LeagueService:
         if not group:
             # Determine next group number
             last_number = (
-                LeagueGroup.objects
-                .filter(season=season, league=league)
-                .order_by('-group_number')
-                .values_list('group_number', flat=True)
+                LeagueGroup.objects.filter(season=season, league=league)
+                .order_by("-group_number")
+                .values_list("group_number", flat=True)
                 .first()
             ) or 0
 
@@ -547,7 +558,9 @@ class LeagueService:
             )
             logger.info(
                 "Created new group #%d for %s in season %s.",
-                group.group_number, league.name, season.name,
+                group.group_number,
+                league.name,
+                season.name,
             )
 
         membership = LeagueGroupMembership.objects.create(
@@ -557,7 +570,9 @@ class LeagueService:
 
         logger.debug(
             "Assigned standing %s to group #%d (%s).",
-            standing.id, group.group_number, league.name,
+            standing.id,
+            group.group_number,
+            league.name,
         )
         return membership
 
@@ -585,28 +600,27 @@ class LeagueService:
 
         # All memberships for this season+league, ordered by XP desc
         memberships = list(
-            LeagueGroupMembership.objects
-            .filter(
+            LeagueGroupMembership.objects.filter(
                 group__season=season,
                 group__league=league,
                 group__is_active=True,
             )
-            .select_related('standing', 'group')
-            .order_by('-standing__xp_earned_this_season')
+            .select_related("standing", "group")
+            .order_by("-standing__xp_earned_this_season")
         )
 
         total_members = len(memberships)
         if total_members == 0:
-            return {'groups_active': 0, 'groups_deactivated': 0, 'members_moved': 0}
+            return {"groups_active": 0, "groups_deactivated": 0, "members_moved": 0}
 
         # Compute desired group count
         desired_groups = max(1, math.ceil(total_members / config.group_target_size))
 
         # Get or create groups
         active_groups = list(
-            LeagueGroup.objects
-            .filter(season=season, league=league, is_active=True)
-            .order_by('group_number')
+            LeagueGroup.objects.filter(
+                season=season, league=league, is_active=True
+            ).order_by("group_number")
         )
 
         # Create more groups if needed
@@ -628,7 +642,7 @@ class LeagueService:
             target_group = target_groups[idx % len(target_groups)]
             if membership.group_id != target_group.id:
                 membership.group = target_group
-                membership.save(update_fields=['group'])
+                membership.save(update_fields=["group"])
                 members_moved += 1
 
         # Deactivate groups that are now empty
@@ -636,24 +650,30 @@ class LeagueService:
         for group in active_groups:
             if group.memberships.count() == 0:
                 group.is_active = False
-                group.save(update_fields=['is_active'])
+                group.save(update_fields=["is_active"])
                 groups_deactivated += 1
 
         active_count = LeagueGroup.objects.filter(
-            season=season, league=league, is_active=True,
+            season=season,
+            league=league,
+            is_active=True,
         ).count()
 
         logger.info(
             "Rebalanced %s in season %s: %d members across %d groups "
             "(%d moved, %d groups deactivated).",
-            league.name, season.name, total_members, active_count,
-            members_moved, groups_deactivated,
+            league.name,
+            season.name,
+            total_members,
+            active_count,
+            members_moved,
+            groups_deactivated,
         )
 
         return {
-            'groups_active': active_count,
-            'groups_deactivated': groups_deactivated,
-            'members_moved': members_moved,
+            "groups_active": active_count,
+            "groups_deactivated": groups_deactivated,
+            "members_moved": members_moved,
         }
 
     @staticmethod
@@ -691,13 +711,16 @@ class LeagueService:
 
         logger.info(
             "Season %s end promotions: %d promoted, %d relegated, %d neutral.",
-            season.name, promoted, relegated, total - promoted - relegated,
+            season.name,
+            promoted,
+            relegated,
+            total - promoted - relegated,
         )
 
         return {
-            'promoted': promoted,
-            'relegated': relegated,
-            'neutral': total - promoted - relegated,
+            "promoted": promoted,
+            "relegated": relegated,
+            "neutral": total - promoted - relegated,
         }
 
     @staticmethod
@@ -728,7 +751,7 @@ class LeagueService:
             return None
 
         # Parse season number from name
-        parts = ended_season.name.split(' ')
+        parts = ended_season.name.split(" ")
         try:
             season_num = int(parts[1]) + 1
         except (IndexError, ValueError):
@@ -737,10 +760,10 @@ class LeagueService:
         now = django_timezone.now()
         duration = config.season_duration_days
         new_season = Season.objects.create(
-            name=f'Season {season_num}',
+            name=f"Season {season_num}",
             start_date=now,
             end_date=now + timedelta(days=duration),
-            status='active',
+            status="active",
             is_active=True,
             duration_days=duration,
             rewards=ended_season.rewards,
@@ -748,21 +771,20 @@ class LeagueService:
 
         # Invalidate active season cache
         from django.core.cache import cache as django_cache
-        django_cache.delete('active_season')
+
+        django_cache.delete("active_season")
 
         logger.info(
             'Created new season: "%s" (ends %s, duration %dd).',
             new_season.name,
-            new_season.end_date.strftime('%Y-%m-%d'),
+            new_season.end_date.strftime("%Y-%m-%d"),
             duration,
         )
 
         # Bulk-create standings for users who had standings in the ended season
-        old_standings = (
-            LeagueStanding.objects
-            .filter(season=ended_season)
-            .select_related('user', 'league')
-        )
+        old_standings = LeagueStanding.objects.filter(
+            season=ended_season
+        ).select_related("user", "league")
 
         new_standings = []
         for old in old_standings:
@@ -781,28 +803,33 @@ class LeagueService:
 
         if new_standings:
             LeagueStanding.objects.bulk_create(
-                new_standings, ignore_conflicts=True,
+                new_standings,
+                ignore_conflicts=True,
             )
 
             # Assign each new standing to a group
             created_standings = LeagueStanding.objects.filter(
                 season=new_season,
-            ).select_related('league')
+            ).select_related("league")
 
             for standing in created_standings:
                 try:
                     LeagueService.assign_user_to_group(
-                        standing, new_season, standing.league,
+                        standing,
+                        new_season,
+                        standing.league,
                     )
                 except Exception:
                     logger.error(
                         "Failed to assign user %s to group in new season.",
-                        standing.user_id, exc_info=True,
+                        standing.user_id,
+                        exc_info=True,
                     )
 
         logger.info(
             "Carried over %d standings to season %s.",
-            len(new_standings), new_season.name,
+            len(new_standings),
+            new_season.name,
         )
 
         return new_season
@@ -820,15 +847,14 @@ class LeagueService:
             List of leaderboard entry dicts.
         """
         memberships = (
-            LeagueGroupMembership.objects
-            .filter(group=group)
+            LeagueGroupMembership.objects.filter(group=group)
             .select_related(
-                'standing',
-                'standing__user',
-                'standing__league',
-                'standing__user__gamification',
+                "standing",
+                "standing__user",
+                "standing__league",
+                "standing__user__gamification",
             )
-            .order_by('-standing__xp_earned_this_season')[:limit]
+            .order_by("-standing__xp_earned_this_season")[:limit]
         )
 
         entries = []
@@ -840,21 +866,23 @@ class LeagueService:
             except Exception:
                 pass
 
-            entries.append({
-                'rank': idx,
-                'user_id': standing.user.id,
-                'user_display_name': standing.user.display_name or 'Anonymous',
-                'user_avatar_url': standing.user.avatar_url or '',
-                'user_level': standing.user.level,
-                'league_name': standing.league.name,
-                'league_tier': standing.league.tier,
-                'league_color_hex': standing.league.color_hex,
-                'xp': standing.xp_earned_this_season,
-                'tasks_completed': standing.tasks_completed,
-                'badges_count': badges_count,
-                'is_current_user': False,
-                'group_id': str(group.id),
-                'group_number': group.group_number,
-            })
+            entries.append(
+                {
+                    "rank": idx,
+                    "user_id": standing.user.id,
+                    "user_display_name": standing.user.display_name or "Anonymous",
+                    "user_avatar_url": standing.user.avatar_url or "",
+                    "user_level": standing.user.level,
+                    "league_name": standing.league.name,
+                    "league_tier": standing.league.tier,
+                    "league_color_hex": standing.league.color_hex,
+                    "xp": standing.xp_earned_this_season,
+                    "tasks_completed": standing.tasks_completed,
+                    "badges_count": badges_count,
+                    "is_current_user": False,
+                    "group_id": str(group.id),
+                    "group_number": group.group_number,
+                }
+            )
 
         return entries

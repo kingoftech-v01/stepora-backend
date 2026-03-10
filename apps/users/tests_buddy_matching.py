@@ -2,15 +2,16 @@
 Tests for Buddy Matching Service.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
-from datetime import timedelta
-from unittest.mock import patch, Mock
+
+from apps.buddies.models import BuddyPairing
+from apps.dreams.models import Dream
 
 from .models import User
-from apps.buddies.models import BuddyPairing
 from .services import BuddyMatchingService
-from apps.dreams.models import Dream
 
 
 @pytest.fixture
@@ -23,26 +24,26 @@ def matching_service():
 def user_with_dreams(db):
     """Create a user with active dreams."""
     user = User.objects.create(
-        email='user1@test.com',
-        display_name='Test User 1',
-        timezone='Europe/Paris',
+        email="user1@test.com",
+        display_name="Test User 1",
+        timezone="Europe/Paris",
         level=5,
-        streak_days=10
+        streak_days=10,
     )
     # Create active dream
     Dream.objects.create(
         user=user,
-        title='Learn Python',
-        description='Become a Python expert',
-        category='career',
-        status='active'
+        title="Learn Python",
+        description="Become a Python expert",
+        category="career",
+        status="active",
     )
     Dream.objects.create(
         user=user,
-        title='Get Fit',
-        description='Improve fitness',
-        category='health',
-        status='active'
+        title="Get Fit",
+        description="Improve fitness",
+        category="health",
+        status="active",
     )
     return user
 
@@ -51,19 +52,19 @@ def user_with_dreams(db):
 def potential_buddy(db):
     """Create a potential buddy user."""
     user = User.objects.create(
-        email='user2@test.com',
-        display_name='Test User 2',
-        timezone='Europe/Paris',
+        email="user2@test.com",
+        display_name="Test User 2",
+        timezone="Europe/Paris",
         level=4,
-        streak_days=8
+        streak_days=8,
     )
     # Create active dream with matching category
     Dream.objects.create(
         user=user,
-        title='Master Python',
-        description='Become proficient in Python',
-        category='career',
-        status='active'
+        title="Master Python",
+        description="Become proficient in Python",
+        category="career",
+        status="active",
     )
     return user
 
@@ -72,12 +73,12 @@ def potential_buddy(db):
 def incompatible_user(db):
     """Create an incompatible user (inactive, different categories)."""
     user = User.objects.create(
-        email='user3@test.com',
-        display_name='Test User 3',
-        timezone='America/New_York',
+        email="user3@test.com",
+        display_name="Test User 3",
+        timezone="America/New_York",
         level=50,
         streak_days=0,
-        last_activity=timezone.now() - timedelta(days=60)  # Inactive
+        last_activity=timezone.now() - timedelta(days=60),  # Inactive
     )
     return user
 
@@ -95,7 +96,7 @@ class TestBuddyMatchingService:
         matched_user, score, categories = result
         assert matched_user == potential_buddy
         assert score > 0
-        assert 'career' in categories
+        assert "career" in categories
 
     def test_find_compatible_buddy_no_candidates(
         self, matching_service, user_with_dreams
@@ -119,9 +120,7 @@ class TestBuddyMatchingService:
         """Test that existing buddy pairs are excluded."""
         # Create an active buddy pair
         BuddyPairing.objects.create(
-            user1=user_with_dreams,
-            user2=potential_buddy,
-            status='active'
+            user1=user_with_dreams, user2=potential_buddy, status="active"
         )
 
         result = matching_service.find_compatible_buddy(user_with_dreams)
@@ -134,9 +133,7 @@ class TestBuddyMatchingService:
         """Test that pending requests are excluded."""
         # Create a pending buddy request
         BuddyPairing.objects.create(
-            user1=user_with_dreams,
-            user2=potential_buddy,
-            status='pending'
+            user1=user_with_dreams, user2=potential_buddy, status="pending"
         )
 
         result = matching_service.find_compatible_buddy(user_with_dreams)
@@ -161,7 +158,7 @@ class TestBuddyMatchingService:
         )
 
         assert score > 0
-        assert 'career' in categories
+        assert "career" in categories
 
     def test_calculate_activity_similarity_same_streak(
         self, matching_service, user_with_dreams
@@ -169,8 +166,7 @@ class TestBuddyMatchingService:
         """Test activity similarity with same streak."""
         # Create user with same streak
         similar_user = User.objects.create(
-            email='similar@test.com',
-            streak_days=user_with_dreams.streak_days
+            email="similar@test.com", streak_days=user_with_dreams.streak_days
         )
 
         score = matching_service._calculate_activity_similarity(
@@ -184,8 +180,7 @@ class TestBuddyMatchingService:
     ):
         """Test activity similarity with different streaks."""
         different_user = User.objects.create(
-            email='different@test.com',
-            streak_days=user_with_dreams.streak_days + 50
+            email="different@test.com", streak_days=user_with_dreams.streak_days + 50
         )
 
         score = matching_service._calculate_activity_similarity(
@@ -209,8 +204,7 @@ class TestBuddyMatchingService:
     ):
         """Test timezone proximity with different region."""
         different_tz_user = User.objects.create(
-            email='differenttz@test.com',
-            timezone='America/New_York'
+            email="differenttz@test.com", timezone="America/New_York"
         )
 
         score = matching_service._calculate_timezone_proximity(
@@ -224,8 +218,7 @@ class TestBuddyMatchingService:
     ):
         """Test level similarity with same level."""
         same_level_user = User.objects.create(
-            email='samelevel@test.com',
-            level=user_with_dreams.level
+            email="samelevel@test.com", level=user_with_dreams.level
         )
 
         score = matching_service._calculate_level_similarity(
@@ -242,12 +235,12 @@ class TestBuddyMatchingService:
             requesting_user=user_with_dreams,
             target_user=potential_buddy,
             compatibility_score=0.75,
-            shared_categories=['career']
+            shared_categories=["career"],
         )
 
         assert buddy_pair.user1 == user_with_dreams
         assert buddy_pair.user2 == potential_buddy
-        assert buddy_pair.status == 'pending'
+        assert buddy_pair.status == "pending"
         assert buddy_pair.compatibility_score == 0.75
 
 
@@ -259,21 +252,21 @@ class TestBuddyPairingModel:
         buddy = BuddyPairing.objects.create(
             user1=user_with_dreams,
             user2=potential_buddy,
-            status='pending',
+            status="pending",
             compatibility_score=0.8,
         )
 
         assert buddy.user1 == user_with_dreams
         assert buddy.user2 == potential_buddy
-        assert buddy.status == 'pending'
+        assert buddy.status == "pending"
 
     def test_buddy_pairing_str(self, db, user_with_dreams, potential_buddy):
         """Test string representation."""
         buddy = BuddyPairing.objects.create(
             user1=user_with_dreams,
             user2=potential_buddy,
-            status='active',
+            status="active",
         )
-        assert 'Test User 1' in str(buddy)
-        assert 'Test User 2' in str(buddy)
-        assert 'active' in str(buddy)
+        assert "Test User 1" in str(buddy)
+        assert "Test User 2" in str(buddy)
+        assert "active" in str(buddy)

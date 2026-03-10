@@ -11,6 +11,6 @@ from django.apps import AppConfig
 class BuddiesConfig(AppConfig):
     """Configuration for the Buddies application."""
 
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.buddies'
-    verbose_name = 'Dream Buddies'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.buddies"
+    verbose_name = "Dream Buddies"

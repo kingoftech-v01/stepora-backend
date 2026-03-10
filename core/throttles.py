@@ -11,54 +11,63 @@ Provides rate limiting for sensitive operations:
 from datetime import datetime, timezone
 
 from rest_framework.exceptions import PermissionDenied, Throttled
-from rest_framework.throttling import UserRateThrottle, AnonRateThrottle, BaseThrottle
+from rest_framework.throttling import AnonRateThrottle, BaseThrottle, UserRateThrottle
 
 from core.ai_usage import AIUsageTracker
 
-
 # --- Per-minute burst rate throttles (DRF built-in) ---
+
 
 class AuthRateThrottle(AnonRateThrottle):
     """Rate limiting for authentication endpoints (login, register, password reset)."""
-    scope = 'auth'
+
+    scope = "auth"
 
 
 class AIRateThrottle(UserRateThrottle):
     """Per-minute burst rate limiting for AI chat (10/min)."""
-    scope = 'ai_chat'
+
+    scope = "ai_chat"
 
 
 class AIPlanRateThrottle(UserRateThrottle):
     """Per-minute burst rate limiting for AI plan generation (5/min)."""
-    scope = 'ai_plan'
+
+    scope = "ai_plan"
 
 
 class AICalibrationRateThrottle(UserRateThrottle):
     """Per-minute burst rate limiting for calibration questions (15/min)."""
-    scope = 'ai_calibration'
+
+    scope = "ai_calibration"
 
 
 class SearchRateThrottle(UserRateThrottle):
     """Rate limiting for search endpoints."""
-    scope = 'search'
+
+    scope = "search"
 
 
 class ExportRateThrottle(UserRateThrottle):
     """Rate limiting for data export (1/day)."""
-    scope = 'export'
+
+    scope = "export"
 
 
 class StorePurchaseRateThrottle(UserRateThrottle):
     """Rate limiting for store purchases."""
-    scope = 'store_purchase'
+
+    scope = "store_purchase"
 
 
 class SubscriptionRateThrottle(UserRateThrottle):
     """Rate limiting for subscription operations."""
-    scope = 'subscription'
+
+    scope = "subscription"
 
 
 # --- Daily AI Quota throttles (Redis counters) ---
+
 
 class DailyAIQuotaThrottle(BaseThrottle):
     """
@@ -71,10 +80,11 @@ class DailyAIQuotaThrottle(BaseThrottle):
     with subscription_required code so the frontend shows the upgrade modal.
     When limit > 0 but exceeded, returns 429 (standard throttle behavior).
     """
+
     category = None
 
     def allow_request(self, request, view):
-        if not hasattr(request, 'user') or not request.user.is_authenticated:
+        if not hasattr(request, "user") or not request.user.is_authenticated:
             return False
 
         tracker = AIUsageTracker()
@@ -82,16 +92,16 @@ class DailyAIQuotaThrottle(BaseThrottle):
         self.usage_info = info
 
         if not allowed:
-            limit = info.get('limit', 0)
+            limit = info.get("limit", 0)
 
             # limit == 0 means the plan doesn't include this feature at all.
             # This is an access control issue (403), not a rate limit (429).
             if limit == 0:
                 exc = PermissionDenied(
                     detail="This feature is not available on your current plan.",
-                    code='subscription_required',
+                    code="subscription_required",
                 )
-                exc.required_tier = 'premium'
+                exc.required_tier = "premium"
                 exc.feature_name = self.category
                 raise exc
 
@@ -100,7 +110,7 @@ class DailyAIQuotaThrottle(BaseThrottle):
             # reads exc.wait to set the Retry-After header, and our
             # custom_exception_handler reads the extra attrs.
             exc = Throttled(wait=self.wait())
-            exc.default_code = 'daily_quota_exceeded'
+            exc.default_code = "daily_quota_exceeded"
             exc.usage_info = info
             exc.category = self.category
             raise exc
@@ -117,39 +127,47 @@ class DailyAIQuotaThrottle(BaseThrottle):
 
 class AIChatDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for AI chat messages."""
-    category = 'ai_chat'
+
+    category = "ai_chat"
 
 
 class AIPlanDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for AI plan/analysis operations."""
-    category = 'ai_plan'
+
+    category = "ai_plan"
 
 
 class AICalibrationDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for calibration questions (separate from plan generation)."""
-    category = 'ai_calibration'
+
+    category = "ai_calibration"
 
 
 class AIImageDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for AI image generation (DALL-E)."""
-    category = 'ai_image'
+
+    category = "ai_image"
 
 
 class AIVoiceDailyThrottle(DailyAIQuotaThrottle):
     """Daily quota for voice transcription."""
-    category = 'ai_voice'
+
+    category = "ai_voice"
 
 
 class AIMotivationRateThrottle(UserRateThrottle):
     """Per-day rate limiting for AI motivation messages (5/day)."""
-    scope = 'ai_motivation'
+
+    scope = "ai_motivation"
 
 
 class TwoFactorRateThrottle(UserRateThrottle):
     """Rate limiting for 2FA operations (backup codes, setup)."""
-    rate = '5/hour'
+
+    rate = "5/hour"
 
 
 class EmailVerificationRateThrottle(AnonRateThrottle):
     """Rate limiting for email verification token attempts."""
-    rate = '10/hour'
+
+    rate = "10/hour"

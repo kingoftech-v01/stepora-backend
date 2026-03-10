@@ -13,86 +13,92 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='apps.users.tasks.send_email_change_verification')
+@shared_task(name="apps.users.tasks.send_email_change_verification")
 def send_email_change_verification(user_id: int, new_email: str, token: str):
     """
     Send a verification email when a user requests an email change.
     """
-    from .models import User
     from core.email import send_templated_email
+
+    from .models import User
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        logger.warning('User %s not found for email change verification', user_id)
+        logger.warning("User %s not found for email change verification", user_id)
         return
 
     verification_url = f"{settings.FRONTEND_URL}/#/verify-email/{token}"
 
     send_templated_email(
-        template_name='users/email_change',
-        subject='Stepora — Verify your new email address',
+        template_name="users/email_change",
+        subject="Stepora — Verify your new email address",
         to=[new_email],
         context={
-            'user_name': user.display_name or 'there',
-            'new_email': new_email,
-            'verification_url': verification_url,
-            'action_url': verification_url,
+            "user_name": user.display_name or "there",
+            "new_email": new_email,
+            "verification_url": verification_url,
+            "action_url": verification_url,
         },
     )
 
-    logger.info('Email change verification sent to %s for user %s', new_email, user_id)
+    logger.info("Email change verification sent to %s for user %s", new_email, user_id)
 
 
-@shared_task(name='apps.users.tasks.export_user_data')
+@shared_task(name="apps.users.tasks.export_user_data")
 def export_user_data(user_id: int):
     """
     Export all user data as JSON and email a download link.
     """
     import json
+
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
+
+    from core.email import send_templated_email
+
     from .models import User
     from .serializers import UserSerializer
-    from core.email import send_templated_email
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        logger.warning('User %s not found for data export', user_id)
+        logger.warning("User %s not found for data export", user_id)
         return
 
     user_data = UserSerializer(user).data
 
     # Include related data
     export = {
-        'user': user_data,
-        'dreams': list(user.dreams.values()),
-        'conversations': list(user.conversations.values()),
-        'notifications': list(user.notifications.values('id', 'title', 'body', 'created_at', 'is_read')),
+        "user": user_data,
+        "dreams": list(user.dreams.values()),
+        "conversations": list(user.conversations.values()),
+        "notifications": list(
+            user.notifications.values("id", "title", "body", "created_at", "is_read")
+        ),
     }
 
     json_content = json.dumps(export, default=str, indent=2)
-    file_path = f'exports/user_{user_id}_data.json'
+    file_path = f"exports/user_{user_id}_data.json"
     default_storage.save(file_path, ContentFile(json_content.encode()))
 
     download_url = f"{settings.FRONTEND_URL}/api/media/{file_path}"
 
     send_templated_email(
-        template_name='users/data_export',
-        subject='Stepora — Your data export is ready',
+        template_name="users/data_export",
+        subject="Stepora — Your data export is ready",
         to=[user.email],
         context={
-            'user_name': user.display_name or 'there',
-            'download_url': download_url,
-            'action_url': download_url,
+            "user_name": user.display_name or "there",
+            "download_url": download_url,
+            "action_url": download_url,
         },
     )
 
-    logger.info('Data export completed and emailed for user %s', user_id)
+    logger.info("Data export completed and emailed for user %s", user_id)
 
 
-@shared_task(name='apps.users.tasks.hard_delete_expired_accounts')
+@shared_task(name="apps.users.tasks.hard_delete_expired_accounts")
 def hard_delete_expired_accounts():
     """
     Hard-delete accounts that have been soft-deleted for 30+ days.
@@ -102,7 +108,9 @@ def hard_delete_expired_accounts():
     After that, all data is permanently removed via CASCADE delete.
     """
     from datetime import timedelta as td
+
     from django.utils import timezone
+
     from .models import User
 
     cutoff = timezone.now() - td(days=30)
@@ -125,11 +133,13 @@ def hard_delete_expired_accounts():
 
     logger.info("Hard-deleted %d expired accounts", count)
     if failed_ids:
-        logger.error("Failed to hard-delete %d users: %s", len(failed_ids), ', '.join(failed_ids))
-    return {'deleted': count, 'failed': failed_ids}
+        logger.error(
+            "Failed to hard-delete %d users: %s", len(failed_ids), ", ".join(failed_ids)
+        )
+    return {"deleted": count, "failed": failed_ids}
 
 
-@shared_task(name='apps.users.tasks.generate_weekly_reports')
+@shared_task(name="apps.users.tasks.generate_weekly_reports")
 def generate_weekly_reports():
     """
     Generate weekly progress reports for all premium/pro users.
@@ -137,15 +147,19 @@ def generate_weekly_reports():
     Runs every Sunday evening via Celery Beat. Creates a notification
     for each user with a link to view their weekly report.
     """
-    from datetime import timedelta as td, datetime as dt
+    from datetime import datetime as dt
+    from datetime import timedelta as td
+
+    from django.db.models import Count, Sum
     from django.utils import timezone
-    from django.db.models import Sum, Count
-    from .models import User, DailyActivity
-    from apps.dreams.models import Dream, Goal, FocusSession, DreamProgressSnapshot
+
+    from apps.dreams.models import Dream, DreamProgressSnapshot, FocusSession, Goal
     from apps.notifications.models import Notification
-    from integrations.openai_service import OpenAIService
     from core.ai_usage import AIUsageTracker
     from core.exceptions import OpenAIError
+    from integrations.openai_service import OpenAIService
+
+    from .models import DailyActivity, User
 
     now = timezone.now()
     today = now.date()
@@ -154,7 +168,7 @@ def generate_weekly_reports():
     # Only generate for premium/pro users who were active this week
     eligible_users = User.objects.filter(
         is_active=True,
-        subscription__in=['premium', 'pro'],
+        subscription__in=["premium", "pro"],
         last_activity__gte=now - td(days=14),
     )
 
@@ -165,7 +179,7 @@ def generate_weekly_reports():
     for user in eligible_users:
         try:
             # Check AI quota
-            allowed, _ = tracker.check_quota(user, 'ai_background')
+            allowed, _ = tracker.check_quota(user, "ai_background")
             if not allowed:
                 logger.info(
                     "Skipping weekly report for user %s (quota exceeded)", user.id
@@ -179,10 +193,10 @@ def generate_weekly_reports():
                 date__lt=today,
             )
             agg = activities.aggregate(
-                total_tasks=Sum('tasks_completed'),
-                total_xp=Sum('xp_earned'),
-                total_minutes=Sum('minutes_active'),
-                active_days=Count('id'),
+                total_tasks=Sum("tasks_completed"),
+                total_xp=Sum("xp_earned"),
+                total_minutes=Sum("minutes_active"),
+                active_days=Count("id"),
             )
 
             range_start = timezone.make_aware(
@@ -199,70 +213,78 @@ def generate_weekly_reports():
                 completed=True,
                 started_at__gte=range_start,
                 started_at__lt=range_end,
-            ).aggregate(total_focus=Sum('actual_minutes'))
+            ).aggregate(total_focus=Sum("actual_minutes"))
 
-            dreams_progressed = DreamProgressSnapshot.objects.filter(
-                dream__user=user,
-                date__gte=week_start,
-                date__lt=today,
-            ).values('dream').distinct().count()
+            dreams_progressed = (
+                DreamProgressSnapshot.objects.filter(
+                    dream__user=user,
+                    date__gte=week_start,
+                    date__lt=today,
+                )
+                .values("dream")
+                .distinct()
+                .count()
+            )
 
             dreams_completed = Dream.objects.filter(
                 user=user,
-                status='completed',
+                status="completed",
                 completed_at__gte=range_start,
                 completed_at__lt=range_end,
             ).count()
 
             goals_completed = Goal.objects.filter(
                 dream__user=user,
-                status='completed',
+                status="completed",
                 completed_at__gte=range_start,
                 completed_at__lt=range_end,
             ).count()
 
             current_stats = {
-                'tasks_completed': agg['total_tasks'] or 0,
-                'focus_minutes': (focus_agg['total_focus'] or 0) + (agg['total_minutes'] or 0),
-                'streak_days': user.streak_days or 0,
-                'xp_earned': agg['total_xp'] or 0,
-                'dreams_progressed': dreams_progressed,
-                'dreams_completed': dreams_completed,
-                'goals_completed': goals_completed,
-                'active_days': agg['active_days'] or 0,
+                "tasks_completed": agg["total_tasks"] or 0,
+                "focus_minutes": (focus_agg["total_focus"] or 0)
+                + (agg["total_minutes"] or 0),
+                "streak_days": user.streak_days or 0,
+                "xp_earned": agg["total_xp"] or 0,
+                "dreams_progressed": dreams_progressed,
+                "dreams_completed": dreams_completed,
+                "goals_completed": goals_completed,
+                "active_days": agg["active_days"] or 0,
             }
 
             # Generate AI report
             ai_report = ai_service.generate_weekly_report(
                 weekly_stats=current_stats,
             )
-            tracker.increment(user, 'ai_background')
+            tracker.increment(user, "ai_background")
 
             # Create notification
-            score = ai_report.get('score', 0)
-            summary = ai_report.get('summary', 'Your weekly report is ready!')
+            score = ai_report.get("score", 0)
+            summary = ai_report.get("summary", "Your weekly report is ready!")
             Notification.objects.create(
                 user=user,
-                notification_type='system',
-                title='Your Weekly Progress Report is Ready!',
+                notification_type="system",
+                title="Your Weekly Progress Report is Ready!",
                 body=f"Score: {score}/100 - {summary}",
                 scheduled_for=now,
                 data={
-                    'screen': 'weekly-report',
-                    'score': score,
+                    "screen": "weekly-report",
+                    "score": score,
                 },
             )
 
             generated += 1
             logger.info(
                 "Generated weekly report for user %s (score: %d)",
-                user.id, score,
+                user.id,
+                score,
             )
 
         except OpenAIError as e:
             logger.error(
                 "Failed to generate weekly report for user %s: %s",
-                user.id, str(e),
+                user.id,
+                str(e),
             )
         except Exception:
             logger.exception(
@@ -274,7 +296,7 @@ def generate_weekly_reports():
     return generated
 
 
-@shared_task(name='apps.users.tasks.send_accountability_checkins')
+@shared_task(name="apps.users.tasks.send_accountability_checkins")
 def send_accountability_checkins():
     """
     Generate and send AI accountability check-in notifications for
@@ -285,15 +307,17 @@ def send_accountability_checkins():
     and creates a push notification.
     """
     from datetime import timedelta as td
+
     from django.utils import timezone
-    from django.db.models import Q, Prefetch
-    from .models import User, DailyActivity
+
     from apps.dreams.models import Dream, Task
     from apps.notifications.models import Notification
-    from integrations.openai_service import OpenAIService
     from core.ai_usage import AIUsageTracker
     from core.exceptions import OpenAIError
     from core.sanitizers import sanitize_text
+    from integrations.openai_service import OpenAIService
+
+    from .models import User
 
     now = timezone.now()
     threshold = now - td(days=2)
@@ -303,19 +327,24 @@ def send_accountability_checkins():
     # - Haven't been active in 2+ days
     # - Haven't received an accountability check-in in the last 24 hours
     # - Are active accounts
-    eligible_users = User.objects.filter(
-        is_active=True,
-        dreams__status='active',
-        last_activity__lt=threshold,
-    ).exclude(
-        notifications__notification_type='check_in',
-        notifications__created_at__gte=now - td(days=1),
-    ).distinct()
+    eligible_users = (
+        User.objects.filter(
+            is_active=True,
+            dreams__status="active",
+            last_activity__lt=threshold,
+        )
+        .exclude(
+            notifications__notification_type="check_in",
+            notifications__created_at__gte=now - td(days=1),
+        )
+        .distinct()
+    )
 
     # Respect notification preferences
     eligible_users = [
-        u for u in eligible_users
-        if (u.notification_prefs or {}).get('accountability_checkins', True)
+        u
+        for u in eligible_users
+        if (u.notification_prefs or {}).get("accountability_checkins", True)
     ]
 
     ai_service = OpenAIService()
@@ -325,7 +354,7 @@ def send_accountability_checkins():
     for user in eligible_users:
         try:
             # Check AI background quota
-            allowed, _ = tracker.check_quota(user, 'ai_background')
+            allowed, _ = tracker.check_quota(user, "ai_background")
             if not allowed:
                 logger.info(
                     "Skipping accountability check-in for user %s (quota exceeded)",
@@ -337,41 +366,49 @@ def send_accountability_checkins():
             days_since = (now - user.last_activity).days if user.last_activity else 0
 
             active_dreams = Dream.objects.filter(
-                user=user, status='active',
-            ).values('id', 'title', 'progress_percentage', 'category')
+                user=user,
+                status="active",
+            ).values("id", "title", "progress_percentage", "category")
 
             dream_progress = [
                 {
-                    'title': d['title'],
-                    'progress': round(d['progress_percentage'], 1),
-                    'category': d['category'] or 'personal',
+                    "title": d["title"],
+                    "progress": round(d["progress_percentage"], 1),
+                    "category": d["category"] or "personal",
                 }
                 for d in active_dreams
             ]
 
-            pending_tasks_qs = Task.objects.filter(
-                goal__dream__user=user,
-                goal__dream__status='active',
-                status='pending',
-            ).select_related('goal__dream').order_by(
-                'scheduled_date', 'order',
-            )[:10]
+            pending_tasks_qs = (
+                Task.objects.filter(
+                    goal__dream__user=user,
+                    goal__dream__status="active",
+                    status="pending",
+                )
+                .select_related("goal__dream")
+                .order_by(
+                    "scheduled_date",
+                    "order",
+                )[:10]
+            )
 
             pending_tasks = [
                 {
-                    'title': t.title,
-                    'dream_title': t.goal.dream.title if t.goal and t.goal.dream else '',
-                    'due_date': str(t.deadline_date) if t.deadline_date else '',
+                    "title": t.title,
+                    "dream_title": (
+                        t.goal.dream.title if t.goal and t.goal.dream else ""
+                    ),
+                    "due_date": str(t.deadline_date) if t.deadline_date else "",
                 }
                 for t in pending_tasks_qs
             ]
 
             streak_data = {
-                'current_streak': user.streak_days or 0,
-                'best_streak': user.streak_days or 0,
+                "current_streak": user.streak_days or 0,
+                "best_streak": user.streak_days or 0,
             }
 
-            display_name = user.display_name or user.email.split('@')[0]
+            display_name = user.display_name or user.email.split("@")[0]
 
             # Generate check-in
             checkin = ai_service.generate_checkin(
@@ -383,37 +420,40 @@ def send_accountability_checkins():
             )
 
             # Track AI usage
-            tracker.increment(user, 'ai_background')
+            tracker.increment(user, "ai_background")
 
             # Sanitize message
-            message = sanitize_text(checkin.get('message', ''))[:500]
+            message = sanitize_text(checkin.get("message", ""))[:500]
 
             # Create notification
             Notification.objects.create(
                 user=user,
-                notification_type='check_in',
-                title='Accountability Check-in',
+                notification_type="check_in",
+                title="Accountability Check-in",
                 body=message,
                 scheduled_for=now,
                 data={
-                    'screen': 'Home',
-                    'action': 'show_checkin',
-                    'prompt_type': checkin.get('prompt_type', 'gentle_nudge'),
-                    'suggested_questions': checkin.get('suggested_questions', []),
-                    'quick_actions': checkin.get('quick_actions', []),
+                    "screen": "Home",
+                    "action": "show_checkin",
+                    "prompt_type": checkin.get("prompt_type", "gentle_nudge"),
+                    "suggested_questions": checkin.get("suggested_questions", []),
+                    "quick_actions": checkin.get("quick_actions", []),
                 },
             )
 
             created += 1
             logger.info(
                 "Sent accountability check-in to user %s (type: %s, %d days inactive)",
-                user.id, checkin.get('prompt_type'), days_since,
+                user.id,
+                checkin.get("prompt_type"),
+                days_since,
             )
 
         except OpenAIError as e:
             logger.error(
                 "Failed to generate accountability check-in for user %s: %s",
-                user.id, str(e),
+                user.id,
+                str(e),
             )
         except Exception:
             logger.exception(

@@ -14,7 +14,7 @@ from django.dispatch import receiver
 logger = logging.getLogger(__name__)
 
 
-@receiver(post_save, sender='subscriptions.Subscription')
+@receiver(post_save, sender="subscriptions.Subscription")
 def sync_user_subscription_field(sender, instance, **kwargs):
     """
     Keep User.subscription CharField in sync with the Subscription model.
@@ -25,8 +25,8 @@ def sync_user_subscription_field(sender, instance, **kwargs):
     """
     try:
         user = instance.user
-        new_slug = instance.plan.slug if instance.plan else 'free'
-        if getattr(user, 'subscription', None) != new_slug:
+        new_slug = instance.plan.slug if instance.plan else "free"
+        if getattr(user, "subscription", None) != new_slug:
             type(user).objects.filter(pk=user.pk).update(subscription=new_slug)
     except Exception:
         logger.exception(
@@ -60,20 +60,19 @@ def create_stripe_customer_on_user_creation(sender, instance, created, **kwargs)
 
     # Create a free-tier Subscription so every user has one from day one.
     try:
-        from .models import SubscriptionPlan, Subscription
-        free_plan = SubscriptionPlan.objects.filter(slug='free').first()
+        from .models import Subscription, SubscriptionPlan
+
+        free_plan = SubscriptionPlan.objects.filter(slug="free").first()
         if free_plan:
             Subscription.objects.get_or_create(
                 user=instance,
                 defaults={
-                    'plan': free_plan,
-                    'status': 'active',
-                    'stripe_subscription_id': '',
+                    "plan": free_plan,
+                    "status": "active",
+                    "stripe_subscription_id": "",
                 },
             )
-            logger.info(
-                "Free subscription created for new user %s", instance.email
-            )
+            logger.info("Free subscription created for new user %s", instance.email)
     except Exception:
         logger.exception(
             "Failed to create free subscription for user %s.",
@@ -82,10 +81,9 @@ def create_stripe_customer_on_user_creation(sender, instance, created, **kwargs)
 
     try:
         from .services import StripeService
+
         StripeService.create_customer(instance)
-        logger.info(
-            "Stripe customer created for new user %s", instance.email
-        )
+        logger.info("Stripe customer created for new user %s", instance.email)
     except Exception:
         # Do not block user registration if Stripe is unreachable.
         # The customer will be created lazily at checkout time.

@@ -10,9 +10,9 @@ Mode 1 is preferred because tokens in URLs can appear in server access logs,
 browser history, proxy logs, and Referrer headers.
 """
 
-import json
 import logging
 from urllib.parse import parse_qs
+
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
@@ -32,13 +32,13 @@ def get_user_from_token(token_key):
 
     # Try JWT access token first
     try:
-        from rest_framework_simplejwt.tokens import AccessToken
-        from rest_framework_simplejwt.exceptions import TokenError
         from django.contrib.auth import get_user_model
+        from rest_framework_simplejwt.tokens import AccessToken
+
         User = get_user_model()
 
         validated = AccessToken(token_key)
-        user_id = validated['user_id']
+        user_id = validated["user_id"]
         user = User.objects.get(id=user_id, is_active=True)
         return user
     except Exception:
@@ -46,15 +46,16 @@ def get_user_from_token(token_key):
 
     # Fallback: legacy DRF Token (transition period)
     try:
-        from rest_framework.authtoken.models import Token
-        from django.conf import settings
-        from django.utils import timezone
         from datetime import timedelta
 
-        token = Token.objects.select_related('user').get(key=token_key)
+        from django.conf import settings
+        from django.utils import timezone
+        from rest_framework.authtoken.models import Token
+
+        token = Token.objects.select_related("user").get(key=token_key)
 
         token_age = timezone.now() - token.created
-        expiry_hours = getattr(settings, 'TOKEN_EXPIRY_HOURS', 24)
+        expiry_hours = getattr(settings, "TOKEN_EXPIRY_HOURS", 24)
         if token_age > timedelta(hours=expiry_hours):
             return AnonymousUser()
 
@@ -83,9 +84,9 @@ class TokenWebSocketMiddleware(BaseMiddleware):
 
     async def __call__(self, scope, receive, send):
         # Fallback: try query string token (deprecated, for backward compatibility)
-        query_string = scope.get('query_string', b'').decode()
+        query_string = scope.get("query_string", b"").decode()
         query_params = parse_qs(query_string)
-        token = query_params.get('token', [None])[0]
+        token = query_params.get("token", [None])[0]
 
         if token:
             logger.warning(
@@ -93,9 +94,9 @@ class TokenWebSocketMiddleware(BaseMiddleware):
                 "Use post-connect authenticate message instead."
             )
 
-        scope['user'] = await get_user_from_token(token)
+        scope["user"] = await get_user_from_token(token)
         # Store a flag so consumers know they can accept a post-connect authenticate message
-        scope['_allow_post_auth'] = not token
+        scope["_allow_post_auth"] = not token
 
         return await super().__call__(scope, receive, send)
 
@@ -109,12 +110,12 @@ class TokenWebSocketAuthMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope['type'] != 'websocket':
+        if scope["type"] != "websocket":
             return await self.app(scope, receive, send)
 
-        query_string = scope.get('query_string', b'').decode()
+        query_string = scope.get("query_string", b"").decode()
         query_params = parse_qs(query_string)
-        token = query_params.get('token', [None])[0]
+        token = query_params.get("token", [None])[0]
 
         if token:
             logger.warning(
@@ -122,8 +123,8 @@ class TokenWebSocketAuthMiddleware:
                 "Use post-connect authenticate message instead."
             )
 
-        scope['user'] = await get_user_from_token(token)
-        scope['_allow_post_auth'] = not token
+        scope["user"] = await get_user_from_token(token)
+        scope["_allow_post_auth"] = not token
 
         return await self.app(scope, receive, send)
 

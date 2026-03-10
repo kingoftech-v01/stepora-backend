@@ -20,20 +20,30 @@ Routes:
     /challenges/<id>/join/                       - Join a challenge
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    CircleViewSet, ChallengeViewSet,
-    JoinByInviteCodeView, MyInvitationsView,
+    ChallengeViewSet,
+    CircleViewSet,
+    JoinByInviteCodeView,
+    MyInvitationsView,
 )
 
 router = DefaultRouter()
-router.register(r'circles', CircleViewSet, basename='circle')
-router.register(r'circles/challenges', ChallengeViewSet, basename='circle-challenge')
+router.register(r"circles", CircleViewSet, basename="circle")
+router.register(r"circles/challenges", ChallengeViewSet, basename="circle-challenge")
 
 urlpatterns = [
-    path('circles/join/<str:invite_code>/', JoinByInviteCodeView.as_view(), name='circle-join-invite'),
-    path('circles/my-invitations/', MyInvitationsView.as_view(), name='circle-my-invitations'),
-    path('', include(router.urls)),
+    path(
+        "circles/join/<str:invite_code>/",
+        JoinByInviteCodeView.as_view(),
+        name="circle-join-invite",
+    ),
+    path(
+        "circles/my-invitations/",
+        MyInvitationsView.as_view(),
+        name="circle-my-invitations",
+    ),
+    path("", include(router.urls)),
 ]

@@ -3,11 +3,10 @@ Notification delivery service — orchestrates WebSocket, Email, FCM, and Web Pu
 """
 
 import logging
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-from channels.layers import get_channel_layer
+
 from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,9 @@ class NotificationDeliveryService:
         Returns True if at least one channel succeeded.
         """
         if notification.retry_count >= notification.max_retries:
-            logger.warning("Notification %s exceeded max retries, skipping", notification.id)
+            logger.warning(
+                "Notification %s exceeded max retries, skipping", notification.id
+            )
             return False
 
         user = notification.user
@@ -32,22 +33,22 @@ class NotificationDeliveryService:
         results = []
 
         # WebSocket (default: enabled)
-        if prefs.get('websocket_enabled', True):
+        if prefs.get("websocket_enabled", True):
             results.append(self._send_websocket(notification))
 
         # Email (default: disabled — opt-in)
-        email_enabled = prefs.get('email_enabled', False)
+        email_enabled = prefs.get("email_enabled", False)
         if email_enabled:
             results.append(self._send_email(notification))
 
         # FCM Push (default: enabled if user has devices)
         fcm_sent = False
-        if prefs.get('push_enabled', True):
+        if prefs.get("push_enabled", True):
             fcm_sent = self._send_fcm(notification)
             results.append(fcm_sent)
 
         # Web Push VAPID fallback (only if FCM didn't send and user has subscriptions)
-        if prefs.get('push_enabled', True) and not fcm_sent:
+        if prefs.get("push_enabled", True) and not fcm_sent:
             results.append(self._send_webpush(notification))
 
         # Email fallback: if no channel succeeded and email was not already tried, send email
@@ -59,27 +60,29 @@ class NotificationDeliveryService:
     def _send_websocket(self, notification):
         """Send notification via WebSocket channel layer."""
         try:
-            group_name = f'notifications_{notification.user.id}'
+            group_name = f"notifications_{notification.user.id}"
             async_to_sync(self.channel_layer.group_send)(
                 group_name,
                 {
-                    'type': 'send_notification',
-                    'notification': {
-                        'id': str(notification.id),
-                        'notification_type': notification.notification_type,
-                        'title': notification.title,
-                        'body': notification.body,
-                        'data': notification.data,
-                        'image_url': notification.image_url,
-                        'action_url': notification.action_url,
-                        'created_at': notification.created_at.isoformat(),
+                    "type": "send_notification",
+                    "notification": {
+                        "id": str(notification.id),
+                        "notification_type": notification.notification_type,
+                        "title": notification.title,
+                        "body": notification.body,
+                        "data": notification.data,
+                        "image_url": notification.image_url,
+                        "action_url": notification.action_url,
+                        "created_at": notification.created_at.isoformat(),
                     },
-                }
+                },
             )
             logger.debug(f"WebSocket sent for notification {notification.id}")
             return True
         except Exception as e:
-            logger.error(f"WebSocket delivery failed for {notification.id}: {e}", exc_info=True)
+            logger.error(
+                f"WebSocket delivery failed for {notification.id}: {e}", exc_info=True
+            )
             return False
 
     def _send_email(self, notification):
@@ -90,18 +93,20 @@ class NotificationDeliveryService:
             user = notification.user
 
             send_templated_email(
-                template_name='notifications/notification',
+                template_name="notifications/notification",
                 subject=notification.title,
                 to=[user.email],
                 context={
-                    'title': notification.title,
-                    'body': notification.body,
-                    'action_url': notification.action_url or settings.FRONTEND_URL,
-                    'user_name': user.display_name or user.email,
+                    "title": notification.title,
+                    "body": notification.body,
+                    "action_url": notification.action_url or settings.FRONTEND_URL,
+                    "user_name": user.display_name or user.email,
                 },
             )
 
-            logger.debug(f"Email sent for notification {notification.id} to {user.email}")
+            logger.debug(
+                f"Email sent for notification {notification.id} to {user.email}"
+            )
             return True
         except Exception as e:
             logger.warning(f"Email delivery failed for {notification.id}: {e}")
@@ -110,15 +115,15 @@ class NotificationDeliveryService:
     def _send_fcm(self, notification):
         """Send notification via Firebase Cloud Messaging to all user devices."""
         try:
-            from .models import UserDevice
             from .fcm_service import FCMService, InvalidTokenError
+            from .models import UserDevice
 
             devices = UserDevice.objects.filter(
                 user=notification.user,
                 is_active=True,
             )
 
-            tokens = list(devices.values_list('fcm_token', flat=True))
+            tokens = list(devices.values_list("fcm_token", flat=True))
             if not tokens:
                 return False
 
@@ -128,8 +133,8 @@ class NotificationDeliveryService:
             data = {}
             if notification.data:
                 data = {k: str(v) for k, v in notification.data.items()}
-            data['notification_id'] = str(notification.id)
-            data['notification_type'] = notification.notification_type
+            data["notification_id"] = str(notification.id)
+            data["notification_type"] = notification.notification_type
 
             if len(tokens) == 1:
                 try:
@@ -145,11 +150,18 @@ class NotificationDeliveryService:
                         return True
                     return False
                 except InvalidTokenError:
-                    UserDevice.objects.filter(fcm_token=tokens[0]).update(is_active=False)
-                    logger.info(f"Deactivated invalid FCM token for user {notification.user.id}")
+                    UserDevice.objects.filter(fcm_token=tokens[0]).update(
+                        is_active=False
+                    )
+                    logger.info(
+                        f"Deactivated invalid FCM token for user {notification.user.id}"
+                    )
                     return False
                 except Exception as e:
-                    logger.error(f"FCM send failed for notification {notification.id}: {e}", exc_info=True)
+                    logger.error(
+                        f"FCM send failed for notification {notification.id}: {e}",
+                        exc_info=True,
+                    )
                     return False
             else:
                 result = fcm.send_multicast(
@@ -181,13 +193,16 @@ class NotificationDeliveryService:
             logger.warning("firebase-admin not installed, skipping FCM delivery")
             return False
         except Exception as e:
-            logger.warning(f"FCM delivery failed for notification {notification.id}: {e}")
+            logger.warning(
+                f"FCM delivery failed for notification {notification.id}: {e}"
+            )
             return False
 
     def _send_webpush(self, notification):
         """Send notification via Web Push (VAPID). Deprecated: use FCM instead."""
         try:
-            from pywebpush import webpush, WebPushException
+            from pywebpush import WebPushException, webpush
+
             from .models import WebPushSubscription
 
             subscriptions = WebPushSubscription.objects.filter(
@@ -198,22 +213,25 @@ class NotificationDeliveryService:
             if not subscriptions.exists():
                 return False
 
-            vapid_settings = getattr(settings, 'WEBPUSH_SETTINGS', {})
-            vapid_private_key = vapid_settings.get('VAPID_PRIVATE_KEY', '')
-            vapid_admin_email = vapid_settings.get('VAPID_ADMIN_EMAIL', '')
+            vapid_settings = getattr(settings, "WEBPUSH_SETTINGS", {})
+            vapid_private_key = vapid_settings.get("VAPID_PRIVATE_KEY", "")
+            vapid_admin_email = vapid_settings.get("VAPID_ADMIN_EMAIL", "")
 
             if not vapid_private_key:
                 logger.warning("VAPID_PRIVATE_KEY not configured, skipping web push")
                 return False
 
             import json
-            payload = json.dumps({
-                'title': notification.title,
-                'body': notification.body,
-                'data': notification.data,
-                'icon': '/static/icon-192.png',
-                'url': notification.action_url or '/',
-            })
+
+            payload = json.dumps(
+                {
+                    "title": notification.title,
+                    "body": notification.body,
+                    "data": notification.data,
+                    "icon": "/static/icon-192.png",
+                    "url": notification.action_url or "/",
+                }
+            )
 
             sent = False
             for sub in subscriptions:
@@ -223,17 +241,19 @@ class NotificationDeliveryService:
                         data=payload,
                         vapid_private_key=vapid_private_key,
                         vapid_claims={
-                            'sub': f'mailto:{vapid_admin_email}',
+                            "sub": f"mailto:{vapid_admin_email}",
                         },
                     )
                     sent = True
                 except WebPushException as e:
                     if e.response and e.response.status_code in (404, 410):
                         sub.is_active = False
-                        sub.save(update_fields=['is_active'])
+                        sub.save(update_fields=["is_active"])
                         logger.info(f"Deactivated expired push subscription {sub.id}")
                     else:
-                        logger.warning(f"Web push failed for subscription {sub.id}: {e}")
+                        logger.warning(
+                            f"Web push failed for subscription {sub.id}: {e}"
+                        )
                 except Exception as e:
                     logger.warning(f"Web push error for subscription {sub.id}: {e}")
 

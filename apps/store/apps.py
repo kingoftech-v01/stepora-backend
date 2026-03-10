@@ -11,7 +11,6 @@ from django.apps import AppConfig
 class StoreConfig(AppConfig):
     """Configuration for the in-app store application."""
 
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.store'
-    verbose_name = 'Store'
-
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.store"
+    verbose_name = "Store"
