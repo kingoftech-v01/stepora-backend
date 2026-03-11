@@ -9,7 +9,13 @@ from rest_framework import serializers
 
 from core.validators import validate_coupon_code
 
-from .models import StripeCustomer, Subscription, SubscriptionPlan
+from .models import (
+    Promotion,
+    PromotionPlanDiscount,
+    StripeCustomer,
+    Subscription,
+    SubscriptionPlan,
+)
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
@@ -21,6 +27,17 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     has_unlimited_dreams = serializers.BooleanField(
         read_only=True, help_text="Whether the plan allows unlimited dreams."
     )
+    active_promotions = serializers.SerializerMethodField(
+        help_text="Active promotions available for this plan."
+    )
+
+    def get_active_promotions(self, obj):
+        promos_by_plan = self.context.get("active_promotions_by_plan", {})
+        promos = promos_by_plan.get(str(obj.id), [])
+        if not promos:
+            return []
+        # Avoid circular import — PromotionSerializer is defined later in same file
+        return PromotionSerializer(promos, many=True, context=self.context).data
 
     class Meta:
         model = SubscriptionPlan
@@ -44,6 +61,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             "is_free",
             "has_unlimited_dreams",
             "is_active",
+            "active_promotions",
         ]
         read_only_fields = fields
         extra_kwargs = {
@@ -157,6 +175,51 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         }
 
 
+class PromotionPlanDiscountSerializer(serializers.ModelSerializer):
+    """Serializer for a plan-specific discount within a promotion."""
+
+    plan = SubscriptionPlanSerializer(read_only=True)
+    discounted_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PromotionPlanDiscount
+        fields = [
+            "id",
+            "plan",
+            "discount_value",
+            "discounted_price",
+        ]
+        read_only_fields = fields
+
+    def get_discounted_price(self, obj):
+        price = float(obj.plan.price_monthly)
+        value = float(obj.discount_value)
+        if obj.promotion.discount_type == "percentage":
+            return round(price * (1 - value / 100), 2)
+        return round(max(0.0, price - value), 2)
+
+
+class PromotionSerializer(serializers.ModelSerializer):
+    """Serializer for active promotions visible to users."""
+
+    plan_discounts = PromotionPlanDiscountSerializer(many=True, read_only=True)
+    spots_remaining = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Promotion
+        fields = [
+            "id",
+            "name",
+            "description",
+            "end_date",
+            "duration_days",
+            "discount_type",
+            "plan_discounts",
+            "spots_remaining",
+        ]
+        read_only_fields = fields
+
+
 class SubscriptionCreateSerializer(serializers.Serializer):
     """Input serializer for creating a Stripe Checkout Session."""
 
@@ -180,6 +243,12 @@ class SubscriptionCreateSerializer(serializers.Serializer):
         allow_blank=True,
         default="",
         help_text="Optional Stripe coupon/promo code",
+    )
+    promotion_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Optional promotion ID to apply the promo discount",
     )
 
     def validate_coupon_code(self, value):

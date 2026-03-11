@@ -9,6 +9,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    PromotionViewSet,
     ReferralView,
     StripeWebhookView,
     SubscriptionPlanViewSet,
@@ -18,6 +19,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r"plans", SubscriptionPlanViewSet, basename="subscription-plan")
 router.register(r"subscription", SubscriptionViewSet, basename="subscription")
+router.register(r"promotions", PromotionViewSet, basename="promotion")
 
 urlpatterns = [
     path("", include(router.urls)),

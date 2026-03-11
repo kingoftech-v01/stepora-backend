@@ -7,17 +7,26 @@ and keeps a single place to manage API keys and error handling.
 """
 
 import logging
+import math
 import os
 from datetime import datetime, timedelta
 from typing import Optional
 
 import stripe
 from django.conf import settings
+from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from apps.users.models import User
 
-from .models import StripeCustomer, Subscription, SubscriptionPlan
+from .models import (
+    Promotion,
+    PromotionPlanDiscount,
+    PromotionRedemption,
+    StripeCustomer,
+    Subscription,
+    SubscriptionPlan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -398,6 +407,13 @@ class StripeService:
             if cancelled is None:
                 raise ValueError("No active subscription to downgrade.")
             return {"action": "downgrade_scheduled", "subscription": cancelled}
+
+        # Free user trying to go to a paid plan → must use checkout
+        if not subscription.stripe_subscription_id and subscription.plan.is_free:
+            raise ValueError(
+                "requires_checkout:No active paid subscription. "
+                "Please use the checkout flow to start a paid subscription."
+            )
 
         # Admin-assigned subscription (no Stripe backing) — change locally
         if not subscription.stripe_subscription_id:
@@ -1455,3 +1471,208 @@ def _revoke_downgraded_features(user, new_plan):
             _logger.exception(
                 "Failed to end buddy pairings for user %s on downgrade", user.email
             )
+
+
+class PromotionService:
+    """
+    Service class for promotion management.
+
+    Handles eligibility filtering, Stripe coupon auto-creation,
+    and Stripe product/price auto-creation for subscription plans.
+    """
+
+    @staticmethod
+    def get_active_promotions(user):
+        """
+        Return promotions available to this user.
+
+        Filters by date range, active flag, max redemptions, eligibility
+        conditions, target audience, and already-redeemed exclusion.
+
+        Returns a list (not queryset) of Promotion instances with
+        plan_discounts prefetched.
+        """
+        now = timezone.now()
+
+        qs = (
+            Promotion.objects.filter(
+                is_active=True,
+                start_date__lte=now,
+                end_date__gte=now,
+            )
+            .exclude(
+                id__in=PromotionRedemption.objects.filter(
+                    user=user
+                ).values("promotion_id")
+            )
+            .annotate(
+                _redemption_count=Count("redemptions"),
+            )
+            .filter(
+                Q(max_redemptions__isnull=True)
+                | Q(_redemption_count__lt=F("max_redemptions"))
+            )
+            .prefetch_related("plan_discounts__plan")
+        )
+
+        # Python-side per-user filtering
+        has_ever_paid = Subscription.objects.filter(
+            user=user
+        ).exclude(plan__slug="free").exists()
+
+        filtered = []
+        for promo in qs:
+            if promo.condition_type == "email_endswith":
+                if not user.email.lower().endswith(
+                    promo.condition_value.lower()
+                ):
+                    continue
+            if promo.target_audience == "new_users" and has_ever_paid:
+                continue
+            filtered.append(promo)
+
+        return filtered
+
+    @staticmethod
+    def create_stripe_coupon(discount: PromotionPlanDiscount) -> str:
+        """
+        Create a Stripe coupon for a PromotionPlanDiscount.
+
+        Returns the Stripe coupon ID.
+        """
+        promo = discount.promotion
+        duration_days = promo.duration_days
+
+        # Stripe supports duration_in_months for repeating coupons
+        if duration_days <= 30:
+            duration = "once"
+            duration_in_months = None
+        else:
+            duration = "repeating"
+            duration_in_months = math.ceil(duration_days / 30)
+
+        coupon_kwargs = {
+            "duration": duration,
+            "name": f"{promo.name} - {discount.plan.name}",
+            "metadata": {
+                "stepora_promotion_id": str(promo.id),
+                "stepora_plan_slug": discount.plan.slug,
+            },
+        }
+
+        if duration_in_months:
+            coupon_kwargs["duration_in_months"] = duration_in_months
+
+        if promo.discount_type == "percentage":
+            coupon_kwargs["percent_off"] = float(discount.discount_value)
+        else:
+            coupon_kwargs["amount_off"] = int(
+                float(discount.discount_value) * 100
+            )
+            coupon_kwargs["currency"] = "usd"
+
+        if promo.max_redemptions:
+            coupon_kwargs["max_redemptions"] = promo.max_redemptions
+
+        if promo.end_date:
+            coupon_kwargs["redeem_by"] = int(promo.end_date.timestamp())
+
+        coupon = stripe.Coupon.create(**coupon_kwargs)
+        logger.info(
+            "Created Stripe coupon %s for promotion '%s' plan '%s'",
+            coupon.id,
+            promo.name,
+            discount.plan.name,
+        )
+        return coupon.id
+
+    @staticmethod
+    def create_stripe_price_for_plan(plan: SubscriptionPlan) -> str:
+        """
+        Create a Stripe Product and recurring monthly Price for a plan.
+
+        Returns the Stripe price ID.
+        """
+        product = stripe.Product.create(
+            name=f"Stepora {plan.name}",
+            metadata={
+                "stepora_plan_slug": plan.slug,
+            },
+        )
+
+        price = stripe.Price.create(
+            product=product.id,
+            unit_amount=int(float(plan.price_monthly) * 100),
+            currency="usd",
+            recurring={"interval": "month"},
+            metadata={
+                "stepora_plan_slug": plan.slug,
+            },
+        )
+
+        logger.info(
+            "Created Stripe product %s and price %s for plan '%s' ($%s/mo)",
+            product.id,
+            price.id,
+            plan.name,
+            plan.price_monthly,
+        )
+        return price.id
+
+    @staticmethod
+    def record_redemption(user, promotion, promotion_plan_discount):
+        """
+        Record that a user redeemed a promotion.
+
+        Creates a PromotionRedemption row. Idempotent — returns existing
+        record if the user already redeemed this promotion.
+        """
+        redemption, created = PromotionRedemption.objects.get_or_create(
+            promotion=promotion,
+            user=user,
+            defaults={
+                "promotion_plan_discount": promotion_plan_discount,
+                "stripe_coupon_id": promotion_plan_discount.stripe_coupon_id,
+            },
+        )
+        if created:
+            logger.info(
+                "User %s redeemed promotion '%s' for plan '%s'",
+                user.email,
+                promotion.name,
+                promotion_plan_discount.plan.name,
+            )
+        return redemption
+
+    @staticmethod
+    def get_discount_for_checkout(user, promotion_id, plan):
+        """
+        Validate a promotion for checkout and return the PromotionPlanDiscount.
+
+        Raises ValueError if the promotion is not eligible.
+        """
+        try:
+            promotion = Promotion.objects.get(id=promotion_id)
+        except Promotion.DoesNotExist:
+            raise ValueError("Promotion not found.")
+
+        # Check eligibility
+        active_promos = PromotionService.get_active_promotions(user)
+        if promotion not in active_promos:
+            raise ValueError("This promotion is not available to you.")
+
+        # Get the discount for this plan
+        try:
+            discount = PromotionPlanDiscount.objects.get(
+                promotion=promotion,
+                plan=plan,
+            )
+        except PromotionPlanDiscount.DoesNotExist:
+            raise ValueError(
+                f"This promotion does not apply to the {plan.name} plan."
+            )
+
+        if not discount.stripe_coupon_id:
+            raise ValueError("Promotion coupon not yet configured.")
+
+        return discount

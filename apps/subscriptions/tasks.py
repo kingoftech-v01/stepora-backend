@@ -218,3 +218,80 @@ def send_subscription_reactivated_email(user_id: str, plan_name: str):
         fail_silently=True,
     )
     logger.info("Reactivation email sent to %s", user.email)
+
+
+@shared_task(name="apps.subscriptions.tasks.send_free_user_upgrade_reminders")
+def send_free_user_upgrade_reminders():
+    """
+    Send push notifications to active free users encouraging upgrade.
+
+    Targets users who:
+    - Are on the free plan
+    - Have been active in the last 7 days
+    - Registered more than 3 days ago
+    - Haven't received this reminder in the last 7 days
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.users.models import User
+
+    now = timezone.now()
+    three_days_ago = now - timedelta(days=3)
+    seven_days_ago = now - timedelta(days=7)
+
+    # Users on free plan, registered >3 days ago, active in last 7 days
+    free_users = User.objects.filter(
+        is_active=True,
+        subscription="free",
+        date_joined__lte=three_days_ago,
+        last_login__gte=seven_days_ago,
+    ).values_list("id", flat=True)[:100]
+
+    sent = 0
+    for user_id in free_users:
+        try:
+            _send_upgrade_push.delay(str(user_id))
+            sent += 1
+        except Exception:
+            logger.exception(
+                "Failed to queue upgrade push for user %s", user_id
+            )
+
+    logger.info(
+        "Queued %d free-user upgrade reminder pushes", sent
+    )
+
+
+@shared_task(name="apps.subscriptions.tasks._send_upgrade_push")
+def _send_upgrade_push(user_id: str):
+    """Send a single upgrade push notification to a free user."""
+    user = _get_user(user_id)
+    if not user:
+        return
+
+    try:
+        from apps.notifications.services import NotificationService
+
+        # Check for active promotions
+        from apps.subscriptions.services import PromotionService
+
+        promos = PromotionService.get_active_promotions(user)
+        if promos:
+            title = promos[0].name
+            body = promos[0].description or "Upgrade now and save!"
+        else:
+            name = user.display_name or "there"
+            title = "Ready to level up?"
+            body = f"Hey {name}, unlock AI coaching, unlimited dreams, and more with Premium!"
+
+        NotificationService.send_push(
+            user=user,
+            title=title,
+            body=body,
+            data={"type": "upgrade_reminder", "route": "/subscription"},
+        )
+        logger.info("Upgrade push sent to %s", user.email)
+    except Exception:
+        logger.exception("Failed to send upgrade push to %s", user_id)

@@ -556,3 +556,199 @@ class StripeWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} ({self.stripe_event_id})"
+
+
+class Promotion(models.Model):
+    """
+    A promotional offer with configurable discount, eligibility, and duration.
+
+    Promotions can target specific plans with different discount values,
+    restrict eligibility by email domain or user type, and auto-create
+    Stripe coupons for seamless billing integration.
+    """
+
+    DISCOUNT_TYPE_CHOICES = [
+        ("percentage", "Percentage"),
+        ("fixed_amount", "Fixed Amount"),
+    ]
+    CONDITION_TYPE_CHOICES = [
+        ("none", "None (everyone)"),
+        ("email_endswith", "Email Ends With"),
+    ]
+    TARGET_AUDIENCE_CHOICES = [
+        ("all", "All Users"),
+        ("new_users", "New Users Only"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(
+        max_length=100,
+        help_text="Internal name for this promotion",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Public-facing description shown to users",
+    )
+    start_date = models.DateTimeField(
+        help_text="When the promotion becomes available",
+    )
+    end_date = models.DateTimeField(
+        help_text="When the promotion expires",
+    )
+    duration_days = models.PositiveIntegerField(
+        help_text="How long the discount lasts after redemption (in days)",
+    )
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_TYPE_CHOICES,
+        help_text="Whether the discount is a percentage or fixed dollar amount",
+    )
+    max_redemptions = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum total redemptions. Leave blank for unlimited.",
+    )
+    condition_type = models.CharField(
+        max_length=30,
+        choices=CONDITION_TYPE_CHOICES,
+        default="none",
+        help_text="Eligibility condition type",
+    )
+    condition_value = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Condition value (e.g. '@school.ca' for email_endswith)",
+    )
+    target_audience = models.CharField(
+        max_length=20,
+        choices=TARGET_AUDIENCE_CHOICES,
+        default="all",
+        help_text="Who can see and redeem this promotion",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Admin toggle to enable/disable the promotion",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "promotions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["is_active", "start_date", "end_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.discount_type}, {self.duration_days}d)"
+
+    @property
+    def redemption_count(self):
+        """Current number of redemptions."""
+        return self.redemptions.count()
+
+    @property
+    def is_exhausted(self):
+        """Whether max redemptions has been reached."""
+        if self.max_redemptions is None:
+            return False
+        return self.redemption_count >= self.max_redemptions
+
+    @property
+    def spots_remaining(self):
+        """Number of spots remaining, or None if unlimited."""
+        if self.max_redemptions is None:
+            return None
+        return max(0, self.max_redemptions - self.redemption_count)
+
+
+class PromotionPlanDiscount(models.Model):
+    """
+    Links a promotion to a specific plan with its own discount value.
+
+    Each promotion can offer different discounts per plan (e.g. Premium -50%,
+    Pro -30%). A Stripe coupon is auto-created via signal on save.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    promotion = models.ForeignKey(
+        Promotion,
+        on_delete=models.CASCADE,
+        related_name="plan_discounts",
+    )
+    plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.CASCADE,
+        related_name="promotion_discounts",
+    )
+    discount_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Percentage (0-100) or fixed dollar amount, per promotion.discount_type",
+    )
+    stripe_coupon_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Auto-created Stripe coupon ID (do not edit manually)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "promotion_plan_discounts"
+        unique_together = [("promotion", "plan")]
+
+    def __str__(self):
+        return (
+            f"{self.promotion.name} → {self.plan.name}: "
+            f"{self.discount_value}"
+            f"{'%' if self.promotion.discount_type == 'percentage' else '$'}"
+        )
+
+    @property
+    def discounted_price(self):
+        """Calculate the discounted price for this plan."""
+        price = float(self.plan.price_monthly)
+        value = float(self.discount_value)
+        if self.promotion.discount_type == "percentage":
+            return round(price * (1 - value / 100), 2)
+        return round(max(0.0, price - value), 2)
+
+
+class PromotionRedemption(models.Model):
+    """Tracks which users have redeemed a promotion."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    promotion = models.ForeignKey(
+        Promotion,
+        on_delete=models.CASCADE,
+        related_name="redemptions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="promotion_redemptions",
+    )
+    promotion_plan_discount = models.ForeignKey(
+        PromotionPlanDiscount,
+        on_delete=models.PROTECT,
+        related_name="redemptions",
+    )
+    stripe_coupon_id = models.CharField(
+        max_length=255,
+        help_text="The Stripe coupon ID used for this redemption",
+    )
+    redeemed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "promotion_redemptions"
+        unique_together = [("promotion", "user")]
+        indexes = [
+            models.Index(fields=["promotion", "user"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} redeemed {self.promotion.name}"

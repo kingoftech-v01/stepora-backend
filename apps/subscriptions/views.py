@@ -22,11 +22,12 @@ from core.throttles import SearchRateThrottle
 from .models import Referral, Subscription, SubscriptionPlan
 from .serializers import (
     InvoiceSerializer,
+    PromotionSerializer,
     SubscriptionCreateSerializer,
     SubscriptionPlanSerializer,
     SubscriptionSerializer,
 )
-from .services import StripeService
+from .services import PromotionService, StripeService
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,28 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.filter(is_active=True)
     lookup_field = "slug"
+
+    def list(self, request, *args, **kwargs):
+        """Override list to inject active promotions per plan."""
+        queryset = self.filter_queryset(self.get_queryset())
+
+        promos_by_plan = {}
+        if request.user.is_authenticated:
+            active_promos = PromotionService.get_active_promotions(request.user)
+            for promo in active_promos:
+                for disc in promo.plan_discounts.all():
+                    plan_id = str(disc.plan_id)
+                    promos_by_plan.setdefault(plan_id, []).append(promo)
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True,
+            context={
+                **self.get_serializer_context(),
+                "active_promotions_by_plan": promos_by_plan,
+            },
+        )
+        return Response(serializer.data)
 
 
 class SubscriptionViewSet(viewsets.GenericViewSet):
@@ -144,13 +167,30 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
                 }
             )
 
+        # Resolve promotion → Stripe coupon code
+        coupon_code = serializer.validated_data.get("coupon_code", "")
+        promotion_id = serializer.validated_data.get("promotion_id")
+        promo_discount = None
+
+        if promotion_id and not coupon_code:
+            try:
+                promo_discount = PromotionService.get_discount_for_checkout(
+                    request.user, promotion_id, plan
+                )
+                coupon_code = promo_discount.stripe_coupon_id
+            except ValueError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             session = StripeService.create_checkout_session(
                 user=request.user,
                 plan=plan,
                 success_url=serializer.validated_data.get("success_url", ""),
                 cancel_url=serializer.validated_data.get("cancel_url", ""),
-                coupon_code=serializer.validated_data.get("coupon_code", ""),
+                coupon_code=coupon_code,
             )
         except ValueError as e:
             return Response(
@@ -162,6 +202,14 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
             return Response(
                 {"detail": _("Payment service error. Please try again later.")},
                 status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Record promotion redemption
+        if promo_discount:
+            PromotionService.record_redemption(
+                request.user,
+                promo_discount.promotion,
+                promo_discount,
             )
 
         return Response(
@@ -317,8 +365,17 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         try:
             result = StripeService.change_plan(request.user, plan)
         except ValueError as e:
+            msg = str(e)
+            if msg.startswith("requires_checkout:"):
+                return Response(
+                    {
+                        "code": "requires_checkout",
+                        "detail": msg[len("requires_checkout:"):],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
-                {"detail": str(e)},
+                {"detail": msg},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except stripe.error.StripeError:
@@ -572,6 +629,26 @@ class ReferralView(views.APIView):
                 "referrer_name": referrer.display_name or referrer.email.split("@")[0],
             }
         )
+
+
+class PromotionViewSet(viewsets.GenericViewSet):
+    """Viewset for listing active promotions available to the current user."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = PromotionSerializer
+
+    @extend_schema(
+        summary="List active promotions",
+        description="Returns promotions currently available to the authenticated user.",
+        tags=["Subscriptions"],
+        responses={200: PromotionSerializer(many=True)},
+    )
+    @action(detail=False, methods=["get"])
+    def active(self, request):
+        """Get active promotions for the current user."""
+        promotions = PromotionService.get_active_promotions(request.user)
+        serializer = PromotionSerializer(promotions, many=True)
+        return Response(serializer.data)
 
 
 class StripeWebhookView(views.APIView):

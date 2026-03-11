@@ -8,6 +8,9 @@ with rich list displays, filters, and search capabilities.
 from django.contrib import admin
 
 from .models import (
+    Promotion,
+    PromotionPlanDiscount,
+    PromotionRedemption,
     Referral,
     StripeCustomer,
     StripeWebhookEvent,
@@ -227,3 +230,121 @@ class StripeWebhookEventAdmin(admin.ModelAdmin):
     list_filter = ["event_type", "processed_at"]
     search_fields = ["stripe_event_id", "event_type"]
     readonly_fields = ["processed_at"]
+
+
+class PromotionPlanDiscountInline(admin.TabularInline):
+    """Inline editor for plan-specific discounts within a promotion."""
+
+    model = PromotionPlanDiscount
+    extra = 1
+    readonly_fields = ["stripe_coupon_id", "created_at"]
+    fields = ["plan", "discount_value", "stripe_coupon_id"]
+
+
+@admin.register(Promotion)
+class PromotionAdmin(admin.ModelAdmin):
+    """Admin interface for managing promotions."""
+
+    list_display = [
+        "name",
+        "discount_type",
+        "start_date",
+        "end_date",
+        "duration_days",
+        "max_redemptions",
+        "redemption_count",
+        "condition_type",
+        "target_audience",
+        "is_active",
+    ]
+    list_filter = [
+        "is_active",
+        "discount_type",
+        "condition_type",
+        "target_audience",
+    ]
+    search_fields = ["name", "description"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    inlines = [PromotionPlanDiscountInline]
+
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "description",
+                    "is_active",
+                ),
+            },
+        ),
+        (
+            "Discount",
+            {
+                "fields": (
+                    "discount_type",
+                    "duration_days",
+                ),
+            },
+        ),
+        (
+            "Schedule",
+            {
+                "fields": (
+                    "start_date",
+                    "end_date",
+                ),
+            },
+        ),
+        (
+            "Eligibility",
+            {
+                "fields": (
+                    "max_redemptions",
+                    "condition_type",
+                    "condition_value",
+                    "target_audience",
+                ),
+            },
+        ),
+        (
+            "Metadata",
+            {
+                "fields": ("id", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    @admin.display(description="Redemptions")
+    def redemption_count(self, obj):
+        return obj.redemptions.count()
+
+
+@admin.register(PromotionRedemption)
+class PromotionRedemptionAdmin(admin.ModelAdmin):
+    """Admin interface for viewing promotion redemptions (read-only)."""
+
+    list_display = [
+        "user",
+        "promotion",
+        "promotion_plan_discount",
+        "stripe_coupon_id",
+        "redeemed_at",
+    ]
+    list_filter = ["redeemed_at", "promotion"]
+    search_fields = ["user__email", "promotion__name"]
+    readonly_fields = [
+        "id",
+        "promotion",
+        "user",
+        "promotion_plan_discount",
+        "stripe_coupon_id",
+        "redeemed_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

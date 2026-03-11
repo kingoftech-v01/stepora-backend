@@ -183,6 +183,12 @@ app.conf.beat_schedule = {
         "task": "apps.users.tasks.send_accountability_checkins",
         "schedule": crontab(hour=10, minute=0),
     },
+    # === Subscription Tasks ===
+    # Send upgrade reminders to active free users (daily at 2 PM)
+    "send-free-user-upgrade-reminders": {
+        "task": "apps.subscriptions.tasks.send_free_user_upgrade_reminders",
+        "schedule": crontab(hour=14, minute=0),
+    },
 }
 
 # Task configuration

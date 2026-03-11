@@ -92,3 +92,75 @@ def create_stripe_customer_on_user_creation(sender, instance, created, **kwargs)
             "Will retry at checkout time.",
             instance.email,
         )
+
+
+@receiver(post_save, sender="subscriptions.SubscriptionPlan")
+def auto_create_stripe_price_for_plan(sender, instance, **kwargs):
+    """
+    Auto-create a Stripe Product + Price when a plan is saved with
+    an empty stripe_price_id. Zero manual Stripe configuration needed.
+    """
+    import stripe as _stripe
+
+    # Guard against recursive signal from our own save(update_fields=...)
+    update_fields = kwargs.get("update_fields")
+    if update_fields and "stripe_price_id" in update_fields:
+        return
+
+    # Skip if already has a price, is free, or no Stripe key configured
+    if instance.stripe_price_id or instance.is_free or not _stripe.api_key:
+        return
+
+    try:
+        from .services import PromotionService
+
+        price_id = PromotionService.create_stripe_price_for_plan(instance)
+        instance.stripe_price_id = price_id
+        instance.save(update_fields=["stripe_price_id", "updated_at"])
+        logger.info(
+            "Auto-created Stripe price %s for plan '%s'",
+            price_id,
+            instance.name,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to auto-create Stripe price for plan '%s'. "
+            "Set stripe_price_id manually or retry.",
+            instance.name,
+        )
+
+
+@receiver(post_save, sender="subscriptions.PromotionPlanDiscount")
+def auto_create_stripe_coupon_for_discount(sender, instance, **kwargs):
+    """
+    Auto-create a Stripe Coupon when a PromotionPlanDiscount is saved
+    with an empty stripe_coupon_id.
+    """
+    import stripe as _stripe
+
+    # Guard against recursive signal
+    update_fields = kwargs.get("update_fields")
+    if update_fields and "stripe_coupon_id" in update_fields:
+        return
+
+    if instance.stripe_coupon_id or not _stripe.api_key:
+        return
+
+    try:
+        from .services import PromotionService
+
+        coupon_id = PromotionService.create_stripe_coupon(instance)
+        instance.stripe_coupon_id = coupon_id
+        instance.save(update_fields=["stripe_coupon_id", "updated_at"])
+        logger.info(
+            "Auto-created Stripe coupon %s for promotion '%s' plan '%s'",
+            coupon_id,
+            instance.promotion.name,
+            instance.plan.name,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to auto-create Stripe coupon for promotion '%s' plan '%s'.",
+            instance.promotion.name,
+            instance.plan.name,
+        )
