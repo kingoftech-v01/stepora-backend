@@ -103,9 +103,19 @@ jobs:
         run: |
           FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
 
-          # Update each service that uses the backend image
+          # Map ECS service names to CONTAINER_ROLE values.
+          # The entrypoint.sh uses CONTAINER_ROLE to decide whether to run
+          # gunicorn (web), celery worker (worker), or celery beat (beat).
+          # Worker auto-discovers all queues from task_routes in celery.py.
+          declare -A ROLES=(
+            [stepora-backend]=web
+            [stepora-celery]=worker
+            [stepora-celery-beat]=beat
+          )
+
           for SERVICE_NAME in stepora-backend stepora-celery stepora-celery-beat; do
-            echo "=== Deploying ${SERVICE_NAME} ==="
+            echo "=== Deploying ${SERVICE_NAME} (role: ${ROLES[$SERVICE_NAME]}) ==="
+            ROLE="${ROLES[$SERVICE_NAME]}"
 
             # Get current task definition from running service
             CURRENT_TD=$(aws ecs describe-services \
@@ -114,12 +124,18 @@ jobs:
               --query 'services[0].taskDefinition' \
               --output text)
 
-            # Swap image, strip read-only fields
+            # Swap image, set CONTAINER_ROLE env var, remove hardcoded command
+            # (entrypoint.sh handles role-based startup), strip read-only fields
             aws ecs describe-task-definition \
               --task-definition "${CURRENT_TD}" \
               --query 'taskDefinition' \
-              | jq --arg IMG "${FULL_IMAGE}" \
+              | jq --arg IMG "${FULL_IMAGE}" --arg ROLE "${ROLE}" \
                 '.containerDefinitions[0].image = $IMG
+                 | .containerDefinitions[0].command = []
+                 | if (.containerDefinitions[0].environment | map(select(.name == "CONTAINER_ROLE")) | length) == 0
+                   then .containerDefinitions[0].environment += [{"name": "CONTAINER_ROLE", "value": $ROLE}]
+                   else .containerDefinitions[0].environment = [.containerDefinitions[0].environment[] | if .name == "CONTAINER_ROLE" then .value = $ROLE else . end]
+                   end
                  | del(.taskDefinitionArn, .revision, .status,
                        .requiresAttributes, .compatibilities,
                        .registeredAt, .registeredBy)' \
