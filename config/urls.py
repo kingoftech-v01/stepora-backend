@@ -40,8 +40,8 @@ api_v1_patterns = [
 ]
 
 urlpatterns = [
-    # Django Admin
-    path("admin/", admin.site.urls),
+    # Django Admin (non-default path for security)
+    path("stepora-manage/", admin.site.urls),
     # Blog (public, not behind API versioning)
     path("api/blog/", include("apps.blog.urls")),
     # Health check
