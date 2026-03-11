@@ -69,7 +69,7 @@ def send_password_reset_email(user_id):
         return
 
     uid, token = make_password_reset_token(user)
-    reset_url = f"{settings.FRONTEND_URL}/#/reset-password/{uid}-{token}"
+    reset_url = f"{settings.FRONTEND_URL}/#/reset-password/{uid}~{token}"
     name = user.display_name or "there"
 
     send_templated_email(
