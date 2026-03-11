@@ -68,15 +68,20 @@ class StripeService:
         Raises:
             stripe.error.StripeError: If the Stripe API call fails.
         """
-        # Return existing customer if present
+        # Return existing customer if present and valid on Stripe
         existing = StripeCustomer.objects.filter(user=user).first()
         if existing:
-            logger.info(
-                "Stripe customer already exists for user %s: %s",
-                user.email,
-                existing.stripe_customer_id,
-            )
-            return existing
+            try:
+                stripe.Customer.retrieve(existing.stripe_customer_id)
+                return existing
+            except stripe.error.InvalidRequestError:
+                # Customer doesn't exist on Stripe (e.g. account change)
+                logger.warning(
+                    "Stripe customer %s not found, recreating for %s",
+                    existing.stripe_customer_id,
+                    user.email,
+                )
+                existing.delete()
 
         try:
             customer = stripe.Customer.create(
@@ -135,8 +140,13 @@ class StripeService:
             ValueError: If the plan has no Stripe price or is the free tier.
             stripe.error.StripeError: If the Stripe API call fails.
         """
-        if plan.is_free or not plan.stripe_price_id:
+        if plan.is_free:
             raise ValueError("Cannot create a checkout session for the free plan.")
+
+        # Auto-create Stripe Product + Price if missing
+        if not plan.stripe_price_id:
+            plan.stripe_price_id = PromotionService.create_stripe_price_for_plan(plan)
+            plan.save(update_fields=["stripe_price_id"])
 
         # Ensure user has a Stripe customer
         stripe_customer = StripeService.create_customer(user)
