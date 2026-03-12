@@ -1621,6 +1621,30 @@ class PromotionService:
         return coupon.id
 
     @staticmethod
+    def delete_stripe_coupon(coupon_id: str) -> None:
+        """Delete a Stripe coupon. Silently ignores if already deleted."""
+        try:
+            stripe.Coupon.delete(coupon_id)
+            logger.info("Deleted Stripe coupon %s", coupon_id)
+        except stripe.error.InvalidRequestError:
+            logger.warning(
+                "Stripe coupon %s not found (already deleted?)", coupon_id
+            )
+
+    @staticmethod
+    def recreate_stripe_coupon(discount: PromotionPlanDiscount) -> str:
+        """
+        Delete the old Stripe coupon and create a new one.
+
+        Stripe coupons are immutable (amount/percent can't be changed),
+        so updates require delete + recreate.
+        """
+        if discount.stripe_coupon_id:
+            PromotionService.delete_stripe_coupon(discount.stripe_coupon_id)
+        new_id = PromotionService.create_stripe_coupon(discount)
+        return new_id
+
+    @staticmethod
     def create_stripe_price_for_plan(plan: SubscriptionPlan) -> str:
         """
         Create a Stripe Product and recurring monthly Price for a plan.

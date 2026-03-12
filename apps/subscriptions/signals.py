@@ -131,36 +131,75 @@ def auto_create_stripe_price_for_plan(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender="subscriptions.PromotionPlanDiscount")
-def auto_create_stripe_coupon_for_discount(sender, instance, **kwargs):
+def auto_sync_stripe_coupon_for_discount(sender, instance, created, **kwargs):
     """
-    Auto-create a Stripe Coupon when a PromotionPlanDiscount is saved
-    with an empty stripe_coupon_id.
+    Auto-create or recreate a Stripe Coupon when a PromotionPlanDiscount
+    is saved. Stripe coupons are immutable, so updates require
+    delete + recreate.
     """
     import stripe as _stripe
 
-    # Guard against recursive signal
+    # Guard against recursive signal from our own save(update_fields=...)
     update_fields = kwargs.get("update_fields")
     if update_fields and "stripe_coupon_id" in update_fields:
         return
 
-    if instance.stripe_coupon_id or not _stripe.api_key:
+    if not _stripe.api_key:
         return
 
     try:
         from .services import PromotionService
 
-        coupon_id = PromotionService.create_stripe_coupon(instance)
+        if instance.stripe_coupon_id:
+            # Update: delete old coupon and create new one
+            coupon_id = PromotionService.recreate_stripe_coupon(instance)
+        else:
+            # New: create coupon
+            coupon_id = PromotionService.create_stripe_coupon(instance)
+
         instance.stripe_coupon_id = coupon_id
         instance.save(update_fields=["stripe_coupon_id", "updated_at"])
         logger.info(
-            "Auto-created Stripe coupon %s for promotion '%s' plan '%s'",
+            "Synced Stripe coupon %s for promotion '%s' plan '%s'",
             coupon_id,
             instance.promotion.name,
             instance.plan.name,
         )
     except Exception:
         logger.exception(
-            "Failed to auto-create Stripe coupon for promotion '%s' plan '%s'.",
+            "Failed to sync Stripe coupon for promotion '%s' plan '%s'.",
             instance.promotion.name,
             instance.plan.name,
+        )
+
+
+@receiver(post_save, sender="subscriptions.Promotion")
+def auto_resync_coupons_on_promotion_update(sender, instance, created, **kwargs):
+    """
+    When a Promotion is updated (duration_months, discount_type, name, etc.),
+    recreate all related Stripe coupons since those fields affect the coupon.
+    """
+    import stripe as _stripe
+
+    if created or not _stripe.api_key:
+        return
+
+    try:
+        from .services import PromotionService
+
+        for discount in instance.plan_discounts.all():
+            if discount.stripe_coupon_id:
+                coupon_id = PromotionService.recreate_stripe_coupon(discount)
+                discount.stripe_coupon_id = coupon_id
+                discount.save(update_fields=["stripe_coupon_id", "updated_at"])
+                logger.info(
+                    "Re-synced Stripe coupon %s for promotion '%s' plan '%s'",
+                    coupon_id,
+                    instance.name,
+                    discount.plan.name,
+                )
+    except Exception:
+        logger.exception(
+            "Failed to re-sync Stripe coupons for promotion '%s'.",
+            instance.name,
         )
