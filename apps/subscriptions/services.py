@@ -1600,7 +1600,7 @@ class PromotionService:
         if promo.discount_type == "percentage":
             coupon_kwargs["percent_off"] = float(discount.discount_value)
         else:
-            coupon_kwargs["amount_off"] = int(
+            coupon_kwargs["amount_off"] = round(
                 float(discount.discount_value) * 100
             )
             coupon_kwargs["currency"] = "usd"
@@ -1636,7 +1636,7 @@ class PromotionService:
 
         price = stripe.Price.create(
             product=product.id,
-            unit_amount=int(float(plan.price_monthly) * 100),
+            unit_amount=round(float(plan.price_monthly) * 100),
             currency="usd",
             recurring={"interval": "month"},
             metadata={
