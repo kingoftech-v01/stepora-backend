@@ -756,3 +756,44 @@ class PromotionRedemption(models.Model):
 
     def __str__(self):
         return f"{self.user.email} redeemed {self.promotion.name}"
+
+
+class PromotionChangeLog(models.Model):
+    """Audit trail for promotion and coupon changes."""
+
+    ACTION_CHOICES = [
+        ("coupon_created", "Coupon Created"),
+        ("coupon_recreated", "Coupon Recreated"),
+        ("coupon_deleted", "Coupon Deleted"),
+        ("promotion_updated", "Promotion Updated"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    promotion = models.ForeignKey(
+        Promotion,
+        on_delete=models.CASCADE,
+        related_name="change_logs",
+    )
+    plan_discount = models.ForeignKey(
+        PromotionPlanDiscount,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="change_logs",
+    )
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    old_stripe_coupon_id = models.CharField(max_length=255, blank=True, default="")
+    new_stripe_coupon_id = models.CharField(max_length=255, blank=True, default="")
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Snapshot of changed values",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "promotion_change_logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} — {self.promotion.name} ({self.created_at:%Y-%m-%d %H:%M})"

@@ -21,6 +21,7 @@ from apps.users.models import User
 
 from .models import (
     Promotion,
+    PromotionChangeLog,
     PromotionPlanDiscount,
     PromotionRedemption,
     StripeCustomer,
@@ -1618,6 +1619,20 @@ class PromotionService:
             promo.name,
             discount.plan.name,
         )
+
+        PromotionChangeLog.objects.create(
+            promotion=promo,
+            plan_discount=discount,
+            action="coupon_created",
+            new_stripe_coupon_id=coupon.id,
+            details={
+                "plan": discount.plan.slug,
+                "discount_type": promo.discount_type,
+                "discount_value": str(discount.discount_value),
+                "duration_months": promo.duration_months,
+            },
+        )
+
         return coupon.id
 
     @staticmethod
@@ -1637,11 +1652,27 @@ class PromotionService:
         Delete the old Stripe coupon and create a new one.
 
         Stripe coupons are immutable (amount/percent can't be changed),
-        so updates require delete + recreate.
+        so updates require delete + recreate. Logs the change.
         """
-        if discount.stripe_coupon_id:
-            PromotionService.delete_stripe_coupon(discount.stripe_coupon_id)
+        old_id = discount.stripe_coupon_id or ""
+        if old_id:
+            PromotionService.delete_stripe_coupon(old_id)
+
+        # create_stripe_coupon already logs "coupon_created"
         new_id = PromotionService.create_stripe_coupon(discount)
+
+        # Overwrite the "coupon_created" log with "coupon_recreated" + old ID
+        latest = PromotionChangeLog.objects.filter(
+            promotion=discount.promotion,
+            plan_discount=discount,
+            action="coupon_created",
+            new_stripe_coupon_id=new_id,
+        ).first()
+        if latest:
+            latest.action = "coupon_recreated"
+            latest.old_stripe_coupon_id = old_id
+            latest.save(update_fields=["action", "old_stripe_coupon_id"])
+
         return new_id
 
     @staticmethod

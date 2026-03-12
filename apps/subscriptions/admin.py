@@ -9,6 +9,7 @@ from django.contrib import admin
 
 from .models import (
     Promotion,
+    PromotionChangeLog,
     PromotionPlanDiscount,
     PromotionRedemption,
     Referral,
@@ -347,4 +348,38 @@ class PromotionRedemptionAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PromotionChangeLog)
+class PromotionChangeLogAdmin(admin.ModelAdmin):
+    """Read-only audit trail for promotion/coupon changes."""
+
+    list_display = [
+        "promotion",
+        "action",
+        "old_stripe_coupon_id",
+        "new_stripe_coupon_id",
+        "created_at",
+    ]
+    list_filter = ["action", "created_at"]
+    search_fields = ["promotion__name", "old_stripe_coupon_id", "new_stripe_coupon_id"]
+    readonly_fields = [
+        "id",
+        "promotion",
+        "plan_discount",
+        "action",
+        "old_stripe_coupon_id",
+        "new_stripe_coupon_id",
+        "details",
+        "created_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
