@@ -175,10 +175,19 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         }
 
 
+class PlanBriefSerializer(serializers.ModelSerializer):
+    """Minimal plan serializer to avoid circular reference with promotions."""
+
+    class Meta:
+        model = SubscriptionPlan
+        fields = ["id", "name", "slug", "price_monthly"]
+        read_only_fields = fields
+
+
 class PromotionPlanDiscountSerializer(serializers.ModelSerializer):
     """Serializer for a plan-specific discount within a promotion."""
 
-    plan = SubscriptionPlanSerializer(read_only=True)
+    plan = PlanBriefSerializer(read_only=True)
     discounted_price = serializers.SerializerMethodField()
 
     class Meta:
