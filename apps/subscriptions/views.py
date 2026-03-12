@@ -191,6 +191,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
                 success_url=serializer.validated_data.get("success_url", ""),
                 cancel_url=serializer.validated_data.get("cancel_url", ""),
                 coupon_code=coupon_code,
+                promotion_id=str(promotion_id) if promotion_id else "",
             )
         except ValueError as e:
             return Response(
@@ -204,13 +205,9 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # Record promotion redemption
-        if promo_discount:
-            PromotionService.record_redemption(
-                request.user,
-                promo_discount.promotion,
-                promo_discount,
-            )
+        # NOTE: promotion redemption is recorded in the checkout.session.completed
+        # webhook handler — NOT here. Recording it before payment is confirmed
+        # would hide the promo if the user cancels checkout.
 
         return Response(
             {

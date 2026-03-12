@@ -119,6 +119,7 @@ class StripeService:
         success_url: str = "",
         cancel_url: str = "",
         coupon_code: str = "",
+        promotion_id: str = "",
     ) -> stripe.checkout.Session:
         """
         Create a Stripe Checkout Session for subscribing to a plan.
@@ -192,6 +193,7 @@ class StripeService:
                 "metadata": {
                     "stepora_user_id": str(user.id),
                     "plan_slug": plan.slug,
+                    **({"promotion_id": promotion_id} if promotion_id else {}),
                 },
                 "subscription_data": subscription_data,
             }
@@ -960,6 +962,26 @@ class StripeService:
         # Sync user model
         _sync_user_subscription(user, plan, period_end)
 
+        # Record promotion redemption (only after payment is confirmed)
+        promotion_id = session.get("metadata", {}).get("promotion_id")
+        if promotion_id:
+            try:
+                promotion = Promotion.objects.get(id=promotion_id)
+                discount = PromotionPlanDiscount.objects.filter(
+                    promotion=promotion, plan=plan
+                ).first()
+                if discount:
+                    PromotionService.record_redemption(user, promotion, discount)
+                    logger.info(
+                        "Recorded promo redemption: user %s, promo %s",
+                        user.email,
+                        promotion.name,
+                    )
+            except Promotion.DoesNotExist:
+                logger.warning(
+                    "Promotion %s from checkout metadata not found", promotion_id
+                )
+
         logger.info(
             "Checkout completed: user %s subscribed to %s (sub: %s)",
             user.email,
@@ -1508,7 +1530,9 @@ class PromotionService:
             Promotion.objects.filter(
                 is_active=True,
                 start_date__lte=now,
-                end_date__gte=now,
+            )
+            .filter(
+                Q(end_date__isnull=True) | Q(end_date__gte=now)
             )
             .exclude(
                 id__in=PromotionRedemption.objects.filter(
