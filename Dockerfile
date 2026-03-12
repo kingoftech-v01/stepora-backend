@@ -61,16 +61,19 @@ ARG FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production"
 ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
 RUN python manage.py collectstatic --noinput --clear
 
+# Make scripts executable
+RUN chmod +x /app/healthcheck.sh /app/entrypoint.sh
+
 # Switch to non-root user
 USER appuser
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/liveness/ || exit 1
+# Health check (role-aware: web checks gunicorn, worker/beat checks process)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD /app/healthcheck.sh
 
-# Entrypoint: migrate then start gunicorn
+# Entrypoint
 COPY --chown=appuser:appuser entrypoint.sh /app/entrypoint.sh
 CMD ["/app/entrypoint.sh"]
