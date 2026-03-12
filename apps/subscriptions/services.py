@@ -1551,15 +1551,15 @@ class PromotionService:
         Returns the Stripe coupon ID.
         """
         promo = discount.promotion
-        duration_days = promo.duration_days
+        duration_months = promo.duration_months
 
         # Stripe supports duration_in_months for repeating coupons
-        if duration_days <= 30:
+        if not duration_months or duration_months <= 1:
             duration = "once"
             duration_in_months = None
         else:
             duration = "repeating"
-            duration_in_months = math.ceil(duration_days / 30)
+            duration_in_months = duration_months
 
         coupon_kwargs = {
             "duration": duration,

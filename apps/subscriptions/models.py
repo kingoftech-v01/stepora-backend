@@ -6,7 +6,6 @@ subscription tracking, and plan definitions with feature gating.
 """
 
 import uuid
-from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -597,12 +596,12 @@ class Promotion(models.Model):
     end_date = models.DateTimeField(
         blank=True,
         null=True,
-        help_text="When the promotion expires (auto-calculated from start_date + duration_days if left blank)",
+        help_text="Deadline to redeem the promotion. After this date, users can no longer use it.",
     )
-    duration_days = models.PositiveIntegerField(
+    duration_months = models.PositiveIntegerField(
         blank=True,
         null=True,
-        help_text="How long the discount lasts after redemption (in days). Auto-sets end_date if provided.",
+        help_text="How many months the discount lasts after redemption (e.g. 2, 3, 4 months).",
     )
     discount_type = models.CharField(
         max_length=20,
@@ -646,17 +645,8 @@ class Promotion(models.Model):
             models.Index(fields=["is_active", "start_date", "end_date"]),
         ]
 
-    def save(self, *args, **kwargs):
-        # Auto-calculate: if duration_days set but no end_date, compute it
-        if self.duration_days and self.start_date and not self.end_date:
-            self.end_date = self.start_date + timedelta(days=self.duration_days)
-        # Auto-calculate: if end_date set but no duration_days, compute it
-        if self.end_date and self.start_date and not self.duration_days:
-            self.duration_days = (self.end_date - self.start_date).days
-        super().save(*args, **kwargs)
-
     def __str__(self):
-        return f"{self.name} ({self.discount_type}, {self.duration_days or 0}d)"
+        return f"{self.name} ({self.discount_type}, {self.duration_months or 0}mo)"
 
     @property
     def redemption_count(self):

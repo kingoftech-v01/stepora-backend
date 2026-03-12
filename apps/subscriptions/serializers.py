@@ -221,7 +221,7 @@ class PromotionSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "end_date",
-            "duration_days",
+            "duration_months",
             "discount_type",
             "plan_discounts",
             "spots_remaining",

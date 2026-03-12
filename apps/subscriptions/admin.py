@@ -250,7 +250,7 @@ class PromotionAdmin(admin.ModelAdmin):
         "discount_type",
         "start_date",
         "end_date",
-        "duration_days",
+        "duration_months",
         "max_redemptions",
         "redemption_count",
         "condition_type",
@@ -283,7 +283,7 @@ class PromotionAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "discount_type",
-                    "duration_days",
+                    "duration_months",
                 ),
             },
         ),
