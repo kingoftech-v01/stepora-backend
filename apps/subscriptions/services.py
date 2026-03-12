@@ -34,8 +34,17 @@ logger = logging.getLogger(__name__)
 # Configure Stripe API key from environment
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
-# Webhook secret for signature verification
+# Webhook secret for signature verification (mutable — auto-set at startup)
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+# Events the webhook must listen for
+WEBHOOK_EVENTS = [
+    "checkout.session.completed",
+    "invoice.paid",
+    "invoice.payment_failed",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+]
 
 
 class StripeService:
@@ -47,6 +56,111 @@ class StripeService:
     from the Stripe SDK are caught, logged, and re-raised so callers
     can present user-friendly messages.
     """
+
+    # -----------------------------------------------------------------
+    # Webhook auto-configuration
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def ensure_webhook(webhook_url: str = "") -> str:
+        """
+        Ensure a Stripe webhook endpoint exists for this backend.
+
+        If STRIPE_WEBHOOK_SECRET is already set, verifies the endpoint
+        exists on Stripe. If not, creates it and stores the secret.
+
+        Args:
+            webhook_url: Full URL for the webhook endpoint. If empty,
+                auto-detected from CORS_ORIGIN env var.
+
+        Returns:
+            The webhook signing secret (whsec_...).
+        """
+        global STRIPE_WEBHOOK_SECRET
+
+        if not stripe.api_key:
+            logger.warning("STRIPE_SECRET_KEY not configured — skipping webhook setup")
+            return ""
+
+        # Build webhook URL if not provided
+        if not webhook_url:
+            cors = os.getenv("CORS_ORIGIN", "")
+            if cors:
+                # CORS_ORIGIN is the backend origin (e.g. https://api.stepora.app)
+                base = cors.rstrip("/")
+            else:
+                base = "http://localhost:8000"
+            webhook_url = f"{base}/api/subscriptions/webhook/stripe/"
+
+        # Check if endpoint already exists on Stripe
+        try:
+            endpoints = stripe.WebhookEndpoint.list(limit=100)
+            for ep in endpoints.data:
+                if ep.url == webhook_url:
+                    if STRIPE_WEBHOOK_SECRET:
+                        logger.info(
+                            "Stripe webhook already exists: %s (secret configured)",
+                            ep.id,
+                        )
+                        return STRIPE_WEBHOOK_SECRET
+                    else:
+                        # Endpoint exists but we lost the secret — delete and recreate
+                        logger.warning(
+                            "Stripe webhook %s exists but secret not configured. "
+                            "Deleting and recreating to get a new secret.",
+                            ep.id,
+                        )
+                        stripe.WebhookEndpoint.delete(ep.id)
+                        break
+        except stripe.error.StripeError:
+            logger.exception("Failed to list Stripe webhook endpoints")
+
+        # Create the webhook endpoint
+        try:
+            endpoint = stripe.WebhookEndpoint.create(
+                url=webhook_url,
+                enabled_events=WEBHOOK_EVENTS,
+                description="Stepora backend — auto-created",
+            )
+            secret = endpoint.secret
+            STRIPE_WEBHOOK_SECRET = secret
+            logger.info(
+                "Created Stripe webhook endpoint %s → %s",
+                endpoint.id,
+                webhook_url,
+            )
+
+            # Try to persist the secret in AWS Secrets Manager
+            StripeService._persist_webhook_secret(secret)
+
+            return secret
+        except stripe.error.StripeError:
+            logger.exception("Failed to create Stripe webhook endpoint")
+            return ""
+
+    @staticmethod
+    def _persist_webhook_secret(secret: str) -> None:
+        """Try to save the webhook secret to AWS Secrets Manager."""
+        try:
+            import json
+
+            import boto3
+
+            client = boto3.client("secretsmanager", region_name="eu-west-3")
+            resp = client.get_secret_value(SecretId="stepora/backend-env")
+            current = json.loads(resp["SecretString"])
+            current["STRIPE_WEBHOOK_SECRET"] = secret
+            client.update_secret(
+                SecretId="stepora/backend-env",
+                SecretString=json.dumps(current),
+            )
+            logger.info("Saved STRIPE_WEBHOOK_SECRET to AWS Secrets Manager")
+        except Exception:
+            logger.warning(
+                "Could not save webhook secret to AWS Secrets Manager. "
+                "Set STRIPE_WEBHOOK_SECRET manually: %s",
+                secret,
+            )
 
     # -----------------------------------------------------------------
     # Customer management
@@ -825,10 +939,12 @@ class StripeService:
             ValueError: If the signature verification fails.
         """
         if not STRIPE_WEBHOOK_SECRET:
-            logger.error(
-                "STRIPE_WEBHOOK_SECRET is not configured — cannot verify webhook signatures"
+            logger.warning(
+                "STRIPE_WEBHOOK_SECRET not configured — attempting auto-setup"
             )
-            raise ValueError("Webhook signature verification is not configured")
+            secret = StripeService.ensure_webhook()
+            if not secret:
+                raise ValueError("Webhook signature verification is not configured")
 
         try:
             event = stripe.Webhook.construct_event(

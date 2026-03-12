@@ -19,6 +19,7 @@ case "$ROLE" in
   web)
     echo "[entrypoint] Role: web — running migrations then starting gunicorn"
     python manage.py migrate --noinput
+    python manage.py ensure_stripe_webhook || echo "[entrypoint] WARNING: Stripe webhook setup skipped"
 
     exec gunicorn \
         --bind 0.0.0.0:8000 \
