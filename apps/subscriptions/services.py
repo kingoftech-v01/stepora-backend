@@ -84,13 +84,17 @@ class StripeService:
 
         # Build webhook URL if not provided
         if not webhook_url:
-            cors = os.getenv("CORS_ORIGIN", "")
-            if cors:
-                # CORS_ORIGIN is the backend origin (e.g. https://api.stepora.app)
-                base = cors.rstrip("/")
-            else:
-                base = "http://localhost:8000"
-            webhook_url = f"{base}/api/subscriptions/webhook/stripe/"
+            # Try explicit env var first, then derive from FRONTEND_URL
+            api_base = os.getenv("API_BASE_URL", "")
+            if not api_base:
+                frontend = os.getenv("FRONTEND_URL", "")
+                if frontend and "stepora.app" in frontend:
+                    api_base = "https://api.stepora.app"
+                elif frontend and "jhpetitfrere.com" in frontend:
+                    api_base = "https://dpapi.jhpetitfrere.com"
+                else:
+                    api_base = "http://localhost:8000"
+            webhook_url = f"{api_base.rstrip('/')}/api/subscriptions/webhook/stripe/"
 
         # Check if endpoint already exists on Stripe
         try:
