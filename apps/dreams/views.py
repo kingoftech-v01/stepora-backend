@@ -2331,7 +2331,12 @@ class DreamViewSet(viewsets.ModelViewSet):
         tags=["Check-ins"],
         responses={202: dict},
     )
-    @action(detail=True, methods=["post"], url_path="trigger-checkin")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="trigger-checkin",
+        throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle],
+    )
     def trigger_checkin(self, request, pk=None):
         """Manually trigger an interactive check-in."""
         from .tasks import generate_checkin_questionnaire_task
@@ -2414,7 +2419,11 @@ class CheckInViewSet(viewsets.ReadOnlyModelViewSet):
         request=CheckInResponseSubmitSerializer,
         responses={202: dict},
     )
-    @action(detail=True, methods=["post"])
+    @action(
+        detail=True,
+        methods=["post"],
+        throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle],
+    )
     def respond(self, request, pk=None):
         """Submit questionnaire responses."""
         checkin = self.get_object()
@@ -2874,6 +2883,17 @@ class DreamMilestoneViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_create(self, serializer):
+        """Validate that the dream belongs to the current user."""
+        dream = serializer.validated_data.get("dream")
+        if dream and dream.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                _("You can only create milestones for your own dreams.")
+            )
+        serializer.save()
+
     @extend_schema(
         summary="Complete dream milestone",
         description="Mark a dream milestone as completed",
@@ -2921,6 +2941,15 @@ class GoalViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(milestone_id=milestone_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        """Validate that the dream belongs to the current user before creating."""
+        dream = serializer.validated_data.get("dream")
+        if dream and dream.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(_("You can only create goals for your own dreams."))
+        serializer.save()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -3163,6 +3192,15 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(goal_id=goal_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        """Validate that the goal's dream belongs to the current user."""
+        goal = serializer.validated_data.get("goal")
+        if goal and goal.dream.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(_("You can only create tasks for your own dreams."))
+        serializer.save()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -4170,6 +4208,17 @@ class ObstacleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(dream_id=dream_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        """Validate that the dream belongs to the current user."""
+        dream = serializer.validated_data.get("dream")
+        if dream and dream.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                _("You can only create obstacles for your own dreams.")
+            )
+        serializer.save()
 
     @extend_schema(
         summary="Resolve obstacle",
