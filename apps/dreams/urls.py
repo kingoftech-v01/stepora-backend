@@ -18,6 +18,12 @@ Routes:
     /tasks/                         - Task CRUD
     /obstacles/                     - Obstacle CRUD
     /journal/                       - Dream Journal CRUD (filter by ?dream=uuid)
+    /checkins/                      - Check-in list (filter by ?dream=uuid&status=...)
+    /checkins/<id>/                 - Check-in detail
+    /checkins/<id>/respond/         - Submit questionnaire responses
+    /checkins/<id>/status/          - Poll check-in processing status
+    /dreams/<id>/checkins/          - List check-ins for a dream
+    /dreams/<id>/trigger-checkin/   - Manually trigger a check-in
     /focus/start/                   - Start a Pomodoro focus session
     /focus/complete/                - Complete a focus session
     /focus/history/                 - List recent focus sessions
@@ -28,6 +34,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CheckInViewSet,
     DreamJournalViewSet,
     DreamMilestoneViewSet,
     DreamPDFExportView,
@@ -52,6 +59,7 @@ router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"obstacles", ObstacleViewSet, basename="obstacle")
 router.register(r"dreams/templates", DreamTemplateViewSet, basename="dream-template")
 router.register(r"journal", DreamJournalViewSet, basename="dream-journal")
+router.register(r"checkins", CheckInViewSet, basename="checkin")
 
 urlpatterns = [
     path("dreams/shared-with-me/", SharedWithMeView.as_view(), name="shared-with-me"),

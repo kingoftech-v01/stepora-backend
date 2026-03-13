@@ -1241,7 +1241,7 @@ def generate_dream_skeleton_task(self, dream_id, user_id):
 
         # Chain to task generation (use apply_async to ensure correct queue)
         generate_initial_tasks_task.apply_async(
-            args=[dream_id, user_id], queue="celery"
+            args=[dream_id, user_id], queue="dreams"
         )
 
         logger.info(f"generate_dream_skeleton_task: DONE dream={dream_id}")
@@ -1520,7 +1520,7 @@ def run_biweekly_checkins(self):
             )
             # Dispatch interactive questionnaire generation
             generate_checkin_questionnaire_task.apply_async(
-                args=[str(checkin.id)], queue="celery"
+                args=[str(checkin.id)], queue="dreams"
             )
             checkin_count += 1
 
@@ -1966,7 +1966,7 @@ def generate_checkin_questionnaire_task(self, checkin_id):
             checkin.status = "ai_processing"
             checkin.save(update_fields=["status"])
             # Fall back to autonomous check-in
-            run_single_checkin_task.apply_async(args=[str(checkin_id)], queue="celery")
+            run_single_checkin_task.apply_async(args=[str(checkin_id)], queue="dreams")
         except Exception:
             pass
         return {"status": "fallback_autonomous"}
@@ -2125,7 +2125,7 @@ def expire_stale_checkins(self):
             checkin.user_responses = {}
             checkin.save(update_fields=["status", "user_responses"])
             process_checkin_responses_task.apply_async(
-                args=[str(checkin.id)], queue="celery"
+                args=[str(checkin.id)], queue="dreams"
             )
             count += 1
 

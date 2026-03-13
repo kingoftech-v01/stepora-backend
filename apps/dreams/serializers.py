@@ -18,6 +18,7 @@ from .models import (
     FocusSession,
     Goal,
     Obstacle,
+    PlanCheckIn,
     ProgressPhoto,
     SharedDream,
     Task,
@@ -1426,3 +1427,51 @@ class DreamJournalSerializer(serializers.ModelSerializer):
     def validate_content(self, value):
         """Sanitize content."""
         return sanitize_text(value)
+
+
+class PlanCheckInSerializer(serializers.ModelSerializer):
+    """Serializer for PlanCheckIn list view."""
+
+    class Meta:
+        model = PlanCheckIn
+        fields = [
+            "id",
+            "dream",
+            "status",
+            "pace_status",
+            "triggered_by",
+            "progress_at_checkin",
+            "tasks_completed_since_last",
+            "tasks_overdue_at_checkin",
+            "coaching_message",
+            "adjustment_summary",
+            "tasks_created",
+            "milestones_adjusted",
+            "months_generated_through",
+            "scheduled_for",
+            "completed_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PlanCheckInDetailSerializer(PlanCheckInSerializer):
+    """Detailed serializer with questionnaire and responses."""
+
+    class Meta(PlanCheckInSerializer.Meta):
+        fields = PlanCheckInSerializer.Meta.fields + [
+            "questionnaire",
+            "user_responses",
+            "ai_actions",
+            "error_message",
+        ]
+        read_only_fields = fields
+
+
+class CheckInResponseSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting questionnaire responses."""
+
+    responses = serializers.DictField(
+        child=serializers.JSONField(),
+        help_text="Map of question_id to answer value (int for slider, str for text/choice)",
+    )
