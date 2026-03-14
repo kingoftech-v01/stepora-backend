@@ -19,8 +19,50 @@ Uses the same AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY as the main S3.
 
 import os
 
+import boto3
+from botocore.config import Config
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
+
+# ── Pre-signed URL generation for private media ─────────────────
+
+_s3_client = None
+
+
+def _get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        region = getattr(settings, "AWS_S3_REGION_NAME", "eu-west-3")
+        _s3_client = boto3.client(
+            "s3",
+            region_name=region,
+            config=Config(signature_version="s3v4"),
+        )
+    return _s3_client
+
+
+def presigned_url(file_field, expires_in=3600):
+    """Generate a pre-signed URL for a private S3 object.
+
+    Args:
+        file_field: Django FieldFile (ImageField/FileField value).
+        expires_in: URL lifetime in seconds (default 1 hour).
+
+    Returns:
+        Pre-signed URL string, or empty string if no file.
+    """
+    if not file_field:
+        return ""
+    bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+    if not bucket:
+        # Local dev — return relative URL
+        return file_field.url
+    key = f"{getattr(settings, 'AWS_MEDIA_LOCATION', 'media')}/{file_field.name}"
+    return _get_s3_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key},
+        ExpiresIn=expires_in,
+    )
 
 
 class ReleasesStorage(S3Boto3Storage):

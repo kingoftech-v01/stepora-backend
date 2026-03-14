@@ -321,6 +321,9 @@ class DreamSerializer(serializers.ModelSerializer):
     sparkline_data = serializers.SerializerMethodField(
         help_text="Last 7 progress snapshots for sparkline charts."
     )
+    signed_vision_image_url = serializers.SerializerMethodField(
+        help_text="Pre-signed URL for the vision board image."
+    )
 
     class Meta:
         model = Dream
@@ -340,6 +343,7 @@ class DreamSerializer(serializers.ModelSerializer):
             "is_public",
             "is_favorited",
             "vision_image_url",
+            "signed_vision_image_url",
             "calibration_status",
             "goals_count",
             "tasks_count",
@@ -414,6 +418,33 @@ class DreamSerializer(serializers.ModelSerializer):
             )
         )
 
+    def get_signed_vision_image_url(self, obj) -> str:
+        """Return a pre-signed URL for the vision image stored on S3."""
+        from core.storage import presigned_url
+
+        if not obj.vision_image_url:
+            return ""
+        # If it's an S3 URL from our bucket, generate a signed URL from the key
+        bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+        if bucket and bucket in (obj.vision_image_url or ""):
+            import boto3
+            from botocore.config import Config
+
+            key = obj.vision_image_url.split(bucket + ".s3.amazonaws.com/")[-1]
+            if "/" in key:
+                client = boto3.client(
+                    "s3",
+                    region_name=getattr(settings, "AWS_S3_REGION_NAME", "eu-west-3"),
+                    config=Config(signature_version="s3v4"),
+                )
+                return client.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bucket, "Key": key},
+                    ExpiresIn=3600,
+                )
+        # External URL or local dev — return as-is
+        return obj.vision_image_url
+
 
 class CalibrationResponseSerializer(serializers.ModelSerializer):
     """Serializer for CalibrationResponse model."""
@@ -479,6 +510,9 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     completed_tasks = serializers.SerializerMethodField()
     days_left = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    signed_vision_image_url = serializers.SerializerMethodField(
+        help_text="Pre-signed URL for the vision board image."
+    )
 
     class Meta:
         model = Dream
@@ -494,6 +528,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             "color",
             "ai_analysis",
             "vision_image_url",
+            "signed_vision_image_url",
             "progress_percentage",
             "completed_at",
             "has_two_minute_start",
@@ -593,6 +628,10 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         if hasattr(obj, "_prefetched_tags"):
             return obj._prefetched_tags
         return list(obj.taggings.values_list("tag__name", flat=True))
+
+    def get_signed_vision_image_url(self, obj) -> str:
+        # Reuse logic from DreamSerializer
+        return DreamSerializer.get_signed_vision_image_url(self, obj)
 
 
 class PublicGoalSerializer(serializers.ModelSerializer):
@@ -1229,6 +1268,8 @@ class AddCollaboratorSerializer(serializers.Serializer):
 class VisionBoardImageSerializer(serializers.ModelSerializer):
     """Serializer for VisionBoardImage model."""
 
+    signed_image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = VisionBoardImage
         fields = [
@@ -1236,12 +1277,13 @@ class VisionBoardImageSerializer(serializers.ModelSerializer):
             "dream",
             "image_url",
             "image_file",
+            "signed_image_url",
             "caption",
             "is_ai_generated",
             "order",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "signed_image_url"]
         extra_kwargs = {
             "id": {"help_text": "Unique identifier for the vision board image."},
             "dream": {"help_text": "The dream this image belongs to."},
@@ -1253,6 +1295,13 @@ class VisionBoardImageSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Timestamp when the image was added."},
         }
 
+    def get_signed_image_url(self, obj):
+        from core.storage import presigned_url
+
+        if obj.image_url:
+            return obj.image_url
+        return presigned_url(obj.image_file)
+
 
 class ProgressPhotoSerializer(serializers.ModelSerializer):
     """Serializer for ProgressPhoto model."""
@@ -1260,6 +1309,7 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
     ai_analysis_data = serializers.SerializerMethodField(
         help_text="Parsed AI analysis data (JSON object or null)."
     )
+    signed_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ProgressPhoto
@@ -1267,6 +1317,7 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
             "id",
             "dream",
             "image",
+            "signed_image_url",
             "caption",
             "ai_analysis",
             "ai_analysis_data",
@@ -1274,7 +1325,7 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "ai_analysis", "created_at", "updated_at"]
+        read_only_fields = ["id", "ai_analysis", "created_at", "updated_at", "signed_image_url"]
         extra_kwargs = {
             "id": {"help_text": "Unique identifier for the progress photo."},
             "dream": {"help_text": "The dream this progress photo belongs to."},
@@ -1285,6 +1336,11 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
             "created_at": {"help_text": "Timestamp when the photo was uploaded."},
             "updated_at": {"help_text": "Timestamp when the photo was last updated."},
         }
+
+    def get_signed_image_url(self, obj):
+        from core.storage import presigned_url
+
+        return presigned_url(obj.image)
 
     def get_ai_analysis_data(self, obj):
         """Parse the AI analysis JSON if available."""
