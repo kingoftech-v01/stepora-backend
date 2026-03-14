@@ -56,8 +56,11 @@ SECURE_HSTS_PRELOAD = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
-# JWT refresh cookie must be Secure in production
+# JWT refresh cookie must be Secure + SameSite=None in production
+# (cross-origin: stepora.app frontend → api.stepora.app backend)
+# SameSite=Lax blocks cookies on cross-origin POST — breaks token refresh
 DP_AUTH["JWT_AUTH_SECURE"] = True
+DP_AUTH["JWT_AUTH_SAMESITE"] = "None"
 
 # CORS - Strict in production (frontend and backend on separate servers)
 CORS_ALLOW_ALL_ORIGINS = False

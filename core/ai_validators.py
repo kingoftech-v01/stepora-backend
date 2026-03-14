@@ -329,6 +329,203 @@ class PlanResponseSchema(BaseModel):
 
 
 # ===================================================================
+# Skeleton plan schemas (generate_skeleton — milestones + goals, NO tasks)
+# ===================================================================
+
+
+class SkeletonGoalSchema(BaseModel):
+    """Goal inside a skeleton milestone (no tasks)."""
+
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    order: int = Field(..., ge=0, le=100)
+    estimated_minutes: Optional[int] = Field(default=None, ge=0, le=100000)
+    expected_date: Optional[str] = Field(default=None)
+    deadline_date: Optional[str] = Field(default=None)
+    reasoning: str = Field(default="", max_length=MAX_SHORT_TEXT_LEN)
+
+    @field_validator("title", "description", "reasoning", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("expected_date", "deadline_date", mode="before")
+    @classmethod
+    def validate_date_str(cls, v):
+        if v is None or v == "":
+            return None
+        v = str(v).strip()[:10]
+        import re as _re
+
+        if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            return None
+        return v
+
+    @field_validator("order", mode="before")
+    @classmethod
+    def coerce_order(cls, v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+    @field_validator("estimated_minutes", mode="before")
+    @classmethod
+    def coerce_estimated_minutes(cls, v):
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+
+class SkeletonMilestoneSchema(BaseModel):
+    """Milestone in a skeleton plan (goals without tasks)."""
+
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_LEN)
+    order: int = Field(..., ge=1, le=60)
+    target_day: Optional[int] = Field(default=None, ge=1, le=3650)
+    expected_date: Optional[str] = Field(default=None)
+    deadline_date: Optional[str] = Field(default=None)
+    goals: list[SkeletonGoalSchema] = Field(default_factory=list, min_length=1)
+    obstacles: list[PlanObstacleSchema] = Field(default_factory=list)
+    reasoning: str = Field(default="", max_length=MAX_SHORT_TEXT_LEN)
+
+    @field_validator("title", "description", "reasoning", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+    @field_validator("expected_date", "deadline_date", mode="before")
+    @classmethod
+    def validate_date_str(cls, v):
+        if v is None or v == "":
+            return None
+        v = str(v).strip()[:10]
+        import re as _re
+
+        if not _re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            return None
+        return v
+
+    @field_validator("order", mode="before")
+    @classmethod
+    def coerce_order(cls, v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 1
+
+
+class SkeletonResponseSchema(BaseModel):
+    """Skeleton plan response — milestones with goals but no tasks."""
+
+    analysis: str = Field(default="", max_length=MAX_TEXT_LEN)
+    estimated_duration_weeks: int = Field(default=12, ge=1, le=520)
+    weekly_time_hours: int = Field(default=5, ge=1, le=168)
+    milestones: list[SkeletonMilestoneSchema] = Field(
+        default_factory=list, min_length=1
+    )
+    tips: list[str] = Field(default_factory=list)
+    potential_obstacles: list[PlanObstacleSchema] = Field(default_factory=list)
+    calibration_references: list[str] = Field(default_factory=list)
+
+    @field_validator("analysis", mode="before")
+    @classmethod
+    def sanitize_analysis(cls, v):
+        return _sanitize_str(v, MAX_TEXT_LEN)
+
+    @field_validator("estimated_duration_weeks", "weekly_time_hours", mode="before")
+    @classmethod
+    def coerce_to_int(cls, v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 12
+
+    @field_validator("tips", mode="before")
+    @classmethod
+    def sanitize_tips(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [_sanitize_str(t, MAX_SHORT_TEXT_LEN) for t in v if t]
+
+    @field_validator("calibration_references", mode="before")
+    @classmethod
+    def sanitize_refs(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [_sanitize_str(r, MAX_SHORT_TEXT_LEN) for r in v if r]
+
+
+# ===================================================================
+# Task patch schemas (generate_tasks_for_months)
+# ===================================================================
+
+
+class TaskPatchSchema(BaseModel):
+    """A patch that adds tasks to a specific goal within a milestone."""
+
+    milestone_order: int = Field(..., ge=1, le=60)
+    goal_order: int = Field(..., ge=0, le=100)
+    tasks: list[PlanTaskSchema] = Field(default_factory=list, min_length=1)
+
+    @field_validator("milestone_order", "goal_order", mode="before")
+    @classmethod
+    def coerce_order(cls, v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 1
+
+
+# ===================================================================
+# Check-in questionnaire schemas
+# ===================================================================
+
+
+class CheckInQuestionSchema(BaseModel):
+    """Single question in a check-in questionnaire."""
+
+    id: str = Field(..., min_length=1, max_length=100)
+    question_type: str = Field(..., max_length=20)
+    question: str = Field(..., min_length=1, max_length=MAX_DESCRIPTION_LEN)
+    options: list[str] = Field(default_factory=list)
+    scale_min: Optional[int] = Field(default=None)
+    scale_max: Optional[int] = Field(default=None)
+    scale_labels: Optional[dict] = Field(default=None)
+    is_required: bool = Field(default=True)
+
+    @field_validator("question_type", mode="before")
+    @classmethod
+    def validate_type(cls, v):
+        v = str(v).lower().strip()
+        return v if v in ("slider", "choice", "text") else "text"
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def sanitize_question(cls, v):
+        return _sanitize_str(v, MAX_DESCRIPTION_LEN)
+
+
+class CheckInQuestionnaireSchema(BaseModel):
+    """Full check-in questionnaire response."""
+
+    questions: list[CheckInQuestionSchema] = Field(
+        default_factory=list, min_length=1
+    )
+    opening_message: str = Field(default="", max_length=MAX_SHORT_TEXT_LEN)
+    pace_summary: str = Field(default="", max_length=MAX_TEXT_LEN)
+
+    @field_validator("opening_message", "pace_summary", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v):
+        return _sanitize_str(v, MAX_TEXT_LEN)
+
+
+# ===================================================================
 # Dream analysis schemas (analyze_dream)
 # ===================================================================
 
@@ -703,6 +900,56 @@ def validate_plan_response(raw: dict) -> PlanResponseSchema:
     except Exception as e:
         logger.error("Plan validation failed: %s | raw keys: %s", e, list(raw.keys()))
         raise AIValidationError(f"AI generated an invalid plan: {e}") from e
+
+
+def validate_skeleton_response(raw: dict) -> SkeletonResponseSchema:
+    """Validate and sanitize a skeleton plan dict from the AI (milestones + goals, no tasks)."""
+    try:
+        skeleton = SkeletonResponseSchema.model_validate(raw)
+        total_goals = sum(len(m.goals) for m in skeleton.milestones)
+        logger.info(
+            "Skeleton validated: %d milestones, %d goals",
+            len(skeleton.milestones),
+            total_goals,
+        )
+        return skeleton
+    except Exception as e:
+        logger.error("Skeleton validation failed: %s | raw keys: %s", e, list(raw.keys()))
+        raise AIValidationError(f"AI generated an invalid skeleton: {e}") from e
+
+
+def validate_task_patches(raw: list) -> list[TaskPatchSchema]:
+    """Validate and sanitize task patches from AI (tasks for specific milestone/goal pairs)."""
+    if not isinstance(raw, list):
+        raise AIValidationError("Task patches must be a list")
+    try:
+        patches = [TaskPatchSchema.model_validate(p) for p in raw]
+        total_tasks = sum(len(p.tasks) for p in patches)
+        logger.info(
+            "Task patches validated: %d patches, %d total tasks",
+            len(patches),
+            total_tasks,
+        )
+        return patches
+    except Exception as e:
+        logger.error("Task patches validation failed: %s", e)
+        raise AIValidationError(f"AI generated invalid task patches: {e}") from e
+
+
+def validate_checkin_questionnaire(raw: dict) -> CheckInQuestionnaireSchema:
+    """Validate and sanitize a check-in questionnaire from the AI."""
+    try:
+        questionnaire = CheckInQuestionnaireSchema.model_validate(raw)
+        logger.info(
+            "Check-in questionnaire validated: %d questions",
+            len(questionnaire.questions),
+        )
+        return questionnaire
+    except Exception as e:
+        logger.error("Check-in questionnaire validation failed: %s", e)
+        raise AIValidationError(
+            f"AI generated an invalid check-in questionnaire: {e}"
+        ) from e
 
 
 def validate_analysis_response(raw: dict) -> AnalysisResponseSchema:
