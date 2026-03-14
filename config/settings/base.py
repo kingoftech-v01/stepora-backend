@@ -471,6 +471,13 @@ DP_AUTH = {
     "APPLE_CLIENT_ID": os.getenv("APPLE_CLIENT_ID", ""),
 }
 
+# Google Calendar OAuth
+GOOGLE_CALENDAR_CLIENT_ID = os.getenv("GOOGLE_CALENDAR_CLIENT_ID", "")
+GOOGLE_CALENDAR_CLIENT_SECRET = os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET", "")
+GOOGLE_CALENDAR_REDIRECT_URI = os.getenv(
+    "GOOGLE_CALENDAR_REDIRECT_URI", ""
+)
+
 # SimpleJWT Configuration
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
