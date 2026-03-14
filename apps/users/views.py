@@ -739,6 +739,23 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"error": _("Invalid password.")}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        # If 2FA is enabled, require TOTP code
+        if getattr(request.user, "totp_enabled", False):
+            totp_code = request.data.get("totp_code", "").strip()
+            if not totp_code:
+                return Response(
+                    {"error": _("2FA verification code is required.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            import pyotp
+
+            totp = pyotp.TOTP(request.user.totp_secret)
+            if not totp.verify(totp_code, valid_window=1):
+                return Response(
+                    {"error": _("Invalid 2FA code.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Check if email is already taken
         if User.objects.filter(email=new_email).exclude(id=request.user.id).exists():
             return Response(

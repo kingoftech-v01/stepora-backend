@@ -164,10 +164,12 @@ class AIMotivationRateThrottle(UserRateThrottle):
 class TwoFactorRateThrottle(UserRateThrottle):
     """Rate limiting for 2FA operations (backup codes, setup)."""
 
-    rate = "5/hour"
+    scope = "two_factor"
+    rate = "30/hour"
 
 
 class EmailVerificationRateThrottle(AnonRateThrottle):
     """Rate limiting for email verification token attempts."""
 
+    scope = "email_verification"
     rate = "10/hour"

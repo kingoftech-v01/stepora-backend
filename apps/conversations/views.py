@@ -8,7 +8,7 @@ from django.db.models import Prefetch
 from django.utils.translation import gettext as _
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -125,8 +125,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
     """CRUD operations for conversations. All AI conversation features require premium+."""
 
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["conversation_type", "is_active"]
+    search_fields = ["title"]
+    ordering_fields = ["updated_at", "created_at"]
     ordering = ["-updated_at"]
 
     def get_permissions(self):
