@@ -76,9 +76,7 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Public display name of the user.",
     )
-    user_avatar_url = serializers.URLField(
-        source="user.avatar_url",
-        read_only=True,
+    user_avatar_url = serializers.SerializerMethodField(
         help_text="URL to the user avatar image.",
     )
     user_level = serializers.IntegerField(
@@ -171,6 +169,9 @@ class LeagueStandingSerializer(serializers.ModelSerializer):
                 "help_text": "Timestamp when the standing was last updated."
             },
         }
+
+    def get_user_avatar_url(self, obj) -> str:
+        return obj.user.get_effective_avatar_url()
 
     def get_user_badges(self, obj) -> list:
         """
@@ -505,10 +506,7 @@ class SeasonParticipantSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Public display name of the user.",
     )
-    user_avatar_url = serializers.URLField(
-        source="user.avatar_url",
-        read_only=True,
-        allow_blank=True,
+    user_avatar_url = serializers.SerializerMethodField(
         help_text="URL to the user avatar image.",
     )
     user_level = serializers.IntegerField(
@@ -543,6 +541,9 @@ class SeasonParticipantSerializer(serializers.ModelSerializer):
             "rewards_claimed": {"help_text": "Whether rewards have been claimed."},
             "joined_at": {"help_text": "When the user joined this season."},
         }
+
+    def get_user_avatar_url(self, obj) -> str:
+        return obj.user.get_effective_avatar_url()
 
     def get_projected_reward(self, obj) -> dict:
         """Return the reward matching the user's current rank, or None."""

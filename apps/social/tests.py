@@ -593,7 +593,7 @@ class TestFriendSerializer:
         friend_data = {
             "id": user.id,
             "username": user.display_name,
-            "avatar": user.avatar_url or "",
+            "avatar": user.get_effective_avatar_url(),
             "title": "Dreamer",
             "currentLevel": user.level,
             "influenceScore": user.xp,
@@ -610,7 +610,7 @@ class TestUserSearchResultSerializer:
         result_data = {
             "id": user.id,
             "username": user.display_name,
-            "avatar": user.avatar_url or "",
+            "avatar": user.get_effective_avatar_url(),
             "title": "Dreamer",
             "influenceScore": user.xp,
             "currentLevel": user.level,

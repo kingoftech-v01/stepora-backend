@@ -5,7 +5,7 @@ set -e
 # Stepora Backend Entrypoint
 # ─────────────────────────────────────────────────────────────────────
 # Single entrypoint for all container roles. Set CONTAINER_ROLE env var:
-#   web    (default) — migrate + gunicorn
+#   web    (default) — migrate + daphne (ASGI)
 #   worker           — celery worker (auto-discovers all queues)
 #   beat             — celery beat scheduler
 #
@@ -17,20 +17,16 @@ ROLE="${CONTAINER_ROLE:-web}"
 
 case "$ROLE" in
   web)
-    echo "[entrypoint] Role: web — running migrations then starting gunicorn"
+    echo "[entrypoint] Role: web — running migrations then starting daphne (ASGI)"
     python manage.py migrate --noinput
     python manage.py ensure_stripe_webhook || echo "[entrypoint] WARNING: Stripe webhook setup skipped"
 
-    exec gunicorn \
-        --bind 0.0.0.0:8000 \
-        --workers "${GUNICORN_WORKERS:-2}" \
-        --worker-class gthread \
-        --threads 2 \
-        --timeout 120 \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info \
-        config.wsgi:application
+    exec daphne \
+        --bind 0.0.0.0 \
+        --port 8000 \
+        --verbosity 1 \
+        --access-log - \
+        config.asgi:application
     ;;
 
   worker)

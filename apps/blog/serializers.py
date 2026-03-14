@@ -77,7 +77,7 @@ class PostListSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.author.id),
             "name": obj.author.display_name or "Anonymous",
-            "avatar": obj.author.avatar_url or "",
+            "avatar": obj.author.get_effective_avatar_url(),
         }
 
 

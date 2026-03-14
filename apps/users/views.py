@@ -28,7 +28,9 @@ from core.ai_usage import AIUsageTracker
 from core.audit import log_account_change, log_data_export
 from core.permissions import CanUseAI
 from core.throttles import (
+    AICheckinRateThrottle,
     AIMotivationRateThrottle,
+    AINotificationTimingRateThrottle,
     ExportRateThrottle,
     TwoFactorRateThrottle,
 )
@@ -178,7 +180,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 "initial": (target_user.display_name or "U")[0].upper(),
                 "bio": target_user.bio or "",
                 "location": target_user.location or "",
-                "avatar_url": target_user.avatar_url or "",
+                "avatar_url": target_user.get_effective_avatar_url(),
                 "level": target_user.level,
                 "xp": target_user.xp,
                 "streak": target_user.streak_days,
@@ -342,7 +344,16 @@ class UserViewSet(viewsets.ModelViewSet):
         user.avatar_image = avatar_file
         user.save(update_fields=["avatar_image"])
 
-        return Response(UserSerializer(user).data)
+        # Sync avatar_url with the newly uploaded image URL so that all
+        # serializers (social feed, stories, comments, etc.) that read
+        # avatar_url return the correct value.
+        try:
+            user.avatar_url = user.avatar_image.url
+            user.save(update_fields=["avatar_url"])
+        except Exception:
+            pass  # Non-blocking — avatar_image is already saved
+
+        return Response(UserSerializer(user, context={"request": request}).data)
 
     @extend_schema(
         summary="Get user statistics",
@@ -1370,7 +1381,7 @@ class UserViewSet(viewsets.ModelViewSet):
         methods=["get", "put"],
         url_path="notification-timing",
         permission_classes=[IsAuthenticated, CanUseAI],
-        throttle_classes=[AIMotivationRateThrottle],
+        throttle_classes=[AINotificationTimingRateThrottle],
     )
     def notification_timing(self, request):
         """GET: Analyze activity patterns and return AI timing suggestions. PUT: Apply timing."""
@@ -2836,7 +2847,7 @@ class UserViewSet(viewsets.ModelViewSet):
         methods=["get"],
         url_path="check-in",
         permission_classes=[IsAuthenticated, CanUseAI],
-        throttle_classes=[AIMotivationRateThrottle],
+        throttle_classes=[AICheckinRateThrottle],
     )
     def check_in(self, request):
         """Return a personalized accountability check-in prompt."""

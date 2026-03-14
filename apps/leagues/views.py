@@ -286,7 +286,7 @@ class LeaderboardViewSet(viewsets.GenericViewSet):
                     "rank": idx,
                     "user_id": standing.user.id,
                     "user_display_name": standing.user.display_name or "Anonymous",
-                    "user_avatar_url": standing.user.avatar_url or "",
+                    "user_avatar_url": standing.user.get_effective_avatar_url(),
                     "user_level": standing.user.level,
                     "league_name": standing.league.name,
                     "league_tier": standing.league.tier,

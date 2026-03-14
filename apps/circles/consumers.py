@@ -169,7 +169,7 @@ class CircleChatConsumer(
                     "id": str(message.id),
                     "sender_id": str(self.user.id),
                     "sender_name": sender_name,
-                    "sender_avatar": self.user.avatar_url or "",
+                    "sender_avatar": self.user.get_effective_avatar_url(),
                     "content": content,
                     "created_at": message.created_at.isoformat(),
                 },

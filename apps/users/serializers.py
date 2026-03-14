@@ -15,6 +15,13 @@ from .models import GamificationProfile, User
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model."""
 
+    # Return the best available avatar URL (avatar_url text field → avatar_image
+    # uploaded file → empty string).  This ensures users who uploaded an avatar
+    # via avatar_image but whose avatar_url was never synced still get a URL.
+    avatar_url = serializers.SerializerMethodField(
+        help_text="Effective avatar URL (prefers avatar_url, falls back to avatar_image)."
+    )
+
     can_create_dream = serializers.BooleanField(
         read_only=True, help_text="Whether user can create more dreams."
     )
@@ -105,6 +112,9 @@ class UserSerializer(serializers.ModelSerializer):
             "updated_at": {"help_text": "Last profile update timestamp."},
         }
 
+    def get_avatar_url(self, obj) -> str:
+        return obj.get_effective_avatar_url()
+
     def get_is_premium(self, obj) -> bool:
         return obj.is_premium()
 
@@ -152,6 +162,9 @@ class UserSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """Detailed user profile serializer."""
 
+    avatar_url = serializers.SerializerMethodField(
+        help_text="Effective avatar URL (prefers avatar_url, falls back to avatar_image)."
+    )
     is_premium = serializers.SerializerMethodField(
         help_text="Whether user has premium subscription."
     )
@@ -236,6 +249,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "streak_days": {"help_text": "Consecutive active days streak."},
             "created_at": {"help_text": "Account creation timestamp."},
         }
+
+    def get_avatar_url(self, obj) -> str:
+        return obj.get_effective_avatar_url()
 
     def get_is_premium(self, obj) -> bool:
         return obj.is_premium()

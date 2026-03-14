@@ -17,7 +17,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from core.audit import log_webhook_event
-from core.throttles import SearchRateThrottle
+from core.throttles import ReferralRateThrottle
 
 from .models import Referral, Subscription, SubscriptionPlan
 from .serializers import (
@@ -561,7 +561,7 @@ class ReferralView(views.APIView):
     """Referral program: refer 3 friends who subscribe → 1 free month."""
 
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SearchRateThrottle]
+    throttle_classes = [ReferralRateThrottle]
 
     @extend_schema(
         summary="Get referral info",

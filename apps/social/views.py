@@ -102,7 +102,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         return {
             "id": user.id,
             "username": user.display_name or "Anonymous",
-            "avatar": user.avatar_url or "",
+            "avatar": user.get_effective_avatar_url(),
             "title": title,
             "current_level": user.level,
             "influence_score": user.xp,
@@ -419,7 +419,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                     "action": "followed",
                     "user_id": str(request.user.id),
                     "username": request.user.display_name or "Someone",
-                    "avatar": request.user.avatar_url or "",
+                    "avatar": request.user.get_effective_avatar_url(),
                 },
             )
         except Exception:
@@ -530,7 +530,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                     "receiver": {
                         "id": str(receiver.id),
                         "username": receiver.display_name or "Anonymous",
-                        "avatar": receiver.avatar_url or "",
+                        "avatar": receiver.get_effective_avatar_url(),
                         "current_level": receiver.level,
                         "influence_score": receiver.xp,
                     },
@@ -1133,7 +1133,7 @@ class UserSearchView(generics.ListAPIView):
                 {
                     "id": user.id,
                     "username": user.display_name or "Anonymous",
-                    "avatar": user.avatar_url or "",
+                    "avatar": user.get_effective_avatar_url(),
                     "title": title,
                     "influence_score": user.xp,
                     "current_level": user.level,
@@ -1294,7 +1294,7 @@ class FollowSuggestionsView(generics.ListAPIView):
                 {
                     "id": u.id,
                     "username": u.display_name or "Anonymous",
-                    "avatar": u.avatar_url or "",
+                    "avatar": u.get_effective_avatar_url(),
                     "title": title,
                     "influence_score": u.xp,
                     "current_level": u.level,
@@ -1434,7 +1434,7 @@ class FeedCommentView(APIView):
                 "user": {
                     "id": str(request.user.id),
                     "username": request.user.display_name or "Anonymous",
-                    "avatar": request.user.avatar_url or "",
+                    "avatar": request.user.get_effective_avatar_url(),
                 },
                 "created_at": comment.created_at,
             },
@@ -1726,7 +1726,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                     "post_id": str(post.id),
                     "user_id": str(request.user.id),
                     "username": request.user.display_name or "Someone",
-                    "avatar": request.user.avatar_url or "",
+                    "avatar": request.user.get_effective_avatar_url(),
                     "content": (
                         (post.content[:100] + "...")
                         if len(post.content) > 100
@@ -2825,7 +2825,7 @@ class StoryViewSet(viewsets.ModelViewSet):
                         "id": uid,
                         "username": story.user.display_name or "Anonymous",
                         "display_name": story.user.display_name or "Anonymous",
-                        "avatar": story.user.avatar_url or "",
+                        "avatar": story.user.get_effective_avatar_url(),
                     },
                     "stories": [],
                     "has_unviewed": False,
@@ -2914,7 +2914,7 @@ class StoryViewSet(viewsets.ModelViewSet):
                 {
                     "id": str(v.user.id),
                     "username": v.user.display_name or "Anonymous",
-                    "avatar": v.user.avatar_url or "",
+                    "avatar": v.user.get_effective_avatar_url(),
                     "viewed_at": v.viewed_at.isoformat(),
                 }
             )
@@ -3172,7 +3172,7 @@ class FriendSuggestionsView(APIView):
                     "user": {
                         "id": str(u.id),
                         "display_name": u.display_name or "Anonymous",
-                        "avatar": u.avatar_url or "",
+                        "avatar": u.get_effective_avatar_url(),
                         "level": u.level,
                         "title": title,
                     },

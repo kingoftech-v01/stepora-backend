@@ -37,9 +37,7 @@ class CircleMemberSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         source="user.display_name", read_only=True, help_text="Member display name."
     )
-    avatar = serializers.URLField(
-        source="user.avatar_url", read_only=True, help_text="Member avatar URL."
-    )
+    avatar = serializers.SerializerMethodField(help_text="Member avatar URL.")
 
     class Meta:
         model = CircleMembership
@@ -57,6 +55,9 @@ class CircleMemberSerializer(serializers.ModelSerializer):
             "user": {"help_text": "ID of the member user."},
             "joined_at": {"help_text": "Date and time the user joined the circle."},
         }
+
+    def get_avatar(self, obj) -> str:
+        return obj.user.get_effective_avatar_url()
 
 
 class CircleChallengeSerializer(serializers.ModelSerializer):
@@ -376,7 +377,11 @@ class CircleListSerializer(serializers.ModelSerializer):
     def get_member_avatars(self, obj) -> list:
         """Return avatar URLs of the first 5 members for preview display."""
         memberships = obj.memberships.select_related("user").order_by("joined_at")[:5]
-        return [m.user.avatar_url for m in memberships if m.user.avatar_url]
+        return [
+            url
+            for m in memberships
+            if (url := m.user.get_effective_avatar_url())
+        ]
 
     def get_is_member(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""
@@ -553,7 +558,7 @@ class CirclePostSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.author.id),
             "username": obj.author.display_name or _("Anonymous"),
-            "avatar": obj.author.avatar_url or "",
+            "avatar": obj.author.get_effective_avatar_url(),
         }
 
     def get_reactions(self, obj) -> dict:
@@ -763,7 +768,7 @@ class ChallengeProgressSerializer(serializers.ModelSerializer):
         return obj.user.display_name or _("Anonymous")
 
     def get_user_avatar(self, obj) -> str:
-        return obj.user.avatar_url or ""
+        return obj.user.get_effective_avatar_url()
 
 
 class ChallengeProgressCreateSerializer(serializers.Serializer):
@@ -788,7 +793,7 @@ class CircleMessageSerializer(serializers.ModelSerializer):
     """Serializer for circle chat messages."""
 
     sender_name = serializers.CharField(source="sender.display_name", read_only=True)
-    sender_avatar = serializers.URLField(source="sender.avatar_url", read_only=True)
+    sender_avatar = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
@@ -811,6 +816,9 @@ class CircleMessageSerializer(serializers.ModelSerializer):
             "sender_avatar",
             "created_at",
         ]
+
+    def get_sender_avatar(self, obj) -> str:
+        return obj.sender.get_effective_avatar_url()
 
 
 class CircleCallSerializer(serializers.ModelSerializer):

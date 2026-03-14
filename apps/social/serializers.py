@@ -45,9 +45,7 @@ class UserPublicSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         source="display_name", read_only=True, help_text="Public display name."
     )
-    avatar = serializers.URLField(
-        source="avatar_url", read_only=True, help_text="Avatar image URL."
-    )
+    avatar = serializers.SerializerMethodField(help_text="Avatar image URL.")
     current_level = serializers.IntegerField(
         source="level", read_only=True, help_text="Current user level."
     )
@@ -76,6 +74,10 @@ class UserPublicSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "id": {"help_text": "Unique user identifier."},
         }
+
+    def get_avatar(self, obj) -> str:
+        """Return the best available avatar URL."""
+        return obj.get_effective_avatar_url()
 
     def get_title(self, obj) -> str:
         """Generate a title based on the user's level."""
@@ -142,7 +144,7 @@ class FriendRequestSerializer(serializers.ModelSerializer):
         return {
             "id": str(user.id),
             "username": user.display_name or "Anonymous",
-            "avatar": user.avatar_url or "",
+            "avatar": user.get_effective_avatar_url(),
             "current_level": user.level,
             "influence_score": user.xp,
         }
@@ -207,7 +209,7 @@ class ActivityFeedItemSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
         }
 
 
@@ -267,7 +269,7 @@ class BlockedUserSerializer(serializers.Serializer):
         return {
             "id": str(blocked.id),
             "username": blocked.display_name or "Anonymous",
-            "avatar": blocked.avatar_url or "",
+            "avatar": blocked.get_effective_avatar_url(),
         }
 
 
@@ -349,7 +351,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
             "level": obj.user.level,
             "is_following": is_following,
         }
@@ -410,28 +412,46 @@ class DreamPostSerializer(serializers.ModelSerializer):
         counts = obj.reactions.values("reaction_type").annotate(count=Count("id"))
         return {item["reaction_type"]: item["count"] for item in counts}
 
-    def _absolute_url(self, relative_url):
-        """Convert a relative media URL to an absolute URL."""
-        request = self.context.get("request")
+    @staticmethod
+    def _make_absolute(url, request):
+        """Return an absolute URL for a media file.
+
+        When using S3Boto3Storage (production), ``FieldFile.url`` already
+        returns a full ``https://`` URL.  In that case we must **not** pass
+        it through ``request.build_absolute_uri()`` because the request's
+        host (the backend container behind ALB) would be prepended, producing
+        a broken URL like ``http://10.0.x.x:8000/https://s3...``.
+
+        For local development the URL is relative (``/media/...``), so we
+        still need ``build_absolute_uri`` to make it absolute.
+        """
+        if not url:
+            return ""
+        # Already absolute — return as-is
+        if url.startswith(("http://", "https://")):
+            return url
         if request:
-            return request.build_absolute_uri(relative_url)
-        return relative_url
+            return request.build_absolute_uri(url)
+        return url
 
     def get_image_url(self, obj) -> str:
+        request = self.context.get("request")
         if obj.image_url:
             return obj.image_url
         if obj.image_file:
-            return self._absolute_url(obj.image_file.url)
+            return self._make_absolute(obj.image_file.url, request)
         return ""
 
     def get_video_url(self, obj) -> str:
+        request = self.context.get("request")
         if obj.video_file:
-            return self._absolute_url(obj.video_file.url)
+            return self._make_absolute(obj.video_file.url, request)
         return ""
 
     def get_audio_url(self, obj) -> str:
+        request = self.context.get("request")
         if obj.audio_file:
-            return self._absolute_url(obj.audio_file.url)
+            return self._make_absolute(obj.audio_file.url, request)
         return ""
 
     def get_dream_title(self, obj) -> str:
@@ -639,7 +659,7 @@ class DreamPostCommentSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
         }
 
     def get_replies(self, obj) -> list:
@@ -668,7 +688,7 @@ class DreamEncouragementSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
         }
 
 
@@ -720,13 +740,20 @@ class SocialEventSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.creator.id),
             "username": obj.creator.display_name or "Anonymous",
-            "avatar": obj.creator.avatar_url or "",
+            "avatar": obj.creator.get_effective_avatar_url(),
             "level": obj.creator.level,
         }
 
     def get_cover_image_url(self, obj) -> str:
         if obj.cover_image:
-            return obj.cover_image.url
+            url = obj.cover_image.url
+            # S3 URLs are already absolute; local dev URLs need the host prefix
+            if url.startswith(("http://", "https://")):
+                return url
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(url)
+            return url
         return ""
 
     def get_is_registered(self, obj) -> bool:
@@ -819,7 +846,7 @@ class SocialEventRegistrationSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
             "level": obj.user.level,
         }
 
@@ -862,23 +889,30 @@ class StorySerializer(serializers.ModelSerializer):
             "id": str(obj.user.id),
             "username": obj.user.display_name or "Anonymous",
             "display_name": obj.user.display_name or "Anonymous",
-            "avatar": obj.user.avatar_url or "",
+            "avatar": obj.user.get_effective_avatar_url(),
         }
 
-    def _absolute_url(self, relative_url):
-        request = self.context.get("request")
+    @staticmethod
+    def _make_absolute(url, request):
+        """Return an absolute URL — see DreamPostSerializer._make_absolute."""
+        if not url:
+            return ""
+        if url.startswith(("http://", "https://")):
+            return url
         if request:
-            return request.build_absolute_uri(relative_url)
-        return relative_url
+            return request.build_absolute_uri(url)
+        return url
 
     def get_image_url(self, obj) -> str:
+        request = self.context.get("request")
         if obj.image_file:
-            return self._absolute_url(obj.image_file.url)
+            return self._make_absolute(obj.image_file.url, request)
         return ""
 
     def get_video_url(self, obj) -> str:
+        request = self.context.get("request")
         if obj.video_file:
-            return self._absolute_url(obj.video_file.url)
+            return self._make_absolute(obj.video_file.url, request)
         return ""
 
     def get_has_viewed(self, obj) -> bool:

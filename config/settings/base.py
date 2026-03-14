@@ -244,9 +244,15 @@ REST_FRAMEWORK = {
         "subscription": "5/minute",
         "store_purchase": "5/minute",
         "auth": "5/minute",
+        "auth_login": "5/minute",
+        "auth_register": "5/minute",
+        "auth_password": "5/minute",
         "search": "15/minute",
+        "referral": "10/minute",
         "export": "1/day",
         "ai_motivation": "5/day",
+        "ai_checkin": "10/day",
+        "ai_notification_timing": "10/day",
     },
 }
 

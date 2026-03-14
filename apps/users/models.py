@@ -215,6 +215,23 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.email} ({self.display_name or 'No name'})"
 
+    def get_effective_avatar_url(self):
+        """Return the best available avatar URL.
+
+        Preference order:
+        1. ``avatar_url`` (text field — may come from social login or manual URL)
+        2. ``avatar_image.url`` (uploaded file — stored on S3 in production)
+        3. Empty string (no avatar)
+        """
+        if self.avatar_url:
+            return self.avatar_url
+        if self.avatar_image:
+            try:
+                return self.avatar_image.url
+            except Exception:
+                return ""
+        return ""
+
     def get_active_plan(self):
         """
         Get the user's active SubscriptionPlan from the database.

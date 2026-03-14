@@ -39,7 +39,7 @@ from core.auth.serializers import (
 )
 from core.auth.social import verify_apple_token, verify_google_token
 from core.auth.tasks import send_login_notification_email, send_password_changed_email
-from core.throttles import AuthRateThrottle
+from core.throttles import AuthLoginRateThrottle, AuthPasswordRateThrottle, AuthRegisterRateThrottle
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -210,7 +210,7 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         identifiers, lockout_response = _check_lockout(request)
@@ -255,7 +255,7 @@ class TwoFactorChallengeView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         challenge_token = request.data.get("challenge_token", "").strip()
@@ -327,7 +327,7 @@ class RegisterView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthRegisterRateThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -382,7 +382,7 @@ class PasswordResetView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthPasswordRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
@@ -403,7 +403,7 @@ class PasswordResetValidateView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthPasswordRateThrottle]
 
     def post(self, request):
         from core.auth.tokens import verify_password_reset_token
@@ -430,7 +430,7 @@ class PasswordResetConfirmView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthPasswordRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -490,7 +490,7 @@ class ResendVerificationView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthRegisterRateThrottle]
 
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
@@ -649,7 +649,7 @@ class GoogleLoginView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         id_token_str = request.data.get("id_token", "") or request.data.get(
@@ -719,7 +719,7 @@ class AppleLoginView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         id_token_str = request.data.get("id_token", "") or request.data.get("code", "")

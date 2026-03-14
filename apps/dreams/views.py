@@ -1361,7 +1361,9 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Build the permanent URL for the saved image
             if vbi.image_file:
-                permanent_url = request.build_absolute_uri(vbi.image_file.url)
+                url = vbi.image_file.url
+                # S3 URLs are already absolute; local dev needs host prefix
+                permanent_url = url if url.startswith(("http://", "https://")) else request.build_absolute_uri(url)
             else:
                 permanent_url = image_url
 
@@ -1486,7 +1488,8 @@ class DreamViewSet(viewsets.ModelViewSet):
         # Update dream's primary vision image if it doesn't have one yet
         if not dream.vision_image_url:
             if vbi.image_file:
-                dream.vision_image_url = request.build_absolute_uri(vbi.image_file.url)
+                url = vbi.image_file.url
+                dream.vision_image_url = url if url.startswith(("http://", "https://")) else request.build_absolute_uri(url)
             elif vbi.image_url:
                 dream.vision_image_url = vbi.image_url
             dream.save(update_fields=["vision_image_url"])
@@ -1650,7 +1653,8 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         # Build the image URL for the AI service
         if photo.image:
-            image_url = request.build_absolute_uri(photo.image.url)
+            url = photo.image.url
+            image_url = url if url.startswith(("http://", "https://")) else request.build_absolute_uri(url)
         else:
             return Response(
                 {"error": _("Photo has no image file.")},

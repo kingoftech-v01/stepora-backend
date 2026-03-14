@@ -817,9 +817,7 @@ class ExploreDreamSerializer(serializers.ModelSerializer):
         return obj.user.display_name or ""
 
     def get_owner_avatar(self, obj) -> str:
-        if obj.user.avatar_image:
-            return obj.user.avatar_image.url
-        return obj.user.avatar_url or ""
+        return obj.user.get_effective_avatar_url()
 
     def get_goals_count(self, obj) -> int:
         if hasattr(obj, "_goals_count"):
@@ -1221,9 +1219,7 @@ class DreamCollaboratorSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Display name of the collaborator.",
     )
-    user_avatar = serializers.CharField(
-        source="user.avatar_url",
-        read_only=True,
+    user_avatar = serializers.SerializerMethodField(
         help_text="Avatar URL of the collaborator.",
     )
     dream_title = serializers.CharField(
@@ -1250,6 +1246,9 @@ class DreamCollaboratorSerializer(serializers.ModelSerializer):
             "role": {"help_text": "Role of the collaborator on this dream."},
             "created_at": {"help_text": "Timestamp when the collaborator was added."},
         }
+
+    def get_user_avatar(self, obj) -> str:
+        return obj.user.get_effective_avatar_url()
 
 
 class AddCollaboratorSerializer(serializers.Serializer):

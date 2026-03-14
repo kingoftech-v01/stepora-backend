@@ -82,8 +82,8 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_raw.split(",") if o.strip()]
 # Static files (served via S3/CloudFront in production)
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_S3_BUCKET")
-AWS_S3_REGION_NAME = os.getenv("AWS_REGION", "eu-west-1")
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME") or os.getenv("AWS_S3_BUCKET")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME") or os.getenv("AWS_REGION", "eu-west-3")
 AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_CLOUDFRONT_DOMAIN")
 AWS_DEFAULT_ACL = None  # Required for S3 Block Public Access
 AWS_S3_FILE_OVERWRITE = False

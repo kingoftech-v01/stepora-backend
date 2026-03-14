@@ -82,7 +82,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         return {
             "id": user.id,
             "username": user.display_name or "Anonymous",
-            "avatar": user.avatar_url or "",
+            "avatar": user.get_effective_avatar_url(),
             "title": title,
             "current_level": user.level,
             "influence_score": user.xp,
@@ -782,7 +782,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         match_data = {
             "user_id": best_match.id,
             "username": best_match.display_name or "Anonymous",
-            "avatar": best_match.avatar_url or "",
+            "avatar": best_match.get_effective_avatar_url(),
             "compatibility_score": round(best_score, 2),
             "shared_interests": shared_interests,
         }
@@ -929,7 +929,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
                 {
                     "user_id": candidate.id,
                     "username": candidate.display_name or "Anonymous",
-                    "avatar": candidate.avatar_url or "",
+                    "avatar": candidate.get_effective_avatar_url(),
                     "bio": candidate.bio or "",
                     "level": candidate.level,
                     "streak": candidate.streak_days,

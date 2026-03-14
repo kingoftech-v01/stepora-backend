@@ -97,7 +97,7 @@ class GlobalSearchView(APIView):
                 {
                     "id": str(u.id),
                     "display_name": u.display_name or "",
-                    "avatar_url": u.avatar_url or "",
+                    "avatar_url": u.get_effective_avatar_url(),
                 }
                 for u in users
             ]

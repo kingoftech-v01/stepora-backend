@@ -24,6 +24,24 @@ class AuthRateThrottle(AnonRateThrottle):
     scope = "auth"
 
 
+class AuthLoginRateThrottle(AnonRateThrottle):
+    """Rate limiting for login-related endpoints (login, social login, 2FA challenge)."""
+
+    scope = "auth_login"
+
+
+class AuthRegisterRateThrottle(AnonRateThrottle):
+    """Rate limiting for registration-related endpoints (register, resend verification)."""
+
+    scope = "auth_register"
+
+
+class AuthPasswordRateThrottle(AnonRateThrottle):
+    """Rate limiting for password reset endpoints (request, validate, confirm)."""
+
+    scope = "auth_password"
+
+
 class AIRateThrottle(UserRateThrottle):
     """Per-minute burst rate limiting for AI chat (10/min)."""
 
@@ -159,6 +177,24 @@ class AIMotivationRateThrottle(UserRateThrottle):
     """Per-day rate limiting for AI motivation messages (5/day)."""
 
     scope = "ai_motivation"
+
+
+class AICheckinRateThrottle(UserRateThrottle):
+    """Per-day rate limiting for AI check-in prompts (10/day)."""
+
+    scope = "ai_checkin"
+
+
+class AINotificationTimingRateThrottle(UserRateThrottle):
+    """Per-day rate limiting for AI notification timing analysis (10/day)."""
+
+    scope = "ai_notification_timing"
+
+
+class ReferralRateThrottle(UserRateThrottle):
+    """Rate limiting for referral operations."""
+
+    scope = "referral"
 
 
 class TwoFactorRateThrottle(UserRateThrottle):
