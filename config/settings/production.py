@@ -87,6 +87,7 @@ AWS_S3_REGION_NAME = os.getenv("AWS_REGION", "eu-west-1")
 AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_CLOUDFRONT_DOMAIN")
 AWS_DEFAULT_ACL = None  # Required for S3 Block Public Access
 AWS_S3_FILE_OVERWRITE = False
+AWS_QUERYSTRING_AUTH = False  # Generate direct URLs (not pre-signed)
 AWS_STATIC_LOCATION = "static"
 AWS_MEDIA_LOCATION = "media"
 
