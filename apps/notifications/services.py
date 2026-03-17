@@ -1,5 +1,5 @@
 """
-Notification delivery service — orchestrates WebSocket, Email, FCM, and Web Push channels.
+Notification services — centralized creation and multi-channel delivery.
 """
 
 import logging
@@ -9,6 +9,52 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
+class NotificationService:
+    """Centralized notification creation."""
+
+    @staticmethod
+    def create(user, notification_type, title, body, data=None, action_url=None,
+               image_url=None, scheduled_for=None, status="pending", sent_at=None):
+        """
+        Centralized notification creation.
+
+        Args:
+            user: The user to notify.
+            notification_type: Type of notification (e.g. 'buddy', 'achievement').
+            title: Notification title.
+            body: Notification body text.
+            data: Optional JSON data dict for deep linking.
+            action_url: Optional deep link URL.
+            image_url: Optional image URL for rich notifications.
+            scheduled_for: When to send (defaults to now).
+            status: Initial status (defaults to 'pending').
+            sent_at: Optional sent timestamp (for pre-sent notifications).
+
+        Returns:
+            The created Notification instance.
+        """
+        from django.utils import timezone
+
+        from .models import Notification
+
+        kwargs = {
+            "user": user,
+            "notification_type": notification_type,
+            "title": title,
+            "body": body,
+            "data": data or {},
+            "action_url": action_url or "",
+            "image_url": image_url or "",
+            "scheduled_for": scheduled_for or timezone.now(),
+            "status": status,
+        }
+        if sent_at is not None:
+            kwargs["sent_at"] = sent_at
+
+        notification = Notification.objects.create(**kwargs)
+        return notification
 
 
 class NotificationDeliveryService:

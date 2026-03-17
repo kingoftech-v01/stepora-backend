@@ -10,7 +10,7 @@ from celery import shared_task
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.notifications.models import Notification
+from apps.notifications.services import NotificationService
 from apps.users.models import User
 from core.exceptions import OpenAIError
 from integrations.openai_service import OpenAIService
@@ -380,9 +380,7 @@ def generate_dream_plan_task(self, dream_id, user_id):
 
         # Send notification to user that plan is ready
         try:
-            from apps.notifications.models import Notification
-
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="dream_completed",
                 title=_("Your plan is ready!"),
@@ -498,7 +496,7 @@ def generate_two_minute_start(self, dream_id):
         dream.save(update_fields=["has_two_minute_start"])
 
         # Send notification
-        Notification.objects.create(
+        NotificationService.create(
             user=dream.user,
             notification_type="task_created",
             title=_("Ready to get started in 2 minutes?"),
@@ -603,7 +601,7 @@ def auto_schedule_tasks(self, user_id):
 
         # Send notification
         if scheduled_count > 0:
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="tasks_scheduled",
                 title=_("Tasks automatically scheduled"),
@@ -723,7 +721,7 @@ def update_dream_progress(self):
                     dream.save(update_fields=["status", "completed_at"])
 
                     # Send completion notification
-                    Notification.objects.create(
+                    NotificationService.create(
                         user=dream.user,
                         notification_type="dream_completed",
                         title=_("Dream achieved!"),
@@ -781,7 +779,7 @@ def check_overdue_tasks(self):
             overdue_count = len(user_data["tasks"])
 
             # Send notification
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="overdue_tasks",
                 title=_("%(count)s overdue task(s)") % {"count": overdue_count},
@@ -846,7 +844,7 @@ def suggest_task_adjustments(self, user_id):
             )
 
             # Send notification with suggestions
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="coaching",
                 title=_("Suggestions to help you succeed"),
@@ -909,7 +907,7 @@ def generate_vision_board(self, dream_id):
         dream.save(update_fields=["vision_image_url"])
 
         # Send notification
-        Notification.objects.create(
+        NotificationService.create(
             user=dream.user,
             notification_type="vision_ready",
             title=_("Your vision is ready!"),
@@ -964,7 +962,7 @@ def cleanup_abandoned_dreams(self):
             archived_count += 1
 
             # Optionally notify user
-            Notification.objects.create(
+            NotificationService.create(
                 user=dream.user,
                 notification_type="dream_archived",
                 title=_("Dream archived"),
@@ -1020,7 +1018,7 @@ def smart_archive_dreams(self):
             dream.save(update_fields=["status", "updated_at"])
             paused_count += 1
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=dream.user,
                 notification_type="dream_paused",
                 title=_("Dream paused due to inactivity"),
@@ -1062,7 +1060,7 @@ def _check_milestone(dream, old_progress, new_progress):
 
     for threshold, message, notif_type in milestones:
         if old_progress < threshold <= new_progress:
-            Notification.objects.create(
+            NotificationService.create(
                 user=dream.user,
                 notification_type=notif_type,
                 title=_("%(threshold)s%% - %(message)s")
@@ -1432,9 +1430,7 @@ def generate_initial_tasks_task(self, dream_id, user_id):
 
         # Send notification
         try:
-            from apps.notifications.models import Notification
-
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="dream_completed",
                 title="Your plan is ready!",
@@ -1609,9 +1605,7 @@ def run_single_checkin_task(self, checkin_id):
         # Send notification with coaching message
         if result.get("coaching_message"):
             try:
-                from apps.notifications.models import Notification
-
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="check_in",
                     title="Your bi-weekly check-in is ready!",
@@ -1932,7 +1926,7 @@ def generate_checkin_questionnaire_task(self, checkin_id):
         # Send notification
         opening = validated.opening_message or "Time for your check-in!"
         try:
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="check_in",
                 title="Check-in time!",
@@ -2054,7 +2048,7 @@ def process_checkin_responses_task(self, checkin_id):
         # Send coaching notification
         if result.get("coaching_message"):
             try:
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="check_in",
                     title="Your check-in results are ready!",

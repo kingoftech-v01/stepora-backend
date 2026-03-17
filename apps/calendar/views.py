@@ -4643,10 +4643,10 @@ class SharedCalendarSuggestView(APIView):
 
         # Create a notification for the calendar owner
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
             note = serializer.validated_data.get("note", "")
-            Notification.objects.create(
+            NotificationService.create(
                 user=share.owner,
                 title=_("Time Suggestion"),
                 body=_("%(name)s suggested a time: %(start)s - %(end)s%(note)s")

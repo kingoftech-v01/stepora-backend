@@ -149,7 +149,7 @@ def send_league_change_notifications(season_id=None):
 
     Runs the promote/demote cycle and notifies affected users.
     """
-    from apps.notifications.models import Notification
+    from apps.notifications.services import NotificationService
 
     from .models import League, LeagueStanding, Season
     from .services import LeagueService
@@ -207,7 +207,7 @@ def send_league_change_notifications(season_id=None):
                 )
                 notif_type = "system"
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=standing.user,
                 notification_type=notif_type,
                 title=title,

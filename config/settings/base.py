@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # Local apps
     "apps.users",
     "apps.dreams",
+    "apps.chat",
     "apps.conversations",
     "apps.notifications",
     "apps.calendar",

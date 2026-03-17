@@ -724,9 +724,9 @@ class Task(models.Model):
         )
 
         # Create notification for the user
-        from apps.notifications.models import Notification
+        from apps.notifications.services import NotificationService
 
-        Notification.objects.create(
+        NotificationService.create(
             user=self.goal.dream.user,
             notification_type="system",
             title="Next task in chain created",

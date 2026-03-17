@@ -16,7 +16,6 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.db import models
 from django.db.models import Prefetch, Sum
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -29,7 +28,8 @@ from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
 from integrations.openai_service import OpenAIService
 
-from .models import Notification, ReminderPreference
+from .models import Notification
+from .services import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ def generate_daily_motivation(self):
                 tracker.increment(user, "ai_background")
 
                 # Create notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="motivation",
                     title=_("Daily motivation"),
@@ -442,7 +442,7 @@ def send_user_digest(self, user_id):
 
     # ---- Create Notification record -----------------------------------------
 
-    notification = Notification.objects.create(
+    notification = NotificationService.create(
         user=user,
         notification_type="weekly_report",
         title=title,
@@ -559,7 +559,7 @@ def check_inactive_users(self):
                 )
 
                 # Create rescue notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="rescue",
                     title=_("We are still here for you"),
@@ -631,7 +631,7 @@ def send_reminder_notifications(self):
                     continue
 
                 # Create reminder notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=goal.dream.user,
                     notification_type="reminder",
                     title=_("Reminder: %(title)s") % {"title": goal.title},
@@ -694,7 +694,7 @@ def send_streak_milestone_notification(self, user_id, streak_days):
         milestones = [7, 14, 30, 60, 100, 365]
 
         if streak_days in milestones:
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="achievement",
                 title=_("%(days)s-day streak!") % {"days": streak_days},
@@ -736,7 +736,7 @@ def send_level_up_notification(self, user_id, new_level):
     try:
         user = User.objects.get(id=user_id)
 
-        Notification.objects.create(
+        NotificationService.create(
             user=user,
             notification_type="achievement",
             title=_("Level %(level)s reached!") % {"level": new_level},
@@ -794,7 +794,7 @@ def expire_ringing_calls(self):
 
             # Notify the callee about the missed call
             caller_name = call.caller.display_name or _("Someone")
-            Notification.objects.create(
+            NotificationService.create(
                 user=call.callee,
                 notification_type="missed_call",
                 title=_("Missed %(call_type)s call") % {"call_type": call.call_type},
@@ -810,7 +810,7 @@ def expire_ringing_calls(self):
 
             # Notify the caller that callee didn't answer
             callee_name = call.callee.display_name or _("Your buddy")
-            Notification.objects.create(
+            NotificationService.create(
                 user=call.caller,
                 notification_type="missed_call",
                 title=_("%(name)s didn't answer") % {"name": callee_name},
@@ -935,7 +935,7 @@ def check_due_tasks(self):
             }
 
             # Create notification record
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="task_due",
                 title=_("%(title)s") % {"title": task.title},
@@ -989,207 +989,3 @@ def cleanup_stale_fcm_tokens(self):
     except Exception as e:
         logger.error(f"Error in cleanup_stale_fcm_tokens: {e}")
         raise self.retry(exc=e, countdown=300)
-
-
-@shared_task(name="notifications.send_task_reminders", bind=True, max_retries=3)
-def send_task_reminders(self):
-    """
-    Check reminder preferences and send notifications for pending tasks.
-
-    Runs every minute via Celery Beat. For each active ReminderPreference
-    whose time matches the current minute (in the user's timezone) and whose
-    day matches today, it:
-      1. Finds the user's pending tasks for today
-      2. Sends a push notification and/or task_call notification
-    """
-    import zoneinfo
-
-    try:
-        now = timezone.now()
-
-        # Get all active reminder preferences
-        active_prefs = (
-            ReminderPreference.objects.filter(is_active=True)
-            .select_related("user", "dream")
-        )
-
-        sent_count = 0
-
-        for pref in active_prefs:
-            try:
-                user = pref.user
-                if not user.is_active:
-                    continue
-
-                # Convert current time to user's timezone
-                user_tz = zoneinfo.ZoneInfo(user.timezone or "UTC")
-                user_now = now.astimezone(user_tz)
-                user_time = user_now.time()
-                current_day = user_now.strftime("%a").lower()[:3]
-
-                # Check if this reminder matches the current minute
-                if user_time.hour != pref.time.hour or user_time.minute != pref.time.minute:
-                    continue
-
-                # Check if today is in the reminder's active days
-                if not pref.matches_day(current_day):
-                    continue
-
-                # Avoid duplicate: check if we already sent for this pref today
-                already_sent = Notification.objects.filter(
-                    user=user,
-                    notification_type__in=["reminder", "task_call"],
-                    data__reminder_preference_id=str(pref.id),
-                    created_at__date=now.date(),
-                ).exists()
-                if already_sent:
-                    continue
-
-                # Get user's pending tasks for today
-                task_qs = Task.objects.filter(
-                    goal__dream__user=user,
-                    goal__dream__status="active",
-                    status="pending",
-                )
-
-                # If reminder is dream-specific, filter to that dream
-                if pref.dream_id:
-                    task_qs = task_qs.filter(goal__dream=pref.dream)
-
-                # Filter to tasks scheduled for today or overdue
-                today = user_now.date()
-                task_qs = task_qs.filter(
-                    models.Q(scheduled_date__date=today)
-                    | models.Q(scheduled_date__date__lt=today)
-                    | models.Q(scheduled_date__isnull=True)
-                ).select_related("goal__dream").order_by("scheduled_date")
-
-                tasks = list(task_qs[:10])
-                if not tasks:
-                    continue
-
-                # Build notification content
-                task_titles = [t.title for t in tasks[:5]]
-                task_count = len(tasks)
-                dream_title = pref.dream.title if pref.dream else None
-
-                if dream_title:
-                    title = _("Time for your tasks: %(dream)s") % {"dream": dream_title}
-                else:
-                    title = _("Time to work on your tasks!")
-
-                body_lines = []
-                for t_title in task_titles:
-                    body_lines.append(f"- {t_title}")
-                if task_count > 5:
-                    body_lines.append(
-                        _("...and %(count)s more") % {"count": task_count - 5}
-                    )
-                body = "\n".join(body_lines)
-
-                # Data payload
-                data = {
-                    "reminder_preference_id": str(pref.id),
-                    "task_count": str(task_count),
-                    "screen": "DreamsDashboard",
-                    "action": "open_tasks",
-                }
-                if pref.dream_id:
-                    data["dream_id"] = str(pref.dream_id)
-
-                # Add task list for task_call overlay
-                task_list = [
-                    {
-                        "id": str(t.id),
-                        "title": t.title,
-                        "dream_title": t.goal.dream.title if t.goal and t.goal.dream else "",
-                        "category": t.goal.dream.category if t.goal and t.goal.dream else "personal",
-                    }
-                    for t in tasks[:5]
-                ]
-
-                # Send based on notify_method
-                should_push = pref.notify_method in ("push", "both")
-                should_task_call = pref.notify_method in ("task_call", "both")
-
-                if should_push:
-                    Notification.objects.create(
-                        user=user,
-                        notification_type="reminder",
-                        title=title,
-                        body=body,
-                        scheduled_for=now,
-                        data=data,
-                    )
-
-                if should_task_call:
-                    # Create a task_call type notification with task list
-                    task_call_data = dict(data)
-                    task_call_data["type"] = "task_call"
-                    task_call_data["notification_type"] = "task_call"
-                    task_call_data["tasks"] = str(task_list)
-
-                    Notification.objects.create(
-                        user=user,
-                        notification_type="task_call",
-                        title=title,
-                        body=body,
-                        scheduled_for=now,
-                        data=task_call_data,
-                    )
-
-                    # Send WebSocket event for real-time task call overlay
-                    try:
-                        from asgiref.sync import async_to_sync
-                        from channels.layers import get_channel_layer
-
-                        channel_layer = get_channel_layer()
-                        if channel_layer:
-                            # Send first task as the call data
-                            first_task = tasks[0]
-                            ws_data = {
-                                "type": "send_notification",
-                                "data": {
-                                    "type": "task_call",
-                                    "notification_type": "task_call",
-                                    "task_id": str(first_task.id),
-                                    "title": first_task.title,
-                                    "dream_title": (
-                                        first_task.goal.dream.title
-                                        if first_task.goal and first_task.goal.dream
-                                        else ""
-                                    ),
-                                    "category": (
-                                        first_task.goal.dream.category
-                                        if first_task.goal and first_task.goal.dream
-                                        else "personal"
-                                    ),
-                                    "task_count": str(task_count),
-                                    "reminder_preference_id": str(pref.id),
-                                },
-                            }
-                            async_to_sync(channel_layer.group_send)(
-                                f"notifications_{user.id}",
-                                ws_data,
-                            )
-                    except Exception as ws_err:
-                        logger.warning(
-                            f"Failed to send WebSocket task_call for user {user.id}: {ws_err}"
-                        )
-
-                sent_count += 1
-
-            except Exception as e:
-                logger.error(
-                    f"Error processing reminder preference {pref.id}: {e}",
-                    exc_info=True,
-                )
-                continue
-
-        if sent_count:
-            logger.info(f"Sent {sent_count} task reminder notifications")
-        return {"sent": sent_count}
-
-    except Exception as e:
-        logger.error(f"Error in send_task_reminders: {e}")
-        raise self.retry(exc=e, countdown=60)

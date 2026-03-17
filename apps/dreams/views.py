@@ -2019,9 +2019,9 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         # Notify the recipient
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=target_user,
                 notification_type="progress",
                 title=_("%(name)s shared a dream with you!")

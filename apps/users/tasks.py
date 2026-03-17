@@ -171,7 +171,7 @@ def generate_weekly_reports():
     from django.utils import timezone
 
     from apps.dreams.models import Dream, DreamProgressSnapshot, FocusSession, Goal
-    from apps.notifications.models import Notification
+    from apps.notifications.services import NotificationService
     from core.ai_usage import AIUsageTracker
     from core.exceptions import OpenAIError
     from integrations.openai_service import OpenAIService
@@ -278,7 +278,7 @@ def generate_weekly_reports():
             # Create notification
             score = ai_report.get("score", 0)
             summary = ai_report.get("summary", "Your weekly report is ready!")
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="system",
                 title="Your Weekly Progress Report is Ready!",
@@ -328,7 +328,7 @@ def send_accountability_checkins():
     from django.utils import timezone
 
     from apps.dreams.models import Dream, Task
-    from apps.notifications.models import Notification
+    from apps.notifications.services import NotificationService
     from core.ai_usage import AIUsageTracker
     from core.exceptions import OpenAIError
     from core.sanitizers import sanitize_text
@@ -443,7 +443,7 @@ def send_accountability_checkins():
             message = sanitize_text(checkin.get("message", ""))[:500]
 
             # Create notification
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="check_in",
                 title="Accountability Check-in",

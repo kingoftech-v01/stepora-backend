@@ -1083,9 +1083,9 @@ class CircleViewSet(viewsets.ModelViewSet):
 
         # Notify the invitee
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=target_user,
                 notification_type="buddy",
                 title=_("Circle Invitation"),

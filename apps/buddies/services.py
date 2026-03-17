@@ -1,5 +1,9 @@
 """
-Services for Users app.
+Services for the Buddies app.
+
+Contains the BuddyMatchingService which handles finding compatible dream
+buddies based on shared categories, activity level, timezone proximity,
+and user level.
 """
 
 import logging
@@ -9,17 +13,15 @@ from typing import List, Optional, Tuple
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import User
+from apps.buddies.models import BuddyPairing
+from apps.users.models import User
 
 logger = logging.getLogger(__name__)
 
 
-# Backward compatibility — BuddyMatchingService moved to apps.buddies.services
-from apps.buddies.services import BuddyMatchingService  # noqa: F401
-
-
-class _BuddyMatchingServiceDeprecated:
-    """DEPRECATED: Use apps.buddies.services.BuddyMatchingService instead.
+class BuddyMatchingService:
+    """
+    Service for matching users with compatible dream buddies.
 
     Matching algorithm considers:
     1. Shared dream categories (40% weight)
@@ -290,143 +292,3 @@ class _BuddyMatchingServiceDeprecated:
             scheduled_for=timezone.now(),
             status="pending",
         )
-
-
-class UserStatsService:
-    """Service for calculating user statistics."""
-
-    @staticmethod
-    def get_user_stats(user: User) -> dict:
-        """Get comprehensive statistics for a user."""
-
-        active_dreams = user.dreams.filter(status="active")
-        completed_dreams = user.dreams.filter(status="completed")
-
-        # Calculate total tasks completed
-        total_tasks_completed = 0
-        for dream in user.dreams.all():
-            for goal in dream.goals.all():
-                total_tasks_completed += goal.tasks.filter(status="completed").count()
-
-        # Calculate current week activity
-        week_ago = timezone.now() - timedelta(days=7)
-        tasks_this_week = 0
-        for dream in active_dreams:
-            for goal in dream.goals.all():
-                tasks_this_week += goal.tasks.filter(
-                    status="completed", completed_at__gte=week_ago
-                ).count()
-
-        return {
-            "level": user.level,
-            "xp": user.xp,
-            "xp_to_next_level": 100 - (user.xp % 100),
-            "streak_days": user.streak_days,
-            "total_dreams": user.dreams.count(),
-            "active_dreams": active_dreams.count(),
-            "completed_dreams": completed_dreams.count(),
-            "total_tasks_completed": total_tasks_completed,
-            "tasks_completed_this_week": tasks_this_week,
-            "subscription": user.subscription,
-            "is_premium": user.is_premium(),
-            "member_since": user.created_at,
-        }
-
-
-class AchievementService:
-    """Service for checking and unlocking achievements."""
-
-    @staticmethod
-    def check_achievements(user: User):
-        """Check all achievement conditions and unlock any newly met ones."""
-        from django.db.models import Q
-
-        from apps.social.models import Friendship
-
-        from .models import Achievement, UserAchievement
-
-        all_achievements = Achievement.objects.filter(is_active=True)
-        already_unlocked = set(
-            UserAchievement.objects.filter(user=user).values_list(
-                "achievement_id", flat=True
-            )
-        )
-
-        # Pre-compute stats
-        stats = {
-            "streak_days": user.streak_days,
-            "level_reached": user.level,
-            "xp_earned": user.xp,
-            "dreams_created": user.dreams.count(),
-            "dreams_completed": user.dreams.filter(status="completed").count(),
-            "tasks_completed": sum(
-                goal.tasks.filter(status="completed").count()
-                for dream in user.dreams.all()
-                for goal in dream.goals.all()
-            ),
-            "friends_count": Friendship.objects.filter(
-                Q(user1=user) | Q(user2=user), status="accepted"
-            ).count(),
-            "first_dream": 1 if user.dreams.exists() else 0,
-            "vision_created": (
-                1 if user.dreams.filter(vision_image_url__gt="").exists() else 0
-            ),
-        }
-
-        # Check buddy
-        try:
-            from apps.buddies.models import BuddyPairing
-
-            stats["first_buddy"] = (
-                1
-                if BuddyPairing.objects.filter(
-                    Q(user1=user) | Q(user2=user), status="active"
-                ).exists()
-                else 0
-            )
-        except Exception:
-            stats["first_buddy"] = 0
-
-        # Check circles
-        try:
-            from apps.circles.models import CircleMembership
-
-            stats["circles_joined"] = CircleMembership.objects.filter(user=user).count()
-        except Exception:
-            stats["circles_joined"] = 0
-
-        newly_unlocked = []
-        for ach in all_achievements:
-            if ach.id in already_unlocked:
-                continue
-
-            current_val = stats.get(ach.condition_type, 0)
-            if current_val >= ach.condition_value:
-                UserAchievement.objects.create(user=user, achievement=ach)
-                user.add_xp(ach.xp_reward)
-                # Send achievement notification
-                try:
-                    from apps.notifications.services import NotificationService
-
-                    NotificationService.create(
-                        user=user,
-                        notification_type="achievement",
-                        title=f"Achievement Unlocked: {ach.name}!",
-                        body=f'You earned the "{ach.name}" achievement! +{ach.xp_reward} XP',
-                        scheduled_for=timezone.now(),
-                        data={
-                            "type": "achievement",
-                            "achievement_id": str(ach.id),
-                            "achievement_name": ach.name,
-                            "xp_reward": ach.xp_reward,
-                        },
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to create achievement notification for user %s, achievement %s",
-                        user.id,
-                        ach.id,
-                    )
-                newly_unlocked.append(ach)
-
-        return newly_unlocked

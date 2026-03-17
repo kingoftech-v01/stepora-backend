@@ -43,7 +43,8 @@ def send_daily_summaries():
     """
     from apps.dreams.models import Task
     from apps.notifications.fcm_service import FCMService
-    from apps.notifications.models import Notification, UserDevice
+    from apps.notifications.models import UserDevice
+    from apps.notifications.services import NotificationService
     from apps.users.models import User
 
     now = timezone.now()
@@ -157,7 +158,7 @@ def send_daily_summaries():
         }
 
         # --- Create Notification record ---
-        Notification.objects.create(
+        NotificationService.create(
             user=user,
             notification_type="daily_summary",
             title=title,
@@ -465,7 +466,8 @@ def check_and_send_reminders():
     sends a push notification via FCM.
     """
     from apps.notifications.fcm_service import FCMService
-    from apps.notifications.models import Notification, UserDevice
+    from apps.notifications.models import UserDevice
+    from apps.notifications.services import NotificationService
 
     now = timezone.now()
     window_end = now + timedelta(seconds=60)
@@ -551,7 +553,7 @@ def check_and_send_reminders():
             }
 
             # Create Notification record
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="reminder",
                 title=title,
