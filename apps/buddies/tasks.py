@@ -25,6 +25,7 @@ def send_buddy_checkin_reminders():
     """
     from apps.buddies.models import BuddyPairing
     from apps.notifications.models import Notification
+    from apps.notifications.services import NotificationService
 
     now = timezone.now()
     threshold = now - timedelta(days=3)
@@ -57,7 +58,7 @@ def send_buddy_checkin_reminders():
                 continue
 
             try:
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     title=_("Check in with your buddy!"),
                     body=_(

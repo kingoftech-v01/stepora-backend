@@ -408,9 +408,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         # Send push notification to the other user
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=other_user,
                 notification_type="buddy",
                 title=_("Message from %(name)s")
@@ -601,9 +601,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         # Send push notification
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=other_user,
                 notification_type="buddy",
                 title=_("Voice message from %(name)s")
@@ -1154,9 +1154,9 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         # Try to send a notification (best-effort)
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=partner,
                 title=_("Buddy Encouragement"),
                 body=serializer.validated_data.get("message", "")
@@ -1382,9 +1382,9 @@ class ContractViewSet(viewsets.GenericViewSet):
         # Notify the partner
         partner = self._get_partner_user(pairing, request.user)
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=partner,
                 notification_type="buddy",
                 title=_("New Accountability Contract"),
@@ -1480,9 +1480,9 @@ class ContractViewSet(viewsets.GenericViewSet):
 
         # Notify the creator
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=contract.created_by,
                 notification_type="buddy",
                 title=_("Contract Accepted"),
@@ -1554,9 +1554,9 @@ class ContractViewSet(viewsets.GenericViewSet):
         # Notify the partner
         partner = self._get_partner_user(pairing, request.user)
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=partner,
                 notification_type="buddy",
                 title=_("Buddy Check-In"),

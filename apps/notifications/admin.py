@@ -297,8 +297,10 @@ def bulk_send_view(request):
             failed = 0
             service = NotificationDeliveryService() if send_immediately else None
 
+            from .services import NotificationService
+
             for user in users.iterator():
-                notification = Notification.objects.create(
+                notification = NotificationService.create(
                     user=user,
                     notification_type=notification_type,
                     title=title,
