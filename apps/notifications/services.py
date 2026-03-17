@@ -102,6 +102,7 @@ class NotificationDeliveryService:
                     "action_url": notification.action_url or settings.FRONTEND_URL,
                     "user_name": user.display_name or user.email,
                 },
+                from_name="Stepora Notifications",
             )
 
             logger.debug(

@@ -53,6 +53,7 @@ def send_payment_receipt_email(
                 "invoice_url": invoice_url,
                 "action_url": invoice_url or frontend,
             },
+            from_name="Stepora Billing",
         )
         logger.info("Payment receipt email sent to %s", user.email)
     except Exception:
@@ -82,6 +83,7 @@ def send_subscription_upgraded_email(user_id: str, plan_name: str):
             "subscription_url": subscription_url,
             "action_url": subscription_url,
         },
+        from_name="Stepora Billing",
         fail_silently=True,
     )
     logger.info("Upgrade email sent to %s (plan: %s)", user.email, plan_name)
@@ -122,6 +124,7 @@ def send_subscription_downgrade_scheduled_email(
             "effective_date": date_str,
             "action_url": subscription_url,
         },
+        from_name="Stepora Billing",
         fail_silently=True,
     )
     logger.info("Downgrade scheduled email sent to %s", user.email)
@@ -161,6 +164,7 @@ def send_subscription_cancel_scheduled_email(
             "subscription_url": subscription_url,
             "action_url": subscription_url,
         },
+        from_name="Stepora Billing",
         fail_silently=True,
     )
     logger.info("Cancel scheduled email sent to %s", user.email)
@@ -189,6 +193,7 @@ def send_subscription_cancelled_email(user_id: str, old_plan_name: str):
             "subscription_url": subscription_url,
             "action_url": subscription_url,
         },
+        from_name="Stepora Billing",
         fail_silently=True,
     )
     logger.info("Subscription cancelled email sent to %s", user.email)
@@ -215,6 +220,7 @@ def send_subscription_reactivated_email(user_id: str, plan_name: str):
             "plan_name": plan_name,
             "action_url": frontend,
         },
+        from_name="Stepora Billing",
         fail_silently=True,
     )
     logger.info("Reactivation email sent to %s", user.email)

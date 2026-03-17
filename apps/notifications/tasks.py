@@ -123,7 +123,8 @@ def _send_digest_email(user, subject, context):
         f"Keep going!\nThe Stepora Team"
     )
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@stepora.net")
+    base_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@stepora.net")
+    from_email = f"Stepora Notifications <{base_email}>"
 
     send_rendered_email.delay(
         subject=subject,

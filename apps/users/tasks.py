@@ -40,6 +40,7 @@ def send_email_change_verification(user_id: int, new_email: str, token: str):
             "verification_url": verification_url,
             "action_url": verification_url,
         },
+        from_name="Stepora Account",
     )
 
     logger.info("Email change verification sent to %s for user %s", new_email, user_id)
@@ -93,6 +94,7 @@ def export_user_data(user_id: int):
             "download_url": download_url,
             "action_url": download_url,
         },
+        from_name="Stepora Account",
     )
 
     logger.info("Data export completed and emailed for user %s", user_id)
