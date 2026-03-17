@@ -91,6 +91,9 @@ class ConversationSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField(
         help_text="Number of unread messages for the current user."
     )
+    target_user = serializers.SerializerMethodField(
+        help_text="Other participant info for buddy/friend chat conversations."
+    )
 
     class Meta:
         model = Conversation
@@ -107,6 +110,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "is_active",
             "last_message",
             "unread_count",
+            "target_user",
             "created_at",
             "updated_at",
         ]
@@ -197,6 +201,56 @@ class ConversationSerializer(serializers.ModelSerializer):
             .filter(role="user")
             .count()
         )
+
+    def get_target_user(self, obj) -> Optional[dict]:
+        """Get the other participant's info for buddy/friend chat conversations."""
+        if obj.conversation_type != "buddy_chat":
+            return None
+        request = self.context.get("request")
+        if not request or not request.user:
+            return None
+
+        # Try to find the other user from messages metadata
+        other_msg = (
+            obj.messages.exclude(
+                metadata__sender_id=str(request.user.id)
+            )
+            .filter(metadata__has_key="sender_id")
+            .values_list("metadata", flat=True)
+            .first()
+        )
+        if other_msg and other_msg.get("sender_id"):
+            try:
+                from apps.users.models import User
+
+                other_user = User.objects.get(id=other_msg["sender_id"])
+                return {
+                    "id": str(other_user.id),
+                    "display_name": other_user.display_name or other_user.email,
+                    "avatar": other_user.avatar.url if other_user.avatar else "",
+                }
+            except Exception:
+                pass
+
+        # Fallback: try target_user_id from first system message metadata
+        sys_msg = (
+            obj.messages.filter(role="system", metadata__has_key="target_user_id")
+            .values_list("metadata", flat=True)
+            .first()
+        )
+        if sys_msg and sys_msg.get("target_user_id"):
+            try:
+                from apps.users.models import User
+
+                other_user = User.objects.get(id=sys_msg["target_user_id"])
+                return {
+                    "id": str(other_user.id),
+                    "display_name": other_user.display_name or other_user.email,
+                    "avatar": other_user.avatar.url if other_user.avatar else "",
+                }
+            except Exception:
+                pass
+        return None
 
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
