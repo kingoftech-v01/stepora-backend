@@ -1842,9 +1842,16 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             )
 
         # ── Base exclusions (always) ───────────────────────────────
-        base_exclude = blocked_ids | {user.id}
+        base_exclude = blocked_ids
 
         # ── Build tier querysets ───────────────────────────────────
+        # T0: own posts (always included)
+        t0_qs = (
+            DreamPost.objects.filter(user=user)
+            .select_related("user", "dream")
+            .order_by("-created_at")
+        )
+
         # T1: friends, all visibility except private
         t1_qs = DreamPost.objects.none()
         if friend_ids:
@@ -1877,7 +1884,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             )
 
         seven_days_ago = timezone.now() - timedelta(days=7)
-        all_known_ids = friend_ids | fof_ids | t3_follow_ids | base_exclude
+        all_known_ids = friend_ids | fof_ids | t3_follow_ids | base_exclude | {user.id}
         t3_trending_qs = (
             DreamPost.objects.filter(
                 visibility="public",
@@ -1894,7 +1901,21 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         t2_target = 4
         t3_target = 3
 
+        # Own posts merged into T1 (sorted by date together with friends)
+        t0_posts = list(_annotate_posts(t0_qs[:t1_target]))
         t1_posts = list(_annotate_posts(t1_qs[:t1_target * 2]))
+        # Merge own + friends, sort by date, deduplicate
+        t1_combined = sorted(
+            t0_posts + t1_posts,
+            key=lambda p: p.created_at,
+            reverse=True,
+        )
+        seen = set()
+        t1_posts = []
+        for p in t1_combined:
+            if p.id not in seen:
+                t1_posts.append(p)
+                seen.add(p.id)
         t2_posts = list(_annotate_posts(t2_qs[:t2_target * 2]))
         t3_follow_posts = list(_annotate_posts(t3_follow_qs[:t3_target * 2]))
         t3_trending_posts = list(_annotate_posts(t3_trending_qs[:t3_target * 2]))
