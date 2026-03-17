@@ -48,6 +48,7 @@ def send_verification_email(user_id, email_address_id):
             "verification_url": verification_url,
             "action_url": verification_url,
         },
+        from_name="Stepora Account",
     )
     logger.info("Verification email sent to %s for user %s", email_addr.email, user_id)
 
@@ -81,6 +82,7 @@ def send_password_reset_email(user_id):
             "reset_url": reset_url,
             "action_url": reset_url,
         },
+        from_name="Stepora Security",
     )
     logger.info("Password reset email sent to %s", user.email)
 
@@ -109,6 +111,7 @@ def send_welcome_email(user_id):
             "user_name": name,
             "action_url": settings.FRONTEND_URL,
         },
+        from_name="Stepora",
         fail_silently=True,
     )
 
@@ -139,6 +142,7 @@ def send_password_changed_email(user_id):
             "reset_url": reset_url,
             "action_url": reset_url,
         },
+        from_name="Stepora Security",
         fail_silently=True,
     )
     logger.info("Password changed notification sent to %s", user.email)
@@ -169,6 +173,7 @@ def send_login_notification_email(user_id, ip_address="", user_agent=""):
             "ip_address": ip_address,
             "user_agent": user_agent,
         },
+        from_name="Stepora Security",
         fail_silently=True,
     )
     logger.info("Login notification sent to %s", user.email)

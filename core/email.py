@@ -26,7 +26,9 @@ from django.template.loader import render_to_string
 logger = logging.getLogger(__name__)
 
 
-def send_templated_email(template_name, subject, to, context=None, fail_silently=False):
+def send_templated_email(
+    template_name, subject, to, context=None, from_name=None, fail_silently=False
+):
     """
     Render and send an HTML email with plain-text fallback.
 
@@ -36,6 +38,8 @@ def send_templated_email(template_name, subject, to, context=None, fail_silently
         subject: Email subject line.
         to: List of recipient email addresses.
         context: Template context dict. 'frontend_url' and 'year' are auto-injected.
+        from_name: Display name for the sender (e.g. "Stepora Security").
+                   Defaults to "Stepora".
         fail_silently: If True, swallow SMTP errors (logged as warning).
     """
     from core.tasks import send_rendered_email
@@ -67,7 +71,9 @@ def send_templated_email(template_name, subject, to, context=None, fail_silently
         logger.debug("No plain-text template for %s, using subject as body", txt_path)
         text_body = subject
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@stepora.app")
+    base_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@stepora.app")
+    display = from_name or "Stepora"
+    from_email = f"{display} <{base_email}>"
 
     if fail_silently:
         try:
