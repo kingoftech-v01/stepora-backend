@@ -2,6 +2,7 @@
 Custom middleware for Stepora.
 
 Includes:
+- OriginValidationMiddleware: reject requests from unknown origins
 - SecurityHeadersMiddleware: CSP, Referrer-Policy, Permissions-Policy, COOP, CORP
 - LastActivityMiddleware: online status tracking
 """
@@ -9,9 +10,111 @@ Includes:
 import logging
 
 from django.conf import settings
+from django.http import JsonResponse
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+class OriginValidationMiddleware:
+    """
+    Validates that API requests come from allowed origins.
+    Checks Origin and Referer headers to ensure requests originate
+    from the Stepora frontend domains.
+
+    Exempt from validation:
+    - Health check endpoints (/health/)
+    - Stripe webhooks (/api/subscriptions/webhook/)
+    - Native mobile app requests (X-Client-Platform: native/ios/android/capacitor)
+    - Internal IPs (127.0.0.1, 10.x.x.x — ALB health checks, ECS exec)
+    - Localhost origins (development)
+    """
+
+    ALLOWED_ORIGINS = [
+        "https://stepora.app",
+        "https://api.stepora.app",
+        "https://dp.jhpetitfrere.com",
+        "https://dpapi.jhpetitfrere.com",
+        "http://localhost",
+        "http://127.0.0.1",
+    ]
+
+    EXEMPT_PATHS = [
+        "/health/",
+        "/api/subscriptions/webhook/",
+    ]
+
+    _NATIVE_PLATFORMS = frozenset(("native", "ios", "android", "capacitor"))
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # 1. Skip exempt paths (health checks, Stripe webhooks)
+        for path_prefix in self.EXEMPT_PATHS:
+            if request.path.startswith(path_prefix):
+                return self.get_response(request)
+
+        # 2. Skip native mobile app requests
+        platform = request.META.get("HTTP_X_CLIENT_PLATFORM", "").lower().strip()
+        if platform in self._NATIVE_PLATFORMS:
+            return self.get_response(request)
+
+        # 3. Skip internal IPs (127.0.0.1, 10.x.x.x for ALB/ECS)
+        remote_ip = self._get_remote_ip(request)
+        if remote_ip == "127.0.0.1" or remote_ip.startswith("10."):
+            return self.get_response(request)
+
+        # 4. Check Origin header
+        origin = request.META.get("HTTP_ORIGIN", "")
+        if origin:
+            if self._is_allowed_origin(origin):
+                return self.get_response(request)
+            logger.warning(
+                "Blocked request from disallowed origin: %s (path=%s, ip=%s)",
+                origin,
+                request.path,
+                remote_ip,
+            )
+            return JsonResponse(
+                {"error": "Forbidden", "code": "invalid_origin"}, status=403
+            )
+
+        # 5. No Origin — check Referer
+        referer = request.META.get("HTTP_REFERER", "")
+        if referer:
+            if self._is_allowed_origin(referer):
+                return self.get_response(request)
+            logger.warning(
+                "Blocked request with disallowed referer: %s (path=%s, ip=%s)",
+                referer,
+                request.path,
+                remote_ip,
+            )
+            return JsonResponse(
+                {"error": "Forbidden", "code": "invalid_origin"}, status=403
+            )
+
+        # 6. Neither Origin nor Referer present — block
+        logger.warning(
+            "Blocked request with no Origin/Referer (path=%s, ip=%s)",
+            request.path,
+            remote_ip,
+        )
+        return JsonResponse(
+            {"error": "Forbidden", "code": "invalid_origin"}, status=403
+        )
+
+    def _get_remote_ip(self, request):
+        """Get the direct remote IP (not X-Forwarded-For) for internal IP checks."""
+        return request.META.get("REMOTE_ADDR", "")
+
+    def _is_allowed_origin(self, value):
+        """Check if the given origin or referer starts with any allowed origin."""
+        for allowed in self.ALLOWED_ORIGINS:
+            if value.startswith(allowed):
+                return True
+        return False
 
 
 class SecurityHeadersMiddleware:
