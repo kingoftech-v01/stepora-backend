@@ -301,6 +301,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
     dream_title = serializers.SerializerMethodField()
     linked_achievement = serializers.SerializerMethodField()
     event_detail = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = DreamPost
@@ -330,6 +331,7 @@ class DreamPostSerializer(serializers.ModelSerializer):
             "reaction_counts",
             "linked_achievement",
             "event_detail",
+            "is_owner",
             "created_at",
             "updated_at",
         ]
@@ -355,6 +357,10 @@ class DreamPostSerializer(serializers.ModelSerializer):
             "level": obj.user.level,
             "is_following": is_following,
         }
+
+    def get_is_owner(self, obj) -> bool:
+        request = self.context.get("request")
+        return request and request.user == obj.user
 
     def get_has_liked(self, obj) -> bool:
         request = self.context.get("request")
