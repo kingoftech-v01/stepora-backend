@@ -57,7 +57,7 @@ COPY --chown=appuser:appuser . .
 
 # Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
 # A placeholder is used during build; the real key is injected at runtime via ECS task definition.
-ARG FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production"
+ARG FIELD_ENCRYPTION_KEY="oWaFzG4bta5qhklgSfvMxFPqwqvy__35IrKHEPURBkg="
 ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
 RUN python manage.py collectstatic --noinput --clear
 
