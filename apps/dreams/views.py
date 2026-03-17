@@ -2953,7 +2953,12 @@ class GoalViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied(_("You can only create goals for your own dreams."))
-        serializer.save()
+        if "order" not in serializer.validated_data:
+            milestone = serializer.validated_data.get("milestone")
+            count = Goal.objects.filter(milestone=milestone).count() if milestone else 0
+            serializer.save(order=count + 1)
+        else:
+            serializer.save()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -3204,7 +3209,11 @@ class TaskViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied(_("You can only create tasks for your own dreams."))
-        serializer.save()
+        if "order" not in serializer.validated_data:
+            count = Task.objects.filter(goal=goal).count() if goal else 0
+            serializer.save(order=count + 1)
+        else:
+            serializer.save()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
