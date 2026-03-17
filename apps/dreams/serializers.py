@@ -327,6 +327,9 @@ class DreamSerializer(serializers.ModelSerializer):
     signed_vision_image_url = serializers.SerializerMethodField(
         help_text="Pre-signed URL for the vision board image."
     )
+    completed_goals_count = serializers.IntegerField(
+        source="_completed_goals_count", read_only=True, default=0
+    )
 
     class Meta:
         model = Dream
@@ -349,6 +352,7 @@ class DreamSerializer(serializers.ModelSerializer):
             "signed_vision_image_url",
             "calibration_status",
             "goals_count",
+            "completed_goals_count",
             "tasks_count",
             "tags",
             "sparkline_data",
@@ -536,6 +540,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             "completed_at",
             "has_two_minute_start",
             "is_public",
+            "is_favorited",
             "calibration_status",
             "calibration_responses",
             "milestones",
@@ -1030,7 +1035,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             "goal": {"help_text": "The goal this task belongs to."},
             "title": {"help_text": "Short title for the new task."},
             "description": {"help_text": "Detailed description of the task."},
-            "order": {"help_text": "Display order of the task within its goal."},
+            "order": {"help_text": "Display order of the task within its goal.", "required": False},
             "scheduled_date": {"help_text": "Date when the task is scheduled."},
             "scheduled_time": {"help_text": "Time when the task is scheduled."},
             "duration_mins": {"help_text": "Estimated duration in minutes."},
@@ -1398,7 +1403,7 @@ class GoalCreateSerializer(serializers.ModelSerializer):
             },
             "title": {"help_text": "Short title for the new goal."},
             "description": {"help_text": "Detailed description of the goal."},
-            "order": {"help_text": "Display order of the goal within its milestone."},
+            "order": {"help_text": "Display order of the goal within its milestone.", "required": False},
             "estimated_minutes": {
                 "help_text": "Estimated time to complete in minutes."
             },
