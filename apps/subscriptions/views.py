@@ -8,6 +8,8 @@ initiating Stripe Checkout, and receiving Stripe webhooks.
 import logging
 
 import stripe
+from django.conf import settings
+from django.db import models
 from django.http import HttpResponse
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
@@ -19,7 +21,7 @@ from rest_framework.response import Response
 from core.audit import log_webhook_event
 from core.throttles import ReferralRateThrottle
 
-from .models import Referral, Subscription, SubscriptionPlan
+from .models import Referral, ReferralCode, ReferralReward, Subscription, SubscriptionPlan
 from .serializers import (
     InvoiceSerializer,
     PromotionSerializer,
@@ -558,23 +560,26 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
 
 class ReferralView(views.APIView):
-    """Referral program: refer 3 friends who subscribe → 1 free month."""
+    """Referral program with tiered rewards."""
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [ReferralRateThrottle]
 
     @extend_schema(
-        summary="Get referral info",
-        description="Get your referral code and stats.",
+        summary="Get referral info with tiered progress",
+        description="Get your referral code, stats, tier progress, and shareable link.",
         tags=["Referrals"],
     )
     def get(self, request):
         user = request.user
-        code = Referral.get_referral_code(user)
+        code_obj = ReferralCode.get_or_create_for_user(user)
         stats = Referral.get_referrer_stats(user)
+        frontend_url = getattr(settings, "FRONTEND_URL", "https://stepora.app")
+        share_link = f"{frontend_url}/#/register?ref={code_obj.code}"
         return Response(
             {
-                "referral_code": code,
+                "referral_code": code_obj.code,
+                "share_link": share_link,
                 **stats,
             }
         )
@@ -619,11 +624,113 @@ class ReferralView(views.APIView):
             referrer=referrer,
             referred=request.user,
             referral_code=code,
+            status="pending",
         )
+
+        # Increment uses_count on the referral code
+        ReferralCode.objects.filter(user=referrer).update(
+            uses_count=models.F("uses_count") + 1
+        )
+
         return Response(
             {
                 "message": _("Referral code applied!"),
                 "referrer_name": referrer.display_name or referrer.email.split("@")[0],
+            }
+        )
+
+
+class ReferralShareView(views.APIView):
+    """Generate a shareable referral link."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ReferralRateThrottle]
+
+    @extend_schema(
+        summary="Generate shareable referral link",
+        description="Returns a shareable link with the user's referral code.",
+        tags=["Referrals"],
+    )
+    def post(self, request):
+        user = request.user
+        code_obj = ReferralCode.get_or_create_for_user(user)
+        frontend_url = getattr(settings, "FRONTEND_URL", "https://stepora.app")
+        share_link = f"{frontend_url}/#/register?ref={code_obj.code}"
+        return Response(
+            {
+                "referral_code": code_obj.code,
+                "share_link": share_link,
+                "share_message": _(
+                    "Join me on Stepora! Use my referral code %(code)s "
+                    "when you sign up. Turn your dreams into reality "
+                    "with AI coaching!"
+                )
+                % {"code": code_obj.code},
+            }
+        )
+
+
+class ReferralHistoryView(views.APIView):
+    """List all referrals for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ReferralRateThrottle]
+
+    @extend_schema(
+        summary="Get referral history",
+        description="List all referrals with status, referred user info, and dates.",
+        tags=["Referrals"],
+    )
+    def get(self, request):
+        referrals = (
+            Referral.objects.filter(referrer=request.user)
+            .select_related("referred")
+            .order_by("-created_at")
+        )
+
+        results = []
+        for ref in referrals:
+            results.append(
+                {
+                    "id": str(ref.id),
+                    "referred_user": {
+                        "id": str(ref.referred.id),
+                        "display_name": ref.referred.display_name
+                        or ref.referred.email.split("@")[0],
+                        "avatar_url": ref.referred.get_effective_avatar_url(),
+                    },
+                    "status": ref.status,
+                    "referred_has_paid": ref.referred_has_paid,
+                    "created_at": ref.created_at.isoformat(),
+                    "completed_at": (
+                        ref.completed_at.isoformat() if ref.completed_at else None
+                    ),
+                    "paid_at": ref.paid_at.isoformat() if ref.paid_at else None,
+                }
+            )
+
+        # Also include rewards earned
+        rewards = ReferralReward.objects.filter(user=request.user).order_by(
+            "-claimed_at"
+        )
+        reward_list = []
+        for rw in rewards:
+            reward_list.append(
+                {
+                    "id": str(rw.id),
+                    "reward_type": rw.reward_type,
+                    "amount": rw.amount,
+                    "description": rw.description,
+                    "tier_name": rw.tier_name,
+                    "claimed_at": rw.claimed_at.isoformat(),
+                }
+            )
+
+        return Response(
+            {
+                "referrals": results,
+                "rewards": reward_list,
+                "count": len(results),
             }
         )
 

@@ -33,6 +33,8 @@ class Notification(models.Model):
         ("dream_completed", "Dream Completed"),
         ("weekly_report", "Weekly Report"),
         ("daily_summary", "Daily Summary"),
+        ("task_due", "Task Due"),
+        ("task_call", "Task Call"),
     ]
     notification_type = models.CharField(
         max_length=20, choices=TYPE_CHOICES, db_index=True
@@ -272,6 +274,85 @@ class UserDevice(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.platform} ({'active' if self.is_active else 'inactive'})"
+
+
+class ReminderPreference(models.Model):
+    """User's preferred reminder times for task notifications."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="reminder_preferences"
+    )
+    dream = models.ForeignKey(
+        "dreams.Dream",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reminder_preferences",
+        help_text="If null, this is a global preference (applies to all dreams).",
+    )
+
+    REMINDER_TYPE_CHOICES = [
+        ("morning", "Morning"),
+        ("afternoon", "Afternoon"),
+        ("evening", "Evening"),
+        ("custom", "Custom"),
+    ]
+    reminder_type = models.CharField(
+        max_length=20, choices=REMINDER_TYPE_CHOICES, default="morning"
+    )
+    time = models.TimeField(help_text="The actual time to send the reminder (user local time).")
+
+    # Days of week (stored as comma-separated: "mon,tue,wed,thu,fri,sat,sun")
+    days = models.CharField(
+        max_length=50,
+        default="mon,tue,wed,thu,fri,sat,sun",
+        help_text="Comma-separated day abbreviations: mon,tue,wed,thu,fri,sat,sun",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    # Notification method
+    NOTIFY_CHOICES = [
+        ("push", "Push Notification"),
+        ("task_call", "Task Call (in-app call screen)"),
+        ("both", "Both"),
+    ]
+    notify_method = models.CharField(
+        max_length=20,
+        choices=NOTIFY_CHOICES,
+        default="push",
+        help_text="How to deliver the reminder: push, task_call, or both.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "reminder_preferences"
+        ordering = ["time"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "dream", "time"],
+                name="unique_user_dream_time",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["is_active", "time"]),
+        ]
+
+    def __str__(self):
+        dream_label = f" (dream: {self.dream_id})" if self.dream_id else " (global)"
+        return f"{self.user.email} - {self.time}{dream_label}"
+
+    def get_days_list(self):
+        """Return days as a list: ['mon', 'tue', ...]."""
+        return [d.strip().lower() for d in self.days.split(",") if d.strip()]
+
+    def matches_day(self, day_abbr):
+        """Check if reminder is active for the given day abbreviation."""
+        return day_abbr.lower() in self.get_days_list()
 
 
 class NotificationBatch(models.Model):

@@ -27,13 +27,15 @@ def verify_google_token(id_token_str):
     Verify a Google ID token and return (uid, email, name, picture).
     Raises serializers.ValidationError on failure.
     """
+    client_id = _DP_AUTH.get("GOOGLE_CLIENT_ID", "")
+    if not client_id:
+        raise serializers.ValidationError("Google Sign-In is not configured on this server.")
+
     try:
         # Use google-auth library if available, otherwise fall back to PyJWT
         try:
             from google.auth.transport import requests as google_requests
             from google.oauth2 import id_token as google_id_token
-
-            client_id = _DP_AUTH.get("GOOGLE_CLIENT_ID", "")
             idinfo = google_id_token.verify_oauth2_token(
                 id_token_str,
                 google_requests.Request(),
@@ -105,6 +107,10 @@ def verify_apple_token(id_token_str):
     Caller must handle the case where email is empty by looking up
     an existing SocialAccount.
     """
+    client_id = _DP_AUTH.get("APPLE_CLIENT_ID", "")
+    if not client_id:
+        raise serializers.ValidationError("Apple Sign-In is not configured on this server.")
+
     try:
         jwks = _get_cached_jwks("apple", _APPLE_JWKS_URL)
         header = jwt.get_unverified_header(id_token_str)
@@ -118,7 +124,6 @@ def verify_apple_token(id_token_str):
             if not key:
                 raise serializers.ValidationError("Apple signing key not found.")
 
-        client_id = _DP_AUTH.get("APPLE_CLIENT_ID", "")
         public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
         claims = jwt.decode(
             id_token_str,

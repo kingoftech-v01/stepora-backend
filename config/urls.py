@@ -33,6 +33,8 @@ api_v1_patterns = [
     path("circles/", include("apps.circles.urls")),
     path("social/", include("apps.social.urls")),
     path("buddies/", include("apps.buddies.urls")),
+    # Ads
+    path("ads/", include("apps.ads.urls")),
     # Search (Elasticsearch)
     path("search/", include("apps.search.urls")),
     # App Updates (OTA live updates)
@@ -44,6 +46,10 @@ urlpatterns = [
     path("stepora-manage/", admin.site.urls),
     # Blog (public, not behind API versioning)
     path("api/blog/", include("apps.blog.urls")),
+    # SEO: sitemap, OG previews, structured data, robots.txt
+    path("api/seo/", include("apps.seo.urls")),
+    # Robots.txt at root (for crawlers that check /robots.txt on API domain)
+    path("robots.txt", include("apps.seo.urls_robots")),
     # Health check
     path("health/", include("core.urls")),
     # API Documentation (restricted to staff in production)
@@ -62,10 +68,7 @@ urlpatterns = [
     path("api/", include(api_v1_patterns)),
 ]
 
-# Always serve media files (vision board images, etc.)
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# Serve API docs and static in development only
+# Serve API docs, static, and media in development only
 if settings.DEBUG:
     urlpatterns += [
         path(
@@ -78,6 +81,7 @@ if settings.DEBUG:
         ),
     ]
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Debug toolbar in development
 if settings.DEBUG and "debug_toolbar" in settings.INSTALLED_APPS:

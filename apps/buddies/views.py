@@ -31,6 +31,7 @@ from .models import (
     AccountabilityContract,
     BuddyEncouragement,
     BuddyPairing,
+    BuddySkip,
     ContractCheckIn,
 )
 from .serializers import (
@@ -42,6 +43,7 @@ from .serializers import (
     BuddyPairingSerializer,
     BuddyPairRequestSerializer,
     BuddyProgressSerializer,
+    BuddySuggestionSerializer,
     ContractCheckInCreateSerializer,
     ContractCheckInSerializer,
     ContractProgressSerializer,
@@ -950,6 +952,375 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         serializer = AIBuddyMatchSerializer(ai_results, many=True)
         return Response({"results": serializer.data})
+
+    # ─── Matching Queue (Tinder-style) ────────────────────────────
+
+    def _compute_compatibility_score(self, user, candidate):
+        """
+        Compute a 0-100 compatibility score between two users based on:
+        - Shared dream categories (30%)
+        - Timezone proximity (20%)
+        - Activity level similarity (20%)
+        - Language match (15%)
+        - Experience level similarity (15%)
+        """
+        from apps.dreams.models import Dream
+
+        score = 0.0
+
+        # 1. Shared dream categories (30 points max)
+        try:
+            user_categories = set(
+                Dream.objects.filter(user=user, status="active")
+                .exclude(category="")
+                .values_list("category", flat=True)
+            )
+            candidate_categories = set(
+                Dream.objects.filter(user=candidate, status="active")
+                .exclude(category="")
+                .values_list("category", flat=True)
+            )
+            if user_categories and candidate_categories:
+                overlap = len(user_categories & candidate_categories)
+                total = len(user_categories | candidate_categories)
+                score += (overlap / total) * 30 if total > 0 else 0
+            elif not user_categories and not candidate_categories:
+                score += 10  # Both new, give partial credit
+        except Exception:
+            pass
+
+        # 2. Timezone proximity (20 points max)
+        try:
+            from datetime import datetime
+
+            import pytz
+
+            user_tz = pytz.timezone(user.timezone or "UTC")
+            cand_tz = pytz.timezone(candidate.timezone or "UTC")
+            now = datetime.now(pytz.UTC)
+            user_offset = user_tz.utcoffset(now).total_seconds() / 3600
+            cand_offset = cand_tz.utcoffset(now).total_seconds() / 3600
+            tz_diff = abs(user_offset - cand_offset)
+            # 0 hours diff = 20pts, 12 hours diff = 0pts
+            score += max(0, 20 - (tz_diff * 20 / 12))
+        except Exception:
+            score += 10  # Default partial credit
+
+        # 3. Activity level similarity (20 points max)
+        try:
+            from apps.users.models import DailyActivity
+
+            week_ago = django_timezone.now() - timedelta(days=7)
+            user_tasks = DailyActivity.objects.filter(
+                user=user, date__gte=week_ago.date()
+            ).values_list("tasks_completed", flat=True)
+            cand_tasks = DailyActivity.objects.filter(
+                user=candidate, date__gte=week_ago.date()
+            ).values_list("tasks_completed", flat=True)
+            user_avg = sum(user_tasks) / max(len(user_tasks), 1)
+            cand_avg = sum(cand_tasks) / max(len(cand_tasks), 1)
+            max_avg = max(user_avg, cand_avg, 1)
+            diff_ratio = abs(user_avg - cand_avg) / max_avg
+            score += max(0, 20 * (1 - diff_ratio))
+        except Exception:
+            score += 10
+
+        # 4. Language match (15 points max)
+        try:
+            user_lang = (
+                user.app_prefs.get("language", "en")
+                if user.app_prefs
+                else "en"
+            )
+            cand_lang = (
+                candidate.app_prefs.get("language", "en")
+                if candidate.app_prefs
+                else "en"
+            )
+            if user_lang == cand_lang:
+                score += 15
+            elif user_lang[:2] == cand_lang[:2]:
+                score += 10
+        except Exception:
+            score += 7
+
+        # 5. Experience level similarity (15 points max)
+        try:
+            level_diff = abs(user.level - candidate.level)
+            # 0 diff = 15pts, 50+ diff = 0pts
+            score += max(0, 15 - (level_diff * 15 / 50))
+        except Exception:
+            score += 7
+
+        return min(100, max(0, round(score)))
+
+    def _get_activity_level(self, user):
+        """Determine a user's activity level based on recent task completions."""
+        try:
+            from apps.users.models import DailyActivity
+
+            week_ago = django_timezone.now() - timedelta(days=7)
+            tasks = DailyActivity.objects.filter(
+                user=user, date__gte=week_ago.date()
+            ).values_list("tasks_completed", flat=True)
+            total = sum(tasks)
+            if total >= 10:
+                return "high"
+            elif total >= 3:
+                return "medium"
+            else:
+                return "low"
+        except Exception:
+            return "medium"
+
+    @extend_schema(
+        summary="Get buddy suggestions queue",
+        description=(
+            "Returns a paginated list of buddy suggestions with compatibility scores, "
+            "sorted by score descending. Excludes existing buddies, pending requests, "
+            "blocked users, and skipped users."
+        ),
+        responses={
+            200: BuddySuggestionSerializer(many=True),
+            403: OpenApiResponse(description="Subscription required."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=False, methods=["get"], url_path="suggestions")
+    def suggestions(self, request):
+        """Get buddy matching suggestions queue."""
+        user = request.user
+
+        # Collect IDs to exclude
+        excluded_ids = set()
+        excluded_ids.add(user.id)
+
+        # Existing buddy partners (active or pending)
+        pairing_user_ids = BuddyPairing.objects.filter(
+            Q(user1=user) | Q(user2=user),
+            status__in=["active", "pending"],
+        ).values_list("user1_id", "user2_id")
+        for u1, u2 in pairing_user_ids:
+            excluded_ids.add(u1)
+            excluded_ids.add(u2)
+
+        # Skipped users
+        skipped_ids = BuddySkip.objects.filter(user=user).values_list(
+            "skipped_user_id", flat=True
+        )
+        excluded_ids.update(skipped_ids)
+
+        # Blocked users (bidirectional)
+        from apps.social.models import BlockedUser
+
+        blocked_ids_1 = BlockedUser.objects.filter(blocker=user).values_list(
+            "blocked_id", flat=True
+        )
+        blocked_ids_2 = BlockedUser.objects.filter(blocked=user).values_list(
+            "blocker_id", flat=True
+        )
+        excluded_ids.update(blocked_ids_1)
+        excluded_ids.update(blocked_ids_2)
+
+        # Fetch candidates (active users who are not excluded)
+        candidates = (
+            User.objects.filter(
+                is_active=True,
+                profile_visibility__in=["public", "friends"],
+            )
+            .exclude(id__in=excluded_ids)
+            .exclude(deactivated_at__isnull=False)
+            .order_by("-last_activity")[:50]  # Pre-filter top 50 active users
+        )
+
+        # Score each candidate
+        results = []
+        from apps.dreams.models import Dream
+
+        user_categories = set(
+            Dream.objects.filter(user=user, status="active")
+            .exclude(category="")
+            .values_list("category", flat=True)
+        )
+
+        for candidate in candidates:
+            comp_score = self._compute_compatibility_score(user, candidate)
+
+            # Get shared categories
+            cand_categories = set(
+                Dream.objects.filter(user=candidate, status="active")
+                .exclude(category="")
+                .values_list("category", flat=True)
+            )
+            shared = list(user_categories & cand_categories)
+
+            results.append({
+                "user_id": candidate.id,
+                "username": candidate.display_name or "Anonymous",
+                "avatar": candidate.get_effective_avatar_url(),
+                "bio": candidate.bio or "",
+                "level": candidate.level,
+                "streak": candidate.streak_days,
+                "xp": candidate.xp,
+                "dreamer_type": candidate.dreamer_type or "",
+                "timezone": candidate.timezone or "",
+                "compatibility_score": comp_score,
+                "shared_categories": shared,
+                "activity_level": self._get_activity_level(candidate),
+            })
+
+        # Sort by compatibility score descending
+        results.sort(key=lambda x: x["compatibility_score"], reverse=True)
+
+        # Paginate — return 10 per page
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 10))
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_results = results[start:end]
+
+        serializer = BuddySuggestionSerializer(page_results, many=True)
+        return Response({
+            "results": serializer.data,
+            "count": len(results),
+            "page": page,
+            "page_size": page_size,
+            "has_next": end < len(results),
+        })
+
+    @extend_schema(
+        summary="Accept a buddy suggestion",
+        description="Send a buddy request to a suggested user. Creates a pending pairing.",
+        responses={
+            201: OpenApiResponse(description="Buddy request sent."),
+            400: OpenApiResponse(description="Already have a buddy or invalid user."),
+            403: OpenApiResponse(description="Subscription required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=True, methods=["post"], url_path="accept-suggestion")
+    def accept_suggestion(self, request, pk=None):
+        """Accept a buddy suggestion — sends a pairing request."""
+        user = request.user
+
+        # Check if user already has an active pairing
+        existing = self._get_active_pairing(user)
+        if existing:
+            return Response(
+                {"error": _("You already have an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check for existing pending request
+        pending = BuddyPairing.objects.filter(
+            Q(user1=user, user2_id=pk) | Q(user1_id=pk, user2=user),
+            status="pending",
+        ).exists()
+        if pending:
+            return Response(
+                {"error": _("A pending request already exists with this user.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            partner = User.objects.get(id=pk, is_active=True)
+        except User.DoesNotExist:
+            return Response(
+                {"error": _("User not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if partner.id == user.id:
+            return Response(
+                {"error": _("You cannot pair with yourself.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check partner doesn't already have a buddy
+        partner_has_buddy = BuddyPairing.objects.filter(
+            Q(user1=partner) | Q(user2=partner), status="active"
+        ).exists()
+        if partner_has_buddy:
+            return Response(
+                {"error": _("This user already has an active buddy pairing.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Compute compatibility for the pairing record (0-1 scale)
+        comp_score = self._compute_compatibility_score(user, partner)
+
+        pairing = BuddyPairing.objects.create(
+            user1=user,
+            user2=partner,
+            status="pending",
+            compatibility_score=round(comp_score / 100, 2),
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+        # Notify the partner
+        try:
+            from apps.notifications.models import Notification
+
+            Notification.objects.create(
+                user=partner,
+                notification_type="buddy",
+                title=_("Buddy Request"),
+                body=_("%(name)s wants to be your dream buddy!")
+                % {"name": user.display_name or _("Someone")},
+                scheduled_for=django_timezone.now(),
+                data={
+                    "pairing_id": str(pairing.id),
+                    "sender_id": str(user.id),
+                    "screen": "BuddyRequests",
+                },
+            )
+        except Exception:
+            logger.warning("Failed to send buddy request notification", exc_info=True)
+
+        return Response(
+            {
+                "message": _("Buddy request sent to %(name)s.")
+                % {"name": partner.display_name or _("user")},
+                "pairing_id": str(pairing.id),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        summary="Skip a buddy suggestion",
+        description="Skip this user — they won't be suggested again.",
+        responses={
+            200: OpenApiResponse(description="User skipped."),
+            400: OpenApiResponse(description="Cannot skip yourself."),
+            403: OpenApiResponse(description="Subscription required."),
+        },
+        tags=["Buddies"],
+    )
+    @action(detail=True, methods=["post"], url_path="skip-suggestion")
+    def skip_suggestion(self, request, pk=None):
+        """Skip a buddy suggestion — don't show this user again."""
+        user = request.user
+
+        if str(pk) == str(user.id):
+            return Response(
+                {"error": _("Cannot skip yourself.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify the skipped user exists
+        if not User.objects.filter(id=pk, is_active=True).exists():
+            return Response(
+                {"error": _("User not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        BuddySkip.objects.get_or_create(
+            user=user,
+            skipped_user_id=pk,
+        )
+
+        return Response({"message": _("Suggestion skipped.")})
 
     @extend_schema(
         summary="Create a buddy pairing",

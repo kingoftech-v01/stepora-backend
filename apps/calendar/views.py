@@ -3,7 +3,10 @@ Views for Calendar app.
 """
 
 import calendar as cal_module
+import logging
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from datetime import timezone as dt_timezone
 
 from django.db.models import Count, Q, Sum
@@ -3087,6 +3090,17 @@ class GoogleCalendarAuthView(APIView):
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
+        ALLOWED_REDIRECT_URIS = [
+            getattr(settings, "GOOGLE_CALENDAR_REDIRECT_URI", ""),
+            "https://stepora.app/calendar-connect",
+            "com.stepora.app://calendar/callback",
+        ]
+        if redirect_uri not in ALLOWED_REDIRECT_URIS:
+            return Response(
+                {"error": "Invalid redirect_uri."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         service = GoogleCalendarService()
         auth_url = service.get_auth_url(redirect_uri)
         return Response({"auth_url": auth_url})
@@ -3132,11 +3146,29 @@ class GoogleCalendarCallbackView(APIView):
             "redirect_uri",
             getattr(settings, "GOOGLE_CALENDAR_REDIRECT_URI", ""),
         )
+
+        ALLOWED_REDIRECT_URIS = [
+            getattr(settings, "GOOGLE_CALENDAR_REDIRECT_URI", ""),
+            "https://stepora.app/calendar-connect",
+            "com.stepora.app://calendar/callback",
+        ]
+        if redirect_uri not in ALLOWED_REDIRECT_URIS:
+            return Response(
+                {"error": "Invalid redirect_uri."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         service = GoogleCalendarService()
 
         try:
             tokens = service.exchange_code(code, redirect_uri)
         except Exception as e:
+            logger.error(
+                "Google Calendar token exchange failed: %s | redirect_uri=%s | code_prefix=%s",
+                e,
+                redirect_uri,
+                code[:10] if code else "none",
+            )
             return Response(
                 {"error": _("Token exchange failed: %(error)s") % {"error": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,

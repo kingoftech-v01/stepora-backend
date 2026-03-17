@@ -9,7 +9,7 @@ from rest_framework import serializers
 from core.sanitizers import sanitize_json_values, sanitize_text, sanitize_url
 from core.validators import validate_display_name, validate_location
 
-from .models import GamificationProfile, User
+from .models import GamificationProfile, HabitChain, User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -33,6 +33,9 @@ class UserSerializer(serializers.ModelSerializer):
     )
     plan_features = serializers.SerializerMethodField(
         help_text="Feature flags from the active subscription plan."
+    )
+    xp_multiplier = serializers.SerializerMethodField(
+        help_text="Current XP multiplier from streak (1.0, 1.5, 2.0, or 3.0)."
     )
 
     class Meta:
@@ -60,6 +63,8 @@ class UserSerializer(serializers.ModelSerializer):
             "xp",
             "level",
             "streak_days",
+            "longest_streak",
+            "xp_multiplier",
             "last_activity",
             "can_create_dream",
             "is_premium",
@@ -78,6 +83,8 @@ class UserSerializer(serializers.ModelSerializer):
             "xp",
             "level",
             "streak_days",
+            "longest_streak",
+            "xp_multiplier",
             "last_activity",
             "email_verified",
             "onboarding_completed",
@@ -117,6 +124,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_is_premium(self, obj) -> bool:
         return obj.is_premium()
+
+    def get_xp_multiplier(self, obj) -> float:
+        return obj.get_streak_xp_multiplier()
 
     def get_email_verified(self, obj) -> bool:
         from core.auth.models import EmailAddress
@@ -557,6 +567,26 @@ class GamificationProfileSerializer(serializers.ModelSerializer):
             }
             for cat in categories
         ]
+
+
+class StreakSummarySerializer(serializers.Serializer):
+    """Read-only serializer for the streak summary endpoint."""
+
+    current_streak = serializers.IntegerField()
+    longest_streak = serializers.IntegerField()
+    streak_updated_at = serializers.CharField(allow_null=True)
+    xp_multiplier = serializers.FloatField()
+    xp_multiplier_label = serializers.CharField(allow_null=True)
+    next_milestone = serializers.IntegerField(allow_null=True)
+    milestones = serializers.ListField(child=serializers.IntegerField())
+
+
+class CalendarHeatmapEntrySerializer(serializers.Serializer):
+    """Single day in the heatmap."""
+
+    date = serializers.CharField()
+    count = serializers.IntegerField()
+    level = serializers.IntegerField()
 
 
 class Verify2FASerializer(serializers.Serializer):

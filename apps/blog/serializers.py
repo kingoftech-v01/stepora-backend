@@ -85,12 +85,16 @@ class PostDetailSerializer(PostListSerializer):
     """
     Serializer for blog post detail views.
 
-    Extends the list serializer with full content and view count.
+    Extends the list serializer with full content, view count, and SEO metadata.
+    The ``seo`` field provides Open Graph and JSON-LD data that the frontend
+    can inject into ``<meta>`` and ``<script type="application/ld+json">`` tags
+    for rich social sharing previews and search engine structured data.
     """
 
     views_count = serializers.IntegerField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
+    seo = serializers.SerializerMethodField()
 
     class Meta(PostListSerializer.Meta):
         fields = PostListSerializer.Meta.fields + [
@@ -98,5 +102,54 @@ class PostDetailSerializer(PostListSerializer):
             "views_count",
             "created_at",
             "updated_at",
+            "seo",
         ]
         read_only_fields = fields
+
+    def get_seo(self, obj) -> dict:
+        """Return SEO metadata for this blog post."""
+        from django.conf import settings
+
+        frontend_url = getattr(settings, "FRONTEND_URL", "https://stepora.app")
+        canonical_url = f"{frontend_url}/blog/{obj.slug}"
+        description = obj.excerpt[:160] if obj.excerpt else obj.title
+
+        return {
+            "canonical_url": canonical_url,
+            "og": {
+                "title": obj.title,
+                "description": description,
+                "image": obj.cover_image or f"{frontend_url}/og-default.png",
+                "url": canonical_url,
+                "type": "article",
+                "site_name": "Stepora",
+            },
+            "json_ld": {
+                "@context": "https://schema.org",
+                "@type": "BlogPosting",
+                "headline": obj.title,
+                "description": description,
+                "image": obj.cover_image or f"{frontend_url}/og-default.png",
+                "url": canonical_url,
+                "datePublished": (
+                    obj.published_at.isoformat() if obj.published_at else ""
+                ),
+                "dateModified": obj.updated_at.isoformat() if obj.updated_at else "",
+                "author": {
+                    "@type": "Person",
+                    "name": obj.author.display_name or "Stepora",
+                },
+                "publisher": {
+                    "@type": "Organization",
+                    "name": "Stepora",
+                    "logo": {
+                        "@type": "ImageObject",
+                        "url": f"{frontend_url}/logo.png",
+                    },
+                },
+                "mainEntityOfPage": {
+                    "@type": "WebPage",
+                    "@id": canonical_url,
+                },
+            },
+        }

@@ -981,6 +981,96 @@ class UserViewSet(viewsets.ModelViewSet):
             }
         )
 
+    # ═══════════════════════════════════════════════════════════
+    # Streaks & Habit Chains (enhanced endpoints)
+    # ═══════════════════════════════════════════════════════════
+
+    @extend_schema(
+        summary="Get streak summary",
+        description=(
+            "Return current streak, longest streak, XP multiplier, "
+            "next milestone, and milestone list."
+        ),
+        responses={200: dict},
+        tags=["Streaks"],
+    )
+    @action(detail=False, methods=["get"], url_path="streaks")
+    def streaks(self, request):
+        """Return comprehensive streak summary for the current user."""
+        from .streak_service import StreakService
+
+        data = StreakService.get_streak_summary(request.user)
+
+        # Also include the 14-day history for backward compat
+        from datetime import date
+        from datetime import timedelta as td
+
+        user = request.user
+        today = date.today()
+        start_date = today - td(days=13)
+        activities = DailyActivity.objects.filter(
+            user=user, date__gte=start_date
+        ).order_by("date")
+        activity_map = {a.date: a for a in activities}
+
+        streak_history = []
+        for i in range(14):
+            d = start_date + td(days=i)
+            a = activity_map.get(d)
+            streak_history.append(1 if (a and a.tasks_completed > 0) else 0)
+
+        # Freeze info
+        profile, _ = GamificationProfile.objects.get_or_create(user=user)
+        data["streak_history"] = streak_history
+        data["freeze_count"] = profile.streak_jokers
+        data["freeze_available"] = profile.streak_jokers > 0
+
+        return Response(data)
+
+    @extend_schema(
+        summary="Get streak calendar heatmap",
+        description=(
+            "Return daily activity data for the last 365 days as a heatmap."
+        ),
+        responses={200: dict},
+        tags=["Streaks"],
+    )
+    @action(detail=False, methods=["get"], url_path="streaks/calendar")
+    def streaks_calendar(self, request):
+        """Return 365-day heatmap data for the GitHub-style calendar."""
+        from .streak_service import StreakService
+
+        days_param = request.query_params.get("days", "365")
+        try:
+            days = min(int(days_param), 365)
+        except (ValueError, TypeError):
+            days = 365
+
+        heatmap = StreakService.get_calendar_heatmap(request.user, days=days)
+        return Response({"heatmap": heatmap, "total_days": len(heatmap)})
+
+    @extend_schema(
+        summary="Use a streak freeze",
+        description=(
+            "Activate a streak freeze for today (premium only, max 1/week)."
+        ),
+        responses={
+            200: dict,
+            400: OpenApiResponse(description="Freeze not available."),
+            403: OpenApiResponse(description="Premium required."),
+        },
+        tags=["Streaks"],
+    )
+    @action(detail=False, methods=["post"], url_path="streaks/freeze")
+    def streaks_freeze(self, request):
+        """Use a streak freeze to protect the current streak."""
+        from .streak_service import StreakService
+
+        result = StreakService.use_streak_freeze(request.user)
+        if result["success"]:
+            return Response(result)
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
     @extend_schema(
         summary="Get achievements",
         description="List all achievements with unlock status and progress",

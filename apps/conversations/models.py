@@ -12,6 +12,21 @@ from apps.dreams.models import Dream
 from apps.users.models import User
 
 
+def _serialize_metadata(obj):
+    """Recursively convert UUID objects to strings for JSON serialization.
+
+    PostgreSQL's psycopg2 adapter cannot serialise uuid.UUID inside a
+    JSONField dict, so we walk the structure and stringify them.
+    """
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _serialize_metadata(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_metadata(item) for item in obj]
+    return obj
+
+
 class Conversation(models.Model):
     """AI conversation session, also used for buddy-to-buddy chat."""
 
@@ -82,7 +97,10 @@ class Conversation(models.Model):
     def add_message(self, role, content, metadata=None):
         """Add a message to this conversation."""
         message = Message.objects.create(
-            conversation=self, role=role, content=content, metadata=metadata or {}
+            conversation=self,
+            role=role,
+            content=content,
+            metadata=_serialize_metadata(metadata or {}),
         )
 
         self.total_messages += 1

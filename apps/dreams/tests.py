@@ -648,3 +648,419 @@ class TestCeleryTasks:
 
         assert result["created"] == 0
         assert result["error"] == "dream_not_found"
+
+
+# ---------------------------------------------------------------------------
+# Milestone CRUD Tests
+# ---------------------------------------------------------------------------
+
+
+class TestMilestoneViewSet:
+    """Test DreamMilestone API endpoints.
+
+    Milestones are registered at r'milestones' under 'api/dreams/' include,
+    so the full URL is /api/dreams/milestones/.
+    """
+
+    def test_list_milestones_for_dream(self, authenticated_client, dream):
+        """Test GET /api/dreams/milestones/?dream={dream_id}"""
+        from apps.dreams.models import DreamMilestone
+
+        DreamMilestone.objects.create(dream=dream, title="Month 1", order=1)
+        DreamMilestone.objects.create(dream=dream, title="Month 2", order=2)
+
+        response = authenticated_client.get(f"/api/dreams/milestones/?dream={dream.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["results"]) == 2
+
+    def test_create_milestone(self, authenticated_client, dream):
+        """Test POST /api/dreams/milestones/"""
+        from apps.dreams.models import DreamMilestone
+
+        data = {
+            "dream": str(dream.id),
+            "title": "New Milestone",
+            "description": "First milestone",
+            "order": 1,
+        }
+
+        response = authenticated_client.post(
+            "/api/dreams/milestones/", data, format="json"
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert DreamMilestone.objects.filter(dream=dream).count() == 1
+
+    def test_complete_milestone(self, authenticated_client, dream):
+        """Test POST /api/dreams/milestones/{id}/complete/"""
+        from apps.dreams.models import DreamMilestone
+
+        milestone = DreamMilestone.objects.create(
+            dream=dream, title="Milestone to complete", order=1
+        )
+
+        response = authenticated_client.post(
+            f"/api/dreams/milestones/{milestone.id}/complete/"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        milestone.refresh_from_db()
+        assert milestone.status == "completed"
+        assert milestone.completed_at is not None
+
+    def test_complete_already_completed_milestone(self, authenticated_client, dream):
+        """Test completing an already-completed milestone returns 400."""
+        from apps.dreams.models import DreamMilestone
+
+        milestone = DreamMilestone.objects.create(
+            dream=dream,
+            title="Done milestone",
+            order=1,
+            status="completed",
+            completed_at=timezone.now(),
+        )
+
+        response = authenticated_client.post(
+            f"/api/dreams/milestones/{milestone.id}/complete/"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_milestone_idor_prevention(
+        self, db, authenticated_client, user_data
+    ):
+        """Test that a user cannot access another user's milestones."""
+        from apps.dreams.models import DreamMilestone
+
+        other_user = User.objects.create(email=f'other_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Private"
+        )
+        other_milestone = DreamMilestone.objects.create(
+            dream=other_dream, title="Other Milestone", order=1
+        )
+
+        response = authenticated_client.get(
+            f"/api/dreams/milestones/{other_milestone.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ---------------------------------------------------------------------------
+# Journal CRUD Tests
+# ---------------------------------------------------------------------------
+
+
+class TestDreamJournalViewSet:
+    """Test DreamJournal API endpoints.
+
+    Journal entries are registered at r'journal' under 'api/dreams/' include,
+    so the full URL is /api/dreams/journal/.
+    """
+
+    def test_list_journal_entries(self, authenticated_client, dream):
+        """Test GET /api/dreams/journal/?dream={dream_id}"""
+        from apps.dreams.models import DreamJournal
+
+        DreamJournal.objects.create(
+            dream=dream,
+            title="Day 1",
+            content="Started working on the dream today.",
+            mood="motivated",
+        )
+        DreamJournal.objects.create(
+            dream=dream,
+            title="Day 2",
+            content="Made progress on first goal.",
+            mood="happy",
+        )
+
+        response = authenticated_client.get(f"/api/dreams/journal/?dream={dream.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["results"]) == 2
+
+    def test_create_journal_entry(self, authenticated_client, dream):
+        """Test POST /api/dreams/journal/"""
+        from apps.dreams.models import DreamJournal
+
+        data = {
+            "dream": str(dream.id),
+            "title": "Reflection",
+            "content": "Today I reflected on my progress.",
+            "mood": "reflective",
+        }
+
+        response = authenticated_client.post(
+            "/api/dreams/journal/", data, format="json"
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert DreamJournal.objects.filter(dream=dream).count() == 1
+
+    def test_update_journal_entry(self, authenticated_client, dream):
+        """Test PATCH /api/dreams/journal/{id}/"""
+        from apps.dreams.models import DreamJournal
+
+        entry = DreamJournal.objects.create(
+            dream=dream,
+            title="Initial",
+            content="Content to update.",
+            mood="neutral",
+        )
+
+        response = authenticated_client.patch(
+            f"/api/dreams/journal/{entry.id}/",
+            {"title": "Updated Title", "mood": "excited"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        entry.refresh_from_db()
+        assert entry.title == "Updated Title"
+        assert entry.mood == "excited"
+
+    def test_delete_journal_entry(self, authenticated_client, dream):
+        """Test DELETE /api/dreams/journal/{id}/"""
+        from apps.dreams.models import DreamJournal
+
+        entry = DreamJournal.objects.create(
+            dream=dream,
+            title="To Delete",
+            content="Will be deleted.",
+        )
+        entry_id = entry.id
+
+        response = authenticated_client.delete(f"/api/dreams/journal/{entry_id}/")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not DreamJournal.objects.filter(id=entry_id).exists()
+
+    def test_journal_idor_prevention(self, db, authenticated_client, user_data):
+        """Test that a user cannot access another user's journal entries."""
+        from apps.dreams.models import DreamJournal
+
+        other_user = User.objects.create(email=f'other_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Private"
+        )
+        other_entry = DreamJournal.objects.create(
+            dream=other_dream,
+            title="Private",
+            content="Should not be accessible.",
+        )
+
+        response = authenticated_client.get(f"/api/dreams/journal/{other_entry.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ---------------------------------------------------------------------------
+# IDOR Prevention Tests (Goals, Tasks, Obstacles)
+# ---------------------------------------------------------------------------
+
+
+class TestIDORPrevention:
+    """Test that users cannot access/modify other users' goals, tasks, and obstacles."""
+
+    def test_goal_idor_read(self, db, authenticated_client, user_data):
+        """Test that a user cannot read another user's goals."""
+        other_user = User.objects.create(email=f'other_goal_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Secret"
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Secret Goal", order=0
+        )
+
+        response = authenticated_client.get(f"/api/dreams/goals/{other_goal.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_goal_idor_update(self, db, authenticated_client, user_data):
+        """Test that a user cannot update another user's goals."""
+        other_user = User.objects.create(email=f'other_goal_up_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Secret"
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Secret Goal", order=0
+        )
+
+        response = authenticated_client.patch(
+            f"/api/dreams/goals/{other_goal.id}/",
+            {"title": "Hacked"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_task_idor_read(self, db, authenticated_client, user_data):
+        """Test that a user cannot read another user's tasks."""
+        other_user = User.objects.create(email=f'other_task_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Secret"
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Secret Goal", order=0
+        )
+        other_task = Task.objects.create(
+            goal=other_goal, title="Secret Task", order=0
+        )
+
+        response = authenticated_client.get(f"/api/dreams/tasks/{other_task.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_task_idor_complete(self, db, authenticated_client, user_data):
+        """Test that a user cannot complete another user's tasks."""
+        other_user = User.objects.create(email=f'other_task_c_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Secret"
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Secret Goal", order=0
+        )
+        other_task = Task.objects.create(
+            goal=other_goal, title="Secret Task", order=0
+        )
+
+        response = authenticated_client.post(
+            f"/api/dreams/tasks/{other_task.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_obstacle_idor_read(self, db, authenticated_client, user_data):
+        """Test that a user cannot read another user's obstacles."""
+        from apps.dreams.models import Obstacle
+
+        other_user = User.objects.create(email=f'other_obs_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Secret"
+        )
+        other_obstacle = Obstacle.objects.create(
+            dream=other_dream,
+            title="Secret Obstacle",
+            description="Should not be readable",
+            obstacle_type="predicted",
+        )
+
+        response = authenticated_client.get(
+            f"/api/dreams/obstacles/{other_obstacle.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ---------------------------------------------------------------------------
+# Check-In Tests
+# ---------------------------------------------------------------------------
+
+
+class TestCheckInViewSet:
+    """Test PlanCheckIn API endpoints.
+
+    Check-ins are registered at r'checkins' under 'api/dreams/' include,
+    so the full URL is /api/dreams/checkins/.
+    """
+
+    def test_list_checkins_for_dream(self, authenticated_client, dream):
+        """Test GET /api/dreams/checkins/?dream={dream_id}"""
+        from apps.dreams.models import PlanCheckIn
+
+        PlanCheckIn.objects.create(
+            dream=dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+            pace_status="on_track",
+            coaching_message="Keep going!",
+        )
+
+        response = authenticated_client.get(
+            f"/api/dreams/checkins/?dream={dream.id}"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["results"]) == 1
+
+    def test_checkin_detail(self, authenticated_client, dream):
+        """Test GET /api/dreams/checkins/{id}/"""
+        from apps.dreams.models import PlanCheckIn
+
+        checkin = PlanCheckIn.objects.create(
+            dream=dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+            pace_status="ahead",
+            coaching_message="You are doing great!",
+        )
+
+        response = authenticated_client.get(f"/api/dreams/checkins/{checkin.id}/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["pace_status"] == "ahead"
+
+    def test_checkin_respond(self, authenticated_client, dream):
+        """Test POST /api/dreams/checkins/{id}/respond/ submits questionnaire."""
+        from apps.dreams.models import PlanCheckIn
+
+        checkin = PlanCheckIn.objects.create(
+            dream=dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+            questionnaire=[
+                {
+                    "id": "q1",
+                    "question_type": "text",
+                    "question": "How is your progress?",
+                    "is_required": True,
+                }
+            ],
+        )
+
+        with patch("apps.dreams.tasks.process_checkin_responses_task") as mock_task:
+            mock_task.apply_async.return_value = Mock(id="fake-task-id")
+
+            response = authenticated_client.post(
+                f"/api/dreams/checkins/{checkin.id}/respond/",
+                {"responses": {"q1": "Going well!"}},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        checkin.refresh_from_db()
+        assert checkin.status == "ai_processing"
+        assert checkin.user_responses["q1"] == "Going well!"
+
+    def test_checkin_respond_not_awaiting(self, authenticated_client, dream):
+        """Test responding to a check-in that is not awaiting user response."""
+        from apps.dreams.models import PlanCheckIn
+
+        checkin = PlanCheckIn.objects.create(
+            dream=dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+
+        response = authenticated_client.post(
+            f"/api/dreams/checkins/{checkin.id}/respond/",
+            {"responses": {"q1": "Answer"}},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_checkin_idor_prevention(self, db, authenticated_client, user_data):
+        """Test that a user cannot access another user's check-ins."""
+        from apps.dreams.models import PlanCheckIn
+
+        other_user = User.objects.create(email=f'other_ci_{user_data["email"]}')
+        other_dream = Dream.objects.create(
+            user=other_user, title="Other Dream", description="Private"
+        )
+        other_checkin = PlanCheckIn.objects.create(
+            dream=other_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+
+        response = authenticated_client.get(
+            f"/api/dreams/checkins/{other_checkin.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND

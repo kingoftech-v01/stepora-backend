@@ -11,6 +11,7 @@ from .models import (
     Notification,
     NotificationBatch,
     NotificationTemplate,
+    ReminderPreference,
     UserDevice,
     WebPushSubscription,
 )
@@ -229,3 +230,128 @@ class UserDeviceSerializer(serializers.ModelSerializer):
         if len(value) > 4096:
             raise serializers.ValidationError(_("FCM token exceeds maximum length."))
         return value
+
+
+class ReminderPreferenceSerializer(serializers.ModelSerializer):
+    """Serializer for ReminderPreference model."""
+
+    dream_title = serializers.SerializerMethodField(
+        help_text="Title of the associated dream (if any)."
+    )
+
+    class Meta:
+        model = ReminderPreference
+        fields = [
+            "id",
+            "user",
+            "dream",
+            "dream_title",
+            "reminder_type",
+            "time",
+            "days",
+            "is_active",
+            "notify_method",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "dream_title", "created_at", "updated_at"]
+        extra_kwargs = {
+            "id": {"help_text": "Unique identifier for the reminder preference."},
+            "user": {"help_text": "Owner of this reminder preference."},
+            "dream": {
+                "help_text": "Associated dream (null for global reminder).",
+                "required": False,
+                "allow_null": True,
+            },
+            "reminder_type": {
+                "help_text": "Preset type: morning, afternoon, evening, or custom."
+            },
+            "time": {"help_text": "Time of day to send the reminder (HH:MM format)."},
+            "days": {
+                "help_text": "Comma-separated day abbreviations: mon,tue,wed,thu,fri,sat,sun"
+            },
+            "is_active": {"help_text": "Whether this reminder is currently active."},
+            "notify_method": {
+                "help_text": "Delivery method: push, task_call, or both."
+            },
+        }
+
+    def get_dream_title(self, obj) -> str:
+        if obj.dream:
+            try:
+                return obj.dream.title
+            except Exception:
+                return ""
+        return ""
+
+    def validate_days(self, value):
+        """Validate days string contains only valid day abbreviations."""
+        valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+        days = [d.strip().lower() for d in value.split(",") if d.strip()]
+        if not days:
+            raise serializers.ValidationError(
+                _("At least one day must be selected.")
+            )
+        invalid = set(days) - valid_days
+        if invalid:
+            raise serializers.ValidationError(
+                _("Invalid day abbreviations: %(days)s") % {"days": ", ".join(invalid)}
+            )
+        return ",".join(days)
+
+    def validate_dream(self, value):
+        """Ensure the dream belongs to the requesting user."""
+        if value is not None:
+            request = self.context.get("request")
+            if request and value.user != request.user:
+                raise serializers.ValidationError(
+                    _("You can only set reminders for your own dreams.")
+                )
+        return value
+
+    def validate(self, attrs):
+        """Check uniqueness of user + dream + time."""
+        request = self.context.get("request")
+        user = request.user if request else None
+        dream = attrs.get("dream")
+        time = attrs.get("time")
+
+        if user and time:
+            qs = ReminderPreference.objects.filter(
+                user=user, dream=dream, time=time
+            )
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    _("A reminder at this time already exists for this dream.")
+                )
+        return attrs
+
+
+class ReminderQuickSetupSerializer(serializers.Serializer):
+    """Serializer for quick-setup endpoint (preset-based creation)."""
+
+    PRESET_CHOICES = [
+        ("morning", "Morning"),
+        ("afternoon", "Afternoon"),
+        ("evening", "Evening"),
+    ]
+    preset = serializers.ChoiceField(
+        choices=PRESET_CHOICES,
+        help_text="Preset to apply: morning (08:00), afternoon (13:00), evening (19:00).",
+    )
+    dream = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Optional dream ID to associate the reminder with.",
+    )
+    notify_method = serializers.ChoiceField(
+        choices=ReminderPreference.NOTIFY_CHOICES,
+        default="push",
+        help_text="Delivery method: push, task_call, or both.",
+    )
+    days = serializers.CharField(
+        default="mon,tue,wed,thu,fri,sat,sun",
+        help_text="Comma-separated day abbreviations.",
+    )

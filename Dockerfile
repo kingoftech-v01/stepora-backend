@@ -57,9 +57,8 @@ COPY --chown=appuser:appuser . .
 
 # Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
 # A placeholder is used during build; the real key is injected at runtime via ECS task definition.
-ARG FIELD_ENCRYPTION_KEY="build-time-placeholder-key-not-for-production"
-ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
-RUN python manage.py collectstatic --noinput --clear
+ARG FIELD_ENCRYPTION_KEY="3MfZbytI5hBSI7HDNyUm6igYKSyccQetsbS5mIDK4aE="
+RUN FIELD_ENCRYPTION_KEY="${FIELD_ENCRYPTION_KEY}" python manage.py collectstatic --noinput --clear
 
 # Make scripts executable
 RUN chmod +x /app/healthcheck.sh /app/entrypoint.sh

@@ -46,6 +46,10 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
+    # Public endpoints that social media crawlers and search engines need
+    # to access cross-origin (e.g., Facebook/Twitter/Slack link unfurlers).
+    _PUBLIC_PREFIXES = ("/api/blog/", "/api/seo/", "/robots.txt")
+
     def __call__(self, request):
         response = self.get_response(request)
 
@@ -54,7 +58,15 @@ class SecurityHeadersMiddleware:
         response["X-Content-Type-Options"] = "nosniff"
         response["X-Frame-Options"] = "DENY"
         response["Cross-Origin-Opener-Policy"] = "same-origin"
-        response["Cross-Origin-Resource-Policy"] = "cross-origin"
+
+        # Cross-Origin-Resource-Policy:
+        # - "cross-origin" for public endpoints (blog, SEO) so social media
+        #   crawlers and search engines can fetch these resources.
+        # - "same-site" for everything else (authenticated API, admin).
+        if any(request.path.startswith(p) for p in self._PUBLIC_PREFIXES):
+            response["Cross-Origin-Resource-Policy"] = "cross-origin"
+        else:
+            response["Cross-Origin-Resource-Policy"] = "same-site"
 
         # CSP and Permissions-Policy only apply to HTML documents.
         # Setting them on JSON API responses is meaningless and can cause
@@ -93,7 +105,14 @@ class EmailVerificationMiddleware:
     - Non-API paths     (static, media, etc.)
     """
 
-    _EXEMPT_PREFIXES = ("/api/auth/", "/api/users/me/", "/health/", "/admin/")
+    _EXEMPT_PREFIXES = (
+        "/api/auth/",
+        "/api/users/me/",
+        "/api/blog/",
+        "/api/seo/",
+        "/health/",
+        "/admin/",
+    )
 
     def __init__(self, get_response):
         self.get_response = get_response

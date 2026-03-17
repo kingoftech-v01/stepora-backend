@@ -6,6 +6,7 @@ import logging
 import uuid
 
 import requests as http_requests
+from django.db import transaction
 from django.db.models import Max
 
 logger = logging.getLogger(__name__)
@@ -1886,13 +1887,14 @@ class DreamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         """Mark dream as completed."""
-        dream = self.get_object()
-        if dream.status == "completed":
-            return Response(
-                {"error": _("Dream is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        dream.complete()
+        with transaction.atomic():
+            dream = Dream.objects.select_for_update().get(pk=pk, user=request.user)
+            if dream.status == "completed":
+                return Response(
+                    {"error": _("Dream is already completed.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            dream.complete()
 
         return Response(DreamSerializer(dream).data)
 
@@ -2910,13 +2912,14 @@ class DreamMilestoneViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         """Mark dream milestone as completed."""
-        milestone = self.get_object()
-        if milestone.status == "completed":
-            return Response(
-                {"error": _("Dream milestone is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        milestone.complete()
+        with transaction.atomic():
+            milestone = DreamMilestone.objects.select_for_update().get(pk=pk, dream__user=request.user)
+            if milestone.status == "completed":
+                return Response(
+                    {"error": _("Dream milestone is already completed.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            milestone.complete()
         return Response(DreamMilestoneSerializer(milestone).data)
 
 
@@ -2973,13 +2976,14 @@ class GoalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         """Mark goal as completed."""
-        goal = self.get_object()
-        if goal.status == "completed":
-            return Response(
-                {"error": _("Goal is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        goal.complete()
+        with transaction.atomic():
+            goal = Goal.objects.select_for_update().get(pk=pk, dream__user=request.user)
+            if goal.status == "completed":
+                return Response(
+                    {"error": _("Goal is already completed.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            goal.complete()
 
         return Response(GoalSerializer(goal).data)
 
@@ -3224,13 +3228,14 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         """Mark task as completed."""
-        task = self.get_object()
-        if task.status == "completed":
-            return Response(
-                {"error": _("Task is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        task.complete()
+        with transaction.atomic():
+            task = Task.objects.select_for_update().get(pk=pk, goal__dream__user=request.user)
+            if task.status == "completed":
+                return Response(
+                    {"error": _("Task is already completed.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            task.complete()
 
         data = TaskSerializer(task).data
         # Include the newly created chain task in the response if one was created

@@ -38,6 +38,7 @@ from .models import (
     ConversationTemplate,
     Message,
     MessageReadStatus,
+    _serialize_metadata,
 )
 from .serializers import (
     CallHistorySerializer,
@@ -225,6 +226,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
     )
     def send_message(self, request, pk=None):
         """Send a message in the conversation."""
+        from .task_actions import TASK_MANAGEMENT_TOOLS, execute_tool_call
+
         conversation = self.get_object()
 
         # Validate message
@@ -256,9 +259,19 @@ class ConversationViewSet(viewsets.ModelViewSet):
             # Get recent messages for context
             messages = conversation.get_messages_for_api(limit=20)
 
-            # Get AI response
-            raw_response = ai_service.chat(
-                messages=messages, conversation_type=conversation.conversation_type
+            # Build tool executor bound to current user
+            current_user = request.user
+
+            def tool_executor(tool_name, arguments):
+                return execute_tool_call(current_user, tool_name, arguments)
+
+            # Use tools-based chat for task management capabilities
+            raw_response = ai_service.chat_with_tools(
+                messages=messages,
+                tools=TASK_MANAGEMENT_TOOLS,
+                tool_executor=tool_executor,
+                conversation_type=conversation.conversation_type,
+                max_tokens=1500,
             )
 
             # Validate chat response
@@ -275,18 +288,53 @@ class ConversationViewSet(viewsets.ModelViewSet):
             # Increment AI usage counter
             AIUsageTracker().increment(request.user, "ai_chat")
 
+            # Build message metadata with task action info
+            msg_metadata = {"tokens_used": validated.tokens_used}
+
+            # Extract task action metadata from tool results
+            tool_results = raw_response.get("tool_results", [])
+            if tool_results:
+                task_actions = []
+                for tr in tool_results:
+                    result = tr.get("result", {})
+                    if result.get("success"):
+                        action = result.get("action", "")
+                        action_data = {"task_action": action}
+
+                        if "task" in result:
+                            action_data["task"] = result["task"]
+                        if "tasks" in result:
+                            action_data["tasks"] = result["tasks"]
+                        if "count" in result:
+                            action_data["count"] = result["count"]
+                        if "deleted_title" in result:
+                            action_data["deleted_title"] = result["deleted_title"]
+                        if "dream_title" in result:
+                            action_data["dream_title"] = result["dream_title"]
+                        if "goal_title" in result:
+                            action_data["goal_title"] = result["goal_title"]
+                        if "dreams" in result:
+                            action_data["dreams"] = result["dreams"]
+
+                        task_actions.append(action_data)
+
+                if task_actions:
+                    msg_metadata["task_actions"] = task_actions
+
             # Save validated assistant message
             assistant_message = conversation.add_message(
                 "assistant",
                 validated.content,
-                metadata={"tokens_used": validated.tokens_used},
+                metadata=msg_metadata,
             )
 
             # Handle function calls from AI (validate before executing)
             if raw_response.get("function_call"):
                 try:
                     fc = validate_function_call(raw_response["function_call"])
-                    assistant_message.metadata["function_call"] = fc.model_dump()
+                    assistant_message.metadata["function_call"] = _serialize_metadata(
+                        fc.model_dump()
+                    )
                     assistant_message.save(update_fields=["metadata"])
                 except AIValidationError:
                     pass  # Ignore invalid function calls silently
@@ -318,6 +366,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                             "id": str(assistant_message.id),
                             "role": "assistant",
                             "content": validated.content,
+                            "metadata": msg_metadata,
                             "created_at": assistant_message.created_at.isoformat(),
                         },
                     },

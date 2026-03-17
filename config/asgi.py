@@ -11,7 +11,9 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 
-# Initialize Django ASGI application early
+# Initialize Django ASGI application early.
+# Static files are served by WhiteNoiseMiddleware (Django middleware in base.py),
+# which works with ASGI through Django's sync-to-async middleware adaptation.
 django_asgi_app = get_asgi_application()
 
 from apps.buddies.routing import websocket_urlpatterns as buddy_chat_ws

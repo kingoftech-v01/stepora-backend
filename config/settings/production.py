@@ -94,7 +94,9 @@ AWS_QUERYSTRING_AUTH = False  # Generate direct URLs (not pre-signed)
 AWS_STATIC_LOCATION = "static"
 AWS_MEDIA_LOCATION = "media"
 
-# Use S3 for static and media files (Django 4.2+ STORAGES dict)
+# Use S3 for media files only; WhiteNoise serves static files from disk
+# (collectstatic runs at Docker build time without AWS creds, so static
+#  files live in /app/staticfiles/ and WhiteNoise serves them directly)
 if AWS_STORAGE_BUCKET_NAME:
     STORAGES = {
         "default": {
@@ -103,16 +105,15 @@ if AWS_STORAGE_BUCKET_NAME:
                 "location": AWS_MEDIA_LOCATION,
             },
         },
+        # Static files served from disk by WhiteNoise ASGI wrapper (see config/asgi.py).
+        # Use basic StaticFilesStorage — no manifest needed, collectstatic runs at
+        # Docker build time without AWS creds so CompressedManifest would crash.
         "staticfiles": {
-            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-            "OPTIONS": {
-                "location": AWS_STATIC_LOCATION,
-            },
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
-    # Set URL prefixes to include the location prefix
     _s3_domain = AWS_S3_CUSTOM_DOMAIN or f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
-    STATIC_URL = f"https://{_s3_domain}/{AWS_STATIC_LOCATION}/"
+    STATIC_URL = "/static/"
     MEDIA_URL = f"https://{_s3_domain}/{AWS_MEDIA_LOCATION}/"
 
 # OTA code signing — path to RSA public key for signature verification

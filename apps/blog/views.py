@@ -76,13 +76,29 @@ class PostViewSet(viewsets.ReadOnlyModelViewSet):
             return PostDetailSerializer
         return PostListSerializer
 
+    def list(self, request, *args, **kwargs):
+        """List published blog posts with SEO-friendly cache headers."""
+        response = super().list(request, *args, **kwargs)
+        response["Cache-Control"] = "public, max-age=120, s-maxage=300"
+        return response
+
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a post by slug and increment views atomically."""
         instance = self.get_object()
         Post.objects.filter(pk=instance.pk).update(views_count=F("views_count") + 1)
         instance.refresh_from_db()
         serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        response = Response(serializer.data)
+
+        # Add canonical Link header for SEO (helps crawlers and CDN caches)
+        from django.conf import settings as django_settings
+
+        frontend_url = getattr(django_settings, "FRONTEND_URL", "https://stepora.app")
+        canonical_url = f"{frontend_url}/blog/{instance.slug}"
+        response["Link"] = f'<{canonical_url}>; rel="canonical"'
+        response["Cache-Control"] = "public, max-age=300, s-maxage=600"
+
+        return response
 
     @action(detail=False, methods=["get"], url_path="search")
     def search(self, request):

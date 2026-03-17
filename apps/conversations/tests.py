@@ -491,3 +491,186 @@ class TestConversationTypes:
                 conversation_type=conv_type,
             )
             assert conversation.conversation_type == conv_type
+
+
+# ---------------------------------------------------------------------------
+# Chat Memory Tests
+# ---------------------------------------------------------------------------
+
+
+class TestChatMemoryModel:
+    """Test ChatMemory model."""
+
+    def test_create_memory(self, db, user, conversation):
+        """Test creating a chat memory."""
+        from .models import ChatMemory
+
+        memory = ChatMemory.objects.create(
+            user=user,
+            key="preference",
+            content="User prefers concise responses.",
+            source_conversation=conversation,
+            importance=4,
+        )
+
+        assert memory.user == user
+        assert memory.key == "preference"
+        assert memory.is_active is True
+        assert memory.importance == 4
+
+    def test_memory_ordering(self, db, user):
+        """Test memories are ordered by importance and updated_at."""
+        from .models import ChatMemory
+
+        low = ChatMemory.objects.create(
+            user=user, key="fact", content="Low importance fact.", importance=1
+        )
+        high = ChatMemory.objects.create(
+            user=user, key="fact", content="High importance fact.", importance=5
+        )
+
+        memories = ChatMemory.objects.filter(user=user)
+        assert memories[0] == high
+        assert memories[1] == low
+
+
+class TestChatMemoryViewSet:
+    """Test ChatMemory API endpoints."""
+
+    def test_list_memories(self, authenticated_client, user):
+        """Test GET /api/conversations/memories/"""
+        from .models import ChatMemory
+
+        ChatMemory.objects.create(
+            user=user, key="fact", content="User likes Python.", importance=3
+        )
+        ChatMemory.objects.create(
+            user=user, key="preference", content="Prefers French.", importance=4
+        )
+
+        response = authenticated_client.get("/api/conversations/memories/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
+
+    def test_list_memories_excludes_inactive(self, authenticated_client, user):
+        """Test that inactive memories are not listed."""
+        from .models import ChatMemory
+
+        ChatMemory.objects.create(
+            user=user, key="fact", content="Active memory.", is_active=True
+        )
+        ChatMemory.objects.create(
+            user=user, key="fact", content="Inactive memory.", is_active=False
+        )
+
+        response = authenticated_client.get("/api/conversations/memories/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+
+    def test_delete_memory(self, authenticated_client, user):
+        """Test DELETE /api/conversations/memories/{id}/ deactivates (soft-deletes)."""
+        from .models import ChatMemory
+
+        memory = ChatMemory.objects.create(
+            user=user, key="fact", content="To be deleted."
+        )
+
+        response = authenticated_client.delete(
+            f"/api/conversations/memories/{memory.id}/"
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        memory.refresh_from_db()
+        assert memory.is_active is False
+
+    def test_clear_all_memories(self, authenticated_client, user):
+        """Test POST /api/conversations/memories/clear/ deactivates all memories."""
+        from .models import ChatMemory
+
+        ChatMemory.objects.create(
+            user=user, key="fact", content="Memory 1."
+        )
+        ChatMemory.objects.create(
+            user=user, key="preference", content="Memory 2."
+        )
+
+        response = authenticated_client.post("/api/conversations/memories/clear/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["cleared"] == 2
+        assert ChatMemory.objects.filter(user=user, is_active=True).count() == 0
+
+    def test_memory_idor_prevention(self, db, authenticated_client, user_data):
+        """Test that a user cannot delete another user's memories."""
+        from apps.users.models import User
+
+        from .models import ChatMemory
+
+        other_user = User.objects.create(email=f'other_mem_{user_data["email"]}')
+        other_memory = ChatMemory.objects.create(
+            user=other_user, key="fact", content="Secret memory."
+        )
+
+        response = authenticated_client.delete(
+            f"/api/conversations/memories/{other_memory.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_list_memories_does_not_leak_other_users(self, db, authenticated_client, user, user_data):
+        """Test that listing memories only returns the current user's memories."""
+        from apps.users.models import User
+
+        from .models import ChatMemory
+
+        ChatMemory.objects.create(user=user, key="fact", content="My memory.")
+        other_user = User.objects.create(email=f'other_list_{user_data["email"]}')
+        ChatMemory.objects.create(user=other_user, key="fact", content="Their memory.")
+
+        response = authenticated_client.get("/api/conversations/memories/")
+        assert len(response.data) == 1
+
+
+# ---------------------------------------------------------------------------
+# Conversation Deletion and Archive Tests
+# ---------------------------------------------------------------------------
+
+
+class TestConversationOperations:
+    """Test conversation lifecycle operations."""
+
+    def test_delete_conversation(self, authenticated_client, conversation):
+        """Test DELETE /api/conversations/{id}/ removes the conversation."""
+        conv_id = conversation.id
+
+        response = authenticated_client.delete(f"/api/conversations/{conv_id}/")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not Conversation.objects.filter(id=conv_id).exists()
+
+    def test_send_message_to_nonexistent_conversation(self, authenticated_client):
+        """Test sending a message to a nonexistent conversation returns 404."""
+        import uuid
+
+        fake_id = uuid.uuid4()
+        response = authenticated_client.post(
+            f"/api/conversations/{fake_id}/send_message/",
+            {"content": "Hello"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_send_empty_message(self, authenticated_client, conversation):
+        """Test sending an empty message is rejected."""
+        with patch("apps.conversations.views.OpenAIService") as mock_service, patch(
+            "apps.conversations.views.validate_chat_response"
+        ) as mock_validate:
+            response = authenticated_client.post(
+                f"/api/conversations/{conversation.id}/send_message/",
+                {"content": ""},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST

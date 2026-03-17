@@ -159,6 +159,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     xp = models.IntegerField(default=0)
     level = models.IntegerField(default=1)
     streak_days = models.IntegerField(default=0)
+    longest_streak = models.IntegerField(default=0)
+    streak_updated_at = models.DateField(null=True, blank=True)
+    streak_freeze_used_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Last date a streak freeze was used (max 1 per week).",
+    )
     last_activity = models.DateTimeField(default=django_timezone.now)
 
     # Online status
@@ -296,9 +303,28 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.last_activity = django_timezone.now()
         self.save(update_fields=["last_activity"])
 
-    def add_xp(self, amount):
-        """Add XP and check for level up. Uses atomic F() to prevent race conditions."""
+    def get_streak_xp_multiplier(self):
+        """Return XP multiplier based on current streak length."""
+        if self.streak_days >= 100:
+            return 3.0
+        if self.streak_days >= 30:
+            return 2.0
+        if self.streak_days >= 7:
+            return 1.5
+        return 1.0
+
+    def add_xp(self, amount, apply_streak_multiplier=True):
+        """Add XP and check for level up. Uses atomic F() to prevent race conditions.
+
+        When ``apply_streak_multiplier`` is True the amount is scaled by
+        the user's current streak multiplier (1.5x at 7-day, 2x at 30-day,
+        3x at 100-day streak).
+        """
         from django.db.models import F
+
+        if apply_streak_multiplier:
+            multiplier = self.get_streak_xp_multiplier()
+            amount = int(amount * multiplier)
 
         old_level = self.level
         User.objects.filter(id=self.id).update(xp=F("xp") + amount)
@@ -430,6 +456,51 @@ class DailyActivity(models.Model):
         )
         activity.refresh_from_db()
         return activity
+
+
+class HabitChain(models.Model):
+    """Tracks individual habit events contributing to a user's streak.
+
+    Each row represents a single qualifying action on a specific date:
+    - ``check_in``: user completed a dream plan check-in
+    - ``task_completion``: user completed a task
+    - ``focus_timer``: user finished a focus/pomodoro session
+    """
+
+    CHAIN_TYPE_CHOICES = [
+        ("check_in", "Check-in"),
+        ("task_completion", "Task Completion"),
+        ("focus_timer", "Focus Timer"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="habit_chains"
+    )
+    dream = models.ForeignKey(
+        "dreams.Dream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="habit_chains",
+    )
+    date = models.DateField()
+    chain_type = models.CharField(
+        max_length=20, choices=CHAIN_TYPE_CHOICES, db_index=True
+    )
+    completed = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "habit_chains"
+        ordering = ["-date", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-date"]),
+            models.Index(fields=["user", "chain_type", "-date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.chain_type} on {self.date}"
 
 
 class Achievement(models.Model):

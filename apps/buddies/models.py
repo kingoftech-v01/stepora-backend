@@ -299,3 +299,54 @@ class ContractCheckIn(models.Model):
 
     def __str__(self):
         return f"Check-in by {self.user_id} on {self.created_at:%Y-%m-%d}"
+
+
+class BuddySkip(models.Model):
+    """
+    Tracks which users have been skipped in the buddy matching queue.
+
+    When a user skips a suggestion, the skipped user will not be
+    re-suggested. Skips are one-directional: user A skipping user B
+    does not prevent user B from seeing user A.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="Unique identifier for this skip record.",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="buddy_skips",
+        help_text="The user who performed the skip.",
+    )
+    skipped_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="skipped_by",
+        help_text="The user who was skipped.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "buddy_skips"
+        ordering = ["-created_at"]
+        verbose_name = "Buddy Skip"
+        verbose_name_plural = "Buddy Skips"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "skipped_user"], name="unique_buddy_skip"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user"], name="idx_buddy_skip_user"),
+            models.Index(fields=["skipped_user"], name="idx_buddy_skip_skipped"),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user.display_name or self.user.email} skipped "
+            f"{self.skipped_user.display_name or self.skipped_user.email}"
+        )

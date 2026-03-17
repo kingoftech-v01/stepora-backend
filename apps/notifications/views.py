@@ -16,6 +16,7 @@ from .models import (
     Notification,
     NotificationBatch,
     NotificationTemplate,
+    ReminderPreference,
     UserDevice,
     WebPushSubscription,
 )
@@ -24,6 +25,8 @@ from .serializers import (
     NotificationCreateSerializer,
     NotificationSerializer,
     NotificationTemplateSerializer,
+    ReminderPreferenceSerializer,
+    ReminderQuickSetupSerializer,
     UserDeviceSerializer,
     WebPushSubscriptionSerializer,
 )
@@ -306,7 +309,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         """
         fcm_token = request.data.get("fcm_token", "")
         if fcm_token:
-            UserDevice.objects.filter(fcm_token=fcm_token).delete()
+            UserDevice.objects.filter(fcm_token=fcm_token, user=request.user).delete()
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -405,3 +408,169 @@ class NotificationBatchViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, "swagger_fake_view", False):
             return NotificationBatch.objects.none()
         return NotificationBatch.objects.all().order_by("-created_at")
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List reminder preferences",
+        description="Get all reminder preferences for the current user",
+        tags=["Reminders"],
+    ),
+    create=extend_schema(
+        summary="Create reminder preference",
+        description="Create a new reminder preference",
+        tags=["Reminders"],
+    ),
+    retrieve=extend_schema(
+        summary="Get reminder preference",
+        description="Get a specific reminder preference",
+        tags=["Reminders"],
+    ),
+    update=extend_schema(
+        summary="Update reminder preference",
+        description="Update a reminder preference",
+        tags=["Reminders"],
+    ),
+    partial_update=extend_schema(
+        summary="Partial update reminder preference",
+        description="Partially update a reminder preference",
+        tags=["Reminders"],
+    ),
+    destroy=extend_schema(
+        summary="Delete reminder preference",
+        description="Delete a reminder preference",
+        tags=["Reminders"],
+    ),
+)
+class ReminderPreferenceViewSet(viewsets.ModelViewSet):
+    """CRUD operations for reminder preferences."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ReminderPreferenceSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["dream", "reminder_type", "is_active", "notify_method"]
+    lookup_value_regex = (
+        "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    )
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return ReminderPreference.objects.none()
+        return ReminderPreference.objects.filter(
+            user=self.request.user
+        ).select_related("dream")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @extend_schema(
+        summary="Get preset options",
+        description="Return available preset reminder times (morning, afternoon, evening)",
+        tags=["Reminders"],
+        responses={200: dict},
+    )
+    @action(detail=False, methods=["get"])
+    def presets(self, request):
+        """Return preset options for quick setup."""
+        return Response(
+            {
+                "presets": [
+                    {
+                        "id": "morning",
+                        "label": "Morning",
+                        "time": "08:00",
+                        "description": "Start your day with a reminder",
+                    },
+                    {
+                        "id": "afternoon",
+                        "label": "Afternoon",
+                        "time": "13:00",
+                        "description": "Midday check-in on your tasks",
+                    },
+                    {
+                        "id": "evening",
+                        "label": "Evening",
+                        "time": "19:00",
+                        "description": "Evening review of your progress",
+                    },
+                ]
+            }
+        )
+
+    @extend_schema(
+        summary="Quick setup with preset",
+        description="Create a reminder preference using a preset (morning/afternoon/evening)",
+        tags=["Reminders"],
+        request=ReminderQuickSetupSerializer,
+        responses={
+            201: ReminderPreferenceSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="quick-setup")
+    def quick_setup(self, request):
+        """Create a reminder from a preset."""
+        import datetime
+
+        setup_serializer = ReminderQuickSetupSerializer(data=request.data)
+        setup_serializer.is_valid(raise_exception=True)
+
+        preset = setup_serializer.validated_data["preset"]
+        dream_id = setup_serializer.validated_data.get("dream")
+        notify_method = setup_serializer.validated_data.get("notify_method", "push")
+        days = setup_serializer.validated_data.get(
+            "days", "mon,tue,wed,thu,fri,sat,sun"
+        )
+
+        # Map preset to time
+        preset_times = {
+            "morning": datetime.time(8, 0),
+            "afternoon": datetime.time(13, 0),
+            "evening": datetime.time(19, 0),
+        }
+        reminder_time = preset_times[preset]
+
+        # Resolve dream if provided
+        dream = None
+        if dream_id:
+            from apps.dreams.models import Dream
+
+            try:
+                dream = Dream.objects.get(id=dream_id, user=request.user)
+            except Dream.DoesNotExist:
+                return Response(
+                    {"detail": "Dream not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Check for existing duplicate
+        existing = ReminderPreference.objects.filter(
+            user=request.user, dream=dream, time=reminder_time
+        ).first()
+        if existing:
+            # Re-activate if it was deactivated
+            if not existing.is_active:
+                existing.is_active = True
+                existing.notify_method = notify_method
+                existing.days = days
+                existing.save(
+                    update_fields=["is_active", "notify_method", "days", "updated_at"]
+                )
+            return Response(
+                ReminderPreferenceSerializer(existing).data,
+                status=status.HTTP_200_OK,
+            )
+
+        reminder = ReminderPreference.objects.create(
+            user=request.user,
+            dream=dream,
+            reminder_type=preset,
+            time=reminder_time,
+            days=days,
+            notify_method=notify_method,
+        )
+
+        return Response(
+            ReminderPreferenceSerializer(reminder).data,
+            status=status.HTTP_201_CREATED,
+        )

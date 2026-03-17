@@ -413,3 +413,578 @@ class TestTimeBlockModel:
             end_time=dt_time(17, 0),
         )
         assert str(block) == f"Mon {dt_time(9, 0)}-{dt_time(17, 0)}: work"
+
+    def test_time_block_focus_label(self, db, user):
+        """Test TimeBlock focus block includes [FOCUS] in str."""
+        block = TimeBlock.objects.create(
+            user=user,
+            block_type="work",
+            day_of_week=2,
+            start_time=dt_time(9, 0),
+            end_time=dt_time(12, 0),
+            focus_block=True,
+        )
+        result = str(block)
+        assert "[FOCUS]" in result
+        assert "Wed" in result
+
+    def test_time_block_all_days(self, db, user):
+        """Test TimeBlock can be created for each day of the week."""
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for i, day in enumerate(days):
+            block = TimeBlock.objects.create(
+                user=user,
+                block_type="personal",
+                day_of_week=i,
+                start_time=dt_time(8, 0),
+                end_time=dt_time(9, 0),
+            )
+            assert day in str(block)
+
+    def test_time_block_default_values(self, db, user):
+        """Test TimeBlock default values."""
+        block = TimeBlock.objects.create(
+            user=user,
+            block_type="exercise",
+            day_of_week=5,
+            start_time=dt_time(6, 0),
+            end_time=dt_time(7, 0),
+        )
+        assert block.is_active is True
+        assert block.focus_block is False
+
+    def test_time_block_types(self, db, user):
+        """Test all block types can be created."""
+        for code, _ in TimeBlock.BLOCK_TYPE_CHOICES:
+            block = TimeBlock.objects.create(
+                user=user,
+                block_type=code,
+                day_of_week=0,
+                start_time=dt_time(10, 0),
+                end_time=dt_time(11, 0),
+            )
+            assert block.block_type == code
+            block.delete()
+
+
+# ===================================================================
+# TimeBlockTemplate model tests
+# ===================================================================
+
+
+class TestTimeBlockTemplateModel:
+    """Test TimeBlockTemplate model."""
+
+    def test_create_template(self, db, user):
+        from apps.calendar.models import TimeBlockTemplate
+
+        tpl = TimeBlockTemplate.objects.create(
+            user=user,
+            name="Morning Routine",
+            description="My morning schedule",
+            blocks=[
+                {
+                    "block_type": "exercise",
+                    "day_of_week": 0,
+                    "start_time": "06:00",
+                    "end_time": "07:00",
+                },
+                {
+                    "block_type": "work",
+                    "day_of_week": 0,
+                    "start_time": "09:00",
+                    "end_time": "17:00",
+                },
+            ],
+        )
+        assert tpl.pk is not None
+        assert len(tpl.blocks) == 2
+
+    def test_template_str_user(self, db, user):
+        from apps.calendar.models import TimeBlockTemplate
+
+        tpl = TimeBlockTemplate.objects.create(
+            user=user,
+            name="Work Template",
+            blocks=[],
+            is_preset=False,
+        )
+        result = str(tpl)
+        assert "Work Template" in result
+        assert user.email in result
+
+    def test_template_str_preset(self, db, user):
+        from apps.calendar.models import TimeBlockTemplate
+
+        tpl = TimeBlockTemplate.objects.create(
+            user=user,
+            name="Default Schedule",
+            blocks=[],
+            is_preset=True,
+        )
+        result = str(tpl)
+        assert "Default Schedule" in result
+        assert "preset" in result
+
+    def test_template_ordering(self, db, user):
+        """Presets come before user templates."""
+        from apps.calendar.models import TimeBlockTemplate
+
+        user_tpl = TimeBlockTemplate.objects.create(
+            user=user,
+            name="User Template",
+            blocks=[],
+            is_preset=False,
+        )
+        preset_tpl = TimeBlockTemplate.objects.create(
+            user=user,
+            name="Preset Template",
+            blocks=[],
+            is_preset=True,
+        )
+        templates = list(TimeBlockTemplate.objects.filter(user=user))
+        # Ordering: -is_preset, -created_at -> presets first
+        assert templates[0] == preset_tpl
+        assert templates[1] == user_tpl
+
+
+# ===================================================================
+# GoogleCalendarIntegration model tests
+# ===================================================================
+
+
+class TestGoogleCalendarIntegrationModel:
+    """Test GoogleCalendarIntegration model."""
+
+    def test_create_integration(self, db, user):
+        from apps.calendar.models import GoogleCalendarIntegration
+
+        integration = GoogleCalendarIntegration.objects.create(
+            user=user,
+            access_token="ya29.test_access_token",
+            refresh_token="1//test_refresh_token",
+            token_expiry=timezone.now() + timedelta(hours=1),
+        )
+        assert integration.pk is not None
+        assert integration.calendar_id == "primary"
+        assert integration.sync_enabled is True
+        assert integration.sync_direction == "both"
+
+    def test_integration_auto_generates_ical_token(self, db, user):
+        from apps.calendar.models import GoogleCalendarIntegration
+
+        integration = GoogleCalendarIntegration.objects.create(
+            user=user,
+            access_token="ya29.test",
+            refresh_token="1//test",
+            token_expiry=timezone.now() + timedelta(hours=1),
+        )
+        assert integration.ical_feed_token != ""
+        assert len(integration.ical_feed_token) > 20
+
+    def test_integration_str(self, db, user):
+        from apps.calendar.models import GoogleCalendarIntegration
+
+        integration = GoogleCalendarIntegration.objects.create(
+            user=user,
+            access_token="ya29.test",
+            refresh_token="1//test",
+            token_expiry=timezone.now() + timedelta(hours=1),
+        )
+        result = str(integration)
+        assert user.email in result
+        assert "primary" in result
+
+    def test_one_to_one_constraint(self, db, user):
+        from apps.calendar.models import GoogleCalendarIntegration
+
+        GoogleCalendarIntegration.objects.create(
+            user=user,
+            access_token="ya29.test",
+            refresh_token="1//test",
+            token_expiry=timezone.now() + timedelta(hours=1),
+        )
+        import pytest
+
+        with pytest.raises(Exception):
+            GoogleCalendarIntegration.objects.create(
+                user=user,
+                access_token="ya29.test2",
+                refresh_token="1//test2",
+                token_expiry=timezone.now() + timedelta(hours=2),
+            )
+
+    def test_sync_direction_choices(self, db, user):
+        from apps.calendar.models import GoogleCalendarIntegration
+
+        for choice, _ in GoogleCalendarIntegration.SYNC_DIRECTION_CHOICES:
+            integration = GoogleCalendarIntegration(
+                user=user,
+                access_token="ya29.test",
+                refresh_token="1//test",
+                token_expiry=timezone.now() + timedelta(hours=1),
+                sync_direction=choice,
+            )
+            assert integration.sync_direction == choice
+
+
+# ===================================================================
+# RecurrenceException model tests
+# ===================================================================
+
+
+class TestRecurrenceExceptionModel:
+    """Test RecurrenceException model."""
+
+    def test_create_skip_exception(self, db, user):
+        from apps.calendar.models import RecurrenceException
+
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Weekly Meeting",
+            start_time=now,
+            end_time=now + timedelta(hours=1),
+            is_recurring=True,
+        )
+        exc = RecurrenceException.objects.create(
+            parent_event=event,
+            original_date=now.date(),
+            skip_occurrence=True,
+        )
+        assert exc.pk is not None
+        assert "Skip" in str(exc)
+
+    def test_create_modify_exception(self, db, user):
+        from apps.calendar.models import RecurrenceException
+
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Daily Standup",
+            start_time=now,
+            end_time=now + timedelta(minutes=30),
+            is_recurring=True,
+        )
+        modified_start = now + timedelta(hours=2)
+        exc = RecurrenceException.objects.create(
+            parent_event=event,
+            original_date=now.date(),
+            skip_occurrence=False,
+            modified_title="Late Standup",
+            modified_start_time=modified_start,
+            modified_end_time=modified_start + timedelta(minutes=30),
+        )
+        assert "Modify" in str(exc)
+
+    def test_unique_parent_date(self, db, user):
+        """Cannot have two exceptions for the same parent + date."""
+        import pytest
+
+        from apps.calendar.models import RecurrenceException
+
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Recurring",
+            start_time=now,
+            end_time=now + timedelta(hours=1),
+            is_recurring=True,
+        )
+        RecurrenceException.objects.create(
+            parent_event=event,
+            original_date=now.date(),
+            skip_occurrence=True,
+        )
+        with pytest.raises(Exception):
+            RecurrenceException.objects.create(
+                parent_event=event,
+                original_date=now.date(),
+                skip_occurrence=False,
+            )
+
+
+# ===================================================================
+# CalendarShare model tests
+# ===================================================================
+
+
+class TestCalendarShareModel:
+    """Test CalendarShare model."""
+
+    def test_create_share(self, db, user):
+        from apps.calendar.models import CalendarShare
+        from apps.users.models import User
+
+        other = User.objects.create_user(
+            email="sharebuddy@example.com", password="pass123"
+        )
+        share = CalendarShare.objects.create(
+            owner=user,
+            shared_with=other,
+            permission="view",
+        )
+        assert share.pk is not None
+        assert share.is_active is True
+        assert share.share_token != ""
+
+    def test_share_auto_generates_token(self, db, user):
+        from apps.calendar.models import CalendarShare
+
+        share = CalendarShare.objects.create(
+            owner=user,
+            permission="suggest",
+        )
+        assert share.share_token != ""
+        assert len(share.share_token) > 20
+
+    def test_share_str_with_user(self, db, user):
+        from apps.calendar.models import CalendarShare
+        from apps.users.models import User
+
+        other = User.objects.create_user(
+            email="sharewith@example.com", password="pass123"
+        )
+        share = CalendarShare.objects.create(
+            owner=user,
+            shared_with=other,
+        )
+        result = str(share)
+        assert user.email in result
+        assert other.email in result
+
+    def test_share_str_link_only(self, db, user):
+        from apps.calendar.models import CalendarShare
+
+        share = CalendarShare.objects.create(
+            owner=user,
+        )
+        result = str(share)
+        assert "link:" in result
+
+    def test_unique_owner_shared_with(self, db, user):
+        """Cannot share with the same user twice."""
+        import pytest
+
+        from apps.calendar.models import CalendarShare
+        from apps.users.models import User
+
+        other = User.objects.create_user(
+            email="uniqueshare@example.com", password="pass123"
+        )
+        CalendarShare.objects.create(owner=user, shared_with=other)
+        with pytest.raises(Exception):
+            CalendarShare.objects.create(owner=user, shared_with=other)
+
+
+# ===================================================================
+# Habit model tests
+# ===================================================================
+
+
+class TestHabitModel:
+    """Test Habit model."""
+
+    def test_create_habit(self, db, user):
+        from apps.calendar.models import Habit
+
+        habit = Habit.objects.create(
+            user=user,
+            name="Meditate",
+            frequency="daily",
+            target_per_day=1,
+        )
+        assert habit.pk is not None
+        assert habit.streak_current == 0
+        assert habit.streak_best == 0
+        assert habit.is_active is True
+
+    def test_habit_str(self, db, user):
+        from apps.calendar.models import Habit
+
+        habit = Habit.objects.create(
+            user=user,
+            name="Exercise",
+            frequency="daily",
+            icon="dumbbell",
+        )
+        result = str(habit)
+        assert "dumbbell" in result
+        assert "Exercise" in result
+        assert "daily" in result
+
+    def test_habit_frequency_choices(self, db, user):
+        from apps.calendar.models import Habit
+
+        for freq, _ in Habit.FREQUENCY_CHOICES:
+            habit = Habit.objects.create(
+                user=user,
+                name=f"Habit {freq}",
+                frequency=freq,
+            )
+            assert habit.frequency == freq
+            habit.delete()
+
+    def test_habit_custom_days(self, db, user):
+        from apps.calendar.models import Habit
+
+        habit = Habit.objects.create(
+            user=user,
+            name="Custom Habit",
+            frequency="custom",
+            custom_days=[0, 2, 4],  # Mon, Wed, Fri
+        )
+        assert habit.custom_days == [0, 2, 4]
+
+
+# ===================================================================
+# HabitCompletion model tests
+# ===================================================================
+
+
+class TestHabitCompletionModel:
+    """Test HabitCompletion model."""
+
+    def test_create_completion(self, db, user):
+        from apps.calendar.models import Habit, HabitCompletion
+
+        habit = Habit.objects.create(
+            user=user, name="Read", frequency="daily"
+        )
+        today = timezone.now().date()
+        completion = HabitCompletion.objects.create(
+            habit=habit,
+            date=today,
+            count=1,
+        )
+        assert completion.pk is not None
+        assert str(completion) == f"Read - {today} (x1)"
+
+    def test_completion_unique_habit_date(self, db, user):
+        """Cannot complete the same habit twice on the same date."""
+        import pytest
+
+        from apps.calendar.models import Habit, HabitCompletion
+
+        habit = Habit.objects.create(
+            user=user, name="Drink Water", frequency="daily"
+        )
+        today = timezone.now().date()
+        HabitCompletion.objects.create(habit=habit, date=today)
+        with pytest.raises(Exception):
+            HabitCompletion.objects.create(habit=habit, date=today)
+
+    def test_completion_different_dates(self, db, user):
+        """Completions on different dates are allowed."""
+        from apps.calendar.models import Habit, HabitCompletion
+
+        habit = Habit.objects.create(
+            user=user, name="Walk", frequency="daily"
+        )
+        today = timezone.now().date()
+        yesterday = today - timedelta(days=1)
+        HabitCompletion.objects.create(habit=habit, date=today)
+        HabitCompletion.objects.create(habit=habit, date=yesterday)
+        assert HabitCompletion.objects.filter(habit=habit).count() == 2
+
+
+# ===================================================================
+# CalendarEvent extended model tests
+# ===================================================================
+
+
+class TestCalendarEventExtended:
+    """Extended tests for CalendarEvent model."""
+
+    def test_event_categories(self, db, user):
+        """All category choices create valid events."""
+        for code, _ in CalendarEvent.CATEGORY_CHOICES:
+            now = timezone.now()
+            event = CalendarEvent.objects.create(
+                user=user,
+                title=f"Cat {code}",
+                start_time=now,
+                end_time=now + timedelta(hours=1),
+                category=code,
+            )
+            assert event.category == code
+            event.delete()
+
+    def test_event_sync_status_choices(self, db, user):
+        """All sync status choices are valid."""
+        for code, _ in CalendarEvent.SYNC_STATUS_CHOICES:
+            now = timezone.now()
+            event = CalendarEvent.objects.create(
+                user=user,
+                title=f"Sync {code}",
+                start_time=now,
+                end_time=now + timedelta(hours=1),
+                sync_status=code,
+            )
+            assert event.sync_status == code
+            event.delete()
+
+    def test_recurring_event(self, db, user):
+        """Recurring event with recurrence rule."""
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Weekly Team Sync",
+            start_time=now,
+            end_time=now + timedelta(hours=1),
+            is_recurring=True,
+            recurrence_rule={
+                "frequency": "weekly",
+                "interval": 1,
+                "days_of_week": [1],
+            },
+        )
+        assert event.is_recurring is True
+        assert event.recurrence_rule["frequency"] == "weekly"
+
+    def test_event_all_day(self, db, user):
+        """All-day event."""
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Holiday",
+            start_time=now,
+            end_time=now + timedelta(days=1),
+            all_day=True,
+        )
+        assert event.all_day is True
+
+    def test_event_with_reminders(self, db, user):
+        """Event with multiple reminders."""
+        now = timezone.now()
+        event = CalendarEvent.objects.create(
+            user=user,
+            title="Important Meeting",
+            start_time=now + timedelta(hours=3),
+            end_time=now + timedelta(hours=4),
+            reminders=[
+                {"minutes_before": 15, "type": "push"},
+                {"minutes_before": 60, "type": "email"},
+            ],
+        )
+        assert len(event.reminders) == 2
+
+    def test_event_parent_child(self, db, user):
+        """Recurring instance links to parent event."""
+        now = timezone.now()
+        parent = CalendarEvent.objects.create(
+            user=user,
+            title="Recurring Parent",
+            start_time=now,
+            end_time=now + timedelta(hours=1),
+            is_recurring=True,
+        )
+        child = CalendarEvent.objects.create(
+            user=user,
+            title="Recurring Parent",
+            start_time=now + timedelta(weeks=1),
+            end_time=now + timedelta(weeks=1, hours=1),
+            parent_event=parent,
+        )
+        assert child.parent_event == parent
+        assert parent.recurring_instances.count() == 1

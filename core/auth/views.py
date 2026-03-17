@@ -78,7 +78,7 @@ def _get_client_ip(request):
     """Get the real client IP, respecting X-Forwarded-For behind a proxy."""
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
     if xff:
-        return xff.split(",")[0].strip()
+        return xff.split(",")[-1].strip()
     return request.META.get("REMOTE_ADDR", "")
 
 
@@ -258,6 +258,11 @@ class TwoFactorChallengeView(APIView):
     throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
+        # Check lockout before processing 2FA
+        identifiers, lockout_response = _check_lockout(request)
+        if lockout_response:
+            return lockout_response
+
         challenge_token = request.data.get("challenge_token", "").strip()
         code = request.data.get("code", "").strip()
 
@@ -294,21 +299,25 @@ class TwoFactorChallengeView(APIView):
 
         # If TOTP failed, try backup codes
         if not verified:
-            from apps.users.two_factor import _hash_code
+            from apps.users.two_factor import _verify_code
 
             stored_hashes = user.backup_codes or []
-            code_hash = _hash_code(code.upper())
-            if code_hash in stored_hashes:
-                stored_hashes.remove(code_hash)
-                user.backup_codes = stored_hashes
-                user.save(update_fields=["backup_codes"])
-                verified = True
+            for i, stored in enumerate(stored_hashes):
+                if _verify_code(code.upper(), stored):
+                    stored_hashes.pop(i)
+                    user.backup_codes = stored_hashes
+                    user.save(update_fields=["backup_codes"])
+                    verified = True
+                    break
 
         if not verified:
+            _record_failed_login(identifiers)
             return Response(
                 {"error": "Invalid verification code."},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
+
+        _clear_failed_login(identifiers)
 
         # Send login notification
         send_login_notification_email.delay(

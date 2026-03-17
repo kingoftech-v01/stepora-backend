@@ -432,10 +432,45 @@ class Task(models.Model):
     )
 
     # Recurrence
+    RECURRENCE_TYPE_CHOICES = [
+        ("none", "None"),
+        ("daily", "Daily"),
+        ("weekly", "Weekly"),
+        ("biweekly", "Bi-weekly"),
+        ("monthly", "Monthly"),
+        ("custom", "Custom"),
+    ]
+    recurrence_type = models.CharField(
+        max_length=10,
+        choices=RECURRENCE_TYPE_CHOICES,
+        default="none",
+        db_index=True,
+        help_text="Type of recurrence pattern for this task",
+    )
+    recurrence_days = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Custom recurrence days, e.g. ["mon","wed","fri"]',
+    )
+    recurrence_end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date after which no more recurring instances should be created",
+    )
+    parent_task = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recurring_children",
+        help_text="The template task that spawned this recurring instance",
+    )
+
+    # Legacy recurrence JSONField (kept for backward compat)
     recurrence = models.JSONField(
         null=True,
         blank=True,
-        help_text='Recurrence pattern: {type: "daily|weekly|monthly", interval: 1, ...}',
+        help_text='Legacy recurrence pattern: {type: "daily|weekly|monthly", interval: 1, ...}',
     )
 
     STATUS_CHOICES = [
@@ -489,6 +524,8 @@ class Task(models.Model):
             models.Index(fields=["expected_date"]),
             models.Index(fields=["deadline_date"]),
             models.Index(fields=["chain_parent"]),
+            models.Index(fields=["parent_task"]),
+            models.Index(fields=["recurrence_type"]),
         ]
 
     def __str__(self):
@@ -535,28 +572,128 @@ class Task(models.Model):
         if self.chain_next_delay_days is not None:
             self._create_chain_next()
 
-    def _update_streak(self):
-        """Update user's streak based on consecutive day completions (atomic)."""
-        from django.contrib.auth import get_user_model
-        from django.db.models import F
+        # ── Recurrence: auto-create next occurrence if recurring ──
+        if self.recurrence_type and self.recurrence_type != "none":
+            self._create_next_recurring()
 
-        User = get_user_model()
+    def _create_next_recurring(self):
+        """Auto-create the next occurrence of a recurring task on completion."""
+        from datetime import timedelta
+
+        next_date = self._calculate_next_recurrence_date()
+        if next_date is None:
+            return None
+
+        # Check end date
+        if self.recurrence_end_date and next_date > self.recurrence_end_date:
+            return None
+
+        # Determine the template (root parent or self)
+        template = self.parent_task if self.parent_task else self
+
+        max_order = Task.objects.filter(goal=self.goal).count()
+
+        next_task = Task.objects.create(
+            goal=self.goal,
+            title=self.title,
+            description=self.description,
+            order=max_order + 1,
+            scheduled_date=timezone.make_aware(
+                timezone.datetime.combine(next_date, timezone.datetime.min.time())
+            )
+            if next_date
+            else None,
+            scheduled_time=self.scheduled_time,
+            duration_mins=self.duration_mins,
+            expected_date=next_date,
+            recurrence_type=self.recurrence_type,
+            recurrence_days=self.recurrence_days,
+            recurrence_end_date=self.recurrence_end_date,
+            parent_task=template,
+        )
+
+        # Notification
+        from apps.notifications.models import Notification
+
+        Notification.objects.create(
+            user=self.goal.dream.user,
+            notification_type="system",
+            title="Next recurring task created",
+            body='"{}" has been scheduled for {}.'.format(
+                next_task.title, next_date.strftime("%b %d, %Y")
+            ),
+            scheduled_for=timezone.now(),
+            data={
+                "screen": "dream",
+                "dreamId": str(self.goal.dream.id),
+                "goalId": str(self.goal.id),
+                "taskId": str(next_task.id),
+            },
+        )
+
+        return next_task
+
+    def _calculate_next_recurrence_date(self):
+        """Calculate the next date for a recurring task based on recurrence_type."""
+        from datetime import date, timedelta
+
+        base_date = (
+            self.completed_at.date()
+            if self.completed_at
+            else (self.expected_date or self.scheduled_date.date() if self.scheduled_date else date.today())
+        )
+
+        if self.recurrence_type == "daily":
+            return base_date + timedelta(days=1)
+        elif self.recurrence_type == "weekly":
+            return base_date + timedelta(weeks=1)
+        elif self.recurrence_type == "biweekly":
+            return base_date + timedelta(weeks=2)
+        elif self.recurrence_type == "monthly":
+            # Advance by ~30 days, landing on the same day-of-month
+            month = base_date.month + 1
+            year = base_date.year
+            if month > 12:
+                month = 1
+                year += 1
+            day = min(base_date.day, 28)  # safe for all months
+            return date(year, month, day)
+        elif self.recurrence_type == "custom" and self.recurrence_days:
+            # Find the next day in recurrence_days after base_date
+            day_map = {
+                "mon": 0, "tue": 1, "wed": 2, "thu": 3,
+                "fri": 4, "sat": 5, "sun": 6,
+            }
+            target_days = sorted(
+                [day_map[d] for d in self.recurrence_days if d in day_map]
+            )
+            if not target_days:
+                return base_date + timedelta(days=1)
+
+            current_weekday = base_date.weekday()
+            for td in target_days:
+                delta = td - current_weekday
+                if delta > 0:
+                    return base_date + timedelta(days=delta)
+            # Wrap to next week
+            delta = 7 - current_weekday + target_days[0]
+            return base_date + timedelta(days=delta)
+
+        return None
+
+    def _update_streak(self):
+        """Update user's streak based on consecutive day completions (atomic).
+
+        Also records a HabitChain entry for the day.
+        """
+        from apps.users.streak_service import StreakService
 
         user = self.goal.dream.user
-        today = timezone.now().date()
-        last_activity_date = user.last_activity.date()
-
-        if last_activity_date == today:
-            # Already counted today
-            return
-        elif last_activity_date == today - timezone.timedelta(days=1):
-            # Consecutive day — atomic increment
-            User.objects.filter(id=user.id).update(streak_days=F("streak_days") + 1)
-        else:
-            # Streak broken — reset
-            User.objects.filter(id=user.id).update(streak_days=1)
-
-        user.refresh_from_db(fields=["streak_days"])
+        StreakService.record_activity(
+            user=user,
+            chain_type="task_completion",
+            dream=self.goal.dream,
+        )
 
     def _create_chain_next(self):
         """Auto-create the next task in a recurring chain."""
@@ -1188,3 +1325,69 @@ class PlanCheckIn(models.Model):
 
     def __str__(self):
         return f"CheckIn for {self.dream_id} ({self.status})"
+
+
+class GoalRefinementSession(models.Model):
+    """
+    Multi-turn AI conversation session for refining vague dreams
+    into specific, measurable SMART goals before dream creation.
+
+    The user describes a vague idea (e.g. "I want to get fit"), and the AI
+    asks 3-5 smart questions to produce a refined dream with title,
+    description, category, timeframe, and suggested goals.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="refinement_sessions"
+    )
+
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("abandoned", "Abandoned"),
+    ]
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="active", db_index=True
+    )
+
+    # Conversation history as JSON: [{"role": "user"|"assistant", "content": "..."}]
+    messages = models.JSONField(default=list)
+
+    # Number of AI questions asked so far (drives progress indicator)
+    questions_asked = models.IntegerField(default=0)
+
+    # Final refined dream output (populated when status=completed)
+    refined_dream = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="AI-generated refined dream: {title, description, category, timeframe_months, suggested_goals}",
+    )
+
+    # The dream created from this session (nullable — set after user confirms)
+    dream = models.ForeignKey(
+        Dream,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="refinement_session",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "goal_refinement_sessions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return f"RefinementSession {self.id} ({self.status})"
+
+    @property
+    def is_expired(self):
+        """Sessions expire after 24 hours."""
+        return (timezone.now() - self.created_at).total_seconds() > 86400

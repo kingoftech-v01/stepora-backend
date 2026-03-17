@@ -1436,3 +1436,210 @@ class TestCleanupStaleFCMTokens:
 
         result = cleanup_stale_fcm_tokens()
         assert result["deactivated"] == 0
+
+
+# ---------------------------------------------------------------------------
+# ReminderPreference model tests
+# ---------------------------------------------------------------------------
+
+
+class TestReminderPreferenceModel:
+    """Tests for the ReminderPreference model."""
+
+    def test_create_reminder(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            reminder_type="morning",
+            time=dt_time(8, 0),
+        )
+        assert reminder.pk is not None
+        assert reminder.is_active is True
+
+    def test_reminder_str_global(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(9, 30),
+        )
+        result = str(reminder)
+        assert user.email in result
+        assert "global" in result
+
+    def test_reminder_str_with_dream(self, db, user, dream):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            dream=dream,
+            time=dt_time(18, 0),
+        )
+        result = str(reminder)
+        assert "dream" in result
+
+    def test_get_days_list(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(8, 0),
+            days="mon,wed,fri",
+        )
+        days = reminder.get_days_list()
+        assert days == ["mon", "wed", "fri"]
+
+    def test_get_days_list_all_days(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(8, 0),
+            days="mon,tue,wed,thu,fri,sat,sun",
+        )
+        assert len(reminder.get_days_list()) == 7
+
+    def test_matches_day_true(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(8, 0),
+            days="mon,tue,wed",
+        )
+        assert reminder.matches_day("mon") is True
+        assert reminder.matches_day("MON") is True  # case-insensitive
+        assert reminder.matches_day("tue") is True
+
+    def test_matches_day_false(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(8, 0),
+            days="mon,tue,wed",
+        )
+        assert reminder.matches_day("thu") is False
+        assert reminder.matches_day("sat") is False
+
+    def test_reminder_type_choices(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        for rtype, _ in ReminderPreference.REMINDER_TYPE_CHOICES:
+            r = ReminderPreference.objects.create(
+                user=user,
+                reminder_type=rtype,
+                time=dt_time(10, 0),
+            )
+            assert r.reminder_type == rtype
+            r.delete()
+
+    def test_notify_method_choices(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        for method, _ in ReminderPreference.NOTIFY_CHOICES:
+            r = ReminderPreference.objects.create(
+                user=user,
+                time=dt_time(12, 0),
+                notify_method=method,
+            )
+            assert r.notify_method == method
+            r.delete()
+
+    def test_unique_user_dream_time(self, db, user, dream):
+        """Duplicate (user, dream, time) raises IntegrityError."""
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        ReminderPreference.objects.create(
+            user=user,
+            dream=dream,
+            time=dt_time(8, 0),
+        )
+        import pytest
+
+        with pytest.raises(Exception):
+            ReminderPreference.objects.create(
+                user=user,
+                dream=dream,
+                time=dt_time(8, 0),
+            )
+
+    def test_default_days_all_week(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        reminder = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(7, 0),
+        )
+        assert "mon" in reminder.days
+        assert "sun" in reminder.days
+
+    def test_ordering_by_time(self, db, user):
+        from datetime import time as dt_time
+
+        from .models import ReminderPreference
+
+        r1 = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(18, 0),
+        )
+        r2 = ReminderPreference.objects.create(
+            user=user,
+            time=dt_time(6, 0),
+        )
+        reminders = list(ReminderPreference.objects.filter(user=user))
+        assert reminders[0] == r2  # 6:00 before 18:00
+
+
+# ---------------------------------------------------------------------------
+# Notification model – extended should_send / DND tests
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationDND:
+    """Tests for DND-related Notification behavior."""
+
+    def test_notification_mark_sent(self, db, notification):
+        """mark_sent updates status and sent_at."""
+        notification.mark_sent()
+        assert notification.status == "sent"
+        assert notification.sent_at is not None
+
+    def test_notification_mark_read(self, db, notification):
+        """mark_read sets read_at timestamp."""
+        notification.mark_read()
+        assert notification.read_at is not None
+
+    def test_notification_mark_opened(self, db, notification):
+        """mark_opened sets opened_at timestamp."""
+        notification.mark_opened()
+        assert notification.opened_at is not None
+
+    def test_notification_mark_failed(self, db, notification):
+        """mark_failed sets status and error_message."""
+        notification.mark_failed("test error")
+        assert notification.status == "failed"
+        assert notification.error_message == "test error"

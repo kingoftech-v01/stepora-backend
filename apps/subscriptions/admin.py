@@ -13,6 +13,8 @@ from .models import (
     PromotionPlanDiscount,
     PromotionRedemption,
     Referral,
+    ReferralCode,
+    ReferralReward,
     StripeCustomer,
     StripeWebhookEvent,
     Subscription,
@@ -204,6 +206,17 @@ class SubscriptionAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(ReferralCode)
+class ReferralCodeAdmin(admin.ModelAdmin):
+    """Admin interface for ReferralCode model."""
+
+    list_display = ["user", "code", "uses_count", "created_at"]
+    list_filter = ["created_at"]
+    search_fields = ["user__email", "code"]
+    readonly_fields = ["id", "created_at"]
+    raw_id_fields = ["user"]
+
+
 @admin.register(Referral)
 class ReferralAdmin(admin.ModelAdmin):
     """Admin interface for Referral model."""
@@ -212,15 +225,35 @@ class ReferralAdmin(admin.ModelAdmin):
         "referrer",
         "referred",
         "referral_code",
+        "status",
         "referred_has_paid",
         "reward_granted",
         "created_at",
+        "completed_at",
         "paid_at",
     ]
-    list_filter = ["referred_has_paid", "reward_granted", "created_at"]
+    list_filter = ["status", "referred_has_paid", "reward_granted", "created_at"]
     search_fields = ["referrer__email", "referred__email", "referral_code"]
-    readonly_fields = ["created_at"]
+    readonly_fields = ["id", "created_at"]
     raw_id_fields = ["referrer", "referred"]
+
+
+@admin.register(ReferralReward)
+class ReferralRewardAdmin(admin.ModelAdmin):
+    """Admin interface for ReferralReward model."""
+
+    list_display = [
+        "user",
+        "reward_type",
+        "amount",
+        "description",
+        "tier_name",
+        "claimed_at",
+    ]
+    list_filter = ["reward_type", "tier_name", "claimed_at"]
+    search_fields = ["user__email", "description"]
+    readonly_fields = ["id", "claimed_at"]
+    raw_id_fields = ["user", "referral"]
 
 
 @admin.register(StripeWebhookEvent)

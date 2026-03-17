@@ -430,14 +430,71 @@ class Subscription(models.Model):
         return self.status in ("active", "trialing")
 
 
+class ReferralCode(models.Model):
+    """
+    Stores each user's unique referral code.
+
+    Auto-generated via signal on user creation. The code is an 8-character
+    uppercase alphanumeric string (e.g. DP-REF-A1B2C3D4).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_code_obj",
+    )
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text="Unique referral code (DP-REF-XXXXXXXX)",
+    )
+    uses_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this code has been used",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "referral_codes"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} — {self.code} ({self.uses_count} uses)"
+
+    @classmethod
+    def generate_code(cls, user):
+        """Generate a deterministic referral code for a user."""
+        short = str(user.id).replace("-", "")[:8].upper()
+        return f"DP-REF-{short}"
+
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get existing or create a new referral code for a user."""
+        obj, _ = cls.objects.get_or_create(
+            user=user,
+            defaults={"code": cls.generate_code(user)},
+        )
+        return obj
+
+
 class Referral(models.Model):
     """
-    Tracks user referrals for the "Refer 3 paid friends → 1 free month" program.
+    Tracks user referrals with tiered rewards.
 
-    When a referred user subscribes to a paid plan, the referrer's
-    paid_referral_count increments. At every 3 paid referrals, the referrer
-    gets 1 month free Premium.
+    Tiered incentives:
+    - 1 referral: 500 XP + 7 days premium (both users)
+    - 5 referrals: unlock exclusive avatar frame
+    - 10 referrals: 30% lifetime discount on premium
+    - 25 referrals: lifetime premium free
     """
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("rewarded", "Rewarded"),
+    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     referrer = models.ForeignKey(
@@ -457,15 +514,27 @@ class Referral(models.Model):
         db_index=True,
         help_text="The code used for this referral",
     )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+        db_index=True,
+        help_text="pending -> completed (onboarding done) -> rewarded (rewards given)",
+    )
     referred_has_paid = models.BooleanField(
         default=False,
         help_text="Whether the referred user has subscribed to a paid plan",
     )
     reward_granted = models.BooleanField(
         default=False,
-        help_text="Whether a free month was granted for this batch of 3",
+        help_text="Whether rewards have been granted for this referral",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the referral was completed (referred user active 7+ days)",
+    )
     paid_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -475,10 +544,13 @@ class Referral(models.Model):
     class Meta:
         db_table = "referrals"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["referrer", "status"]),
+            models.Index(fields=["status"]),
+        ]
 
     def __str__(self):
-        status = "paid" if self.referred_has_paid else "pending"
-        return f"{self.referrer.email} → {self.referred.email} ({status})"
+        return f"{self.referrer.email} -> {self.referred.email} ({self.status})"
 
     @classmethod
     def get_referral_code(cls, user):
@@ -493,7 +565,7 @@ class Referral(models.Model):
 
         Code format: DP-REF-<first 8 hex chars of user UUID>.
         We reverse the code into a UUID range and query with __gte/__lte
-        which hits the primary key index → O(1).
+        which hits the primary key index -> O(1).
         """
         import uuid as _uuid
 
@@ -523,22 +595,155 @@ class Referral(models.Model):
             .first()
         )
 
+    # Tier definitions: (threshold, tier_name, rewards_description)
+    TIERS = [
+        (1, "bronze", "500 XP + 7 days premium"),
+        (5, "silver", "Exclusive avatar frame"),
+        (10, "gold", "30% lifetime discount"),
+        (25, "diamond", "Lifetime premium free"),
+    ]
+
     @classmethod
-    def get_referrer_stats(cls, user):
-        """Get referral stats for a user."""
+    def get_current_tier(cls, completed_count):
+        """Return the current tier name based on completed referral count."""
+        tier = None
+        for threshold, name, _ in cls.TIERS:
+            if completed_count >= threshold:
+                tier = name
+        return tier
+
+    @classmethod
+    def get_next_tier(cls, completed_count):
+        """Return the next tier info (threshold, name, description) or None."""
+        for threshold, name, desc in cls.TIERS:
+            if completed_count < threshold:
+                return {"threshold": threshold, "name": name, "description": desc}
+        return None
+
+    @classmethod
+    def get_tier_progress(cls, user):
+        """Get detailed tier progress for the referral screen."""
+        completed = cls.objects.filter(
+            referrer=user,
+            status__in=("completed", "rewarded"),
+        ).count()
         total = cls.objects.filter(referrer=user).count()
-        paid = cls.objects.filter(referrer=user, referred_has_paid=True).count()
-        free_months_earned = paid // 3
-        progress_to_next = paid % 3
+        pending = cls.objects.filter(referrer=user, status="pending").count()
+
+        current_tier = cls.get_current_tier(completed)
+        next_tier = cls.get_next_tier(completed)
+
+        # Build unlocked tiers list
+        unlocked_tiers = []
+        for threshold, name, desc in cls.TIERS:
+            unlocked_tiers.append({
+                "threshold": threshold,
+                "name": name,
+                "description": desc,
+                "unlocked": completed >= threshold,
+            })
+
         return {
             "total_referrals": total,
+            "completed_referrals": completed,
+            "pending_referrals": pending,
+            "current_tier": current_tier,
+            "next_tier": next_tier,
+            "tiers": unlocked_tiers,
+        }
+
+    @classmethod
+    def get_referrer_stats(cls, user):
+        """Get referral stats for a user (backward-compatible + tiered)."""
+        total = cls.objects.filter(referrer=user).count()
+        completed = cls.objects.filter(
+            referrer=user, status__in=("completed", "rewarded")
+        ).count()
+        paid = cls.objects.filter(referrer=user, referred_has_paid=True).count()
+        pending = cls.objects.filter(referrer=user, status="pending").count()
+
+        # Legacy compat
+        free_months_earned = paid // 3
+        progress_to_next = paid % 3
+
+        # Tiered
+        tier_progress = cls.get_tier_progress(user)
+
+        return {
+            "total_referrals": total,
+            "completed_referrals": completed,
             "paid_referrals": paid,
+            "pending_referrals": pending,
             "free_months_earned": free_months_earned,
             "referrals_until_next_reward": (
                 3 - progress_to_next if progress_to_next > 0 else 3
             ),
             "progress_to_next": progress_to_next,
+            **tier_progress,
         }
+
+
+class ReferralReward(models.Model):
+    """
+    Tracks rewards given for referrals.
+
+    Reward types:
+    - xp: XP bonus
+    - premium_days: temporary premium access
+    - cosmetic: avatar frame or other cosmetic
+    - discount: lifetime discount on premium
+    """
+
+    REWARD_TYPE_CHOICES = [
+        ("xp", "XP Bonus"),
+        ("premium_days", "Premium Days"),
+        ("cosmetic", "Cosmetic Reward"),
+        ("discount", "Lifetime Discount"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_rewards",
+    )
+    reward_type = models.CharField(
+        max_length=20,
+        choices=REWARD_TYPE_CHOICES,
+        help_text="Type of reward granted",
+    )
+    amount = models.IntegerField(
+        default=0,
+        help_text="Amount: XP points, premium days, discount %, or 1 for cosmetic",
+    )
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Human-readable reward description",
+    )
+    referral = models.ForeignKey(
+        Referral,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rewards",
+        help_text="The referral that triggered this reward (null for tier milestones)",
+    )
+    tier_name = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Tier that unlocked this reward (bronze/silver/gold/diamond)",
+    )
+    claimed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "referral_rewards"
+        ordering = ["-claimed_at"]
+
+    def __str__(self):
+        return f"{self.user.email} — {self.reward_type}: {self.amount}"
 
 
 class StripeWebhookEvent(models.Model):

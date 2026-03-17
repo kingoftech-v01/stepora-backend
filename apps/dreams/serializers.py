@@ -47,6 +47,9 @@ class TaskSerializer(serializers.ModelSerializer):
             "expected_date",
             "deadline_date",
             "recurrence",
+            "recurrence_type",
+            "recurrence_days",
+            "recurrence_end_date",
             "status",
             "completed_at",
             "is_two_minute_start",
@@ -1015,6 +1018,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             "expected_date",
             "deadline_date",
             "recurrence",
+            "recurrence_type",
+            "recurrence_days",
+            "recurrence_end_date",
             "is_two_minute_start",
             "chain_next_delay_days",
             "chain_template_title",
@@ -1030,7 +1036,19 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             "duration_mins": {"help_text": "Estimated duration in minutes."},
             "expected_date": {"help_text": "Ideal/soft date to do this task."},
             "deadline_date": {"help_text": "Hard deadline for this task."},
-            "recurrence": {"help_text": "Recurrence pattern for the task."},
+            "recurrence": {"help_text": "Recurrence pattern for the task (legacy)."},
+            "recurrence_type": {
+                "help_text": "Type of recurrence: none, daily, weekly, biweekly, monthly, custom.",
+                "required": False,
+            },
+            "recurrence_days": {
+                "help_text": 'Custom recurrence days, e.g. ["mon","wed","fri"].',
+                "required": False,
+            },
+            "recurrence_end_date": {
+                "help_text": "Optional end date for recurrence.",
+                "required": False,
+            },
             "is_two_minute_start": {
                 "help_text": "Whether this is a two-minute quick-start task."
             },

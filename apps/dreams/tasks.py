@@ -2136,3 +2136,252 @@ def expire_stale_checkins(self):
     except Exception as e:
         logger.error(f"expire_stale_checkins error: {e}", exc_info=True)
         return {"expired": 0, "error": str(e)}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Recurring Task Generation
+# ══════════════════════════════════════════════════════════════════════
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=300, time_limit=360)
+def generate_recurring_tasks(self):
+    """
+    Daily job: generate upcoming recurring task instances for the next 7 days.
+
+    For each "template" recurring task (parent_task is NULL, recurrence_type != 'none'),
+    checks if instances already exist for each upcoming date, and creates them if missing.
+    """
+    from datetime import date as date_type
+
+    try:
+        today = timezone.now().date()
+        horizon = today + timedelta(days=7)
+
+        # Find all recurring template tasks (not children of another recurring task)
+        templates = Task.objects.filter(
+            recurrence_type__in=["daily", "weekly", "biweekly", "monthly", "custom"],
+            parent_task__isnull=True,
+        ).select_related("goal", "goal__dream")
+
+        created_count = 0
+
+        for template in templates:
+            # Skip if the end date has passed
+            if template.recurrence_end_date and template.recurrence_end_date < today:
+                continue
+
+            # Skip if the dream is not active
+            if template.goal.dream.status != "active":
+                continue
+
+            # Generate dates for the next 7 days
+            dates = _generate_recurrence_dates(template, today, horizon)
+
+            for target_date in dates:
+                # Skip dates beyond end date
+                if template.recurrence_end_date and target_date > template.recurrence_end_date:
+                    continue
+
+                # Check if an instance already exists for this date
+                existing = Task.objects.filter(
+                    parent_task=template,
+                    expected_date=target_date,
+                ).exists()
+
+                if not existing:
+                    max_order = template.goal.tasks.count()
+                    Task.objects.create(
+                        goal=template.goal,
+                        title=template.title,
+                        description=template.description,
+                        order=max_order + 1,
+                        scheduled_date=timezone.make_aware(
+                            timezone.datetime.combine(
+                                target_date, timezone.datetime.min.time()
+                            )
+                        ),
+                        scheduled_time=template.scheduled_time,
+                        duration_mins=template.duration_mins,
+                        expected_date=target_date,
+                        recurrence_type=template.recurrence_type,
+                        recurrence_days=template.recurrence_days,
+                        recurrence_end_date=template.recurrence_end_date,
+                        parent_task=template,
+                    )
+                    created_count += 1
+
+        logger.info(
+            "generate_recurring_tasks: created %d instances from %d templates",
+            created_count,
+            templates.count(),
+        )
+        return {"created": created_count, "templates": templates.count()}
+
+    except Exception as e:
+        logger.error("generate_recurring_tasks error: %s", e, exc_info=True)
+        raise self.retry(exc=e, countdown=60)
+
+
+def _generate_recurrence_dates(template, start_date, end_date):
+    """Generate all recurrence dates between start_date and end_date for a template."""
+    from datetime import date as date_type
+
+    dates = []
+    current = start_date
+
+    if template.recurrence_type == "daily":
+        while current <= end_date:
+            dates.append(current)
+            current += timedelta(days=1)
+
+    elif template.recurrence_type == "weekly":
+        # Schedule on the same weekday as the template's expected_date or scheduled_date
+        base_weekday = _get_template_weekday(template)
+        while current <= end_date:
+            if current.weekday() == base_weekday:
+                dates.append(current)
+            current += timedelta(days=1)
+
+    elif template.recurrence_type == "biweekly":
+        base_date = _get_template_base_date(template)
+        base_weekday = base_date.weekday() if base_date else 0
+        while current <= end_date:
+            if current.weekday() == base_weekday:
+                # Check it's on a biweekly cadence from the base date
+                if base_date:
+                    delta_days = (current - base_date).days
+                    if delta_days >= 0 and delta_days % 14 == 0:
+                        dates.append(current)
+                else:
+                    dates.append(current)
+            current += timedelta(days=1)
+
+    elif template.recurrence_type == "monthly":
+        base_date = _get_template_base_date(template)
+        target_day = base_date.day if base_date else 1
+        target_day = min(target_day, 28)
+        current_month = start_date.month
+        current_year = start_date.year
+        for _ in range(2):  # Check this month and next
+            try:
+                d = date_type(current_year, current_month, target_day)
+                if start_date <= d <= end_date:
+                    dates.append(d)
+            except ValueError:
+                pass
+            current_month += 1
+            if current_month > 12:
+                current_month = 1
+                current_year += 1
+
+    elif template.recurrence_type == "custom" and template.recurrence_days:
+        day_map = {
+            "mon": 0, "tue": 1, "wed": 2, "thu": 3,
+            "fri": 4, "sat": 5, "sun": 6,
+        }
+        target_days = set(
+            day_map[d] for d in template.recurrence_days if d in day_map
+        )
+        while current <= end_date:
+            if current.weekday() in target_days:
+                dates.append(current)
+            current += timedelta(days=1)
+
+    return dates
+
+
+def _get_template_weekday(template):
+    """Get the weekday for a template task."""
+    if template.expected_date:
+        return template.expected_date.weekday()
+    if template.scheduled_date:
+        return template.scheduled_date.date().weekday()
+    return 0  # Monday default
+
+
+def _get_template_base_date(template):
+    """Get the base date for a template task."""
+    from datetime import date as date_type
+
+    if template.expected_date:
+        return template.expected_date
+    if template.scheduled_date:
+        return template.scheduled_date.date()
+    return date_type.today()
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=120, time_limit=150)
+def suggest_recurrence_patterns(self, dream_id, user_id):
+    """
+    AI suggests recurrence patterns when a user creates a goal with a timeline.
+
+    Returns suggested recurring tasks based on the dream's category and timeline.
+    """
+    try:
+        dream = Dream.objects.get(id=dream_id, user_id=user_id)
+        ai = OpenAIService()
+
+        # Calculate timeline in months
+        timeline_months = 6  # default
+        if dream.target_date:
+            delta = dream.target_date - timezone.now()
+            timeline_months = max(1, delta.days // 30)
+
+        prompt = (
+            f"The user has a goal: \"{dream.title}\" in category \"{dream.category}\" "
+            f"with a timeline of {timeline_months} months.\n\n"
+            f"Description: {dream.description}\n\n"
+            f"Suggest 3-5 recurring tasks that would help achieve this goal. "
+            f"For each task, specify:\n"
+            f"- title: short task name\n"
+            f"- recurrence_type: one of daily, weekly, biweekly, monthly\n"
+            f"- recurrence_days: (only for custom) array of day abbreviations like [\"mon\",\"wed\",\"fri\"]\n"
+            f"- duration_mins: estimated minutes per session\n"
+            f"- reasoning: why this recurrence helps\n\n"
+            f"Return JSON array only."
+        )
+
+        response = ai.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a productivity coach. Return only valid JSON array.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=800,
+            response_format={"type": "json_object"},
+        )
+
+        import json as json_mod
+
+        raw = response.choices[0].message.content
+        result = json_mod.loads(raw)
+        suggestions = result.get("suggestions") or result.get("tasks") or result
+        if not isinstance(suggestions, list):
+            suggestions = [suggestions] if isinstance(suggestions, dict) else []
+
+        # Store in Redis for frontend polling
+        from django.core.cache import cache
+
+        cache.set(
+            f"recurrence_suggestions:{dream_id}",
+            json_mod.dumps(suggestions),
+            timeout=3600,
+        )
+
+        logger.info(
+            "suggest_recurrence_patterns: %d suggestions for dream %s",
+            len(suggestions),
+            dream_id,
+        )
+        return {"dream_id": str(dream_id), "suggestions": suggestions}
+
+    except Dream.DoesNotExist:
+        logger.warning("suggest_recurrence_patterns: dream %s not found", dream_id)
+        return {"error": "Dream not found"}
+    except Exception as e:
+        logger.error("suggest_recurrence_patterns error: %s", e, exc_info=True)
+        raise self.retry(exc=e, countdown=30)

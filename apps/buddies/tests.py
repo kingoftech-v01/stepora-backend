@@ -927,3 +927,331 @@ class TestBuddyEncouragementAdminMessagePreview:
         admin_instance = BuddyEncouragementAdmin(BuddyEncouragement, None)
         result = admin_instance.message_preview(enc)
         assert result == "Z" * 80 + "..."
+
+
+# ---------------------------------------------------------------------------
+# Model tests – BuddySkip
+# ---------------------------------------------------------------------------
+
+
+class TestBuddySkipModel:
+    """Tests for the BuddySkip model."""
+
+    def test_create_skip(self, user, other_user):
+        from .models import BuddySkip
+
+        skip = BuddySkip.objects.create(user=user, skipped_user=other_user)
+        assert skip.pk is not None
+        assert skip.user == user
+        assert skip.skipped_user == other_user
+
+    def test_skip_str_representation(self, user, other_user):
+        from .models import BuddySkip
+
+        skip = BuddySkip.objects.create(user=user, skipped_user=other_user)
+        result = str(skip)
+        assert "Test User" in result
+        assert "Other User" in result
+        assert "skipped" in result
+
+    def test_skip_str_falls_back_to_email(self, db):
+        from .models import BuddySkip
+
+        u1 = User.objects.create_user(email="skipper@test.com", password="pass")
+        u2 = User.objects.create_user(email="skipped@test.com", password="pass")
+        skip = BuddySkip.objects.create(user=u1, skipped_user=u2)
+        result = str(skip)
+        assert "skipper@test.com" in result
+        assert "skipped@test.com" in result
+
+    def test_unique_skip_constraint(self, user, other_user):
+        """Cannot skip the same user twice."""
+        from .models import BuddySkip
+
+        BuddySkip.objects.create(user=user, skipped_user=other_user)
+        with pytest.raises(Exception):
+            BuddySkip.objects.create(user=user, skipped_user=other_user)
+
+    def test_skip_is_directional(self, user, other_user):
+        """User A skipping B does not prevent B from seeing A."""
+        from .models import BuddySkip
+
+        BuddySkip.objects.create(user=user, skipped_user=other_user)
+        # Reverse direction should succeed
+        reverse_skip = BuddySkip.objects.create(
+            user=other_user, skipped_user=user
+        )
+        assert reverse_skip.pk is not None
+
+    def test_uuid_primary_key(self, user, other_user):
+        from .models import BuddySkip
+
+        skip = BuddySkip.objects.create(user=user, skipped_user=other_user)
+        assert isinstance(skip.pk, uuid.UUID)
+
+    def test_ordering(self, user, other_user, third_user):
+        """Skips are ordered by -created_at."""
+        from .models import BuddySkip
+
+        s1 = BuddySkip.objects.create(user=user, skipped_user=other_user)
+        BuddySkip.objects.filter(pk=s1.pk).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+        s2 = BuddySkip.objects.create(user=user, skipped_user=third_user)
+
+        skips = list(BuddySkip.objects.filter(user=user))
+        assert skips[0] == s2  # Most recent first
+
+
+# ---------------------------------------------------------------------------
+# Model tests – AccountabilityContract
+# ---------------------------------------------------------------------------
+
+
+class TestAccountabilityContractModel:
+    """Tests for the AccountabilityContract model."""
+
+    def test_create_contract(self, buddy_pairing, user):
+        from .models import AccountabilityContract
+
+        contract = AccountabilityContract.objects.create(
+            pairing=buddy_pairing,
+            title="Fitness Challenge",
+            description="30 days of exercise",
+            goals=[
+                {"title": "Run 5K", "target": 5, "unit": "km"},
+                {"title": "Push-ups", "target": 100, "unit": "reps"},
+            ],
+            check_in_frequency="daily",
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            created_by=user,
+        )
+        assert contract.pk is not None
+        assert isinstance(contract.pk, uuid.UUID)
+        assert contract.status == "active"
+        assert contract.accepted_by_partner is False
+        assert len(contract.goals) == 2
+
+    def test_contract_str(self, buddy_pairing, user):
+        from .models import AccountabilityContract
+
+        contract = AccountabilityContract.objects.create(
+            pairing=buddy_pairing,
+            title="Reading Goal",
+            goals=[],
+            check_in_frequency="weekly",
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            created_by=user,
+        )
+        result = str(contract)
+        assert "Reading Goal" in result
+        assert "active" in result
+
+    def test_contract_status_choices(self, buddy_pairing, user):
+        from .models import AccountabilityContract
+
+        for code, _ in AccountabilityContract.STATUS_CHOICES:
+            contract = AccountabilityContract.objects.create(
+                pairing=buddy_pairing,
+                title=f"Contract {code}",
+                goals=[],
+                check_in_frequency="weekly",
+                start_date=timezone.now().date(),
+                end_date=(timezone.now() + timedelta(days=30)).date(),
+                created_by=user,
+                status=code,
+            )
+            assert contract.status == code
+            contract.delete()
+
+    def test_contract_frequency_choices(self, buddy_pairing, user):
+        from .models import AccountabilityContract
+
+        for freq, _ in AccountabilityContract.CHECK_IN_FREQUENCY_CHOICES:
+            contract = AccountabilityContract.objects.create(
+                pairing=buddy_pairing,
+                title=f"Contract {freq}",
+                goals=[],
+                check_in_frequency=freq,
+                start_date=timezone.now().date(),
+                end_date=(timezone.now() + timedelta(days=30)).date(),
+                created_by=user,
+            )
+            assert contract.check_in_frequency == freq
+            contract.delete()
+
+    def test_contract_ordering(self, buddy_pairing, user):
+        """Contracts ordered by -created_at."""
+        from .models import AccountabilityContract
+
+        c1 = AccountabilityContract.objects.create(
+            pairing=buddy_pairing,
+            title="First",
+            goals=[],
+            check_in_frequency="weekly",
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            created_by=user,
+        )
+        AccountabilityContract.objects.filter(pk=c1.pk).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+        c2 = AccountabilityContract.objects.create(
+            pairing=buddy_pairing,
+            title="Second",
+            goals=[],
+            check_in_frequency="weekly",
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            created_by=user,
+        )
+        contracts = list(AccountabilityContract.objects.all())
+        assert contracts[0] == c2  # Most recent first
+
+
+# ---------------------------------------------------------------------------
+# Model tests – ContractCheckIn
+# ---------------------------------------------------------------------------
+
+
+class TestContractCheckInModel:
+    """Tests for the ContractCheckIn model."""
+
+    @pytest.fixture
+    def contract(self, buddy_pairing, user):
+        from .models import AccountabilityContract
+
+        return AccountabilityContract.objects.create(
+            pairing=buddy_pairing,
+            title="Check-in Test Contract",
+            goals=[{"title": "Walk", "target": 10000, "unit": "steps"}],
+            check_in_frequency="daily",
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            created_by=user,
+        )
+
+    def test_create_checkin(self, contract, user):
+        from .models import ContractCheckIn
+
+        checkin = ContractCheckIn.objects.create(
+            contract=contract,
+            user=user,
+            progress={"0": 8500},
+            note="Almost there!",
+            mood="happy",
+        )
+        assert checkin.pk is not None
+        assert isinstance(checkin.pk, uuid.UUID)
+        assert checkin.progress["0"] == 8500
+
+    def test_checkin_str(self, contract, user):
+        from .models import ContractCheckIn
+
+        checkin = ContractCheckIn.objects.create(
+            contract=contract,
+            user=user,
+            progress={},
+        )
+        result = str(checkin)
+        assert "Check-in by" in result
+
+    def test_checkin_default_values(self, contract, user):
+        from .models import ContractCheckIn
+
+        checkin = ContractCheckIn.objects.create(
+            contract=contract,
+            user=user,
+        )
+        assert checkin.progress == {}
+        assert checkin.note == ""
+        assert checkin.mood == ""
+
+    def test_checkin_ordering(self, contract, user):
+        """Check-ins ordered by -created_at."""
+        from .models import ContractCheckIn
+
+        ci1 = ContractCheckIn.objects.create(
+            contract=contract, user=user, progress={"0": 5000}
+        )
+        ContractCheckIn.objects.filter(pk=ci1.pk).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+        ci2 = ContractCheckIn.objects.create(
+            contract=contract, user=user, progress={"0": 10000}
+        )
+        checkins = list(ContractCheckIn.objects.filter(contract=contract))
+        assert checkins[0] == ci2
+
+    def test_multiple_checkins_per_user(self, contract, user):
+        """Users can submit multiple check-ins."""
+        from .models import ContractCheckIn
+
+        ContractCheckIn.objects.create(
+            contract=contract, user=user, progress={"0": 5000}
+        )
+        ContractCheckIn.objects.create(
+            contract=contract, user=user, progress={"0": 8000}
+        )
+        assert ContractCheckIn.objects.filter(
+            contract=contract, user=user
+        ).count() == 2
+
+    def test_both_users_can_checkin(self, contract, user, other_user):
+        """Both pairing users can submit check-ins."""
+        from .models import ContractCheckIn
+
+        ContractCheckIn.objects.create(
+            contract=contract, user=user, progress={"0": 5000}
+        )
+        ContractCheckIn.objects.create(
+            contract=contract, user=other_user, progress={"0": 7000}
+        )
+        assert ContractCheckIn.objects.filter(contract=contract).count() == 2
+
+
+# ---------------------------------------------------------------------------
+# View tests – ContractViewSet
+# ---------------------------------------------------------------------------
+
+
+CONTRACT_URL = "/api/buddies/contracts/"
+
+
+class TestContractListCreate:
+    """Tests for GET/POST /api/buddies/contracts/."""
+
+    def test_list_contracts_empty(self, authenticated_client, buddy_pairing):
+        response = authenticated_client.get(CONTRACT_URL)
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_create_contract(self, authenticated_client, buddy_pairing, user):
+        data = {
+            "pairing_id": str(buddy_pairing.id),
+            "title": "New Contract",
+            "description": "Test",
+            "goals": [{"title": "Walk", "target": 10000, "unit": "steps"}],
+            "check_in_frequency": "daily",
+            "start_date": timezone.now().date().isoformat(),
+            "end_date": (timezone.now() + timedelta(days=30)).date().isoformat(),
+        }
+        response = authenticated_client.post(
+            CONTRACT_URL, data, format="json"
+        )
+        # Contract creation returns 201 or 200 depending on implementation
+        assert response.status_code in (
+            status.HTTP_201_CREATED,
+            status.HTTP_200_OK,
+        )
+
+    def test_create_contract_requires_auth(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(CONTRACT_URL, {}, format="json")
+        assert response.status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        )

@@ -69,14 +69,17 @@ def leagues(db):
     ]
     result = {}
     for tier, name, min_xp, max_xp, color in data:
-        result[tier] = League.objects.create(
-            name=name,
+        league, _ = League.objects.get_or_create(
             tier=tier,
-            min_xp=min_xp,
-            max_xp=max_xp,
-            color_hex=color,
-            rewards=[{"type": "badge", "name": f"{name} Badge"}],
+            defaults={
+                "name": name,
+                "min_xp": min_xp,
+                "max_xp": max_xp,
+                "color_hex": color,
+                "rewards": [{"type": "badge", "name": f"{name} Badge"}],
+            },
         )
+        result[tier] = league
     return result
 
 
@@ -954,3 +957,746 @@ class TestLeaderboardQueries:
 
         assert user_entry is not None
         assert user_entry["badges_count"] == 2  # 'early_bird' and 'streak_7'
+
+
+# ---------------------------------------------------------------------------
+# SeasonConfig Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSeasonConfigModel:
+    """Tests for the SeasonConfig singleton model."""
+
+    def test_get_creates_singleton(self, db):
+        """SeasonConfig.get() creates and returns a singleton."""
+        from apps.leagues.models import SeasonConfig
+
+        config = SeasonConfig.get()
+        assert config is not None
+        assert config.season_duration_days == 180
+        assert config.group_target_size == 20
+        assert config.group_max_size == 30
+        assert config.group_min_size == 5
+
+    def test_get_returns_same_instance(self, db):
+        """SeasonConfig.get() returns the same instance on repeated calls."""
+        from apps.leagues.models import SeasonConfig
+
+        config1 = SeasonConfig.get()
+        config2 = SeasonConfig.get()
+        assert config1.pk == config2.pk
+
+    def test_str_representation(self, db):
+        from apps.leagues.models import SeasonConfig
+
+        config = SeasonConfig.get()
+        result = str(config)
+        assert "180d" in result
+        assert "20" in result
+        assert "30" in result
+
+    def test_save_invalidates_cache(self, db):
+        """Saving SeasonConfig invalidates the cache."""
+        from django.core.cache import cache
+
+        from apps.leagues.models import SeasonConfig
+
+        config = SeasonConfig.get()
+        config.season_duration_days = 90
+        config.save()
+
+        # Cache should be invalidated
+        assert cache.get("season_config_singleton") is None
+
+        # Re-fetch should return updated value
+        config2 = SeasonConfig.get()
+        assert config2.season_duration_days == 90
+
+    def test_default_values(self, db):
+        from apps.leagues.models import SeasonConfig
+
+        config = SeasonConfig.get()
+        assert config.promotion_xp_threshold == 1000
+        assert config.relegation_xp_threshold == 100
+        assert config.auto_create_next_season is True
+
+
+# ---------------------------------------------------------------------------
+# LeagueGroup Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueGroupModel:
+    """Tests for the LeagueGroup model."""
+
+    def test_create_group(self, leagues, active_season):
+        from apps.leagues.models import LeagueGroup
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        assert group.pk is not None
+        assert group.is_active is True
+
+    def test_group_str(self, leagues, active_season):
+        from apps.leagues.models import LeagueGroup
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["gold"],
+            group_number=3,
+        )
+        result = str(group)
+        assert "Gold League" in result
+        assert "Group #3" in result
+        assert active_season.name in result
+
+    def test_member_count_empty(self, leagues, active_season):
+        from apps.leagues.models import LeagueGroup
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        assert group.member_count == 0
+
+    def test_member_count_with_members(
+        self, leagues, active_season, league_user
+    ):
+        from apps.leagues.models import (
+            LeagueGroup,
+            LeagueGroupMembership,
+            LeagueStanding,
+        )
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        standing = LeagueStanding.objects.create(
+            user=league_user,
+            league=leagues["bronze"],
+            season=active_season,
+            rank=1,
+        )
+        LeagueGroupMembership.objects.create(
+            group=group,
+            standing=standing,
+        )
+        assert group.member_count == 1
+
+    def test_unique_group_constraint(self, leagues, active_season):
+        """Cannot create two groups with the same season+league+number."""
+        from apps.leagues.models import LeagueGroup
+
+        LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        with pytest.raises(Exception):
+            LeagueGroup.objects.create(
+                season=active_season,
+                league=leagues["bronze"],
+                group_number=1,
+            )
+
+
+# ---------------------------------------------------------------------------
+# LeagueGroupMembership Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueGroupMembershipModel:
+    """Tests for the LeagueGroupMembership model."""
+
+    def test_create_membership(self, leagues, active_season, league_user):
+        from apps.leagues.models import (
+            LeagueGroup,
+            LeagueGroupMembership,
+            LeagueStanding,
+        )
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["silver"],
+            group_number=1,
+        )
+        standing = LeagueStanding.objects.create(
+            user=league_user,
+            league=leagues["silver"],
+            season=active_season,
+            rank=1,
+            xp_earned_this_season=600,
+        )
+        membership = LeagueGroupMembership.objects.create(
+            group=group,
+            standing=standing,
+        )
+        assert membership.pk is not None
+        assert membership.promoted_from_group is None
+
+    def test_one_to_one_standing(self, leagues, active_season, league_user):
+        """A standing can only belong to one group."""
+        from apps.leagues.models import (
+            LeagueGroup,
+            LeagueGroupMembership,
+            LeagueStanding,
+        )
+
+        group1 = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        group2 = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=2,
+        )
+        standing = LeagueStanding.objects.create(
+            user=league_user,
+            league=leagues["bronze"],
+            season=active_season,
+        )
+        LeagueGroupMembership.objects.create(group=group1, standing=standing)
+        with pytest.raises(Exception):
+            LeagueGroupMembership.objects.create(
+                group=group2, standing=standing
+            )
+
+    def test_membership_str(self, leagues, active_season, league_user):
+        from apps.leagues.models import (
+            LeagueGroup,
+            LeagueGroupMembership,
+            LeagueStanding,
+        )
+
+        group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        standing = LeagueStanding.objects.create(
+            user=league_user,
+            league=leagues["bronze"],
+            season=active_season,
+            rank=5,
+            xp_earned_this_season=200,
+        )
+        membership = LeagueGroupMembership.objects.create(
+            group=group, standing=standing
+        )
+        result = str(membership)
+        assert "Bronze League" in result or "Group" in result
+
+    def test_promotion_tracking(self, leagues, active_season, league_user):
+        """Membership tracks which group the user was promoted from."""
+        from apps.leagues.models import (
+            LeagueGroup,
+            LeagueGroupMembership,
+            LeagueStanding,
+        )
+
+        old_group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["bronze"],
+            group_number=1,
+        )
+        new_group = LeagueGroup.objects.create(
+            season=active_season,
+            league=leagues["silver"],
+            group_number=1,
+        )
+        standing = LeagueStanding.objects.create(
+            user=league_user,
+            league=leagues["silver"],
+            season=active_season,
+        )
+        membership = LeagueGroupMembership.objects.create(
+            group=new_group,
+            standing=standing,
+            promoted_from_group=old_group,
+        )
+        assert membership.promoted_from_group == old_group
+
+
+# ---------------------------------------------------------------------------
+# RankSnapshot Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRankSnapshotModel:
+    """Tests for the RankSnapshot model."""
+
+    def test_create_snapshot(self, leagues, active_season, league_user):
+        from apps.leagues.models import RankSnapshot
+
+        today = django_timezone.now().date()
+        snapshot = RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=5,
+            xp=250,
+            snapshot_date=today,
+        )
+        assert snapshot.pk is not None
+        assert snapshot.rank == 5
+        assert snapshot.xp == 250
+
+    def test_snapshot_str(self, leagues, active_season, league_user):
+        from apps.leagues.models import RankSnapshot
+
+        today = django_timezone.now().date()
+        snapshot = RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=3,
+            xp=400,
+            snapshot_date=today,
+        )
+        result = str(snapshot)
+        assert "Rank #3" in result
+        assert str(today) in result
+
+    def test_snapshot_unique_user_season_date(
+        self, leagues, active_season, league_user
+    ):
+        """One snapshot per user+season+date."""
+        from apps.leagues.models import RankSnapshot
+
+        today = django_timezone.now().date()
+        RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=1,
+            xp=100,
+            snapshot_date=today,
+        )
+        with pytest.raises(Exception):
+            RankSnapshot.objects.create(
+                user=league_user,
+                season=active_season,
+                league=leagues["bronze"],
+                rank=2,
+                xp=200,
+                snapshot_date=today,
+            )
+
+    def test_snapshot_different_dates_allowed(
+        self, leagues, active_season, league_user
+    ):
+        from apps.leagues.models import RankSnapshot
+
+        today = django_timezone.now().date()
+        from datetime import timedelta
+
+        RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=5,
+            xp=100,
+            snapshot_date=today,
+        )
+        RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=4,
+            xp=150,
+            snapshot_date=today - timedelta(days=1),
+        )
+        assert (
+            RankSnapshot.objects.filter(
+                user=league_user, season=active_season
+            ).count()
+            == 2
+        )
+
+    def test_snapshot_ordering(self, leagues, active_season, league_user):
+        """Snapshots ordered by -snapshot_date."""
+        from apps.leagues.models import RankSnapshot
+
+        today = django_timezone.now().date()
+        from datetime import timedelta
+
+        s1 = RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=5,
+            xp=100,
+            snapshot_date=today - timedelta(days=1),
+        )
+        s2 = RankSnapshot.objects.create(
+            user=league_user,
+            season=active_season,
+            league=leagues["bronze"],
+            rank=4,
+            xp=200,
+            snapshot_date=today,
+        )
+        snapshots = list(
+            RankSnapshot.objects.filter(
+                user=league_user, season=active_season
+            )
+        )
+        assert snapshots[0] == s2  # Most recent first
+
+
+# ---------------------------------------------------------------------------
+# LeagueSeason Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueSeasonModel:
+    """Tests for the LeagueSeason model."""
+
+    def test_create_league_season(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Season of Growth - Spring 2026",
+            theme="growth",
+            description="A season focused on personal growth.",
+            start_date=today,
+            end_date=today + timedelta(days=90),
+            is_active=True,
+            rewards=[
+                {"rank_min": 1, "rank_max": 3, "reward_type": "badge", "reward_id": "gold_crown"},
+            ],
+            theme_colors={"primary": "#4CAF50", "secondary": "#81C784", "accent": "#A5D6A7"},
+        )
+        assert season.pk is not None
+        assert season.is_active is True
+        assert season.theme == "growth"
+
+    def test_league_season_str(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Fire Season",
+            theme="fire",
+            start_date=today,
+            end_date=today + timedelta(days=60),
+            is_active=True,
+        )
+        result = str(season)
+        assert "Fire Season" in result
+        assert "Active" in result
+
+    def test_is_current_property(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Current Season",
+            start_date=today - timedelta(days=5),
+            end_date=today + timedelta(days=50),
+            is_active=True,
+        )
+        assert season.is_current is True
+
+    def test_has_ended_property(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        ended = LeagueSeason.objects.create(
+            name="Ended Season",
+            start_date=today - timedelta(days=100),
+            end_date=today - timedelta(days=10),
+            is_active=False,
+        )
+        assert ended.has_ended is True
+
+        active = LeagueSeason.objects.create(
+            name="Active Season",
+            start_date=today - timedelta(days=5),
+            end_date=today + timedelta(days=50),
+            is_active=True,
+        )
+        assert active.has_ended is False
+
+    def test_days_remaining(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Days Test",
+            start_date=today,
+            end_date=today + timedelta(days=30),
+            is_active=True,
+        )
+        assert season.days_remaining > 0
+        assert season.days_remaining <= 30
+
+    def test_days_remaining_ended(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Ended Days",
+            start_date=today - timedelta(days=60),
+            end_date=today - timedelta(days=1),
+            is_active=False,
+        )
+        assert season.days_remaining == 0
+
+    def test_get_active_league_season(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Active LS",
+            start_date=today,
+            end_date=today + timedelta(days=90),
+            is_active=True,
+        )
+        result = LeagueSeason.get_active_league_season()
+        assert result is not None
+        assert result.pk == season.pk
+
+    def test_get_active_league_season_none(self, db):
+        from django.core.cache import cache
+
+        from apps.leagues.models import LeagueSeason
+
+        cache.delete("active_league_season")
+        LeagueSeason.objects.filter(is_active=True).delete()
+        result = LeagueSeason.get_active_league_season()
+        assert result is None
+
+    def test_get_reward_for_rank(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        season = LeagueSeason.objects.create(
+            name="Reward Season",
+            start_date=today,
+            end_date=today + timedelta(days=60),
+            rewards=[
+                {"rank_min": 1, "rank_max": 3, "reward_type": "badge", "title": "Top 3"},
+                {"rank_min": 4, "rank_max": 10, "reward_type": "xp", "title": "Top 10"},
+            ],
+        )
+        reward = season.get_reward_for_rank(1)
+        assert reward is not None
+        assert reward["title"] == "Top 3"
+
+        reward = season.get_reward_for_rank(5)
+        assert reward is not None
+        assert reward["title"] == "Top 10"
+
+        reward = season.get_reward_for_rank(11)
+        assert reward is None
+
+    def test_theme_choices(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        for theme, _ in LeagueSeason.THEME_CHOICES:
+            season = LeagueSeason(
+                name=f"Theme {theme}",
+                theme=theme,
+                start_date=today,
+                end_date=today + timedelta(days=30),
+            )
+            assert season.theme == theme
+
+
+# ---------------------------------------------------------------------------
+# SeasonParticipant Model Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSeasonParticipantModel:
+    """Tests for the SeasonParticipant model."""
+
+    @pytest.fixture
+    def league_season(self, db):
+        from apps.leagues.models import LeagueSeason
+
+        today = django_timezone.now().date()
+        return LeagueSeason.objects.create(
+            name="Participant Test Season",
+            start_date=today,
+            end_date=today + timedelta(days=90),
+            is_active=True,
+        )
+
+    def test_create_participant(self, league_season, league_user):
+        from apps.leagues.models import SeasonParticipant
+
+        participant = SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+            xp_earned=500,
+        )
+        assert participant.pk is not None
+        assert participant.xp_earned == 500
+        assert participant.rank is None
+        assert participant.rewards_claimed is False
+
+    def test_participant_str(self, league_season, league_user):
+        from apps.leagues.models import SeasonParticipant
+
+        participant = SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+            xp_earned=1000,
+            rank=5,
+        )
+        result = str(participant)
+        assert "Rank #5" in result
+        assert "1000 XP" in result
+
+    def test_participant_str_unranked(self, league_season, league_user):
+        from apps.leagues.models import SeasonParticipant
+
+        participant = SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+        )
+        result = str(participant)
+        assert "Unranked" in result
+
+    def test_claim_rewards(self, league_season, league_user):
+        from apps.leagues.models import SeasonParticipant
+
+        participant = SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+            rank=1,
+        )
+        result = participant.claim_rewards()
+        assert result is True
+        assert participant.rewards_claimed is True
+
+    def test_claim_rewards_double(self, league_season, league_user):
+        from apps.leagues.models import SeasonParticipant
+
+        participant = SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+        )
+        participant.claim_rewards()
+        result = participant.claim_rewards()
+        assert result is False
+
+    def test_unique_season_user(self, league_season, league_user):
+        """A user can only participate once per season."""
+        from apps.leagues.models import SeasonParticipant
+
+        SeasonParticipant.objects.create(
+            season=league_season,
+            user=league_user,
+        )
+        with pytest.raises(Exception):
+            SeasonParticipant.objects.create(
+                season=league_season,
+                user=league_user,
+            )
+
+    def test_participant_ordering(self, league_season):
+        """Participants ordered by -xp_earned."""
+        from apps.leagues.models import SeasonParticipant
+
+        u1 = User.objects.create(
+            email=f"sp1_{uuid.uuid4().hex[:8]}@example.com",
+            xp=100,
+        )
+        u2 = User.objects.create(
+            email=f"sp2_{uuid.uuid4().hex[:8]}@example.com",
+            xp=500,
+        )
+        SeasonParticipant.objects.create(
+            season=league_season, user=u1, xp_earned=100
+        )
+        SeasonParticipant.objects.create(
+            season=league_season, user=u2, xp_earned=500
+        )
+        participants = list(
+            SeasonParticipant.objects.filter(season=league_season)
+        )
+        assert participants[0].xp_earned >= participants[1].xp_earned
+
+
+# ---------------------------------------------------------------------------
+# Season model – extended
+# ---------------------------------------------------------------------------
+
+
+class TestSeasonModelExtended:
+    """Extended tests for the Season model."""
+
+    def test_seconds_remaining(self, active_season):
+        """Test seconds_remaining for active season."""
+        assert active_season.seconds_remaining > 0
+
+    def test_seconds_remaining_ended(self, ended_season):
+        """Test seconds_remaining for ended season."""
+        assert ended_season.seconds_remaining == 0
+
+    def test_ends_at_alias(self, active_season):
+        """Test ends_at property is an alias for end_date."""
+        assert active_season.ends_at == active_season.end_date
+
+    def test_season_save_syncs_is_active(self, db):
+        """Saving with status='active' sets is_active=True."""
+        now = django_timezone.now()
+        season = Season.objects.create(
+            name="Sync Test",
+            start_date=now,
+            end_date=now + timedelta(days=30),
+            status="active",
+        )
+        assert season.is_active is True
+
+        season.status = "ended"
+        season.save()
+        assert season.is_active is False
+
+    def test_season_str_with_status(self, db):
+        now = django_timezone.now()
+        season = Season.objects.create(
+            name="Status Test",
+            start_date=now,
+            end_date=now + timedelta(days=30),
+            status="pending",
+        )
+        result = str(season)
+        assert "Status Test" in result
+        assert "Pending" in result
+
+
+# ---------------------------------------------------------------------------
+# League model – seed_defaults
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueSeedDefaults:
+    """Tests for League.seed_defaults classmethod."""
+
+    def test_seed_defaults_creates_leagues(self, db):
+        """seed_defaults creates all 7 tiers."""
+        leagues = League.seed_defaults()
+        assert len(leagues) == 7
+        tiers = {l.tier for l in leagues}
+        assert "bronze" in tiers
+        assert "legend" in tiers
+
+    def test_seed_defaults_idempotent(self, db):
+        """Calling seed_defaults twice does not duplicate."""
+        League.seed_defaults()
+        League.seed_defaults()
+        assert League.objects.count() == 7

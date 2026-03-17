@@ -98,6 +98,21 @@ def export_user_data(user_id: int):
     logger.info("Data export completed and emailed for user %s", user_id)
 
 
+@shared_task(name="apps.users.tasks.check_broken_streaks")
+def check_broken_streaks():
+    """
+    Reset streaks for users who missed activity and send at-risk notifications.
+
+    Runs daily at midnight UTC via Celery Beat.
+    Delegates to StreakService.reset_broken_streaks().
+    """
+    from .streak_service import StreakService
+
+    result = StreakService.reset_broken_streaks()
+    logger.info("Broken streak check complete: %s", result)
+    return result
+
+
 @shared_task(name="apps.users.tasks.hard_delete_expired_accounts")
 def hard_delete_expired_accounts():
     """

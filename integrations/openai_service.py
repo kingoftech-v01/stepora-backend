@@ -150,6 +150,9 @@ CONTEXT AWARENESS:
 - If the user tries to change the topic away from their dream, gently redirect.
 
 Your tone: empathetic, positive, encouraging but realistic.
+
+TASK MANAGEMENT: You have tools to create, update, complete, delete, and list tasks. If the user asks to manage tasks, use the appropriate tool.
+
 IMPORTANT: Always respond in the user's language. Detect the language they write in and match it.""",
         "planning": ETHICAL_PREAMBLE
         + """You are Stepora, an elite strategic planner that transforms dreams into structured milestone-based action plans.
@@ -392,6 +395,9 @@ CONTEXT AWARENESS:
 - If dream context is provided in system messages, base all your responses on it.
 
 Ask 1-2 open questions. Be empathetic and encouraging.
+
+TASK MANAGEMENT: You have tools to create, update, complete, delete, and list tasks. If the user asks to manage tasks, use the appropriate tool.
+
 IMPORTANT: Respond in the user's language.""",
         "rescue": ETHICAL_PREAMBLE
         + """You are Stepora in "rescue mode" - the user has been inactive for several days.
@@ -512,6 +518,41 @@ If USER RESPONSES is empty or null, proceed as autonomous check-in without user-
 
 Maximum 16 tool calls.
 LANGUAGE RULE: ALL output must be in the dream's language.""",
+        "general": ETHICAL_PREAMBLE
+        + """You are Stepora, a caring and motivating personal AI coach that helps users achieve their dreams and manage their daily tasks.
+
+TASK MANAGEMENT CAPABILITIES:
+You have access to tools that let you manage the user's tasks directly. When a user asks you to create, update, complete, delete, or list tasks, USE the appropriate tool. Do NOT just describe what to do — actually execute it.
+
+Examples of task management requests (in any language):
+- "Add a task for tomorrow: go to the gym" → call create_task
+- "What tasks do I have today?" → call list_tasks with today's date
+- "Mark my gym task as done" → call find_tasks to locate it, then complete_task
+- "Delete the Monday task" → call find_tasks then delete_task
+- "Change my task to 2pm" → call find_tasks then update_task
+- "Ajoute une tâche pour demain : aller à la salle" → call create_task
+- "Supprime la tâche de lundi" → call find_tasks then delete_task
+- "Quelles sont mes tâches cette semaine ?" → call list_tasks with date range
+
+TOOL USE RULES:
+1. When the user's intent clearly involves task management, ALWAYS use the tools — don't just talk about it.
+2. If the request is ambiguous (e.g. which dream to associate a task with), ask for clarification first.
+3. After executing a tool, give a friendly confirmation message summarizing what was done.
+4. If a tool returns an error, explain the issue helpfully and suggest how to fix it.
+5. When creating tasks, infer reasonable defaults: if no date is given, use today or tomorrow.
+6. When listing tasks, present them in a clean, organized way.
+7. If the user has no active dreams, suggest creating one first.
+
+GENERAL COACHING:
+- Be empathetic, positive, encouraging but realistic
+- Help users plan, stay motivated, and track progress
+- Suggest actionable next steps
+
+CONTEXT AWARENESS:
+- When a conversation is linked to a specific dream, ALWAYS reference that dream.
+- If dream context is provided in system messages, base all your responses on it.
+
+IMPORTANT: Always respond in the user's language. Detect the language they write in and match it.""",
     }
 
     def __init__(self):
@@ -1030,6 +1071,108 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 }
 
             return result
+
+        except openai.APIError as e:
+            raise OpenAIError(f"OpenAI API error: {str(e)}")
+        except Exception as e:
+            raise OpenAIError(f"Unexpected error: {str(e)}")
+
+    def chat_with_tools(
+        self,
+        messages,
+        tools,
+        tool_executor,
+        conversation_type="general",
+        temperature=0.7,
+        max_tokens=1500,
+        max_iterations=6,
+    ):
+        """
+        Chat completion with OpenAI tools API and iterative tool execution.
+
+        The AI may call one or more tools. Each tool call is executed via
+        ``tool_executor(tool_name, arguments)`` and the result is fed back
+        to the model so it can generate a final human-readable response.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            tools: List of tool definitions (OpenAI tools format)
+            tool_executor: callable(tool_name, arguments) -> dict
+            conversation_type: Key for system prompt selection
+            temperature: Randomness (0-1)
+            max_tokens: Maximum response tokens
+            max_iterations: Safety cap on tool-call loops
+
+        Returns:
+            Dict with 'content', 'tokens_used', 'model', and 'tool_results'
+        """
+        try:
+            system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
+
+            total_tokens = 0
+            tool_results = []
+
+            for iteration in range(max_iterations):
+                kwargs = {
+                    "model": self.model,
+                    "messages": full_messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "timeout": self.timeout,
+                    "tools": tools,
+                    "tool_choice": "auto",
+                }
+
+                response = _client.chat.completions.create(**kwargs)
+                total_tokens += response.usage.total_tokens
+                choice = response.choices[0]
+
+                # If the model wants to call tools
+                if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+                    # Append the assistant message with tool calls
+                    full_messages.append(choice.message.model_dump())
+
+                    for tool_call in choice.message.tool_calls:
+                        fn_name = tool_call.function.name
+                        try:
+                            fn_args = json.loads(tool_call.function.arguments)
+                        except (json.JSONDecodeError, TypeError):
+                            fn_args = {}
+
+                        # Execute the tool
+                        result = tool_executor(fn_name, fn_args)
+                        tool_results.append({
+                            "tool_name": fn_name,
+                            "arguments": fn_args,
+                            "result": result,
+                        })
+
+                        # Feed the result back as a tool response message
+                        full_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps(result, default=str),
+                        })
+                else:
+                    # Model is done — return the final response
+                    return {
+                        "content": choice.message.content or "",
+                        "tokens_used": total_tokens,
+                        "model": response.model,
+                        "tool_results": tool_results,
+                    }
+
+            # Safety: if we hit max iterations, return whatever we have
+            logger.warning(
+                "chat_with_tools hit max iterations (%d)", max_iterations
+            )
+            return {
+                "content": choice.message.content or "",
+                "tokens_used": total_tokens,
+                "model": response.model,
+                "tool_results": tool_results,
+            }
 
         except openai.APIError as e:
             raise OpenAIError(f"OpenAI API error: {str(e)}")
@@ -3976,6 +4119,122 @@ Respond ONLY with JSON in this exact format:
             raise OpenAIError(f"Task prioritization failed (bad JSON): {str(e)}")
         except openai.APIError as e:
             raise OpenAIError(f"Task prioritization failed: {str(e)}")
+
+    # ── Dream Refinement Agent (Multi-Turn) ──────────────────────────
+    DREAM_REFINEMENT_SYSTEM_PROMPT = (
+        ETHICAL_PREAMBLE
+        + """You are a dream-planning coach helping users turn vague aspirations into specific, actionable SMART dreams. You guide the user through a structured conversation, asking ONE question at a time.
+
+CONVERSATION FLOW (5 questions max):
+1. SPECIFIC OUTCOME: "What specific result do you want to achieve?" — Turn vague into concrete.
+2. TIMELINE: "By when do you want to achieve this?" — Get a realistic deadline.
+3. MOTIVATION: "Why is this important to you?" — Understand the deeper 'why'.
+4. BASELINE: "What's your current level/starting point?" — Assess where they are now.
+5. CAPACITY: "How much time per week can you dedicate?" — Gauge available resources.
+
+You do NOT need to ask all 5 questions. If the user provides enough detail in their answers, you can skip ahead. After gathering sufficient information (typically 3-5 exchanges), propose the refined dream.
+
+RESPONSE FORMAT: You MUST respond with valid JSON in this exact format:
+
+During conversation (asking questions):
+{
+  "message": "Your conversational response and ONE follow-up question",
+  "question_number": 1,
+  "is_complete": false,
+  "refined_dream": null
+}
+
+When you have enough information to propose a refined dream:
+{
+  "message": "Here's your refined dream based on our conversation...",
+  "question_number": 5,
+  "is_complete": true,
+  "refined_dream": {
+    "title": "Concise, specific dream title (max 80 chars)",
+    "description": "Detailed SMART description incorporating all gathered info (2-4 sentences)",
+    "category": "health|career|finance|hobbies|personal|relationships",
+    "timeframe_months": 6,
+    "suggested_goals": [
+      {"title": "Goal 1 title", "description": "Brief description"},
+      {"title": "Goal 2 title", "description": "Brief description"},
+      {"title": "Goal 3 title", "description": "Brief description"}
+    ]
+  }
+}
+
+RULES:
+- Ask only ONE question per message
+- Be encouraging, warm, and conversational — not robotic
+- Always respond in the user's language (detect from their input)
+- Suggest 3-5 goals that form a logical progression
+- Category MUST be one of: health, career, finance, hobbies, personal, relationships
+- timeframe_months must be a realistic integer (1-60)
+- ALWAYS respond with valid JSON — no text outside the JSON object
+- If the user's idea involves harmful/illegal content, refuse per ethical guidelines"""
+    )
+
+    @openai_retry
+    def refine_dream(self, message, conversation_history=None):
+        """
+        Multi-turn dream refinement conversation.
+
+        Args:
+            message: The user's latest message
+            conversation_history: List of prior {role, content} message dicts
+
+        Returns:
+            Dict with message, question_number, is_complete, refined_dream (or None)
+        """
+        messages = [
+            {"role": "system", "content": self.DREAM_REFINEMENT_SYSTEM_PROMPT},
+        ]
+
+        # Append prior conversation history
+        if conversation_history:
+            for msg in conversation_history:
+                messages.append(
+                    {
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", ""),
+                    }
+                )
+
+        # Append the new user message
+        messages.append({"role": "user", "content": message})
+
+        try:
+            response = _client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1200,
+                response_format={"type": "json_object"},
+                timeout=self.timeout,
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Normalise keys
+            if "message" not in result:
+                result["message"] = result.get(
+                    "response",
+                    "I'd love to help you define your dream. What would you like to achieve?",
+                )
+            if "question_number" not in result:
+                result["question_number"] = 1
+            if "is_complete" not in result:
+                result["is_complete"] = False
+            if "refined_dream" not in result:
+                result["refined_dream"] = None
+
+            result["tokens_used"] = response.usage.total_tokens
+
+            return result
+
+        except json.JSONDecodeError as e:
+            raise OpenAIError(f"Dream refinement failed (bad JSON): {str(e)}")
+        except openai.APIError as e:
+            raise OpenAIError(f"Dream refinement failed: {str(e)}")
 
     GOAL_REFINE_SYSTEM_PROMPT = (
         ETHICAL_PREAMBLE

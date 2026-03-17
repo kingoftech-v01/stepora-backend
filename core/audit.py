@@ -18,7 +18,7 @@ def _get_client_ip(request):
     """Extract client IP from request, respecting X-Forwarded-For."""
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
     if xff:
-        return xff.split(",")[0].strip()
+        return xff.split(",")[-1].strip()
     return request.META.get("REMOTE_ADDR", "unknown")
 
 

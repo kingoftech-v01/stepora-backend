@@ -79,6 +79,18 @@ def create_stripe_customer_on_user_creation(sender, instance, created, **kwargs)
             instance.email,
         )
 
+    # Create a ReferralCode so every user has one from day one.
+    try:
+        from .models import ReferralCode
+
+        ReferralCode.get_or_create_for_user(instance)
+        logger.info("Referral code created for new user %s", instance.email)
+    except Exception:
+        logger.exception(
+            "Failed to create referral code for user %s.",
+            instance.email,
+        )
+
     try:
         from .services import StripeService
 

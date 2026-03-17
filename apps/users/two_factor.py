@@ -6,8 +6,10 @@ Uses pyotp for TOTP generation and verification.
 Secrets are stored in the User model's EncryptedCharField (not app_prefs).
 """
 
+import base64
 import hashlib
 import logging
+import os
 import secrets
 
 import pyotp
@@ -33,11 +35,23 @@ def _generate_backup_codes(count=BACKUP_CODE_COUNT):
 
 
 def _hash_code(code):
-    """Hash a backup code for secure storage using PBKDF2 with a fixed app-level salt."""
-    # Using a fixed salt derived from FIELD_ENCRYPTION_KEY avoids storing per-code salts
-    # while still preventing rainbow table attacks on the 8-char hex codes.
-    salt = hashlib.sha256(b"stepora-backup-codes").digest()
-    return hashlib.pbkdf2_hmac("sha256", code.encode(), salt, iterations=100_000).hex()
+    """Hash a backup code for secure storage using PBKDF2 with a random per-code salt."""
+    salt = os.urandom(32)
+    h = hashlib.pbkdf2_hmac("sha256", code.upper().encode(), salt, iterations=100_000)
+    return base64.b64encode(salt).decode() + ":" + h.hex()
+
+
+def _verify_code(code, stored):
+    """Verify a backup code against a stored salt:hash string."""
+    if ":" not in stored:
+        # Legacy format (fixed salt) — fall back to old verification
+        salt = hashlib.sha256(b"stepora-backup-codes").digest()
+        h = hashlib.pbkdf2_hmac("sha256", code.upper().encode(), salt, iterations=100_000)
+        return h.hex() == stored
+    salt_b64, h_hex = stored.split(":", 1)
+    salt = base64.b64decode(salt_b64)
+    h = hashlib.pbkdf2_hmac("sha256", code.upper().encode(), salt, iterations=100_000)
+    return h.hex() == h_hex
 
 
 class TwoFactorSetupView(APIView):
@@ -140,13 +154,18 @@ class TwoFactorVerifyView(APIView):
 
         totp = pyotp.TOTP(secret)
         if not totp.verify(code, valid_window=1):
-            # Check backup codes (stored as hashes)
+            # Check backup codes (stored as hashes with per-code salts)
             stored_hashes = user.backup_codes or []
-            code_hash = _hash_code(code)
-            if code_hash in stored_hashes:
-                stored_hashes.remove(code_hash)
-                user.backup_codes = stored_hashes
-                user.save(update_fields=["backup_codes"])
+            matched = False
+            for i, stored in enumerate(stored_hashes):
+                if _verify_code(code, stored):
+                    stored_hashes.pop(i)
+                    user.backup_codes = stored_hashes
+                    user.save(update_fields=["backup_codes"])
+                    matched = True
+                    break
+
+            if matched:
                 return Response(
                     {
                         "verified": True,

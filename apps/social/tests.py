@@ -1863,3 +1863,418 @@ class TestBlockedUserAdminReasonPreview:
     def test_reason_preview_short_description(self):
         admin_instance = BlockedUserAdmin(BlockedUser, None)
         assert admin_instance.reason_preview.short_description == "Reason"
+
+
+# ---------------------------------------------------------------------------
+# Model tests – DreamPost
+# ---------------------------------------------------------------------------
+
+
+class TestDreamPostModel:
+    """Tests for the DreamPost model."""
+
+    def test_create_dream_post(self, db, user):
+        from apps.social.models import DreamPost
+
+        post = DreamPost.objects.create(
+            user=user,
+            content="My dream is coming true!",
+            visibility="public",
+        )
+        assert post.pk is not None
+        assert post.likes_count == 0
+        assert post.comments_count == 0
+        assert post.is_pinned is False
+
+    def test_dream_post_str(self, db, user):
+        from apps.social.models import DreamPost
+
+        post = DreamPost.objects.create(
+            user=user,
+            content="Short caption",
+        )
+        result = str(post)
+        assert "Test User" in result or user.email in result
+        assert "Short caption" in result
+
+    def test_dream_post_str_long_truncated(self, db, user):
+        from apps.social.models import DreamPost
+
+        post = DreamPost.objects.create(
+            user=user,
+            content="A" * 60,
+        )
+        result = str(post)
+        assert "..." in result
+
+    def test_dream_post_visibility_choices(self, db, user):
+        from apps.social.models import DreamPost
+
+        for vis in ["public", "friends_only", "private"]:
+            post = DreamPost.objects.create(
+                user=user,
+                content=f"vis {vis}",
+                visibility=vis,
+            )
+            assert post.visibility == vis
+            post.delete()
+
+    def test_dream_post_types(self, db, user):
+        from apps.social.models import DreamPost
+
+        for ptype in ["regular", "achievement", "milestone", "event"]:
+            post = DreamPost.objects.create(
+                user=user,
+                content=f"type {ptype}",
+                post_type=ptype,
+            )
+            assert post.post_type == ptype
+            post.delete()
+
+    def test_dream_post_default_values(self, db, user):
+        from apps.social.models import DreamPost
+
+        post = DreamPost.objects.create(
+            user=user,
+            content="Defaults",
+        )
+        assert post.visibility == "public"
+        assert post.post_type == "regular"
+        assert post.media_type == "none"
+        assert post.shares_count == 0
+        assert post.saves_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Model tests – DreamPostLike
+# ---------------------------------------------------------------------------
+
+
+class TestDreamPostLikeModel:
+    """Tests for the DreamPostLike model."""
+
+    def test_create_like(self, db, user):
+        from apps.social.models import DreamPost, DreamPostLike
+
+        post = DreamPost.objects.create(user=user, content="Likeable")
+        like = DreamPostLike.objects.create(post=post, user=user)
+        assert like.pk is not None
+
+    def test_like_str(self, db, user):
+        from apps.social.models import DreamPost, DreamPostLike
+
+        post = DreamPost.objects.create(user=user, content="Like me")
+        like = DreamPostLike.objects.create(post=post, user=user)
+        result = str(like)
+        assert "liked" in result
+
+    def test_unique_like_per_user(self, db, user):
+        import pytest
+
+        from apps.social.models import DreamPost, DreamPostLike
+
+        post = DreamPost.objects.create(user=user, content="Only one like")
+        DreamPostLike.objects.create(post=post, user=user)
+        with pytest.raises(Exception):
+            DreamPostLike.objects.create(post=post, user=user)
+
+
+# ---------------------------------------------------------------------------
+# Model tests – DreamPostComment
+# ---------------------------------------------------------------------------
+
+
+class TestDreamPostCommentModel:
+    """Tests for the DreamPostComment model."""
+
+    def test_create_comment(self, db, user):
+        from apps.social.models import DreamPost, DreamPostComment
+
+        post = DreamPost.objects.create(user=user, content="Commentable")
+        comment = DreamPostComment.objects.create(
+            post=post, user=user, content="Great post!"
+        )
+        assert comment.pk is not None
+
+    def test_comment_str(self, db, user):
+        from apps.social.models import DreamPost, DreamPostComment
+
+        post = DreamPost.objects.create(user=user, content="Test")
+        comment = DreamPostComment.objects.create(
+            post=post, user=user, content="Nice!"
+        )
+        result = str(comment)
+        assert "Nice!" in result
+
+    def test_comment_str_truncated(self, db, user):
+        from apps.social.models import DreamPost, DreamPostComment
+
+        post = DreamPost.objects.create(user=user, content="Test")
+        comment = DreamPostComment.objects.create(
+            post=post, user=user, content="X" * 60
+        )
+        result = str(comment)
+        assert "..." in result
+
+    def test_threaded_replies(self, db, user):
+        from apps.social.models import DreamPost, DreamPostComment
+
+        post = DreamPost.objects.create(user=user, content="Thread test")
+        parent = DreamPostComment.objects.create(
+            post=post, user=user, content="Parent comment"
+        )
+        reply = DreamPostComment.objects.create(
+            post=post, user=user, content="Reply", parent=parent
+        )
+        assert reply.parent == parent
+        assert parent.replies.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Model tests – DreamEncouragement
+# ---------------------------------------------------------------------------
+
+
+class TestDreamEncouragementModel:
+    """Tests for the DreamEncouragement model."""
+
+    def test_create_encouragement(self, db, user):
+        from apps.social.models import DreamEncouragement, DreamPost
+
+        post = DreamPost.objects.create(user=user, content="Encourage me")
+        enc = DreamEncouragement.objects.create(
+            post=post,
+            user=user,
+            encouragement_type="you_got_this",
+        )
+        assert enc.pk is not None
+
+    def test_encouragement_str(self, db, user):
+        from apps.social.models import DreamEncouragement, DreamPost
+
+        post = DreamPost.objects.create(user=user, content="Test")
+        enc = DreamEncouragement.objects.create(
+            post=post, user=user, encouragement_type="fire"
+        )
+        result = str(enc)
+        assert "fire" in result
+
+    def test_unique_per_user_post(self, db, user):
+        import pytest
+
+        from apps.social.models import DreamEncouragement, DreamPost
+
+        post = DreamPost.objects.create(user=user, content="Once only")
+        DreamEncouragement.objects.create(
+            post=post, user=user, encouragement_type="keep_going"
+        )
+        with pytest.raises(Exception):
+            DreamEncouragement.objects.create(
+                post=post, user=user, encouragement_type="proud"
+            )
+
+    def test_all_encouragement_types(self, db, user):
+        from apps.social.models import DreamEncouragement, DreamPost
+
+        for etype, _ in DreamEncouragement.ENCOURAGEMENT_TYPES:
+            post = DreamPost.objects.create(user=user, content=f"enc {etype}")
+            enc = DreamEncouragement.objects.create(
+                post=post, user=user, encouragement_type=etype
+            )
+            assert enc.encouragement_type == etype
+
+
+# ---------------------------------------------------------------------------
+# Model tests – PostReaction (social)
+# ---------------------------------------------------------------------------
+
+
+class TestDreamPostReactionModel:
+    """Tests for the social PostReaction model."""
+
+    def test_create_reaction(self, db, user):
+        from apps.social.models import DreamPost
+        from apps.social.models import PostReaction as SocialPostReaction
+
+        post = DreamPost.objects.create(user=user, content="React to me")
+        reaction = SocialPostReaction.objects.create(
+            post=post, user=user, reaction_type="fire"
+        )
+        assert reaction.pk is not None
+
+    def test_reaction_str(self, db, user):
+        from apps.social.models import DreamPost
+        from apps.social.models import PostReaction as SocialPostReaction
+
+        post = DreamPost.objects.create(user=user, content="Test")
+        reaction = SocialPostReaction.objects.create(
+            post=post, user=user, reaction_type="love"
+        )
+        result = str(reaction)
+        assert "love" in result
+
+    def test_unique_reaction_per_user_post(self, db, user):
+        import pytest
+
+        from apps.social.models import DreamPost
+        from apps.social.models import PostReaction as SocialPostReaction
+
+        post = DreamPost.objects.create(user=user, content="Once")
+        SocialPostReaction.objects.create(
+            post=post, user=user, reaction_type="like"
+        )
+        with pytest.raises(Exception):
+            SocialPostReaction.objects.create(
+                post=post, user=user, reaction_type="fire"
+            )
+
+    def test_all_reaction_types(self, db, user):
+        from apps.social.models import DreamPost
+        from apps.social.models import PostReaction as SocialPostReaction
+
+        for rtype, _ in SocialPostReaction.REACTION_TYPES:
+            post = DreamPost.objects.create(user=user, content=f"react {rtype}")
+            r = SocialPostReaction.objects.create(
+                post=post, user=user, reaction_type=rtype
+            )
+            assert r.reaction_type == rtype
+
+
+# ---------------------------------------------------------------------------
+# Model tests – SavedPost
+# ---------------------------------------------------------------------------
+
+
+class TestSavedPostModel:
+    """Tests for the SavedPost model."""
+
+    def test_create_saved_post(self, db, user):
+        from apps.social.models import DreamPost, SavedPost
+
+        post = DreamPost.objects.create(user=user, content="Save me")
+        saved = SavedPost.objects.create(user=user, post=post)
+        assert saved.pk is not None
+
+    def test_saved_post_str(self, db, user):
+        from apps.social.models import DreamPost, SavedPost
+
+        post = DreamPost.objects.create(user=user, content="Bookmark")
+        saved = SavedPost.objects.create(user=user, post=post)
+        result = str(saved)
+        assert "saved" in result
+
+    def test_unique_save(self, db, user):
+        import pytest
+
+        from apps.social.models import DreamPost, SavedPost
+
+        post = DreamPost.objects.create(user=user, content="Save once")
+        SavedPost.objects.create(user=user, post=post)
+        with pytest.raises(Exception):
+            SavedPost.objects.create(user=user, post=post)
+
+
+# ---------------------------------------------------------------------------
+# Model tests – Story
+# ---------------------------------------------------------------------------
+
+
+class TestStoryModel:
+    """Tests for the Story model."""
+
+    def test_create_story(self, db, user):
+        from apps.social.models import Story
+
+        story = Story.objects.create(
+            user=user,
+            media_type="image",
+            caption="My story",
+        )
+        assert story.pk is not None
+        assert story.view_count == 0
+
+    def test_story_auto_expires(self, db, user):
+        from apps.social.models import Story
+
+        story = Story.objects.create(
+            user=user,
+            media_type="image",
+        )
+        # Should auto-set expires_at to ~24h from now
+        assert story.expires_at is not None
+        diff = story.expires_at - story.created_at
+        assert 23 <= diff.total_seconds() / 3600 <= 25
+
+    def test_story_is_active(self, db, user):
+        from apps.social.models import Story
+
+        story = Story.objects.create(
+            user=user,
+            media_type="image",
+        )
+        assert story.is_active is True
+
+    def test_story_is_expired(self, db, user):
+        from apps.social.models import Story
+
+        story = Story.objects.create(
+            user=user,
+            media_type="image",
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+        assert story.is_active is False
+
+    def test_story_str(self, db, user):
+        from apps.social.models import Story
+
+        story = Story.objects.create(
+            user=user,
+            media_type="video",
+        )
+        result = str(story)
+        assert user.email in result
+        assert "video" in result
+
+    def test_story_media_types(self, db, user):
+        from apps.social.models import Story
+
+        for mtype, _ in Story.MEDIA_TYPE_CHOICES:
+            story = Story.objects.create(
+                user=user, media_type=mtype
+            )
+            assert story.media_type == mtype
+            story.delete()
+
+
+# ---------------------------------------------------------------------------
+# Model tests – StoryView
+# ---------------------------------------------------------------------------
+
+
+class TestStoryViewModel:
+    """Tests for the StoryView model."""
+
+    def test_create_story_view(self, db, user, other_user):
+        from apps.social.models import Story, StoryView
+
+        story = Story.objects.create(user=user, media_type="image")
+        view = StoryView.objects.create(story=story, user=other_user)
+        assert view.pk is not None
+
+    def test_story_view_str(self, db, user, other_user):
+        from apps.social.models import Story, StoryView
+
+        story = Story.objects.create(user=user, media_type="image")
+        view = StoryView.objects.create(story=story, user=other_user)
+        result = str(view)
+        assert other_user.email in result
+
+    def test_unique_story_view(self, db, user, other_user):
+        import pytest
+
+        from apps.social.models import Story, StoryView
+
+        story = Story.objects.create(user=user, media_type="image")
+        StoryView.objects.create(story=story, user=other_user)
+        with pytest.raises(Exception):
+            StoryView.objects.create(story=story, user=other_user)

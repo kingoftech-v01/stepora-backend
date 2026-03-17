@@ -9,11 +9,13 @@ from .views import (
     NotificationBatchViewSet,
     NotificationTemplateViewSet,
     NotificationViewSet,
+    ReminderPreferenceViewSet,
     UserDeviceViewSet,
     WebPushSubscriptionViewSet,
 )
 
 router = SimpleRouter()
+router.register(r"reminders", ReminderPreferenceViewSet, basename="reminder-preference")
 router.register(r"", NotificationViewSet, basename="notification")
 router.register(
     r"templates", NotificationTemplateViewSet, basename="notification-template"

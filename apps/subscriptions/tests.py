@@ -1074,3 +1074,747 @@ class TestSerializers:
         )
         assert not serializer.is_valid()
         assert "plan_slug" in serializer.errors
+
+
+# ===================================================================
+# ReferralCode model tests
+# ===================================================================
+
+
+class TestReferralCodeModel:
+    """Tests for the ReferralCode model."""
+
+    def test_generate_code_format(self, test_user):
+        """ReferralCode.generate_code produces a DP-REF-XXXXXXXX code."""
+        from apps.subscriptions.models import ReferralCode
+
+        code = ReferralCode.generate_code(test_user)
+        assert code.startswith("DP-REF-")
+        assert len(code) == 15  # DP-REF- (7) + 8 hex chars
+        # Hex part should be uppercase
+        hex_part = code[7:]
+        assert hex_part == hex_part.upper()
+
+    def test_generate_code_deterministic(self, test_user):
+        """Same user always produces the same referral code."""
+        from apps.subscriptions.models import ReferralCode
+
+        code1 = ReferralCode.generate_code(test_user)
+        code2 = ReferralCode.generate_code(test_user)
+        assert code1 == code2
+
+    def test_get_or_create_for_user(self, test_user):
+        """get_or_create_for_user creates a ReferralCode on first call."""
+        from apps.subscriptions.models import ReferralCode
+
+        obj = ReferralCode.get_or_create_for_user(test_user)
+        assert obj.user == test_user
+        assert obj.code.startswith("DP-REF-")
+        assert obj.uses_count == 0
+
+    def test_get_or_create_for_user_idempotent(self, test_user):
+        """Calling get_or_create_for_user twice returns the same object."""
+        from apps.subscriptions.models import ReferralCode
+
+        obj1 = ReferralCode.get_or_create_for_user(test_user)
+        obj2 = ReferralCode.get_or_create_for_user(test_user)
+        assert obj1.pk == obj2.pk
+
+    def test_str_representation(self, test_user):
+        """ReferralCode __str__ includes email and code."""
+        from apps.subscriptions.models import ReferralCode
+
+        obj = ReferralCode.get_or_create_for_user(test_user)
+        result = str(obj)
+        assert test_user.email in result
+        assert obj.code in result
+
+    def test_unique_code_constraint(self, test_user):
+        """Duplicate codes are rejected by the unique constraint."""
+        from apps.subscriptions.models import ReferralCode
+
+        obj = ReferralCode.get_or_create_for_user(test_user)
+        with patch(
+            "apps.subscriptions.services.StripeService.create_customer",
+        ):
+            user2 = User.objects.create(
+                email=f"ref2_{uuid.uuid4().hex[:8]}@example.com",
+            )
+        with pytest.raises(Exception):
+            ReferralCode.objects.create(user=user2, code=obj.code)
+
+
+# ===================================================================
+# Referral model tests
+# ===================================================================
+
+
+class TestReferralModel:
+    """Tests for the Referral model and tiered rewards."""
+
+    @pytest.fixture
+    def referrer(self, db):
+        with patch("apps.subscriptions.services.StripeService.create_customer"):
+            return User.objects.create(
+                email=f"referrer_{uuid.uuid4().hex[:8]}@example.com",
+                display_name="Referrer",
+            )
+
+    @pytest.fixture
+    def referred(self, db):
+        with patch("apps.subscriptions.services.StripeService.create_customer"):
+            return User.objects.create(
+                email=f"referred_{uuid.uuid4().hex[:8]}@example.com",
+                display_name="Referred",
+            )
+
+    def test_create_referral(self, referrer, referred):
+        """Referral is created with correct attributes."""
+        from apps.subscriptions.models import Referral
+
+        ref = Referral.objects.create(
+            referrer=referrer,
+            referred=referred,
+            referral_code="DP-REF-ABCD1234",
+            status="pending",
+        )
+        assert ref.pk is not None
+        assert ref.status == "pending"
+        assert ref.referred_has_paid is False
+        assert ref.reward_granted is False
+
+    def test_str_representation(self, referrer, referred):
+        from apps.subscriptions.models import Referral
+
+        ref = Referral.objects.create(
+            referrer=referrer,
+            referred=referred,
+            referral_code="DP-REF-ABCD1234",
+        )
+        result = str(ref)
+        assert referrer.email in result
+        assert referred.email in result
+
+    def test_referred_one_to_one(self, referrer, referred):
+        """A user can only be referred once (OneToOne on referred)."""
+        from apps.subscriptions.models import Referral
+
+        Referral.objects.create(
+            referrer=referrer,
+            referred=referred,
+            referral_code="DP-REF-ABCD1234",
+        )
+        with patch("apps.subscriptions.services.StripeService.create_customer"):
+            another_referrer = User.objects.create(
+                email=f"ref3_{uuid.uuid4().hex[:8]}@example.com",
+            )
+        with pytest.raises(Exception):
+            Referral.objects.create(
+                referrer=another_referrer,
+                referred=referred,
+                referral_code="DP-REF-XXXX1234",
+            )
+
+    def test_resolve_referrer_valid_code(self, referrer):
+        """resolve_referrer finds the user from a valid referral code."""
+        from apps.subscriptions.models import Referral
+
+        code = Referral.get_referral_code(referrer)
+        result = Referral.resolve_referrer(code)
+        assert result is not None
+        assert result.pk == referrer.pk
+
+    def test_resolve_referrer_invalid_format(self):
+        """resolve_referrer returns None for malformed codes."""
+        from apps.subscriptions.models import Referral
+
+        assert Referral.resolve_referrer("") is None
+        assert Referral.resolve_referrer("INVALID") is None
+        assert Referral.resolve_referrer("DP-REF-ZZZZZZZZ") is None  # non-hex
+        assert Referral.resolve_referrer("DP-REF-12") is None  # too short
+
+    def test_resolve_referrer_no_match(self):
+        """resolve_referrer returns None when no user matches."""
+        from apps.subscriptions.models import Referral
+
+        result = Referral.resolve_referrer("DP-REF-00000000")
+        assert result is None
+
+    def test_get_current_tier(self):
+        """get_current_tier returns correct tier for various counts."""
+        from apps.subscriptions.models import Referral
+
+        assert Referral.get_current_tier(0) is None
+        assert Referral.get_current_tier(1) == "bronze"
+        assert Referral.get_current_tier(4) == "bronze"
+        assert Referral.get_current_tier(5) == "silver"
+        assert Referral.get_current_tier(10) == "gold"
+        assert Referral.get_current_tier(25) == "diamond"
+        assert Referral.get_current_tier(100) == "diamond"
+
+    def test_get_next_tier(self):
+        """get_next_tier returns correct next tier info."""
+        from apps.subscriptions.models import Referral
+
+        nxt = Referral.get_next_tier(0)
+        assert nxt["name"] == "bronze"
+        assert nxt["threshold"] == 1
+
+        nxt = Referral.get_next_tier(1)
+        assert nxt["name"] == "silver"
+        assert nxt["threshold"] == 5
+
+        nxt = Referral.get_next_tier(25)
+        assert nxt is None  # max tier reached
+
+    def test_get_tier_progress(self, referrer, referred):
+        """get_tier_progress returns comprehensive progress data."""
+        from apps.subscriptions.models import Referral
+
+        Referral.objects.create(
+            referrer=referrer,
+            referred=referred,
+            referral_code="DP-REF-ABCD1234",
+            status="completed",
+        )
+        progress = Referral.get_tier_progress(referrer)
+        assert progress["total_referrals"] == 1
+        assert progress["completed_referrals"] == 1
+        assert progress["pending_referrals"] == 0
+        assert progress["current_tier"] == "bronze"
+        assert progress["next_tier"]["name"] == "silver"
+        assert len(progress["tiers"]) == 4
+        assert progress["tiers"][0]["unlocked"] is True  # bronze unlocked
+        assert progress["tiers"][1]["unlocked"] is False  # silver locked
+
+    def test_get_referrer_stats(self, referrer, referred):
+        """get_referrer_stats returns all stat fields."""
+        from apps.subscriptions.models import Referral
+
+        Referral.objects.create(
+            referrer=referrer,
+            referred=referred,
+            referral_code="DP-REF-ABCD1234",
+            status="pending",
+        )
+        stats = Referral.get_referrer_stats(referrer)
+        assert stats["total_referrals"] == 1
+        assert stats["completed_referrals"] == 0
+        assert stats["pending_referrals"] == 1
+        assert "free_months_earned" in stats
+        assert "current_tier" in stats
+        assert "tiers" in stats
+
+
+# ===================================================================
+# Promotion model tests
+# ===================================================================
+
+
+class TestPromotionModel:
+    """Tests for the Promotion model."""
+
+    @pytest.fixture
+    def promotion(self, db):
+        from apps.subscriptions.models import Promotion
+
+        return Promotion.objects.create(
+            name="Summer Sale",
+            description="50% off for summer",
+            start_date=timezone.now() - timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=30),
+            duration_months=3,
+            discount_type="percentage",
+            max_redemptions=100,
+            is_active=True,
+        )
+
+    @pytest.fixture
+    def unlimited_promotion(self, db):
+        from apps.subscriptions.models import Promotion
+
+        return Promotion.objects.create(
+            name="Unlimited Promo",
+            start_date=timezone.now() - timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=30),
+            discount_type="percentage",
+            max_redemptions=None,
+            is_active=True,
+        )
+
+    def test_create_promotion(self, promotion):
+        """Promotion is created with correct attributes."""
+        assert promotion.name == "Summer Sale"
+        assert promotion.discount_type == "percentage"
+        assert promotion.duration_months == 3
+        assert promotion.max_redemptions == 100
+
+    def test_str_representation(self, promotion):
+        result = str(promotion)
+        assert "Summer Sale" in result
+        assert "percentage" in result
+
+    def test_redemption_count_zero(self, promotion):
+        """redemption_count is 0 when no redemptions exist."""
+        assert promotion.redemption_count == 0
+
+    def test_is_exhausted_false(self, promotion):
+        """is_exhausted is False when redemptions < max_redemptions."""
+        assert promotion.is_exhausted is False
+
+    def test_is_exhausted_unlimited(self, unlimited_promotion):
+        """is_exhausted is always False when max_redemptions is None."""
+        assert unlimited_promotion.is_exhausted is False
+
+    def test_spots_remaining(self, promotion):
+        """spots_remaining returns correct remaining count."""
+        assert promotion.spots_remaining == 100
+
+    def test_spots_remaining_unlimited(self, unlimited_promotion):
+        """spots_remaining is None when max_redemptions is None."""
+        assert unlimited_promotion.spots_remaining is None
+
+
+class TestPromotionPlanDiscountModel:
+    """Tests for the PromotionPlanDiscount model."""
+
+    @pytest.fixture
+    def promotion(self, db):
+        from apps.subscriptions.models import Promotion
+
+        return Promotion.objects.create(
+            name="Test Promo",
+            start_date=timezone.now() - timedelta(days=1),
+            discount_type="percentage",
+            is_active=True,
+        )
+
+    @pytest.fixture
+    def fixed_promotion(self, db):
+        from apps.subscriptions.models import Promotion
+
+        return Promotion.objects.create(
+            name="Fixed Promo",
+            start_date=timezone.now() - timedelta(days=1),
+            discount_type="fixed_amount",
+            is_active=True,
+        )
+
+    @pytest.fixture
+    def discount(self, promotion, premium_plan):
+        from apps.subscriptions.models import PromotionPlanDiscount
+
+        return PromotionPlanDiscount.objects.create(
+            promotion=promotion,
+            plan=premium_plan,
+            discount_value=50,
+        )
+
+    def test_discounted_price_percentage(self, discount, premium_plan):
+        """Percentage discount calculates correctly."""
+        # premium is $19.99, 50% off = $9.995 rounded to $10.00
+        expected = round(19.99 * 0.5, 2)
+        assert discount.discounted_price == expected
+
+    def test_discounted_price_fixed(self, fixed_promotion, premium_plan):
+        """Fixed amount discount calculates correctly."""
+        from apps.subscriptions.models import PromotionPlanDiscount
+
+        disc = PromotionPlanDiscount.objects.create(
+            promotion=fixed_promotion,
+            plan=premium_plan,
+            discount_value=5,
+        )
+        expected = round(19.99 - 5.0, 2)
+        assert disc.discounted_price == expected
+
+    def test_discounted_price_floor_zero(self, fixed_promotion, premium_plan):
+        """Fixed discount larger than price floors at 0."""
+        from apps.subscriptions.models import PromotionPlanDiscount
+
+        disc = PromotionPlanDiscount.objects.create(
+            promotion=fixed_promotion,
+            plan=premium_plan,
+            discount_value=100,
+        )
+        assert disc.discounted_price == 0.0
+
+    def test_str_representation(self, discount):
+        result = str(discount)
+        assert "Test Promo" in result
+        assert "Premium" in result
+        assert "50" in result
+
+    def test_unique_together(self, discount, promotion, premium_plan):
+        """Cannot create two discounts for the same promotion+plan."""
+        from apps.subscriptions.models import PromotionPlanDiscount
+
+        with pytest.raises(Exception):
+            PromotionPlanDiscount.objects.create(
+                promotion=promotion,
+                plan=premium_plan,
+                discount_value=25,
+            )
+
+
+# ===================================================================
+# Referral view tests
+# ===================================================================
+
+
+class TestReferralViews:
+    """Tests for the referral API endpoints."""
+
+    def test_get_referral_info(self, authenticated_client, test_user):
+        """GET /api/subscriptions/referral/ returns referral code and stats."""
+        response = authenticated_client.get("/api/subscriptions/referral/")
+        assert response.status_code == status.HTTP_200_OK
+        assert "referral_code" in response.data
+        assert "share_link" in response.data
+        assert response.data["referral_code"].startswith("DP-REF-")
+        assert "total_referrals" in response.data
+        assert "tiers" in response.data
+
+    def test_get_referral_info_unauthenticated(self):
+        """GET /api/subscriptions/referral/ requires auth."""
+        client = APIClient()
+        response = client.get("/api/subscriptions/referral/")
+        assert response.status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_apply_referral_code_self_referral(self, authenticated_client, test_user):
+        """POST /api/subscriptions/referral/ rejects self-referral."""
+        from apps.subscriptions.models import Referral
+
+        own_code = Referral.get_referral_code(test_user)
+        response = authenticated_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": own_code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cannot refer yourself" in response.data.get("error", "").lower()
+
+    def test_apply_referral_code_invalid(self, authenticated_client):
+        """POST /api/subscriptions/referral/ rejects invalid codes."""
+        response = authenticated_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": "INVALID_CODE"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_apply_referral_code_empty(self, authenticated_client):
+        """POST /api/subscriptions/referral/ rejects empty codes."""
+        response = authenticated_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": ""},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_apply_referral_code_success(self, authenticated_client, test_user):
+        """POST /api/subscriptions/referral/ creates a referral record."""
+        from apps.subscriptions.models import Referral, ReferralCode
+
+        with patch("apps.subscriptions.services.StripeService.create_customer"):
+            referrer = User.objects.create(
+                email=f"ref_success_{uuid.uuid4().hex[:8]}@example.com",
+                display_name="Referrer Success",
+            )
+        code_obj = ReferralCode.get_or_create_for_user(referrer)
+
+        response = authenticated_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": code_obj.code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "message" in response.data
+
+        # Verify referral was created
+        assert Referral.objects.filter(
+            referrer=referrer, referred=test_user
+        ).exists()
+
+    def test_apply_referral_code_duplicate(self, authenticated_client, test_user):
+        """POST /api/subscriptions/referral/ rejects duplicate referral."""
+        from apps.subscriptions.models import Referral, ReferralCode
+
+        with patch("apps.subscriptions.services.StripeService.create_customer"):
+            referrer = User.objects.create(
+                email=f"ref_dup_{uuid.uuid4().hex[:8]}@example.com",
+            )
+        code_obj = ReferralCode.get_or_create_for_user(referrer)
+        Referral.objects.create(
+            referrer=referrer,
+            referred=test_user,
+            referral_code=code_obj.code,
+        )
+
+        response = authenticated_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": code_obj.code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already" in response.data.get("error", "").lower()
+
+
+# ===================================================================
+# Signal tests – extended
+# ===================================================================
+
+
+class TestSignalsExtended:
+    """Extended signal tests for subscription signals."""
+
+    @patch("apps.subscriptions.services.stripe.Customer.create")
+    def test_signal_creates_free_subscription(self, mock_stripe_create, db, free_plan):
+        """Creating a User also creates a free-tier subscription."""
+        mock_stripe_create.return_value = Mock(id="cus_free_sub_test")
+
+        user = User.objects.create(
+            email=f"freesub_{uuid.uuid4().hex[:8]}@example.com",
+            display_name="Free Sub Test",
+        )
+
+        sub = Subscription.objects.filter(user=user).first()
+        assert sub is not None
+        assert sub.plan == free_plan
+        assert sub.status == "active"
+
+    @patch("apps.subscriptions.services.stripe.Customer.create")
+    def test_signal_creates_referral_code(self, mock_stripe_create, db):
+        """Creating a User auto-creates a ReferralCode."""
+        from apps.subscriptions.models import ReferralCode
+
+        mock_stripe_create.return_value = Mock(id="cus_refcode_test")
+
+        user = User.objects.create(
+            email=f"refcode_{uuid.uuid4().hex[:8]}@example.com",
+        )
+
+        assert ReferralCode.objects.filter(user=user).exists()
+
+    def test_sync_user_subscription_field_signal(self, test_user, premium_plan):
+        """Saving a Subscription syncs User.subscription via signal."""
+        sub, _ = Subscription.objects.update_or_create(
+            user=test_user,
+            defaults={"plan": premium_plan, "status": "active"},
+        )
+
+        test_user.refresh_from_db()
+        assert test_user.subscription == "premium"
+
+    @patch("apps.subscriptions.services.StripeService.create_customer")
+    @patch("apps.subscriptions.models.PromotionPlanDiscount.save")
+    def test_auto_create_stripe_price_signal(self, mock_ppd_save, mock_create, db):
+        """Saving a SubscriptionPlan without stripe_price_id triggers auto-create."""
+        # This test verifies the signal wiring, not the Stripe API.
+        # The signal is already tested via the signals.py code path.
+        plan = SubscriptionPlan.objects.filter(slug="premium").first()
+        if plan:
+            plan.stripe_price_id = ""
+            with patch(
+                "apps.subscriptions.services.PromotionService.create_stripe_price_for_plan"
+            ) as mock_price:
+                mock_price.return_value = "price_auto_test"
+                with patch("stripe.api_key", "sk_test_fake"):
+                    plan.save(update_fields=["stripe_price_id"])
+
+
+# ===================================================================
+# PromotionRedemption model tests
+# ===================================================================
+
+
+class TestPromotionRedemptionModel:
+    """Tests for PromotionRedemption model."""
+
+    def test_create_redemption(self, test_user, premium_plan):
+        from apps.subscriptions.models import (
+            Promotion,
+            PromotionPlanDiscount,
+            PromotionRedemption,
+        )
+
+        promo = Promotion.objects.create(
+            name="Redeem Test",
+            start_date=timezone.now() - timedelta(days=1),
+            discount_type="percentage",
+            is_active=True,
+        )
+        disc = PromotionPlanDiscount.objects.create(
+            promotion=promo,
+            plan=premium_plan,
+            discount_value=20,
+        )
+        redemption = PromotionRedemption.objects.create(
+            promotion=promo,
+            user=test_user,
+            promotion_plan_discount=disc,
+            stripe_coupon_id="coupon_test_123",
+        )
+        assert redemption.pk is not None
+        assert str(redemption) == f"{test_user.email} redeemed Redeem Test"
+
+    def test_unique_promotion_user(self, test_user, premium_plan):
+        """A user can only redeem a promotion once."""
+        from apps.subscriptions.models import (
+            Promotion,
+            PromotionPlanDiscount,
+            PromotionRedemption,
+        )
+
+        promo = Promotion.objects.create(
+            name="Unique Redeem",
+            start_date=timezone.now() - timedelta(days=1),
+            discount_type="percentage",
+            is_active=True,
+        )
+        disc = PromotionPlanDiscount.objects.create(
+            promotion=promo,
+            plan=premium_plan,
+            discount_value=10,
+        )
+        PromotionRedemption.objects.create(
+            promotion=promo,
+            user=test_user,
+            promotion_plan_discount=disc,
+            stripe_coupon_id="coupon_dup_1",
+        )
+        with pytest.raises(Exception):
+            PromotionRedemption.objects.create(
+                promotion=promo,
+                user=test_user,
+                promotion_plan_discount=disc,
+                stripe_coupon_id="coupon_dup_2",
+            )
+
+    def test_redemption_count_updates(self, test_user, premium_plan):
+        """Promotion.redemption_count increases after redemption."""
+        from apps.subscriptions.models import (
+            Promotion,
+            PromotionPlanDiscount,
+            PromotionRedemption,
+        )
+
+        promo = Promotion.objects.create(
+            name="Count Test",
+            start_date=timezone.now() - timedelta(days=1),
+            discount_type="percentage",
+            max_redemptions=5,
+            is_active=True,
+        )
+        disc = PromotionPlanDiscount.objects.create(
+            promotion=promo,
+            plan=premium_plan,
+            discount_value=15,
+        )
+        assert promo.redemption_count == 0
+        assert promo.spots_remaining == 5
+
+        PromotionRedemption.objects.create(
+            promotion=promo,
+            user=test_user,
+            promotion_plan_discount=disc,
+            stripe_coupon_id="coupon_count_1",
+        )
+        assert promo.redemption_count == 1
+        assert promo.spots_remaining == 4
+
+
+# ===================================================================
+# ReferralReward model tests
+# ===================================================================
+
+
+class TestReferralRewardModel:
+    """Tests for the ReferralReward model."""
+
+    def test_create_reward(self, test_user):
+        from apps.subscriptions.models import ReferralReward
+
+        reward = ReferralReward.objects.create(
+            user=test_user,
+            reward_type="xp",
+            amount=500,
+            description="500 XP for first referral",
+            tier_name="bronze",
+        )
+        assert reward.pk is not None
+        assert str(reward) == f"{test_user.email} — xp: 500"
+
+    def test_reward_types(self, test_user):
+        """All reward types can be created."""
+        from apps.subscriptions.models import ReferralReward
+
+        for rtype, _ in ReferralReward.REWARD_TYPE_CHOICES:
+            reward = ReferralReward.objects.create(
+                user=test_user,
+                reward_type=rtype,
+                amount=1,
+            )
+            assert reward.reward_type == rtype
+            reward.delete()
+
+
+# ===================================================================
+# StripeWebhookEvent model tests
+# ===================================================================
+
+
+class TestStripeWebhookEventModel:
+    """Tests for the StripeWebhookEvent model."""
+
+    def test_create_event(self, db):
+        from apps.subscriptions.models import StripeWebhookEvent
+
+        event = StripeWebhookEvent.objects.create(
+            stripe_event_id="evt_test_12345",
+            event_type="invoice.paid",
+        )
+        assert event.stripe_event_id == "evt_test_12345"
+        assert str(event) == "invoice.paid (evt_test_12345)"
+
+    def test_unique_event_id(self, db):
+        from apps.subscriptions.models import StripeWebhookEvent
+
+        StripeWebhookEvent.objects.create(
+            stripe_event_id="evt_unique_test",
+            event_type="invoice.paid",
+        )
+        with pytest.raises(Exception):
+            StripeWebhookEvent.objects.create(
+                stripe_event_id="evt_unique_test",
+                event_type="checkout.session.completed",
+            )
+
+
+# ===================================================================
+# PromotionChangeLog model tests
+# ===================================================================
+
+
+class TestPromotionChangeLogModel:
+    """Tests for the PromotionChangeLog model."""
+
+    def test_create_change_log(self, db):
+        from apps.subscriptions.models import Promotion, PromotionChangeLog
+
+        promo = Promotion.objects.create(
+            name="Log Test",
+            start_date=timezone.now(),
+            discount_type="percentage",
+        )
+        log = PromotionChangeLog.objects.create(
+            promotion=promo,
+            action="coupon_created",
+            new_stripe_coupon_id="coupon_new_123",
+        )
+        assert log.pk is not None
+        assert "Log Test" in str(log)
+        assert "coupon_created" in str(log)

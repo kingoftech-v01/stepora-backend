@@ -61,6 +61,11 @@ app.conf.beat_schedule = {
         "task": "apps.notifications.tasks.check_due_tasks",
         "schedule": 180.0,  # Every 3 minutes
     },
+    # Send task reminders based on user preferences (every minute)
+    "send-task-reminders": {
+        "task": "notifications.send_task_reminders",
+        "schedule": 60.0,  # Every 60 seconds
+    },
     # === Dream Tasks ===
     # Update dream progress daily at 3 AM
     "update-dream-progress": {
@@ -166,6 +171,18 @@ app.conf.beat_schedule = {
     "expire-circle-invitations": {
         "task": "apps.circles.tasks.expire_circle_invitations",
         "schedule": crontab(hour=2, minute=30),
+    },
+    # === Recurring Task Generation ===
+    # Generate upcoming recurring task instances nightly at 1:30 AM
+    "generate-recurring-tasks": {
+        "task": "apps.dreams.tasks.generate_recurring_tasks",
+        "schedule": crontab(hour=1, minute=30),
+    },
+    # === Streak Tasks ===
+    # Reset broken streaks and send at-risk notifications at midnight
+    "check-broken-streaks": {
+        "task": "apps.users.tasks.check_broken_streaks",
+        "schedule": crontab(hour=0, minute=0),
     },
     # === User Tasks ===
     # Hard-delete accounts soft-deleted 30+ days ago (GDPR)

@@ -1587,3 +1587,368 @@ class TestCirclePostSerializer:
         feed_post = resp.data["feed"][0]
         assert "user" in feed_post
         assert feed_post["user"]["username"] == "Test User"
+
+
+# ---------------------------------------------------------------------------
+# Model tests – CircleMessage
+# ---------------------------------------------------------------------------
+
+
+class TestCircleMessageModel:
+    """Tests for the CircleMessage model."""
+
+    def test_create_message(self, db, circle, user):
+        from apps.circles.models import CircleMessage
+
+        msg = CircleMessage.objects.create(
+            circle=circle,
+            sender=user,
+            content="Hello circle!",
+        )
+        assert msg.pk is not None
+
+    def test_message_str(self, db, circle, user):
+        from apps.circles.models import CircleMessage
+
+        msg = CircleMessage.objects.create(
+            circle=circle,
+            sender=user,
+            content="Test message",
+        )
+        result = str(msg)
+        assert "Test User" in result or user.email in result
+
+    def test_message_ordering(self, db, circle, user):
+        """Messages ordered by created_at (ascending)."""
+        from apps.circles.models import CircleMessage
+
+        m1 = CircleMessage.objects.create(
+            circle=circle, sender=user, content="First"
+        )
+        CircleMessage.objects.filter(pk=m1.pk).update(
+            created_at=django_timezone.now() - timedelta(hours=1)
+        )
+        m1.refresh_from_db()
+        m2 = CircleMessage.objects.create(
+            circle=circle, sender=user, content="Second"
+        )
+        messages = list(CircleMessage.objects.filter(circle=circle))
+        # Ascending order: oldest first
+        assert messages[0] == m1
+        assert messages[1] == m2
+
+
+# ---------------------------------------------------------------------------
+# Model tests – CircleCall
+# ---------------------------------------------------------------------------
+
+
+class TestCircleCallModel:
+    """Tests for the CircleCall model."""
+
+    def test_create_call(self, db, circle, user):
+        from apps.circles.models import CircleCall
+
+        call = CircleCall.objects.create(
+            circle=circle,
+            initiator=user,
+            call_type="voice",
+            agora_channel="test_channel_123",
+        )
+        assert call.pk is not None
+        assert call.status == "active"
+        assert call.duration_seconds == 0
+
+    def test_call_str(self, db, circle, user):
+        from apps.circles.models import CircleCall
+
+        call = CircleCall.objects.create(
+            circle=circle,
+            initiator=user,
+            call_type="video",
+            agora_channel="test_channel",
+        )
+        result = str(call)
+        assert "video" in result
+        assert circle.name in result
+
+    def test_call_types(self, db, circle, user):
+        from apps.circles.models import CircleCall
+
+        for ctype, _ in CircleCall.CALL_TYPE_CHOICES:
+            call = CircleCall(
+                circle=circle,
+                initiator=user,
+                call_type=ctype,
+                agora_channel=f"chan_{ctype}",
+            )
+            assert call.call_type == ctype
+
+
+# ---------------------------------------------------------------------------
+# Model tests – CircleCallParticipant
+# ---------------------------------------------------------------------------
+
+
+class TestCircleCallParticipantModel:
+    """Tests for the CircleCallParticipant model."""
+
+    def test_create_participant(self, db, circle, user):
+        from apps.circles.models import CircleCall, CircleCallParticipant
+
+        call = CircleCall.objects.create(
+            circle=circle,
+            initiator=user,
+            agora_channel="test_call",
+        )
+        participant = CircleCallParticipant.objects.create(
+            call=call,
+            user=user,
+        )
+        assert participant.pk is not None
+        assert participant.left_at is None
+
+    def test_unique_participant(self, db, circle, user):
+        import pytest
+
+        from apps.circles.models import CircleCall, CircleCallParticipant
+
+        call = CircleCall.objects.create(
+            circle=circle,
+            initiator=user,
+            agora_channel="test_unique",
+        )
+        CircleCallParticipant.objects.create(call=call, user=user)
+        with pytest.raises(Exception):
+            CircleCallParticipant.objects.create(call=call, user=user)
+
+    def test_participant_str(self, db, circle, user):
+        from apps.circles.models import CircleCall, CircleCallParticipant
+
+        call = CircleCall.objects.create(
+            circle=circle,
+            initiator=user,
+            agora_channel="test_str",
+        )
+        participant = CircleCallParticipant.objects.create(
+            call=call, user=user
+        )
+        result = str(participant)
+        assert "Test User" in result or user.email in result
+
+
+# ---------------------------------------------------------------------------
+# Model tests – CirclePoll
+# ---------------------------------------------------------------------------
+
+
+class TestCirclePollModel:
+    """Tests for the CirclePoll model."""
+
+    def test_create_poll(self, db, circle, user):
+        from apps.circles.models import CirclePoll
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Poll post"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post,
+            question="What should we do?",
+        )
+        assert poll.pk is not None
+        assert poll.allows_multiple is False
+
+    def test_poll_str(self, db, circle, user):
+        from apps.circles.models import CirclePoll
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Poll q"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post,
+            question="Best meeting time?",
+        )
+        result = str(poll)
+        assert "Best meeting time?" in result
+
+    def test_poll_is_ended_false(self, db, circle, user):
+        from apps.circles.models import CirclePoll
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Active poll"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post,
+            question="Open poll",
+            ends_at=django_timezone.now() + timedelta(days=1),
+        )
+        assert poll.is_ended is False
+
+    def test_poll_is_ended_true(self, db, circle, user):
+        from apps.circles.models import CirclePoll
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Ended poll"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post,
+            question="Closed poll",
+            ends_at=django_timezone.now() - timedelta(hours=1),
+        )
+        assert poll.is_ended is True
+
+    def test_poll_is_ended_no_deadline(self, db, circle, user):
+        from apps.circles.models import CirclePoll
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="No deadline"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post,
+            question="Forever open",
+            ends_at=None,
+        )
+        assert poll.is_ended is False
+
+    def test_poll_total_votes(self, db, circle, user, other_user):
+        from apps.circles.models import CirclePoll, PollOption, PollVote
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Vote poll"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Vote count"
+        )
+        opt1 = PollOption.objects.create(poll=poll, text="Option A", order=0)
+        opt2 = PollOption.objects.create(poll=poll, text="Option B", order=1)
+        PollVote.objects.create(option=opt1, user=user)
+        PollVote.objects.create(option=opt2, user=other_user)
+        assert poll.total_votes == 2
+
+
+# ---------------------------------------------------------------------------
+# Model tests – PollOption
+# ---------------------------------------------------------------------------
+
+
+class TestPollOptionModel:
+    """Tests for the PollOption model."""
+
+    def test_create_option(self, db, circle, user):
+        from apps.circles.models import CirclePoll, PollOption
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Options"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Test options"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="Choice 1", order=0
+        )
+        assert opt.pk is not None
+
+    def test_option_str(self, db, circle, user):
+        from apps.circles.models import CirclePoll, PollOption
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Opt str"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Str test"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="My option", order=0
+        )
+        assert "My option" in str(opt)
+
+    def test_vote_count(self, db, circle, user, other_user):
+        from apps.circles.models import CirclePoll, PollOption, PollVote
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Count"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Count test"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="Popular", order=0
+        )
+        assert opt.vote_count == 0
+        PollVote.objects.create(option=opt, user=user)
+        PollVote.objects.create(option=opt, user=other_user)
+        assert opt.vote_count == 2
+
+    def test_option_ordering(self, db, circle, user):
+        from apps.circles.models import CirclePoll, PollOption
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Order"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Order test"
+        )
+        opt2 = PollOption.objects.create(poll=poll, text="Second", order=1)
+        opt1 = PollOption.objects.create(poll=poll, text="First", order=0)
+        options = list(PollOption.objects.filter(poll=poll))
+        assert options[0] == opt1
+        assert options[1] == opt2
+
+
+# ---------------------------------------------------------------------------
+# Model tests – PollVote
+# ---------------------------------------------------------------------------
+
+
+class TestPollVoteModel:
+    """Tests for the PollVote model."""
+
+    def test_create_vote(self, db, circle, user):
+        from apps.circles.models import CirclePoll, PollOption, PollVote
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Vote"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Vote test"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="Choice", order=0
+        )
+        vote = PollVote.objects.create(option=opt, user=user)
+        assert vote.pk is not None
+
+    def test_vote_str(self, db, circle, user):
+        from apps.circles.models import CirclePoll, PollOption, PollVote
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Vote str"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Str test"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="My choice", order=0
+        )
+        vote = PollVote.objects.create(option=opt, user=user)
+        result = str(vote)
+        assert "voted" in result
+        assert "My choice" in result
+
+    def test_unique_vote_per_option(self, db, circle, user):
+        import pytest
+
+        from apps.circles.models import CirclePoll, PollOption, PollVote
+
+        poll_post = CirclePost.objects.create(
+            circle=circle, author=user, content="Unique"
+        )
+        poll = CirclePoll.objects.create(
+            post=poll_post, question="Unique test"
+        )
+        opt = PollOption.objects.create(
+            poll=poll, text="Only once", order=0
+        )
+        PollVote.objects.create(option=opt, user=user)
+        with pytest.raises(Exception):
+            PollVote.objects.create(option=opt, user=user)

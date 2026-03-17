@@ -11,6 +11,7 @@ from .models import (
     AccountabilityContract,
     BuddyEncouragement,
     BuddyPairing,
+    BuddySkip,
     ContractCheckIn,
 )
 
@@ -130,6 +131,23 @@ class AccountabilityContractAdmin(admin.ModelAdmin):
         ("Goals", {"fields": ("goals",), "classes": ("collapse",)}),
         ("Metadata", {"fields": ("id", "created_at"), "classes": ("collapse",)}),
     )
+
+
+@admin.register(BuddySkip)
+class BuddySkipAdmin(admin.ModelAdmin):
+    """Admin interface for BuddySkip model."""
+
+    list_display = ["user", "skipped_user", "created_at"]
+    list_filter = ["created_at"]
+    search_fields = [
+        "user__email",
+        "user__display_name",
+        "skipped_user__email",
+        "skipped_user__display_name",
+    ]
+    ordering = ["-created_at"]
+    readonly_fields = ["created_at"]
+    raw_id_fields = ["user", "skipped_user"]
 
 
 @admin.register(ContractCheckIn)

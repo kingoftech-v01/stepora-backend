@@ -72,6 +72,8 @@ INSTALLED_APPS = [
     "apps.buddies",
     "apps.updates",
     "apps.blog",
+    "apps.seo",
+    "apps.ads",
     "core",
 ]
 
@@ -82,12 +84,14 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "core.authentication.CsrfExemptAPIMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.seo.middleware.SEOHeadersMiddleware",
     "core.middleware.EmailVerificationMiddleware",
     "core.middleware.LastActivityMiddleware",
 ]
@@ -175,8 +179,14 @@ LOCALE_PATHS = [
 ]
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise configuration for static file serving
+# Enables compression (gzip + brotli if installed) and forever-caching
+# of hashed static files.
+WHITENOISE_MAX_AGE = 31536000  # 1 year for hashed static files
+WHITENOISE_ALLOW_ALL_ORIGINS = True  # Allow cross-origin access to static files
 
 # Media files
 MEDIA_URL = "/media/"
@@ -501,7 +511,14 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = (
     True  # Required: frontend sends credentials: "include" cross-origin
 )
-CORS_EXPOSE_HEADERS = ["Content-Type", "X-Request-Id"]
+CORS_EXPOSE_HEADERS = [
+    "Content-Type",
+    "X-Request-Id",
+    "X-Robots-Tag",
+    "ETag",
+    "Cache-Control",
+    "Link",
+]
 CORS_ALLOWED_METHODS = [
     "DELETE",
     "GET",

@@ -101,6 +101,38 @@ class AIBuddyMatchSerializer(serializers.Serializer):
     )
 
 
+class BuddySuggestionSerializer(serializers.Serializer):
+    """Serializer for a buddy suggestion in the matching queue."""
+
+    user_id = serializers.UUIDField(help_text="Suggested user ID.")
+    username = serializers.CharField(help_text="Display name.")
+    avatar = serializers.CharField(
+        allow_blank=True, default="", help_text="Avatar URL."
+    )
+    bio = serializers.CharField(
+        allow_blank=True, default="", help_text="User bio."
+    )
+    level = serializers.IntegerField(help_text="User level.")
+    streak = serializers.IntegerField(help_text="User streak days.")
+    xp = serializers.IntegerField(help_text="User XP.")
+    dreamer_type = serializers.CharField(
+        allow_blank=True, default="", help_text="User dreamer type."
+    )
+    timezone = serializers.CharField(
+        allow_blank=True, default="", help_text="User timezone."
+    )
+    compatibility_score = serializers.IntegerField(
+        help_text="Compatibility score 0-100."
+    )
+    shared_categories = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="Shared dream categories.",
+    )
+    activity_level = serializers.CharField(
+        help_text="Activity level: high, medium, low.",
+    )
+
+
 class BuddyPairRequestSerializer(serializers.Serializer):
     """Serializer for pairing with a specific user."""
 

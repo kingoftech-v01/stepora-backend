@@ -80,5 +80,8 @@ class CsrfExemptAPIMiddleware:
         if request.path.startswith("/api/"):
             auth_header = request.META.get("HTTP_AUTHORIZATION", "")
             if auth_header.startswith(("Token ", "Bearer ")):
-                setattr(request, "_dont_enforce_csrf_checks", True)
+                # Only exempt CSRF if the token value is long enough to be valid
+                token_value = auth_header.split(" ", 1)[1] if " " in auth_header else ""
+                if len(token_value) > 20:
+                    setattr(request, "_dont_enforce_csrf_checks", True)
         return self.get_response(request)

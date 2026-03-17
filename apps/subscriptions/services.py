@@ -14,6 +14,7 @@ from typing import Optional
 
 import stripe
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 
@@ -1835,15 +1836,22 @@ class PromotionService:
 
         Creates a PromotionRedemption row. Idempotent — returns existing
         record if the user already redeemed this promotion.
+        Uses select_for_update to prevent race conditions on max_redemptions.
         """
-        redemption, created = PromotionRedemption.objects.get_or_create(
-            promotion=promotion,
-            user=user,
-            defaults={
-                "promotion_plan_discount": promotion_plan_discount,
-                "stripe_coupon_id": promotion_plan_discount.stripe_coupon_id,
-            },
-        )
+        with transaction.atomic():
+            count = PromotionRedemption.objects.filter(
+                promotion=promotion
+            ).select_for_update().count()
+            if promotion.max_redemptions and count >= promotion.max_redemptions:
+                raise ValueError("Promotion is no longer available.")
+            redemption, created = PromotionRedemption.objects.get_or_create(
+                promotion=promotion,
+                user=user,
+                defaults={
+                    "promotion_plan_discount": promotion_plan_discount,
+                    "stripe_coupon_id": promotion_plan_discount.stripe_coupon_id,
+                },
+            )
         if created:
             logger.info(
                 "User %s redeemed promotion '%s' for plan '%s'",
