@@ -29,6 +29,7 @@ from core.sanitizers import sanitize_text
 from integrations.openai_service import OpenAIService
 
 from .models import Notification
+from .services import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,7 @@ def generate_daily_motivation(self):
                 tracker.increment(user, "ai_background")
 
                 # Create notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="motivation",
                     title=_("Daily motivation"),
@@ -441,7 +442,7 @@ def send_user_digest(self, user_id):
 
     # ---- Create Notification record -----------------------------------------
 
-    notification = Notification.objects.create(
+    notification = NotificationService.create(
         user=user,
         notification_type="weekly_report",
         title=title,
@@ -558,7 +559,7 @@ def check_inactive_users(self):
                 )
 
                 # Create rescue notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=user,
                     notification_type="rescue",
                     title=_("We are still here for you"),
@@ -630,7 +631,7 @@ def send_reminder_notifications(self):
                     continue
 
                 # Create reminder notification
-                Notification.objects.create(
+                NotificationService.create(
                     user=goal.dream.user,
                     notification_type="reminder",
                     title=_("Reminder: %(title)s") % {"title": goal.title},
@@ -693,7 +694,7 @@ def send_streak_milestone_notification(self, user_id, streak_days):
         milestones = [7, 14, 30, 60, 100, 365]
 
         if streak_days in milestones:
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="achievement",
                 title=_("%(days)s-day streak!") % {"days": streak_days},
@@ -735,7 +736,7 @@ def send_level_up_notification(self, user_id, new_level):
     try:
         user = User.objects.get(id=user_id)
 
-        Notification.objects.create(
+        NotificationService.create(
             user=user,
             notification_type="achievement",
             title=_("Level %(level)s reached!") % {"level": new_level},
@@ -793,7 +794,7 @@ def expire_ringing_calls(self):
 
             # Notify the callee about the missed call
             caller_name = call.caller.display_name or _("Someone")
-            Notification.objects.create(
+            NotificationService.create(
                 user=call.callee,
                 notification_type="missed_call",
                 title=_("Missed %(call_type)s call") % {"call_type": call.call_type},
@@ -809,7 +810,7 @@ def expire_ringing_calls(self):
 
             # Notify the caller that callee didn't answer
             callee_name = call.callee.display_name or _("Your buddy")
-            Notification.objects.create(
+            NotificationService.create(
                 user=call.caller,
                 notification_type="missed_call",
                 title=_("%(name)s didn't answer") % {"name": callee_name},
@@ -934,7 +935,7 @@ def check_due_tasks(self):
             }
 
             # Create notification record
-            Notification.objects.create(
+            NotificationService.create(
                 user=user,
                 notification_type="task_due",
                 title=_("%(title)s") % {"title": task.title},

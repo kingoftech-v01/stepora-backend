@@ -249,9 +249,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         # Send push notification to the recipient
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=target_user,
                 notification_type="buddy",
                 title=_("New Friend Request"),
@@ -302,9 +302,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         # Notify the sender that their request was accepted
         try:
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=friendship.user1,
                 notification_type="buddy",
                 title=_("Friend Request Accepted"),
@@ -2382,9 +2382,9 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         try:
             from django.utils import timezone
 
-            from apps.notifications.models import Notification
+            from apps.notifications.services import NotificationService
 
-            Notification.objects.create(
+            NotificationService.create(
                 user=post.user,
                 notification_type="social",
                 title=title,
