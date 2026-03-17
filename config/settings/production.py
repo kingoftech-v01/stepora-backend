@@ -105,7 +105,7 @@ if AWS_STORAGE_BUCKET_NAME:
             },
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
     MEDIA_URL = f"https://{_s3_domain}/{AWS_MEDIA_LOCATION}/"
