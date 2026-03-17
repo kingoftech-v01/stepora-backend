@@ -39,7 +39,7 @@ from core.auth.serializers import (
 )
 from core.auth.social import verify_apple_token, verify_google_token
 from core.auth.tasks import send_login_notification_email, send_password_changed_email
-from core.throttles import AuthLoginRateThrottle, AuthPasswordRateThrottle, AuthRegisterRateThrottle
+from core.throttles import AuthLoginRateThrottle, AuthPasswordRateThrottle, AuthRateThrottle, AuthRegisterRateThrottle
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -480,6 +480,7 @@ class VerifyEmailView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
