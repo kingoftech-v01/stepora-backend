@@ -6,6 +6,7 @@ and user search. All endpoints require authentication.
 """
 
 import logging
+from datetime import timedelta
 
 from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
 from django.utils import timezone
@@ -20,6 +21,7 @@ from rest_framework import generics
 from rest_framework import serializers as drf_serializers
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -408,23 +410,6 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         UserFollow.objects.create(follower=request.user, following=target_user)
 
-        # Broadcast follow event to the target user's social feed
-        try:
-            from .consumers import broadcast_social_event
-
-            broadcast_social_event(
-                target_user.id,
-                "follow_update",
-                {
-                    "action": "followed",
-                    "user_id": str(request.user.id),
-                    "username": request.user.display_name or "Someone",
-                    "avatar": request.user.get_effective_avatar_url(),
-                },
-            )
-        except Exception:
-            logger.warning("Failed to broadcast follow event", exc_info=True)
-
         return Response(
             {
                 "message": _("Now following %(name)s.")
@@ -456,22 +441,6 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 {"error": _("You are not following this user.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        # Broadcast unfollow event to the target user's social feed
-        try:
-            from .consumers import broadcast_social_event
-
-            broadcast_social_event(
-                user_id,
-                "follow_update",
-                {
-                    "action": "unfollowed",
-                    "user_id": str(request.user.id),
-                    "username": request.user.display_name or "Someone",
-                },
-            )
-        except Exception:
-            logger.warning("Failed to broadcast unfollow event", exc_info=True)
 
         return Response({"message": _("Successfully unfollowed.")})
 
@@ -1715,47 +1684,27 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 dream=dream,
             )
 
-        # Broadcast new_post event to all followers
-        try:
-            from .consumers import broadcast_social_event_to_followers
-
-            broadcast_social_event_to_followers(
-                request.user,
-                "new_post",
-                {
-                    "post_id": str(post.id),
-                    "user_id": str(request.user.id),
-                    "username": request.user.display_name or "Someone",
-                    "avatar": request.user.get_effective_avatar_url(),
-                    "content": (
-                        (post.content[:100] + "...")
-                        if len(post.content) > 100
-                        else post.content
-                    ),
-                    "post_type": post.post_type,
-                },
-            )
-        except Exception:
-            logger.warning("Failed to broadcast new_post event", exc_info=True)
-
         return Response(
             DreamPostSerializer(post, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
+    def perform_update(self, serializer):
+        """Verify ownership before updating."""
+        instance = serializer.instance if hasattr(serializer, "instance") else self.get_object()
+        if instance.user != self.request.user:
+            raise PermissionDenied(_("You can only edit your own posts."))
+
     def update(self, request, *args, **kwargs):
-        """Edit own post."""
+        """Edit own post. Only content, visibility, post_type, gofundme_url are editable."""
         post = self.get_object()
         if post.user != request.user:
-            return Response(
-                {"error": _("You can only edit your own posts.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            raise PermissionDenied(_("You can only edit your own posts."))
+
+        from core.sanitizers import sanitize_text
 
         content = request.data.get("content")
         if content:
-            from core.sanitizers import sanitize_text
-
             post.content = sanitize_text(content)
 
         gofundme_url = request.data.get("gofundme_url")
@@ -1768,6 +1717,10 @@ class DreamPostViewSet(viewsets.ModelViewSet):
         if visibility in ("public", "followers", "private"):
             post.visibility = visibility
 
+        post_type = request.data.get("post_type")
+        if post_type in ("regular", "achievement", "milestone", "event"):
+            post.post_type = post_type
+
         post.save()
         return Response(
             DreamPostSerializer(post, context={"request": request}).data,
@@ -1776,93 +1729,237 @@ class DreamPostViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
+    def perform_destroy(self, instance):
+        """Verify ownership before deleting."""
+        if instance.user != self.request.user:
+            raise PermissionDenied(_("You can only delete your own posts."))
+        instance.delete()
+
     def destroy(self, request, *args, **kwargs):
         """Delete own post."""
         post = self.get_object()
         if post.user != request.user:
-            return Response(
-                {"error": _("You can only delete your own posts.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            raise PermissionDenied(_("You can only delete your own posts."))
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="Social feed",
-        description="Main social feed: posts from followed users + public, excluding blocked users.",
+        description=(
+            "Main social feed with tiered algorithm: "
+            "Tier 1 (friends), Tier 2 (friends-of-friends), "
+            "Tier 3 (follows + trending). Excludes blocked users and own posts."
+        ),
         responses={200: DreamPostSerializer(many=True)},
         tags=["Social Feed"],
     )
     @action(detail=False, methods=["get"])
     def feed(self, request):
-        """Main social feed."""
-        user = request.user
+        """
+        Main social feed with 3-tier algorithm.
 
-        # Get followed user IDs
+        Tier 1 — Friends (highest priority):
+          Posts from accepted friends, all visibility except 'private'.
+
+        Tier 2 — Friends of friends (2nd degree):
+          Public posts only. Capped at 500 2nd-degree user IDs.
+
+        Tier 3 — Follows + Trending:
+          Public posts from followed users (not in T1/T2) +
+          high-engagement public posts from last 7 days.
+
+        Interleave: ~8 T1, ~4 T2, ~3 T3 per page of 15.
+        Always exclude: blocked users, own posts, private posts from non-owners.
+        """
+        user = request.user
+        PAGE_SIZE = 15
+
+        # ── Blocked users ──────────────────────────────────────────
+        blocked_ids = self._get_blocked_ids(user)
+
+        # ── Tier 1: Friends ────────────────────────────────────────
+        friend_ids = set(
+            Friendship.objects.filter(
+                user1=user, status="accepted"
+            ).values_list("user2_id", flat=True)
+        ) | set(
+            Friendship.objects.filter(
+                user2=user, status="accepted"
+            ).values_list("user1_id", flat=True)
+        )
+        friend_ids -= blocked_ids
+
+        # ── Tier 2: Friends of friends ─────────────────────────────
+        # Get friends of T1 users, excluding self, T1, and blocked
+        fof_ids = set()
+        if friend_ids:
+            fof_from_user1 = set(
+                Friendship.objects.filter(
+                    user1_id__in=friend_ids, status="accepted"
+                ).values_list("user2_id", flat=True)
+            )
+            fof_from_user2 = set(
+                Friendship.objects.filter(
+                    user2_id__in=friend_ids, status="accepted"
+                ).values_list("user1_id", flat=True)
+            )
+            fof_ids = (fof_from_user1 | fof_from_user2) - friend_ids - blocked_ids - {user.id}
+            # Cap at 500 IDs
+            if len(fof_ids) > 500:
+                fof_ids = set(list(fof_ids)[:500])
+
+        # ── Tier 3: Follows (excluding T1 and T2) ─────────────────
         followed_ids = set(
             UserFollow.objects.filter(follower=user).values_list(
                 "following_id", flat=True
             )
         )
+        t3_follow_ids = followed_ids - friend_ids - fof_ids - blocked_ids - {user.id}
 
-        # Get blocked user IDs (both directions)
-        blocked_ids = set()
-        blocked_qs = BlockedUser.objects.filter(
-            Q(blocker=user) | Q(blocked=user)
-        ).values_list("blocker_id", "blocked_id")
-        for blocker_id, blocked_id in blocked_qs:
-            if blocker_id != user.id:
-                blocked_ids.add(blocker_id)
-            if blocked_id != user.id:
-                blocked_ids.add(blocked_id)
+        # ── Common annotations ─────────────────────────────────────
+        def _annotate_posts(qs):
+            return qs.annotate(
+                _user_has_liked=Exists(
+                    DreamPostLike.objects.filter(post=OuterRef("pk"), user=user)
+                ),
+                _user_has_saved=Exists(
+                    SavedPost.objects.filter(post=OuterRef("pk"), user=user)
+                ),
+                _user_has_encouraged=Exists(
+                    DreamEncouragement.objects.filter(post=OuterRef("pk"), user=user)
+                ),
+                _user_reaction_type=Subquery(
+                    PostReaction.objects.filter(
+                        post=OuterRef("pk"),
+                        user=user,
+                    ).values("reaction_type")[:1]
+                ),
+                _user_is_following=Exists(
+                    UserFollow.objects.filter(
+                        follower=user, following_id=OuterRef("user_id")
+                    )
+                ),
+            )
 
-        # Posts from followed users OR public posts, excluding blocked
-        posts = (
+        # ── Base exclusions (always) ───────────────────────────────
+        base_exclude = blocked_ids | {user.id}
+
+        # ── Build tier querysets ───────────────────────────────────
+        # T1: friends, all visibility except private
+        t1_qs = DreamPost.objects.none()
+        if friend_ids:
+            t1_qs = (
+                DreamPost.objects.filter(user_id__in=friend_ids)
+                .exclude(visibility="private")
+                .exclude(user_id__in=base_exclude)
+                .select_related("user", "dream")
+                .order_by("-created_at")
+            )
+
+        # T2: friends-of-friends, public only
+        t2_qs = DreamPost.objects.none()
+        if fof_ids:
+            t2_qs = (
+                DreamPost.objects.filter(user_id__in=fof_ids, visibility="public")
+                .exclude(user_id__in=base_exclude)
+                .select_related("user", "dream")
+                .order_by("-created_at")
+            )
+
+        # T3: followed users (not in T1/T2) + trending public posts from last 7 days
+        t3_follow_qs = DreamPost.objects.none()
+        if t3_follow_ids:
+            t3_follow_qs = (
+                DreamPost.objects.filter(user_id__in=t3_follow_ids, visibility="public")
+                .exclude(user_id__in=base_exclude)
+                .select_related("user", "dream")
+                .order_by("-created_at")
+            )
+
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        all_known_ids = friend_ids | fof_ids | t3_follow_ids | base_exclude
+        t3_trending_qs = (
             DreamPost.objects.filter(
-                Q(user_id__in=followed_ids) | Q(visibility="public")
+                visibility="public",
+                created_at__gte=seven_days_ago,
             )
-            .exclude(
-                user_id__in=blocked_ids,
-            )
+            .exclude(user_id__in=all_known_ids)
             .select_related("user", "dream")
-            .order_by("-created_at")
+            .order_by("-likes_count", "-comments_count", "-created_at")
         )
 
-        # Annotate with user_has_liked, user_has_saved, user_has_encouraged, user_reaction, and follow status
-        posts = posts.annotate(
-            _user_has_liked=Exists(
-                DreamPostLike.objects.filter(post=OuterRef("pk"), user=user)
-            ),
-            _user_has_saved=Exists(
-                SavedPost.objects.filter(post=OuterRef("pk"), user=user)
-            ),
-            _user_has_encouraged=Exists(
-                DreamEncouragement.objects.filter(post=OuterRef("pk"), user=user)
-            ),
-            _user_reaction_type=Subquery(
-                PostReaction.objects.filter(
-                    post=OuterRef("pk"),
-                    user=user,
-                ).values(
-                    "reaction_type"
-                )[:1]
-            ),
-            _user_is_following=Exists(
-                UserFollow.objects.filter(
-                    follower=user, following_id=OuterRef("user_id")
-                )
-            ),
-        )
+        # ── Fetch and interleave ───────────────────────────────────
+        # Target distribution per page: ~8 T1, ~4 T2, ~3 T3
+        t1_target = 8
+        t2_target = 4
+        t3_target = 3
 
-        page = self.paginate_queryset(posts)
-        if page is not None:
-            serializer = DreamPostSerializer(
-                page, many=True, context={"request": request}
-            )
-            return self.get_paginated_response(serializer.data)
+        t1_posts = list(_annotate_posts(t1_qs[:t1_target * 2]))
+        t2_posts = list(_annotate_posts(t2_qs[:t2_target * 2]))
+        t3_follow_posts = list(_annotate_posts(t3_follow_qs[:t3_target * 2]))
+        t3_trending_posts = list(_annotate_posts(t3_trending_qs[:t3_target * 2]))
 
+        # Take up to targets from each tier
+        t1_take = t1_posts[:t1_target]
+        t2_take = t2_posts[:t2_target]
+        t3_take = t3_follow_posts[:t3_target]
+
+        # Fill remaining from trending if follows didn't provide enough
+        t3_remaining = t3_target - len(t3_take)
+        if t3_remaining > 0:
+            # Avoid duplicates
+            t3_take_ids = {p.id for p in t3_take}
+            for tp in t3_trending_posts:
+                if tp.id not in t3_take_ids:
+                    t3_take.append(tp)
+                    t3_take_ids.add(tp.id)
+                    if len(t3_take) >= t3_target:
+                        break
+
+        # Fill shortfalls: if any tier is short, fill from others
+        total_collected = len(t1_take) + len(t2_take) + len(t3_take)
+        deficit = PAGE_SIZE - total_collected
+
+        if deficit > 0:
+            # Collect remaining posts from all tiers
+            used_ids = {p.id for p in t1_take} | {p.id for p in t2_take} | {p.id for p in t3_take}
+            fill_pool = []
+            for pool in [t1_posts, t2_posts, t3_follow_posts, t3_trending_posts]:
+                for p in pool:
+                    if p.id not in used_ids:
+                        fill_pool.append(p)
+                        used_ids.add(p.id)
+            t3_take.extend(fill_pool[:deficit])
+
+        # ── Interleave: T1, T1, T2, T1, T3, T1, T2, T1, ... ──────
+        merged = []
+        t1_iter = iter(t1_take)
+        t2_iter = iter(t2_take)
+        t3_iter = iter(t3_take)
+
+        # Pattern per 15: T1 T1 T2 T1 T1 T3 T1 T1 T2 T1 T3 T1 T2 T1 T3
+        pattern = [1, 1, 2, 1, 1, 3, 1, 1, 2, 1, 3, 1, 2, 1, 3]
+        iters = {1: t1_iter, 2: t2_iter, 3: t3_iter}
+        fallback_order = {1: [2, 3], 2: [1, 3], 3: [2, 1]}
+
+        seen_ids = set()
+        for tier_num in pattern:
+            added = False
+            # Try primary tier first, then fallbacks
+            for try_tier in [tier_num] + fallback_order[tier_num]:
+                post = next(iters[try_tier], None)
+                if post and post.id not in seen_ids:
+                    merged.append(post)
+                    seen_ids.add(post.id)
+                    added = True
+                    break
+            if not added:
+                # All tiers exhausted for this slot
+                continue
+
+        # ── Serialize and return ───────────────────────────────────
         serializer = DreamPostSerializer(
-            posts[:50], many=True, context={"request": request}
+            merged, many=True, context={"request": request}
         )
         return Response(serializer.data)
 
@@ -1892,25 +1989,6 @@ class DreamPostViewSet(viewsets.ModelViewSet):
                 title=_("%(name)s liked your dream post")
                 % {"name": request.user.display_name or _("Someone")},
             )
-            # Broadcast post_liked event to the post owner
-            if post.user_id != request.user.id:
-                try:
-                    from .consumers import broadcast_social_event
-
-                    broadcast_social_event(
-                        post.user_id,
-                        "post_liked",
-                        {
-                            "post_id": str(post.id),
-                            "user_id": str(request.user.id),
-                            "username": request.user.display_name or "Someone",
-                            "likes_count": post.likes_count + 1,
-                        },
-                    )
-                except Exception:
-                    logger.warning(
-                        "Failed to broadcast post_liked event", exc_info=True
-                    )
             return Response({"liked": True, "likes_count": post.likes_count + 1})
         else:
             like.delete()
@@ -2038,30 +2116,6 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             title=_("%(name)s commented on your post")
             % {"name": request.user.display_name or _("Someone")},
         )
-
-        # Broadcast post_commented event to the post owner
-        if post.user_id != request.user.id:
-            try:
-                from .consumers import broadcast_social_event
-
-                broadcast_social_event(
-                    post.user_id,
-                    "post_commented",
-                    {
-                        "post_id": str(post.id),
-                        "comment_id": str(comment.id),
-                        "user_id": str(request.user.id),
-                        "username": request.user.display_name or "Someone",
-                        "content": (
-                            (content[:100] + "...") if len(content) > 100 else content
-                        ),
-                        "comments_count": post.comments_count + 1,
-                    },
-                )
-            except Exception:
-                logger.warning(
-                    "Failed to broadcast post_commented event", exc_info=True
-                )
 
         return Response(
             DreamPostCommentSerializer(comment, context={"request": request}).data,
