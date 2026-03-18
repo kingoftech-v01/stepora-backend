@@ -280,7 +280,7 @@ class PlanCheckInAdmin(admin.ModelAdmin):
     list_filter = ["status", "triggered_by", "pace_status", "created_at"]
     search_fields = ["dream__title", "coaching_message"]
     readonly_fields = ["created_at"]
-    raw_id_fields = ["dream", "conversation"]
+    raw_id_fields = ["dream"]
 
 
 @admin.register(CalibrationResponse)

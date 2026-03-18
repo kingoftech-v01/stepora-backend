@@ -1105,13 +1105,7 @@ class PlanCheckIn(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="checkins")
-    conversation = models.ForeignKey(
-        "ai.AIConversation",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="checkin_records",
-    )
+    conversation = models.UUIDField(null=True, blank=True)
     STATUS_CHOICES = [
         ("pending", "Pending"),
         ("questionnaire_generating", "Generating Questionnaire"),
