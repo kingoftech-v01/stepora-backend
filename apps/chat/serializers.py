@@ -210,29 +210,22 @@ class ConversationSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return None
 
-        # Try to find the other user from messages metadata
-        other_msg = (
-            obj.messages.exclude(
-                metadata__sender_id=str(request.user.id)
-            )
-            .filter(metadata__has_key="sender_id")
-            .values_list("metadata", flat=True)
-            .first()
-        )
-        if other_msg and other_msg.get("sender_id"):
-            try:
-                from apps.users.models import User
+        from apps.users.models import User
 
-                other_user = User.objects.get(id=other_msg["sender_id"])
-                return {
-                    "id": str(other_user.id),
-                    "display_name": other_user.display_name or other_user.email,
-                    "avatar": other_user.avatar.url if other_user.avatar else "",
-                }
-            except Exception:
-                pass
+        def _user_dict(u):
+            return {
+                "id": str(u.id),
+                "display_name": u.display_name or u.email,
+                "avatar": u.avatar.url if u.avatar else "",
+            }
 
-        # Fallback: try target_user_id from first system message metadata
+        # Simplest case: if current user is NOT the conv owner,
+        # the owner IS the other participant
+        if obj.user_id != request.user.id:
+            return _user_dict(obj.user)
+
+        # Current user IS the owner — find the other participant
+        # Try target_user_id from system message metadata
         sys_msg = (
             obj.messages.filter(role="system", metadata__has_key="target_user_id")
             .values_list("metadata", flat=True)
@@ -240,16 +233,23 @@ class ConversationSerializer(serializers.ModelSerializer):
         )
         if sys_msg and sys_msg.get("target_user_id"):
             try:
-                from apps.users.models import User
-
-                other_user = User.objects.get(id=sys_msg["target_user_id"])
-                return {
-                    "id": str(other_user.id),
-                    "display_name": other_user.display_name or other_user.email,
-                    "avatar": other_user.avatar.url if other_user.avatar else "",
-                }
-            except Exception:
+                return _user_dict(User.objects.get(id=sys_msg["target_user_id"]))
+            except User.DoesNotExist:
                 pass
+
+        # Try finding a message from someone else
+        other_msg = (
+            obj.messages.exclude(metadata__sender_id=str(request.user.id))
+            .filter(metadata__has_key="sender_id")
+            .values_list("metadata", flat=True)
+            .first()
+        )
+        if other_msg and other_msg.get("sender_id"):
+            try:
+                return _user_dict(User.objects.get(id=other_msg["sender_id"]))
+            except User.DoesNotExist:
+                pass
+
         return None
 
 
