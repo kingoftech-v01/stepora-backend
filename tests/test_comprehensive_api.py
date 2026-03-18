@@ -16,7 +16,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from apps.conversations.models import Conversation, Message
+from apps.ai.models import AIConversation as Conversation, AIMessage as Message
 from apps.dreams.models import Dream, Goal, Obstacle, Task
 from apps.notifications.models import Notification
 from apps.users.models import User
@@ -273,12 +273,12 @@ class TestSubscriptionGatingComplete:
     # --- Free user BLOCKED ---
 
     def test_free_blocked_from_conversations(self, authenticated_client):
-        response = authenticated_client.get("/api/conversations/")
+        response = authenticated_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_free_blocked_from_create_conversation(self, authenticated_client):
         response = authenticated_client.post(
-            "/api/conversations/",
+            "/api/ai/conversations/",
             {
                 "conversation_type": "general",
             },
@@ -414,7 +414,7 @@ class TestSubscriptionGatingComplete:
     # --- Premium user ---
 
     def test_premium_allowed_conversations(self, premium_client):
-        response = premium_client.get("/api/conversations/")
+        response = premium_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_premium_allowed_buddies(self, premium_client):
@@ -547,7 +547,7 @@ class TestOwnershipAndIDOR:
         conv = Conversation.objects.create(user=user1, conversation_type="general")
         client = APIClient()
         client.force_authenticate(user=user2)
-        response = client.get(f"/api/conversations/{conv.id}/")
+        response = client.get(f"/api/ai/conversations/{conv.id}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_cannot_update_other_user_profile(self, second_client, user):
@@ -749,7 +749,7 @@ class TestXSSInjection:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.post(
-            f"/api/conversations/{conv.id}/send_message/",
+            f"/api/ai/conversations/{conv.id}/send_message/",
             {
                 "content": payload,
             },
@@ -865,7 +865,7 @@ class TestSQLInjection:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.get(
-            f"/api/conversations/{conv.id}/search/", {"q": payload}
+            f"/api/ai/conversations/{conv.id}/search/", {"q": payload}
         )
         assert response.status_code != status.HTTP_500_INTERNAL_SERVER_ERROR
 
@@ -1305,12 +1305,12 @@ class TestConversationsAPI:
     """Test conversation/messaging endpoints."""
 
     def test_list_conversations(self, premium_client):
-        response = premium_client.get("/api/conversations/")
+        response = premium_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_create_conversation(self, premium_client):
         response = premium_client.post(
-            "/api/conversations/",
+            "/api/ai/conversations/",
             {
                 "conversation_type": "general",
             },
@@ -1321,14 +1321,14 @@ class TestConversationsAPI:
         conv = Conversation.objects.create(
             user=premium_user, conversation_type="general"
         )
-        response = premium_client.get(f"/api/conversations/{conv.id}/")
+        response = premium_client.get(f"/api/ai/conversations/{conv.id}/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_delete_conversation(self, premium_client, premium_user):
         conv = Conversation.objects.create(
             user=premium_user, conversation_type="general"
         )
-        response = premium_client.delete(f"/api/conversations/{conv.id}/")
+        response = premium_client.delete(f"/api/ai/conversations/{conv.id}/")
         assert response.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_200_OK)
 
     def test_send_message(self, premium_client, premium_user, mock_openai):
@@ -1336,7 +1336,7 @@ class TestConversationsAPI:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.post(
-            f"/api/conversations/{conv.id}/send_message/",
+            f"/api/ai/conversations/{conv.id}/send_message/",
             {
                 "content": "Hello AI!",
             },
@@ -1348,7 +1348,7 @@ class TestConversationsAPI:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.post(
-            f"/api/conversations/{conv.id}/send_message/",
+            f"/api/ai/conversations/{conv.id}/send_message/",
             {
                 "content": "",
             },
@@ -1361,14 +1361,14 @@ class TestConversationsAPI:
         )
         Message.objects.create(conversation=conv, role="user", content="Hello")
         Message.objects.create(conversation=conv, role="assistant", content="Hi there!")
-        response = premium_client.get(f"/api/conversations/{conv.id}/messages/")
+        response = premium_client.get(f"/api/ai/conversations/{conv.id}/messages/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_pin_conversation(self, premium_client, premium_user):
         conv = Conversation.objects.create(
             user=premium_user, conversation_type="general"
         )
-        response = premium_client.post(f"/api/conversations/{conv.id}/pin/")
+        response = premium_client.post(f"/api/ai/conversations/{conv.id}/pin/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_like_message(self, premium_client, premium_user):
@@ -1379,7 +1379,7 @@ class TestConversationsAPI:
             conversation=conv, role="assistant", content="Hello"
         )
         response = premium_client.post(
-            f"/api/conversations/{conv.id}/like-message/{msg.id}/"
+            f"/api/ai/conversations/{conv.id}/like-message/{msg.id}/"
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -1389,7 +1389,7 @@ class TestConversationsAPI:
         )
         Message.objects.create(conversation=conv, role="user", content="Hello world")
         response = premium_client.get(
-            f"/api/conversations/{conv.id}/search/", {"q": "Hello"}
+            f"/api/ai/conversations/{conv.id}/search/", {"q": "Hello"}
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -1398,7 +1398,7 @@ class TestConversationsAPI:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.get(
-            f"/api/conversations/{conv.id}/search/", {"q": "H"}
+            f"/api/ai/conversations/{conv.id}/search/", {"q": "H"}
         )
         assert response.status_code == status.HTTP_200_OK
 
@@ -1406,14 +1406,14 @@ class TestConversationsAPI:
         conv = Conversation.objects.create(
             user=premium_user, conversation_type="general"
         )
-        response = premium_client.get(f"/api/conversations/{conv.id}/export/")
+        response = premium_client.get(f"/api/ai/conversations/{conv.id}/export/")
         assert response.status_code == status.HTTP_200_OK
 
     @pytest.mark.xfail(
         reason="SimpleRouter root prefix catches conversation-templates/ as detail pk"
     )
     def test_conversation_templates_list(self, premium_client):
-        response = premium_client.get("/api/conversations/conversation-templates/")
+        response = premium_client.get("/api/ai/templates/")
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -1744,7 +1744,7 @@ class TestIntegrationFlows:
 
         # Send message
         resp = premium_client.post(
-            f"/api/conversations/{conv_id}/send_message/",
+            f"/api/ai/conversations/{conv_id}/send_message/",
             {
                 "content": "Hello AI, help me plan my dream!",
             },
@@ -1752,21 +1752,21 @@ class TestIntegrationFlows:
         assert resp.status_code == 200
 
         # Get messages
-        resp = premium_client.get(f"/api/conversations/{conv_id}/messages/")
+        resp = premium_client.get(f"/api/ai/conversations/{conv_id}/messages/")
         assert resp.status_code == 200
 
         # Pin conversation
-        resp = premium_client.post(f"/api/conversations/{conv_id}/pin/")
+        resp = premium_client.post(f"/api/ai/conversations/{conv_id}/pin/")
         assert resp.status_code == 200
 
         # Search
         resp = premium_client.get(
-            f"/api/conversations/{conv_id}/search/", {"q": "dream"}
+            f"/api/ai/conversations/{conv_id}/search/", {"q": "dream"}
         )
         assert resp.status_code == 200
 
         # Export
-        resp = premium_client.get(f"/api/conversations/{conv_id}/export/")
+        resp = premium_client.get(f"/api/ai/conversations/{conv_id}/export/")
         assert resp.status_code == 200
 
     def test_notification_flow(self, authenticated_client, user):
@@ -2333,7 +2333,7 @@ class TestEdgeCases:
             user=premium_user, conversation_type="general"
         )
         response = premium_client.post(
-            f"/api/conversations/{conv.id}/send_message/",
+            f"/api/ai/conversations/{conv.id}/send_message/",
             {
                 "content": "",
             },

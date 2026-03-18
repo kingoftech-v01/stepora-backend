@@ -167,7 +167,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"], url_path="chat")
     def chat(self, request):
         """Find or create a buddy_chat conversation for the given user."""
-        from apps.conversations.models import Conversation
+        from apps.chat.models import ChatConversation as Conversation
 
         target_user_id = (
             request.data.get("user_id")
@@ -191,7 +191,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if not target_user:
             try:
                 conv = Conversation.objects.get(
-                    id=target_user_id, conversation_type="buddy_chat"
+                    id=target_user_id
                 )
                 # Find the buddy (the other user in the pairing)
                 buddy_user = None
@@ -234,7 +234,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
         if pairing:
             existing = (
                 Conversation.objects.filter(
-                    conversation_type="buddy_chat",
                     buddy_pairing=pairing,
                 )
                 .filter(Q(user=request.user) | Q(user=target_user))
@@ -246,7 +245,6 @@ class BuddyViewSet(viewsets.GenericViewSet):
             existing = (
                 Conversation.objects.filter(
                     user=request.user,
-                    conversation_type="buddy_chat",
                 )
                 .filter(
                     Q(buddy_pairing__user1=target_user)
@@ -261,14 +259,12 @@ class BuddyViewSet(viewsets.GenericViewSet):
             # Create new buddy_chat conversation
             conv = Conversation.objects.create(
                 user=request.user,
-                conversation_type="buddy_chat",
                 title=target_user.display_name or "Buddy",
                 buddy_pairing=pairing,
                 total_messages=0,
-                total_tokens_used=0,
             )
             # Store target user as a system message so send_message can resolve recipient
-            from apps.conversations.models import Message
+            from apps.chat.models import ChatMessage as Message
 
             Message.objects.create(
                 conversation=conv,
@@ -304,7 +300,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         """Send a buddy chat message (REST fallback when WebSocket unavailable)."""
         from django.db.models import F
 
-        from apps.conversations.models import Conversation, Message
+        from apps.chat.models import ChatConversation as Conversation, Message
 
         conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"
@@ -335,7 +331,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
 
         try:
-            conv = Conversation.objects.get(id=conv_id, conversation_type="buddy_chat")
+            conv = Conversation.objects.get(id=conv_id)
         except Conversation.DoesNotExist:
             return Response(
                 {"error": _("Conversation not found.")},
@@ -362,7 +358,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
 
         # Fallback: check the system message metadata for target_user_id
         if not other_user:
-            from apps.conversations.models import Message as ConvMessage
+            from apps.chat.models import ChatMessage as ConvMessage
 
             sys_msg = (
                 ConvMessage.objects.filter(
@@ -459,7 +455,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         from django.core.files.storage import default_storage
         from django.db.models import F
 
-        from apps.conversations.models import Conversation, Message
+        from apps.chat.models import ChatConversation as Conversation, Message
 
         conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"
@@ -517,7 +513,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
             )
 
         try:
-            conv = Conversation.objects.get(id=conv_id, conversation_type="buddy_chat")
+            conv = Conversation.objects.get(id=conv_id)
         except Conversation.DoesNotExist:
             return Response(
                 {"error": _("Conversation not found.")},
@@ -542,7 +538,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         elif conv.user_id != request.user.id:
             other_user = conv.user
         if not other_user:
-            from apps.conversations.models import Message as ConvMessage
+            from apps.chat.models import ChatMessage as ConvMessage
 
             sys_msg = (
                 ConvMessage.objects.filter(

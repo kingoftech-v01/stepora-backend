@@ -1463,7 +1463,7 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             str: Formatted context string for inclusion in the system prompt,
                  or empty string if no memories exist.
         """
-        from apps.conversations.models import ChatMemory
+        from apps.ai.models import ChatMemory
 
         memories = ChatMemory.objects.filter(user=user, is_active=True).order_by(
             "-importance", "-updated_at"

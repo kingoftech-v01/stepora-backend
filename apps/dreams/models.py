@@ -1106,7 +1106,7 @@ class PlanCheckIn(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dream = models.ForeignKey(Dream, on_delete=models.CASCADE, related_name="checkins")
     conversation = models.ForeignKey(
-        "conversations.Conversation",
+        "ai.AIConversation",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

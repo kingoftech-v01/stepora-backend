@@ -202,7 +202,7 @@ app.conf.task_routes = {
     "apps.circles.tasks.*": {"queue": "social"},
     "apps.calendar.tasks.*": {"queue": "dreams"},
     "apps.subscriptions.tasks.*": {"queue": "notifications"},
-    "apps.conversations.tasks.*": {"queue": "integrations"},
+    "apps.ai.tasks.*": {"queue": "integrations"},
     "apps.users.tasks.*": {"queue": "notifications"},
     "integrations.*": {"queue": "integrations"},
 }

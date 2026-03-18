@@ -1,5 +1,5 @@
 """
-URLs for Chat app.
+URLs for Chat app (friend/buddy chat and calls only).
 """
 
 from django.urls import include, path
@@ -8,22 +8,12 @@ from rest_framework.routers import SimpleRouter
 from .agora_views import agora_config, agora_rtc_token, agora_rtm_token
 from .views import (
     CallViewSet,
-    ChatMemoryViewSet,
-    ConversationTemplateViewSet,
-    ConversationViewSet,
-    MessageViewSet,
+    ChatConversationViewSet,
 )
 
 router = SimpleRouter()
 router.register(r"calls", CallViewSet, basename="call")
-router.register(r"memories", ChatMemoryViewSet, basename="chat-memory")
-router.register(r"messages", MessageViewSet, basename="message")
-router.register(
-    r"conversation-templates",
-    ConversationTemplateViewSet,
-    basename="conversation-template",
-)
-router.register(r"", ConversationViewSet, basename="conversation")
+router.register(r"", ChatConversationViewSet, basename="chat-conversation")
 
 urlpatterns = [
     # Agora.io token endpoints

@@ -8,7 +8,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('conversations', '0011_alter_messagereadstatus_unique_together_and_more'),
         ('dreams', '0016_persona_and_language'),
     ]
 
@@ -67,7 +66,7 @@ class Migration(migrations.Migration):
                 ('completed_at', models.DateTimeField(blank=True, null=True)),
                 ('error_message', models.TextField(blank=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('conversation', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='checkin_records', to='conversations.conversation')),
+                ('conversation', models.UUIDField(blank=True, null=True)),
                 ('dream', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='checkins', to='dreams.dream')),
             ],
             options={

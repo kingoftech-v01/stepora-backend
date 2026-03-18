@@ -11,7 +11,7 @@ from django_elasticsearch_dsl.registries import registry
 
 from apps.calendar.models import CalendarEvent
 from apps.circles.models import CircleChallenge, CirclePost
-from apps.conversations.models import Message
+from apps.ai.models import AIMessage
 from apps.dreams.models import Dream, Goal, Task
 from apps.social.models import ActivityComment
 from apps.users.models import User
@@ -125,7 +125,7 @@ class MessageDocument(Document):
         settings = {"number_of_shards": 1, "number_of_replicas": 0}
 
     class Django:
-        model = Message
+        model = AIMessage
         fields = []
 
     def prepare_content(self, instance):

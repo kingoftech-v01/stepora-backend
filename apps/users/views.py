@@ -569,14 +569,27 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # Export conversation summaries (not full messages for privacy)
         try:
-            from apps.conversations.models import Conversation
+            from apps.ai.models import AIConversation
+            from apps.chat.models import ChatConversation
 
-            for conv in Conversation.objects.filter(user=user).order_by("-updated_at")[
+            for conv in AIConversation.objects.filter(user=user).order_by("-updated_at")[
                 :100
             ]:
                 data["conversations"].append(
                     {
                         "type": conv.conversation_type,
+                        "title": conv.title or "",
+                        "total_messages": conv.total_messages,
+                        "created_at": str(conv.created_at),
+                        "updated_at": str(conv.updated_at),
+                    }
+                )
+            for conv in ChatConversation.objects.filter(user=user).order_by("-updated_at")[
+                :100
+            ]:
+                data["conversations"].append(
+                    {
+                        "type": "buddy_chat",
                         "title": conv.title or "",
                         "total_messages": conv.total_messages,
                         "created_at": str(conv.created_at),

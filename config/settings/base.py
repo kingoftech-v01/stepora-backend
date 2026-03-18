@@ -62,7 +62,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.dreams",
     "apps.chat",
-    "apps.conversations",
+    "apps.ai",
     "apps.notifications",
     "apps.calendar",
     "apps.subscriptions",
@@ -72,7 +72,6 @@ INSTALLED_APPS = [
     "apps.social",
     "apps.buddies",
     "apps.updates",
-    "apps.blog",
     "core",
 ]
 

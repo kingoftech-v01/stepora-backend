@@ -10,7 +10,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.conversations.models import Conversation, Message
+from apps.ai.models import AIConversation as Conversation, AIMessage as Message
 from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, NotificationTemplate, UserDevice
 from apps.subscriptions.models import Subscription, SubscriptionPlan

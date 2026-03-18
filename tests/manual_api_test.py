@@ -27,7 +27,7 @@ from django.core.management import call_command
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.conversations.models import Conversation, Message
+from apps.ai.models import AIConversation as Conversation, AIMessage as Message
 from apps.dreams.models import Dream, Goal, Obstacle, Task
 from apps.notifications.models import Notification
 from apps.users.models import User
@@ -196,7 +196,7 @@ check(
 # ===== SUBSCRIPTION GATING =====
 print()
 print("=== SUBSCRIPTION GATING (Free blocked) ===")
-resp = client.get("/api/conversations/")
+resp = client.get("/api/ai/conversations/")
 check(
     "Free GET /conversations/ -> 403",
     resp.status_code == 403,
@@ -397,7 +397,7 @@ print("=== PREMIUM USER FEATURES ===")
 pclient = APIClient()
 pclient.force_authenticate(user=premium_user)
 
-resp = pclient.get("/api/conversations/")
+resp = pclient.get("/api/ai/conversations/")
 check(
     "Premium GET /conversations/ -> 200",
     resp.status_code == 200,
@@ -445,7 +445,7 @@ with patch("integrations.openai_service._client") as mock_oa:
     mock_oa.chat.completions.create = mock_chat
 
     resp = pclient.post(
-        f"/api/conversations/{conv.id}/send_message/",
+        f"/api/ai/conversations/{conv.id}/send_message/",
         {"content": "Help me plan my dream"},
     )
     check("Send message -> 200", resp.status_code == 200, f"got {resp.status_code}")
@@ -453,33 +453,33 @@ with patch("integrations.openai_service._client") as mock_oa:
         check("Has assistant_message", "assistant_message" in resp.data)
         check("Has user_message", "user_message" in resp.data)
 
-resp = pclient.post(f"/api/conversations/{conv.id}/send_message/", {"content": ""})
+resp = pclient.post(f"/api/ai/conversations/{conv.id}/send_message/", {"content": ""})
 check("Empty message -> 400", resp.status_code == 400, f"got {resp.status_code}")
 
-resp = pclient.get(f"/api/conversations/{conv.id}/messages/")
+resp = pclient.get(f"/api/ai/conversations/{conv.id}/messages/")
 check("GET messages -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
-resp = pclient.post(f"/api/conversations/{conv.id}/pin/")
+resp = pclient.post(f"/api/ai/conversations/{conv.id}/pin/")
 check("Pin conversation -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
 msg = Message.objects.filter(conversation=conv, role="assistant").first()
 if msg:
-    resp = pclient.post(f"/api/conversations/{conv.id}/like-message/{msg.id}/")
+    resp = pclient.post(f"/api/ai/conversations/{conv.id}/like-message/{msg.id}/")
     check("Like message -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
     resp = pclient.post(
-        f"/api/conversations/{conv.id}/react-message/{msg.id}/", {"emoji": "👍"}
+        f"/api/ai/conversations/{conv.id}/react-message/{msg.id}/", {"emoji": "👍"}
     )
     check("React to message -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
-resp = pclient.get(f"/api/conversations/{conv.id}/search/", {"q": "dream"})
+resp = pclient.get(f"/api/ai/conversations/{conv.id}/search/", {"q": "dream"})
 check("Search messages -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
-resp = pclient.get(f"/api/conversations/{conv.id}/export/")
+resp = pclient.get(f"/api/ai/conversations/{conv.id}/export/")
 check("Export conversation -> 200", resp.status_code == 200, f"got {resp.status_code}")
 
 # IDOR: other user cant see this conversation
-resp = other_client.get(f"/api/conversations/{conv.id}/")
+resp = other_client.get(f"/api/ai/conversations/{conv.id}/")
 check(
     "Other user GET conversation -> 404 (IDOR)",
     resp.status_code in (403, 404),

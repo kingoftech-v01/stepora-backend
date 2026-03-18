@@ -773,7 +773,7 @@ def expire_ringing_calls(self):
     Runs every 15 seconds via Celery beat.
     """
     try:
-        from apps.conversations.models import Call
+        from apps.chat.models import Call
 
         threshold = timezone.now() - timedelta(seconds=30)
 

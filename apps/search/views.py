@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from apps.calendar.models import CalendarEvent
 from apps.circles.models import CirclePost
-from apps.conversations.models import Message
+from apps.ai.models import AIMessage as Message
 from apps.dreams.models import Dream, Goal, Task
 from apps.search.services import SearchService
 from apps.users.models import User

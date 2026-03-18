@@ -76,17 +76,12 @@ class TestAIChatConsumerRefactor(TestCase):
     """Verify AIChatConsumer import paths and backward compat alias."""
 
     def test_import_aichat_consumer(self):
-        from apps.conversations.consumers import AIChatConsumer
+        from apps.ai.consumers import AIChatConsumer
 
         assert AIChatConsumer is not None
 
-    def test_backward_compat_alias(self):
-        from apps.conversations.consumers import AIChatConsumer, ChatConsumer
-
-        assert ChatConsumer is AIChatConsumer
-
     def test_routing_has_both_paths(self):
-        from apps.conversations.routing import websocket_urlpatterns
+        from apps.ai.routing import websocket_urlpatterns
 
         patterns = [r.pattern.regex.pattern for r in websocket_urlpatterns]
         assert any("ai-chat" in p for p in patterns)
@@ -359,11 +354,11 @@ class TestBuddyCallBroadcast(TestCase):
     )
     def test_initiate_call_creates_call_with_pairing(self):
         resp = self.client1.post(
-            "/api/conversations/calls/initiate/",
+            "/api/chat/calls/initiate/",
             {"callee_id": str(self.user2.id), "call_type": "voice"},
         )
         assert resp.status_code == status.HTTP_201_CREATED
-        from apps.conversations.models import Call
+        from apps.chat.models import Call
 
         call = Call.objects.get(id=resp.data["callId"])
         assert call.buddy_pairing == self.pairing
@@ -656,7 +651,7 @@ class TestASGIConfig(TestCase):
         """Verify ASGI config includes all 4 WS route sets."""
         from apps.buddies.routing import websocket_urlpatterns as buddy_ws
         from apps.circles.routing import websocket_urlpatterns as circle_ws
-        from apps.conversations.routing import websocket_urlpatterns as ai_ws
+        from apps.ai.routing import websocket_urlpatterns as ai_ws
         from apps.notifications.routing import websocket_urlpatterns as notif_ws
 
         combined = ai_ws + buddy_ws + circle_ws + notif_ws

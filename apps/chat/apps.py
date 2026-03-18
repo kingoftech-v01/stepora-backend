@@ -1,5 +1,5 @@
 """
-AppConfig for the standalone Chat app.
+AppConfig for the standalone Chat app (friend/buddy chat).
 """
 
 from django.apps import AppConfig

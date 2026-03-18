@@ -18,7 +18,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.buddies.models import BuddyPairing
-from apps.conversations.models import Call, Conversation, Message, MessageReadStatus
+from apps.chat.models import Call, ChatConversation as Conversation, ChatMessage as Message, MessageReadStatus
 from apps.notifications.models import Notification
 from apps.social.models import BlockedUser
 from apps.users.models import User
@@ -97,7 +97,6 @@ def buddy_pairing(db, user_a, user_b):
 def buddy_conversation(db, user_a, buddy_pairing):
     return Conversation.objects.create(
         user=user_a,
-        conversation_type="buddy_chat",
         buddy_pairing=buddy_pairing,
     )
 
@@ -195,7 +194,7 @@ class TestBlockEnforcement:
 
         with patch("apps.notifications.fcm_service.FCMService"):
             resp = client_a.post(
-                "/api/conversations/calls/initiate/",
+                "/api/chat/calls/initiate/",
                 {
                     "callee_id": str(user_b.id),
                     "call_type": "voice",
@@ -207,7 +206,7 @@ class TestBlockEnforcement:
         """Unblocked user can initiate a call."""
         with patch("apps.notifications.fcm_service.FCMService"):
             resp = client_a.post(
-                "/api/conversations/calls/initiate/",
+                "/api/chat/calls/initiate/",
                 {
                     "callee_id": str(user_b.id),
                     "call_type": "voice",
@@ -272,7 +271,7 @@ class TestUnreadCountAndMarkRead:
         msg = Message.objects.create(
             conversation=buddy_conversation, role="user", content="Test"
         )
-        resp = client_a.post(f"/api/conversations/{buddy_conversation.id}/mark-read/")
+        resp = client_a.post(f"/api/chat/{buddy_conversation.id}/mark-read/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["last_read_message_id"] == str(msg.id)
 
@@ -284,12 +283,12 @@ class TestUnreadCountAndMarkRead:
         msg1 = Message.objects.create(
             conversation=buddy_conversation, role="user", content="First"
         )
-        client_a.post(f"/api/conversations/{buddy_conversation.id}/mark-read/")
+        client_a.post(f"/api/chat/{buddy_conversation.id}/mark-read/")
 
         msg2 = Message.objects.create(
             conversation=buddy_conversation, role="user", content="Second"
         )
-        client_a.post(f"/api/conversations/{buddy_conversation.id}/mark-read/")
+        client_a.post(f"/api/chat/{buddy_conversation.id}/mark-read/")
 
         assert (
             MessageReadStatus.objects.filter(
@@ -303,7 +302,7 @@ class TestUnreadCountAndMarkRead:
 
     def test_mark_read_empty_conversation(self, client_a, buddy_conversation):
         """Mark-read on empty conversation returns null last_read_message_id."""
-        resp = client_a.post(f"/api/conversations/{buddy_conversation.id}/mark-read/")
+        resp = client_a.post(f"/api/chat/{buddy_conversation.id}/mark-read/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["last_read_message_id"] is None
 
@@ -320,7 +319,7 @@ class TestUnreadCountAndMarkRead:
                 metadata={"sender_id": str(user_a.id)},
             )
 
-        resp = client_b.get("/api/conversations/")
+        resp = client_b.get("/api/chat/")
         assert resp.status_code == status.HTTP_200_OK
         convs = (
             resp.data
@@ -349,9 +348,9 @@ class TestUnreadCountAndMarkRead:
             )
 
         # Mark as read
-        client_b.post(f"/api/conversations/{buddy_conversation.id}/mark-read/")
+        client_b.post(f"/api/chat/{buddy_conversation.id}/mark-read/")
 
-        resp = client_b.get("/api/conversations/")
+        resp = client_b.get("/api/chat/")
         convs = (
             resp.data
             if isinstance(resp.data, list)
@@ -492,7 +491,7 @@ class TestCallRejectNotification:
         with patch("channels.layers.get_channel_layer") as mock_layer:
             mock_layer.return_value = Mock()
             mock_layer.return_value.group_send = Mock()
-            resp = client_b.post(f"/api/conversations/calls/{call.id}/reject/")
+            resp = client_b.post(f"/api/chat/calls/{call.id}/reject/")
 
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["status"] == "rejected"
@@ -512,7 +511,7 @@ class TestCallRejectNotification:
             call_type="voice",
             status="ringing",
         )
-        resp = client_a.post(f"/api/conversations/calls/{call.id}/reject/")
+        resp = client_a.post(f"/api/chat/calls/{call.id}/reject/")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -536,7 +535,7 @@ class TestCallHistory:
             status="missed",
         )
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         assert resp.status_code == status.HTTP_200_OK
         ids = [c["id"] for c in resp.data]
         assert str(call1.id) in ids
@@ -558,7 +557,7 @@ class TestCallHistory:
             status="completed",
         )
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         assert resp.status_code == status.HTTP_200_OK
         assert len(resp.data) == 0
 
@@ -580,7 +579,7 @@ class TestCallHistory:
             status="completed",
         )
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         assert resp.data[0]["id"] == str(new.id)
         assert resp.data[1]["id"] == str(old.id)
 
@@ -594,7 +593,7 @@ class TestCallHistory:
             duration_seconds=120,
         )
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         entry = resp.data[0]
         assert "caller_name" in entry
         assert "callee_name" in entry
@@ -611,7 +610,7 @@ class TestCallHistory:
         ]
         Call.objects.bulk_create(calls)
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         assert len(resp.data) <= 100
 
 
@@ -650,7 +649,7 @@ class TestIntegration:
         """Full call lifecycle: initiate -> accept -> end."""
         with patch("apps.notifications.fcm_service.FCMService"):
             resp = client_a.post(
-                "/api/conversations/calls/initiate/",
+                "/api/chat/calls/initiate/",
                 {
                     "callee_id": str(user_b.id),
                     "call_type": "voice",
@@ -659,11 +658,11 @@ class TestIntegration:
         assert resp.status_code == status.HTTP_201_CREATED
         call_id = resp.data["callId"]
 
-        resp = client_b.post(f"/api/conversations/calls/{call_id}/accept/")
+        resp = client_b.post(f"/api/chat/calls/{call_id}/accept/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["status"] == "accepted"
 
-        resp = client_a.post(f"/api/conversations/calls/{call_id}/end/")
+        resp = client_a.post(f"/api/chat/calls/{call_id}/end/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["status"] == "completed"
         assert resp.data["durationSeconds"] >= 0
@@ -684,5 +683,5 @@ class TestIntegration:
 
         expire_ringing_calls()
 
-        resp = client_a.get("/api/conversations/calls/history/")
+        resp = client_a.get("/api/chat/calls/history/")
         assert any(c["status"] == "missed" for c in resp.data)

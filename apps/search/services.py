@@ -130,9 +130,9 @@ class SearchService:
             return [hit.meta.id for hit in s[:limit].execute()]
 
         def db():
-            from apps.conversations.models import Message
+            from apps.ai.models import AIMessage
 
-            qs = Message.objects.filter(
+            qs = AIMessage.objects.filter(
                 content__icontains=query,
                 conversation__user=user,
             )

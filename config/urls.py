@@ -24,7 +24,8 @@ api_v1_patterns = [
     # API endpoints
     path("users/", include("apps.users.urls")),
     path("dreams/", include("apps.dreams.urls")),
-    path("conversations/", include("apps.conversations.urls")),
+    path("chat/", include("apps.chat.urls")),
+    path("ai/", include("apps.ai.urls")),
     path("calendar/", include("apps.calendar.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("subscriptions/", include("apps.subscriptions.urls")),
@@ -42,8 +43,6 @@ api_v1_patterns = [
 urlpatterns = [
     # Django Admin (non-default path for security)
     path("stepora-manage/", admin.site.urls),
-    # Blog (public, not behind API versioning)
-    path("api/blog/", include("apps.blog.urls")),
     # Health check
     path("health/", include("core.urls")),
     # API Documentation (restricted to staff in production)

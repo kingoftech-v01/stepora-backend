@@ -14,7 +14,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from apps.conversations.models import Conversation
+from apps.ai.models import AIConversation as Conversation
 from apps.dreams.models import Dream
 from apps.users.models import User
 
@@ -107,12 +107,12 @@ class TestFreeUserBlocked:
     """Test that free users cannot access premium/pro features."""
 
     def test_free_user_cannot_use_ai_conversations(self, authenticated_client):
-        response = authenticated_client.get("/api/conversations/")
+        response = authenticated_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_free_user_cannot_create_conversation(self, authenticated_client):
         response = authenticated_client.post(
-            "/api/conversations/",
+            "/api/ai/conversations/",
             {
                 "conversation_type": "general",
             },
@@ -223,7 +223,7 @@ class TestPremiumUserAllowed:
     """Test that premium users can access premium features."""
 
     def test_premium_can_list_conversations(self, premium_client):
-        response = premium_client.get("/api/conversations/")
+        response = premium_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_premium_can_use_buddies(self, premium_client):
@@ -263,7 +263,7 @@ class TestProUserAllowed:
     """Test that pro users can access all features."""
 
     def test_pro_can_list_conversations(self, pro_client):
-        response = pro_client.get("/api/conversations/")
+        response = pro_client.get("/api/ai/conversations/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_pro_can_use_buddies(self, pro_client):
@@ -369,7 +369,7 @@ class TestOwnershipEnforcement:
 
         client = APIClient()
         client.force_authenticate(user=user2)
-        response = client.get(f"/api/conversations/{conv.id}/")
+        response = client.get(f"/api/ai/conversations/{conv.id}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_user_cannot_delete_other_dream(self, db):
