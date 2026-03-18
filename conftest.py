@@ -10,6 +10,39 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+
+def pytest_configure(config):
+    """Disable Elasticsearch autosync and Stripe API calls during tests."""
+    import os
+
+    # Clear Stripe API key BEFORE Django settings load dotenv,
+    # to prevent real API calls from module-level stripe.api_key assignments.
+    os.environ["STRIPE_SECRET_KEY"] = ""
+    os.environ["STRIPE_PUBLISHABLE_KEY"] = ""
+
+    from django.conf import settings
+
+    settings.ELASTICSEARCH_DSL_AUTOSYNC = False
+    settings.ELASTICSEARCH_DSL_SIGNAL_PROCESSOR = (
+        "django_elasticsearch_dsl.signals.BaseSignalProcessor"
+    )
+    settings.STRIPE_SECRET_KEY = ""
+
+    import stripe
+
+    stripe.api_key = ""
+
+
+@pytest.fixture(autouse=True)
+def _clear_stripe_api_key():
+    """Ensure Stripe API key is empty for every test to prevent real API calls."""
+    import stripe
+
+    original = stripe.api_key
+    stripe.api_key = ""
+    yield
+    stripe.api_key = original
+
 from apps.ai.models import AIConversation as Conversation, AIMessage as Message
 from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, NotificationTemplate, UserDevice

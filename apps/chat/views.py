@@ -86,6 +86,64 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
         return ChatConversationSerializer
 
     @extend_schema(
+        summary="Start or get conversation",
+        description="Get or create a chat conversation with another user.",
+        tags=["Chat"],
+        request=None,
+        responses={
+            200: ChatConversationSerializer,
+            201: ChatConversationSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="start")
+    def start(self, request):
+        """Get or create a chat conversation with another user."""
+        target_user_id = request.data.get("target_user_id") or request.data.get("user_id")
+        if not target_user_id:
+            return Response(
+                {"error": _("target_user_id is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.users.models import User
+
+        try:
+            target = User.objects.get(id=target_user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": _("User not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if target == request.user:
+            return Response(
+                {"error": _("Cannot chat with yourself.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get or create conversation (check both directions)
+        conv = (
+            ChatConversation.objects.filter(
+                Q(user=request.user, target_user=target)
+                | Q(user=target, target_user=request.user)
+            )
+            .first()
+        )
+
+        if conv:
+            serializer = ChatConversationSerializer(conv, context={"request": request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        conv = ChatConversation.objects.create(
+            user=request.user,
+            target_user=target,
+            is_active=True,
+        )
+        serializer = ChatConversationSerializer(conv, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
         summary="Send friend message",
         description="Send a text message in a friend chat (no AI).",
         tags=["Chat"],
