@@ -143,6 +143,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             "generate_plan",
         ):
             return [IsAuthenticated(), CanUseAI()]
+        # Friend chat messages don't need AI subscription
         return [IsAuthenticated()]
 
     def perform_update(self, serializer):
@@ -171,6 +172,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         return (
             Conversation.objects.filter(
                 Q(user=user)
+                | Q(target_user=user)
                 | Q(conversation_type="buddy_chat", buddy_pairing__user1=user)
                 | Q(conversation_type="buddy_chat", buddy_pairing__user2=user)
             )
@@ -345,6 +347,72 @@ class ConversationViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @extend_schema(
+        summary="Send friend message",
+        description="Send a text message in a friend chat (no AI). Persists to DB and broadcasts via WebSocket.",
+        tags=["Conversations"],
+        request=MessageCreateSerializer,
+        responses={
+            201: MessageSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="send-friend-message",
+    )
+    def send_friend_message(self, request, pk=None):
+        """Send a message in a friend/buddy chat conversation (no AI)."""
+        conversation = self.get_object()
+
+        if conversation.conversation_type != "buddy_chat":
+            return Response(
+                {"error": _("This endpoint is for friend chat only.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = MessageCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        content = serializer.validated_data["content"]
+
+        # Save message
+        msg = Message.objects.create(
+            conversation=conversation,
+            role="user",
+            content=content,
+            metadata={"sender_id": str(request.user.id)},
+        )
+        conversation.total_messages = (conversation.total_messages or 0) + 1
+        conversation.save(update_fields=["total_messages", "updated_at"])
+
+        # Broadcast via WebSocket
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+
+            channel_layer = get_channel_layer()
+            room = f"conversation_{conversation.id}"
+            async_to_sync(channel_layer.group_send)(
+                room,
+                {
+                    "type": "chat_message",
+                    "message": {
+                        "id": str(msg.id),
+                        "role": "user",
+                        "content": content,
+                        "sender_id": str(request.user.id),
+                        "created_at": msg.created_at.isoformat(),
+                    },
+                },
+            )
+        except Exception:
+            logger.debug("WebSocket broadcast failed", exc_info=True)
+
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         summary="Send voice message",
@@ -1297,7 +1365,10 @@ class CallViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"])
     def initiate(self, request):
         """Initiate a voice or video call."""
-        callee_id = request.data.get("callee_id")
+        callee_id = (
+            request.data.get("callee_id")
+            or request.data.get("user_id")
+        )
         call_type = request.data.get("call_type", "voice")
 
         if not callee_id:

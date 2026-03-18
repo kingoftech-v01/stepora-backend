@@ -28,6 +28,14 @@ class Conversation(models.Model):
         blank=True,
         related_name="conversations",
     )
+    target_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conversations_as_target",
+        help_text="The other participant in a friend/buddy chat conversation.",
+    )
     buddy_pairing = models.ForeignKey(
         "buddies.BuddyPairing",
         on_delete=models.SET_NULL,

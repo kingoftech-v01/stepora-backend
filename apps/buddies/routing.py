@@ -1,14 +1,6 @@
 """
-WebSocket routing for Buddy Chat.
+Backward-compatibility shim. Buddy chat WS route is now in apps.chat.routing.
+This list is empty to avoid duplicate route registration in ASGI.
 """
 
-from django.urls import re_path
-
-from . import consumers
-
-websocket_urlpatterns = [
-    re_path(
-        r"ws/buddy-chat/(?P<pairing_id>[0-9a-f-]+)/$",
-        consumers.BuddyChatConsumer.as_asgi(),
-    ),
-]
+websocket_urlpatterns = []
