@@ -374,3 +374,218 @@ class TestIncomingCalls:
         # Caller should not see calls where they are the caller
         call_ids = [c.get("call_id") for c in response.data]
         assert str(chat_call.id) not in call_ids
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Start (get-or-create) conversation
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestStartConversation:
+    """Tests for POST /api/chat/start/"""
+
+    def test_start_creates_new_conversation(self, chat_client, chat_user, chat_user3):
+        """Starting a conversation with a new user creates one."""
+        response = chat_client.post(
+            "/api/chat/start/",
+            {"target_user_id": str(chat_user3.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert ChatConversation.objects.filter(
+            user=chat_user, target_user=chat_user3
+        ).exists()
+
+    def test_start_returns_existing_conversation(self, chat_client, chat_conversation, chat_user2):
+        """Starting a conversation with a user who already has one returns existing."""
+        response = chat_client.post(
+            "/api/chat/start/",
+            {"target_user_id": str(chat_user2.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["id"] == str(chat_conversation.id)
+
+    def test_start_missing_target(self, chat_client):
+        """Starting without target_user_id returns 400."""
+        response = chat_client.post(
+            "/api/chat/start/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_start_with_self(self, chat_client, chat_user):
+        """Cannot start a conversation with yourself."""
+        response = chat_client.post(
+            "/api/chat/start/",
+            {"target_user_id": str(chat_user.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_start_nonexistent_user(self, chat_client):
+        """Starting with a non-existent user returns 404."""
+        response = chat_client.post(
+            "/api/chat/start/",
+            {"target_user_id": str(uuid.uuid4())},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_start_unauthenticated(self, chat_user2):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/chat/start/",
+            {"target_user_id": str(chat_user2.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Send Voice Message
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestSendVoiceMessage:
+    """Tests for POST /api/chat/{id}/send-message/ with voice-like content."""
+
+    @patch("channels.layers.get_channel_layer")
+    def test_send_long_message(self, mock_channel_layer, chat_client, chat_conversation):
+        """Send a long text message."""
+        mock_channel_layer.return_value = None
+        long_content = "A" * 500
+        response = chat_client.post(
+            f"/api/chat/{chat_conversation.id}/send-message/",
+            {"content": long_content},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["content"] == long_content
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  End Call & Cancel Call
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestEndCall:
+    """Tests for POST /api/chat/calls/{id}/end/"""
+
+    def test_end_accepted_call(self, chat_client, chat_call):
+        """Caller can end an accepted call."""
+        from django.utils import timezone as tz
+
+        chat_call.status = "accepted"
+        chat_call.started_at = tz.now()
+        chat_call.save()
+
+        response = chat_client.post(f"/api/chat/calls/{chat_call.id}/end/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_end_call_as_callee(self, chat_client2, chat_call):
+        """Callee can also end a call."""
+        from django.utils import timezone as tz
+
+        chat_call.status = "accepted"
+        chat_call.started_at = tz.now()
+        chat_call.save()
+
+        response = chat_client2.post(f"/api/chat/calls/{chat_call.id}/end/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_end_call_not_participant(self, chat_user3, chat_call):
+        """Non-participant cannot end a call."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=chat_user3)
+
+        chat_call.status = "accepted"
+        chat_call.save()
+
+        response = client.post(f"/api/chat/calls/{chat_call.id}/end/")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_end_nonexistent_call(self, chat_client):
+        """Ending a non-existent call returns 404."""
+        response = chat_client.post(f"/api/chat/calls/{uuid.uuid4()}/end/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+class TestCancelCall:
+    """Tests for POST /api/chat/calls/{id}/cancel/"""
+
+    def test_cancel_ringing_call(self, chat_client, chat_call):
+        """Caller can cancel a ringing call."""
+        response = chat_client.post(f"/api/chat/calls/{chat_call.id}/cancel/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "cancelled"
+
+    def test_cancel_call_not_caller(self, chat_client2, chat_call):
+        """Callee cannot cancel a call."""
+        response = chat_client2.post(f"/api/chat/calls/{chat_call.id}/cancel/")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_cancel_non_ringing_call(self, chat_client, chat_call):
+        """Cannot cancel a call that is not ringing."""
+        chat_call.status = "accepted"
+        chat_call.save()
+        response = chat_client.post(f"/api/chat/calls/{chat_call.id}/cancel/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+class TestCallStatus:
+    """Tests for GET /api/chat/calls/{id}/status/"""
+
+    def test_get_call_status(self, chat_client, chat_call):
+        """Participant can get call status."""
+        response = chat_client.get(f"/api/chat/calls/{chat_call.id}/status/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "ringing"
+        assert response.data["call_type"] == "voice"
+
+    def test_get_call_status_callee(self, chat_client2, chat_call):
+        """Callee can also get call status."""
+        response = chat_client2.get(f"/api/chat/calls/{chat_call.id}/status/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_get_call_status_non_participant(self, chat_user3, chat_call):
+        """Non-participant cannot see call status."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=chat_user3)
+        response = client.get(f"/api/chat/calls/{chat_call.id}/status/")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_get_call_status_not_found(self, chat_client):
+        """Non-existent call returns 404."""
+        response = chat_client.get(f"/api/chat/calls/{uuid.uuid4()}/status/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Retrieve conversation detail
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestRetrieveConversation:
+    """Tests for GET /api/chat/{id}/"""
+
+    def test_retrieve_conversation(self, chat_client, chat_conversation):
+        """Get a specific conversation with messages."""
+        response = chat_client.get(f"/api/chat/{chat_conversation.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["id"] == str(chat_conversation.id)
+
+    def test_retrieve_nonexistent(self, chat_client):
+        """Non-existent conversation returns 404."""
+        response = chat_client.get(f"/api/chat/{uuid.uuid4()}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND

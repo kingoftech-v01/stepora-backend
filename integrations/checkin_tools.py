@@ -636,9 +636,9 @@ class CheckInToolExecutor:
         goals = (
             Goal.objects.filter(milestone=ms)
             .annotate(
-                total_tasks=Count("task"),
-                completed_tasks=Count("task", filter=Q(task__status="completed")),
-                pending_tasks=Count("task", filter=Q(task__status="pending")),
+                total_tasks=Count("tasks"),
+                completed_tasks=Count("tasks", filter=Q(tasks__status="completed")),
+                pending_tasks=Count("tasks", filter=Q(tasks__status="pending")),
             )
             .order_by("order")
         )

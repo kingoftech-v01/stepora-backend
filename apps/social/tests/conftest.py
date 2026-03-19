@@ -59,3 +59,11 @@ def social_client2(social_user2):
     client = APIClient()
     client.force_authenticate(user=social_user2)
     return client
+
+
+@pytest.fixture
+def social_client3(social_user3):
+    """Authenticated API client for social_user3."""
+    client = APIClient()
+    client.force_authenticate(user=social_user3)
+    return client

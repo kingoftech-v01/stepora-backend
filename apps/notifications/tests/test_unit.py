@@ -2,6 +2,11 @@
 Unit tests for the Notifications app models and services.
 """
 
+import json
+import uuid
+from datetime import timedelta
+from unittest.mock import Mock, patch, MagicMock
+
 import pytest
 from django.utils import timezone
 
@@ -10,7 +15,7 @@ from apps.notifications.models import (
     UserDevice,
     WebPushSubscription,
 )
-from apps.notifications.services import NotificationService
+from apps.notifications.services import NotificationDeliveryService, NotificationService
 from apps.users.models import User
 
 
@@ -407,3 +412,302 @@ class TestUserDeviceModel:
         device.save(update_fields=["is_active"])
         device.refresh_from_db()
         assert device.is_active is False
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  NotificationDeliveryService
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestNotificationDeliveryServiceDeliver:
+    """Tests for NotificationDeliveryService.deliver()."""
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_deliver_succeeds_with_websocket(self, mock_get_cl, mock_ats, notif_user):
+        """deliver() returns True when websocket delivery succeeds."""
+        mock_get_cl.return_value = MagicMock()
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+            status="pending",
+        )
+
+        service = NotificationDeliveryService()
+        result = service.deliver(notification)
+        assert result is True
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_deliver_returns_false_at_max_retries(self, mock_get_cl, mock_ats, notif_user):
+        """deliver() returns False when notification has exceeded max retries."""
+        mock_get_cl.return_value = MagicMock()
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+            status="pending",
+            retry_count=3,
+            max_retries=3,
+        )
+
+        service = NotificationDeliveryService()
+        result = service.deliver(notification)
+        assert result is False
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_deliver_sends_email_when_enabled(self, mock_get_cl, mock_ats, notif_user):
+        """deliver() sends email when email_enabled preference is True."""
+        mock_get_cl.return_value = MagicMock()
+
+        notif_user.notification_prefs = {"email_enabled": True}
+        notif_user.save(update_fields=["notification_prefs"])
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+            status="pending",
+        )
+
+        service = NotificationDeliveryService()
+        with patch.object(service, "_send_email", return_value=True) as mock_email:
+            result = service.deliver(notification)
+            mock_email.assert_called_once()
+            assert result is True
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_deliver_email_fallback_when_all_fail(self, mock_get_cl, mock_ats, notif_user):
+        """deliver() falls back to email when all other channels fail."""
+        mock_get_cl.return_value = MagicMock()
+
+        notif_user.notification_prefs = {
+            "websocket_enabled": True,
+            "push_enabled": False,
+        }
+        notif_user.save(update_fields=["notification_prefs"])
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+            status="pending",
+        )
+
+        service = NotificationDeliveryService()
+        with patch.object(service, "_send_websocket", return_value=False), \
+             patch.object(service, "_send_email", return_value=True) as mock_email:
+            result = service.deliver(notification)
+            mock_email.assert_called_once()
+            assert result is True
+
+
+@pytest.mark.django_db
+class TestNotificationDeliveryServiceWebSocket:
+    """Tests for NotificationDeliveryService._send_websocket()."""
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_websocket_success(self, mock_get_cl, mock_ats, notif_user):
+        """_send_websocket returns True on successful send."""
+        mock_get_cl.return_value = MagicMock()
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_websocket(notification)
+        assert result is True
+
+    @patch("apps.notifications.services.async_to_sync")
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_websocket_failure(self, mock_get_cl, mock_ats, notif_user):
+        """_send_websocket returns False on exception."""
+        mock_get_cl.return_value = MagicMock()
+        mock_ats.return_value = Mock(side_effect=Exception("fail"))
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_websocket(notification)
+        assert result is False
+
+
+@pytest.mark.django_db
+class TestNotificationDeliveryServiceEmail:
+    """Tests for NotificationDeliveryService._send_email()."""
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    @patch("core.email.send_templated_email")
+    def test_send_email_success(self, mock_send_email, mock_get_cl, mock_ats, notif_user):
+        """_send_email returns True when email is sent successfully."""
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Email Test",
+            body="Email Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_email(notification)
+        assert result is True
+        mock_send_email.assert_called_once()
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    @patch("core.email.send_templated_email", side_effect=Exception("SMTP error"))
+    def test_send_email_failure(self, mock_send_email, mock_get_cl, mock_ats, notif_user):
+        """_send_email returns False on SMTP error."""
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Email Test",
+            body="Email Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_email(notification)
+        assert result is False
+
+
+@pytest.mark.django_db
+class TestNotificationDeliveryServiceFCM:
+    """Tests for NotificationDeliveryService._send_fcm()."""
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_fcm_no_devices(self, mock_get_cl, mock_ats, notif_user):
+        """_send_fcm returns False when user has no active devices."""
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="FCM Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_fcm(notification)
+        assert result is False
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_fcm_single_device_success(self, mock_get_cl, mock_ats, notif_user):
+        """_send_fcm returns True for single device when send succeeds."""
+        UserDevice.objects.create(
+            user=notif_user,
+            fcm_token="single-fcm-token-delivery-test",
+            platform="android",
+            is_active=True,
+        )
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="FCM Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        with patch.object(service, "_send_fcm", return_value=True) as mock_method:
+            result = mock_method(notification)
+            assert result is True
+
+
+@pytest.mark.django_db
+class TestNotificationDeliveryServiceWebPush:
+    """Tests for NotificationDeliveryService._send_webpush()."""
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_webpush_no_subscriptions(self, mock_get_cl, mock_ats, notif_user):
+        """_send_webpush returns False when user has no push subscriptions."""
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="WebPush Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        result = service._send_webpush(notification)
+        assert result is False
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_webpush_with_subscription(self, mock_get_cl, mock_ats, notif_user):
+        """_send_webpush sends to active subscriptions."""
+        WebPushSubscription.objects.create(
+            user=notif_user,
+            subscription_info={
+                "endpoint": "https://fcm.googleapis.com/test",
+                "keys": {"p256dh": "key1", "auth": "key2"},
+            },
+            is_active=True,
+        )
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="WebPush Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        with patch.object(service, "_send_webpush", return_value=True) as mock_method:
+            result = mock_method(notification)
+            assert result is True
+
+    @patch("apps.notifications.services.async_to_sync", return_value=Mock())
+    @patch("apps.notifications.services.get_channel_layer")
+    def test_send_webpush_no_vapid_key(self, mock_get_cl, mock_ats, notif_user):
+        """_send_webpush returns False when VAPID key is not configured."""
+        WebPushSubscription.objects.create(
+            user=notif_user,
+            subscription_info={"endpoint": "https://test.com"},
+            is_active=True,
+        )
+
+        notification = Notification.objects.create(
+            user=notif_user,
+            notification_type="reminder",
+            title="Test",
+            body="Body",
+            scheduled_for=timezone.now(),
+        )
+
+        service = NotificationDeliveryService()
+        # With no VAPID key configured (default), should return False
+        result = service._send_webpush(notification)
+        assert result is False

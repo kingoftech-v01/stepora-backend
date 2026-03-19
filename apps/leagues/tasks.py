@@ -317,6 +317,45 @@ def rebalance_groups_task(season_id=None, league_id=None):
     )
 
 
+@shared_task(name="apps.leagues.tasks.update_all_standings")
+def update_all_standings():
+    """
+    Batch-update all league standings for the active season.
+
+    Runs 4x/day via Celery Beat (12 AM, 6 AM, 12 PM, 6 PM).
+    Replaces real-time signal-based updates for better performance.
+    """
+    from apps.users.models import User
+
+    from .models import Season
+    from .services import LeagueService
+
+    season = Season.get_active_season()
+    if not season:
+        logger.info("No active season. Skipping standings update.")
+        return 0
+
+    # Get all active users with XP > 0
+    users = User.objects.filter(is_active=True, xp__gt=0)
+    updated = 0
+    errors = 0
+
+    for user in users:
+        try:
+            LeagueService.update_standing(user)
+            updated += 1
+        except Exception:
+            errors += 1
+            logger.error(
+                "Failed to update standing for user %s", user.id, exc_info=True
+            )
+
+    logger.info(
+        "Batch standings update complete: %d updated, %d errors.", updated, errors
+    )
+    return updated
+
+
 @shared_task(name="apps.leagues.tasks.auto_activate_pending_seasons")
 def auto_activate_pending_seasons():
     """

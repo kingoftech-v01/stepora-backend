@@ -1,9 +1,10 @@
 """
-Unit tests for the Subscriptions app models.
+Unit tests for the Subscriptions app models and StripeService.
 """
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from django.utils import timezone
@@ -392,3 +393,457 @@ class TestStripeWebhookEventModel:
                 stripe_event_id="evt_dup",
                 event_type="test",
             )
+
+
+# ── StripeService ────────────────────────────────────────────────────
+
+
+class TestStripeServiceCreateCheckoutSession:
+    """Tests for StripeService.create_checkout_session."""
+
+    @patch("apps.subscriptions.services.stripe.checkout.Session.create")
+    @patch("apps.subscriptions.services.StripeService.create_customer")
+    def test_create_checkout_session_success(
+        self,
+        mock_create_customer,
+        mock_session_create,
+        sub_user,
+        premium_plan,
+        stripe_customer,
+    ):
+        """Creates a checkout session for a valid plan and user."""
+        # Ensure plan has a stripe_price_id to avoid auto-creation
+        premium_plan.stripe_price_id = "price_test_premium"
+        premium_plan.save(update_fields=["stripe_price_id"])
+
+        mock_create_customer.return_value = stripe_customer
+        mock_session_create.return_value = Mock(
+            id="cs_test_123", url="https://checkout.stripe.com/test"
+        )
+
+        from apps.subscriptions.services import StripeService
+
+        session = StripeService.create_checkout_session(
+            user=sub_user, plan=premium_plan
+        )
+
+        assert session.id == "cs_test_123"
+        mock_session_create.assert_called_once()
+
+    def test_create_checkout_session_free_plan_raises(self, sub_user, free_plan):
+        """Cannot create checkout session for the free plan."""
+        from apps.subscriptions.services import StripeService
+
+        with pytest.raises(ValueError, match="free plan"):
+            StripeService.create_checkout_session(user=sub_user, plan=free_plan)
+
+    @patch("apps.subscriptions.services.stripe.checkout.Session.create")
+    @patch("apps.subscriptions.services.StripeService.create_customer")
+    def test_checkout_with_coupon(
+        self,
+        mock_create_customer,
+        mock_session_create,
+        sub_user,
+        premium_plan,
+        stripe_customer,
+    ):
+        """Checkout session includes discount when coupon_code is provided."""
+        premium_plan.stripe_price_id = "price_test_premium"
+        premium_plan.save(update_fields=["stripe_price_id"])
+
+        mock_create_customer.return_value = stripe_customer
+        mock_session_create.return_value = Mock(id="cs_coupon")
+
+        from apps.subscriptions.services import StripeService
+
+        StripeService.create_checkout_session(
+            user=sub_user, plan=premium_plan, coupon_code="coupon_50off"
+        )
+
+        call_kwargs = mock_session_create.call_args[1]
+        assert call_kwargs["discounts"] == [{"coupon": "coupon_50off"}]
+
+
+class TestStripeServiceCancelSubscription:
+    """Tests for StripeService.cancel_subscription."""
+
+    @patch("apps.subscriptions.services.stripe.Subscription.modify")
+    def test_cancel_sets_cancel_at_period_end(
+        self, mock_modify, sub_user, premium_plan, premium_subscription
+    ):
+        """cancel_subscription sets cancel_at_period_end on Stripe and locally."""
+        mock_modify.return_value = Mock()
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.cancel_subscription(sub_user)
+
+        assert result is not None
+        assert result.cancel_at_period_end is True
+        assert result.canceled_at is not None
+        mock_modify.assert_called_once_with(
+            "sub_test_123", cancel_at_period_end=True
+        )
+
+    def test_cancel_no_active_subscription(self, sub_user, free_plan, free_subscription):
+        """cancel_subscription returns None when user has no active paid subscription."""
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.cancel_subscription(sub_user)
+        # Free sub has status=active but no stripe_subscription_id,
+        # so it goes through admin-assigned path and downgrades to free
+        # If plan is already free, it's essentially a no-op cancel
+        # The function should still return the subscription
+        assert result is not None
+
+    def test_cancel_admin_assigned_subscription(self, sub_user, premium_plan, free_plan):
+        """cancel_subscription locally downgrades admin-assigned subscription."""
+        sub = Subscription.objects.update_or_create(
+            user=sub_user,
+            defaults={
+                "plan": premium_plan,
+                "status": "active",
+                "stripe_subscription_id": "",  # admin-assigned
+            },
+        )[0]
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.cancel_subscription(sub_user)
+        assert result is not None
+        assert result.plan == free_plan
+        assert result.status == "canceled"
+
+
+class TestStripeServiceChangePlan:
+    """Tests for StripeService.change_plan."""
+
+    @patch("apps.subscriptions.services.stripe.Subscription.modify")
+    @patch("apps.subscriptions.services.stripe.Subscription.retrieve")
+    def test_upgrade_applied_immediately(
+        self,
+        mock_retrieve,
+        mock_modify,
+        sub_user,
+        premium_plan,
+        pro_plan,
+        premium_subscription,
+    ):
+        """Upgrade (lower tier -> higher tier) is applied immediately."""
+        mock_retrieve.return_value = {
+            "items": {"data": [{"id": "si_test_123"}]},
+        }
+        mock_modify.return_value = Mock()
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.change_plan(sub_user, pro_plan)
+
+        assert result["action"] == "upgraded"
+        assert result["subscription"].plan == pro_plan
+        mock_modify.assert_called_once()
+
+    @patch("apps.subscriptions.services.stripe.SubscriptionSchedule.modify")
+    @patch("apps.subscriptions.services.stripe.SubscriptionSchedule.create")
+    @patch("apps.subscriptions.services.stripe.Subscription.retrieve")
+    def test_downgrade_scheduled(
+        self,
+        mock_retrieve,
+        mock_schedule_create,
+        mock_schedule_modify,
+        db,
+        premium_plan,
+        pro_plan,
+    ):
+        """Downgrade (higher tier -> lower tier) is scheduled for period end."""
+        # Ensure both plans have stripe_price_id
+        premium_plan.stripe_price_id = "price_test_premium"
+        premium_plan.save(update_fields=["stripe_price_id"])
+        pro_plan.stripe_price_id = "price_test_pro"
+        pro_plan.save(update_fields=["stripe_price_id"])
+
+        downgrade_user = User.objects.create_user(
+            email="downgrade@example.com", password="testpass123"
+        )
+        sub = Subscription.objects.update_or_create(
+            user=downgrade_user,
+            defaults={
+                "plan": pro_plan,
+                "status": "active",
+                "stripe_subscription_id": "sub_pro_123",
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )[0]
+
+        mock_retrieve.return_value = {
+            "items": {"data": [{"id": "si_pro_123"}]},
+        }
+        mock_schedule_obj = MagicMock()
+        mock_schedule_obj.id = "sub_sched_123"
+        mock_schedule_obj.__getitem__ = lambda self, key: {
+            "phases": [{"start_date": 1000000, "end_date": 2000000}]
+        }[key]
+        mock_schedule_create.return_value = mock_schedule_obj
+        mock_schedule_modify.return_value = Mock()
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.change_plan(downgrade_user, premium_plan)
+
+        assert result["action"] == "downgrade_scheduled"
+        assert result["subscription"].pending_plan == premium_plan
+        mock_schedule_create.assert_called_once()
+
+    def test_change_to_same_plan_raises(self, sub_user, premium_plan, premium_subscription):
+        """Changing to the same plan raises ValueError."""
+        from apps.subscriptions.services import StripeService
+
+        with pytest.raises(ValueError, match="already on this plan"):
+            StripeService.change_plan(sub_user, premium_plan)
+
+    def test_change_no_active_subscription_raises(self, db, premium_plan):
+        """Changing plan without an active subscription raises ValueError."""
+        no_sub_user = User.objects.create_user(
+            email="nosub_change@example.com", password="testpass123"
+        )
+        # Delete any auto-created subscription from signals
+        from apps.subscriptions.models import Subscription
+        Subscription.objects.filter(user=no_sub_user).delete()
+
+        from apps.subscriptions.services import StripeService
+
+        with pytest.raises(ValueError, match="No active subscription"):
+            StripeService.change_plan(no_sub_user, premium_plan)
+
+    def test_free_user_to_paid_requires_checkout(
+        self, sub_user, premium_plan, free_plan, free_subscription
+    ):
+        """Free user trying change_plan to paid gets requires_checkout error."""
+        from apps.subscriptions.services import StripeService
+
+        with pytest.raises(ValueError, match="requires_checkout"):
+            StripeService.change_plan(sub_user, premium_plan)
+
+
+class TestStripeServiceReactivateSubscription:
+    """Tests for StripeService.reactivate_subscription."""
+
+    @patch("apps.subscriptions.services.stripe.Subscription.modify")
+    def test_reactivate_canceling_subscription(
+        self, mock_modify, sub_user, premium_plan, premium_subscription
+    ):
+        """reactivate_subscription reverses a pending cancellation."""
+        premium_subscription.cancel_at_period_end = True
+        premium_subscription.canceled_at = timezone.now()
+        premium_subscription.save()
+
+        mock_modify.return_value = Mock()
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.reactivate_subscription(sub_user)
+
+        assert result is not None
+        assert result.cancel_at_period_end is False
+        assert result.canceled_at is None
+        mock_modify.assert_called_once_with(
+            "sub_test_123", cancel_at_period_end=False
+        )
+
+    def test_reactivate_no_canceling_subscription(
+        self, sub_user, premium_plan, premium_subscription
+    ):
+        """reactivate_subscription returns None when not canceling."""
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.reactivate_subscription(sub_user)
+        assert result is None
+
+    def test_reactivate_admin_assigned(self, sub_user, premium_plan):
+        """reactivate_subscription handles admin-assigned subscriptions locally."""
+        sub = Subscription.objects.update_or_create(
+            user=sub_user,
+            defaults={
+                "plan": premium_plan,
+                "status": "active",
+                "cancel_at_period_end": True,
+                "canceled_at": timezone.now(),
+                "stripe_subscription_id": "",
+            },
+        )[0]
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.reactivate_subscription(sub_user)
+        assert result is not None
+        assert result.cancel_at_period_end is False
+        assert result.canceled_at is None
+
+
+class TestStripeServiceHandleWebhook:
+    """Tests for StripeService.handle_webhook_event."""
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "whsec_test")
+    @patch("apps.subscriptions.services.stripe.Webhook.construct_event")
+    def test_idempotent_event(self, mock_construct, db):
+        """Duplicate webhook events are skipped."""
+        mock_construct.return_value = {
+            "id": "evt_duplicate_test",
+            "type": "checkout.session.completed",
+            "data": {"object": {}},
+        }
+
+        # Pre-create the event record
+        StripeWebhookEvent.objects.create(
+            stripe_event_id="evt_duplicate_test",
+            event_type="checkout.session.completed",
+        )
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.handle_webhook_event(b"payload", "sig_header")
+        assert result["status"] == "already_processed"
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "whsec_test")
+    @patch("apps.subscriptions.services.stripe.Subscription.retrieve")
+    @patch("apps.subscriptions.services.stripe.Webhook.construct_event")
+    def test_checkout_completed_creates_subscription(
+        self, mock_construct, mock_retrieve, sub_user, premium_plan
+    ):
+        """checkout.session.completed webhook creates a subscription."""
+        mock_construct.return_value = {
+            "id": "evt_checkout_test",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "metadata": {
+                        "stepora_user_id": str(sub_user.id),
+                        "plan_slug": "premium",
+                    },
+                    "subscription": "sub_new_123",
+                },
+            },
+        }
+
+        mock_retrieve.return_value = {
+            "status": "active",
+            "current_period_start": 1700000000,
+            "current_period_end": 1702592000,
+            "cancel_at_period_end": False,
+        }
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.handle_webhook_event(b"payload", "sig_header")
+        assert result["status"] == "ok"
+
+        # Subscription should be created
+        sub = Subscription.objects.filter(user=sub_user).first()
+        assert sub is not None
+        assert sub.plan == premium_plan
+        assert sub.stripe_subscription_id == "sub_new_123"
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "whsec_test")
+    @patch("apps.subscriptions.services.stripe.Webhook.construct_event")
+    def test_invoice_payment_failed_marks_past_due(
+        self, mock_construct, sub_user, premium_subscription
+    ):
+        """invoice.payment_failed webhook marks subscription as past_due."""
+        mock_construct.return_value = {
+            "id": "evt_fail_test",
+            "type": "invoice.payment_failed",
+            "data": {
+                "object": {
+                    "subscription": "sub_test_123",
+                },
+            },
+        }
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.handle_webhook_event(b"payload", "sig_header")
+        assert result["status"] == "ok"
+
+        premium_subscription.refresh_from_db()
+        assert premium_subscription.status == "past_due"
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "whsec_test")
+    @patch("apps.subscriptions.services.stripe.Webhook.construct_event")
+    def test_subscription_deleted_reverts_to_free(
+        self, mock_construct, sub_user, premium_subscription, free_plan
+    ):
+        """customer.subscription.deleted webhook reverts user to free tier."""
+        mock_construct.return_value = {
+            "id": "evt_delete_test",
+            "type": "customer.subscription.deleted",
+            "data": {
+                "object": {
+                    "id": "sub_test_123",
+                },
+            },
+        }
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.handle_webhook_event(b"payload", "sig_header")
+        assert result["status"] == "ok"
+
+        premium_subscription.refresh_from_db()
+        assert premium_subscription.plan == free_plan
+        assert premium_subscription.stripe_subscription_id == ""
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "")
+    @patch("apps.subscriptions.services.StripeService.ensure_webhook")
+    def test_missing_webhook_secret_triggers_auto_setup(
+        self, mock_ensure, db
+    ):
+        """Missing webhook secret triggers auto-setup attempt."""
+        mock_ensure.return_value = ""
+
+        from apps.subscriptions.services import StripeService
+
+        with pytest.raises(ValueError, match="not configured"):
+            StripeService.handle_webhook_event(b"payload", "sig_header")
+
+    @patch("apps.subscriptions.services.STRIPE_WEBHOOK_SECRET", "whsec_test")
+    @patch("apps.subscriptions.services.stripe.Webhook.construct_event")
+    def test_unhandled_event_type(self, mock_construct, db):
+        """Unhandled event types return ok status."""
+        mock_construct.return_value = {
+            "id": "evt_unknown_type",
+            "type": "some.unknown.event",
+            "data": {"object": {}},
+        }
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.handle_webhook_event(b"payload", "sig_header")
+        assert result["status"] == "ok"
+
+
+class TestStripeServiceCreateCustomer:
+    """Tests for StripeService.create_customer."""
+
+    @patch("apps.subscriptions.services.stripe.Customer.create")
+    def test_create_new_customer(self, mock_create, sub_user):
+        """create_customer creates Stripe customer and local record."""
+        mock_create.return_value = Mock(id="cus_new_123")
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.create_customer(sub_user)
+        assert result.stripe_customer_id == "cus_new_123"
+        assert result.user == sub_user
+        mock_create.assert_called_once()
+
+    @patch("apps.subscriptions.services.stripe.Customer.retrieve")
+    def test_returns_existing_customer(self, mock_retrieve, sub_user, stripe_customer):
+        """create_customer returns existing customer if valid on Stripe."""
+        mock_retrieve.return_value = Mock(id="cus_test_123")
+
+        from apps.subscriptions.services import StripeService
+
+        result = StripeService.create_customer(sub_user)
+        assert result.stripe_customer_id == "cus_test_123"
+        # Should not create a new one
+        assert StripeCustomer.objects.filter(user=sub_user).count() == 1

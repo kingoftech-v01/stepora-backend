@@ -145,6 +145,11 @@ app.conf.beat_schedule = {
         "task": "apps.leagues.tasks.auto_activate_pending_seasons",
         "schedule": crontab(minute=0),  # Every hour at :00
     },
+    # Update all league standings 4x/day (12 AM, 6 AM, 12 PM, 6 PM)
+    "update-all-standings": {
+        "task": "apps.leagues.tasks.update_all_standings",
+        "schedule": crontab(hour="0,6,12,18", minute=0),
+    },
     # === Social Tasks ===
     # Expire stories older than 24h (hourly)
     "expire-stories": {
