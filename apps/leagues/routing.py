@@ -1,11 +1,8 @@
 """
-WebSocket URL routing for Leagues app.
+League routing — removed.
+
+League standings are updated via Celery Beat (4x/day).
+No WebSocket consumer needed.
 """
 
-from django.urls import re_path
-
-from . import consumers
-
-websocket_urlpatterns = [
-    re_path(r"ws/league/$", consumers.LeagueLeaderboardConsumer.as_asgi()),
-]
+websocket_urlpatterns = []
