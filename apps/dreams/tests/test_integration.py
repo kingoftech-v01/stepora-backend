@@ -638,15 +638,26 @@ class TestVisionBoard:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.skip(reason="Pre-existing TypeError: gettext '_' shadowed by dict in views.py")
     def test_vision_board_remove(self, dream_client, test_dream):
         """Remove a vision board image."""
-        pass
+        img = VisionBoardImage.objects.create(
+            dream=test_dream,
+            image_url="https://example.com/old.png",
+            caption="To remove",
+        )
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/{img.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not VisionBoardImage.objects.filter(id=img.id).exists()
 
-    @pytest.mark.skip(reason="Pre-existing TypeError: gettext '_' shadowed by dict in views.py")
     def test_vision_board_remove_not_found(self, dream_client, test_dream):
         """Remove non-existent vision board image returns 404."""
-        pass
+        fake_id = uuid.uuid4()
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/{fake_id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -786,15 +797,24 @@ class TestDreamTags:
         )
         assert response.status_code == status.HTTP_200_OK
 
-    @pytest.mark.skip(reason="Pre-existing TypeError: gettext '_' shadowed by dict in views.py")
     def test_remove_tag(self, dream_client, test_dream):
         """Remove a tag from a dream."""
-        pass
+        from apps.dreams.models import DreamTag, DreamTagging
 
-    @pytest.mark.skip(reason="Pre-existing TypeError: gettext '_' shadowed by dict in views.py")
+        tag = DreamTag.objects.create(name="removeme")
+        DreamTagging.objects.create(dream=test_dream, tag=tag)
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/tags/removeme/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not DreamTagging.objects.filter(dream=test_dream, tag=tag).exists()
+
     def test_remove_nonexistent_tag(self, dream_client, test_dream):
         """Remove non-existent tag returns 404."""
-        pass
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/tags/nonexistenttag/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -3209,3 +3229,2694 @@ class TestDreamTriggerCheckin:
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_403_FORBIDDEN,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  100% COVERAGE: FocusSession, Journal, VisionBoard, CheckIn,
+#  Template, Collaborator, Tag, ProgressSnapshot
+# ──────────────────────────────────────────────────────────────────────
+
+from apps.dreams.models import (
+    DreamCollaborator,
+    DreamJournal,
+    DreamTag,
+    DreamTagging,
+)
+
+
+@pytest.mark.django_db
+class TestFocusSessionFull:
+    """Full coverage tests for FocusSession views."""
+
+    def test_start_with_task(self, dream_client, test_task):
+        """Start a focus session linked to a task."""
+        response = dream_client.post(
+            "/api/dreams/focus/start/",
+            {"task_id": str(test_task.id), "duration_minutes": 25, "session_type": "work"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["duration_minutes"] == 25
+        assert response.data["session_type"] == "work"
+
+    def test_start_without_task(self, dream_client):
+        """Start a focus session without any task."""
+        response = dream_client.post(
+            "/api/dreams/focus/start/",
+            {"duration_minutes": 15, "session_type": "work"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["task"] is None
+
+    def test_start_invalid_task(self, dream_client):
+        """Start with a non-existent task returns 404."""
+        response = dream_client.post(
+            "/api/dreams/focus/start/",
+            {"task_id": str(uuid.uuid4()), "duration_minutes": 25},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_start_other_users_task(self, dream_client, dream_user2):
+        """Cannot start session for another user's task."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other", description="Other dream"
+        )
+        other_goal = Goal.objects.create(dream=other_dream, title="OG", order=1)
+        other_task = Task.objects.create(goal=other_goal, title="OT", order=1)
+        response = dream_client.post(
+            "/api/dreams/focus/start/",
+            {"task_id": str(other_task.id), "duration_minutes": 25},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_complete_success(self, dream_client, test_focus_session):
+        """Complete a focus session successfully."""
+        response = dream_client.post(
+            "/api/dreams/focus/complete/",
+            {"session_id": str(test_focus_session.id), "actual_minutes": 25},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        test_focus_session.refresh_from_db()
+        assert test_focus_session.actual_minutes == 25
+        assert test_focus_session.ended_at is not None
+
+    def test_complete_not_found(self, dream_client):
+        """Complete non-existent session returns 404."""
+        response = dream_client.post(
+            "/api/dreams/focus/complete/",
+            {"session_id": str(uuid.uuid4()), "actual_minutes": 10},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_complete_already_completed(self, dream_client, test_focus_session):
+        """Completing already completed session still succeeds (idempotent)."""
+        test_focus_session.completed = True
+        test_focus_session.save()
+        response = dream_client.post(
+            "/api/dreams/focus/complete/",
+            {"session_id": str(test_focus_session.id), "actual_minutes": 25},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_complete_partial_minutes(self, dream_client, test_focus_session):
+        """Complete session with fewer minutes than planned marks as not completed."""
+        response = dream_client.post(
+            "/api/dreams/focus/complete/",
+            {"session_id": str(test_focus_session.id), "actual_minutes": 10},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        test_focus_session.refresh_from_db()
+        assert test_focus_session.completed is False
+        assert test_focus_session.actual_minutes == 10
+
+    def test_history(self, dream_client, test_focus_session):
+        """List past focus sessions."""
+        response = dream_client.get("/api/dreams/focus/history/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_history_empty(self, dream_client):
+        """History returns empty when no sessions exist."""
+        response = dream_client.get("/api/dreams/focus/history/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_stats(self, dream_client):
+        """Get focus session stats."""
+        response = dream_client.get("/api/dreams/focus/stats/")
+        assert response.status_code == status.HTTP_200_OK
+        assert "weekly" in response.data
+        assert "today" in response.data
+        assert "total_minutes" in response.data["weekly"]
+        assert "sessions_completed" in response.data["weekly"]
+        assert "total_sessions" in response.data["weekly"]
+        assert "total_minutes" in response.data["today"]
+        assert "sessions_completed" in response.data["today"]
+
+    def test_stats_with_completed_sessions(self, dream_client, dream_user, test_task):
+        """Stats accurately reflect completed sessions."""
+        FocusSession.objects.create(
+            user=dream_user,
+            task=test_task,
+            duration_minutes=25,
+            actual_minutes=25,
+            session_type="work",
+            completed=True,
+        )
+        FocusSession.objects.create(
+            user=dream_user,
+            task=test_task,
+            duration_minutes=25,
+            actual_minutes=10,
+            session_type="work",
+            completed=False,
+        )
+        response = dream_client.get("/api/dreams/focus/stats/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["weekly"]["total_minutes"] >= 35
+        assert response.data["weekly"]["sessions_completed"] >= 1
+
+    def test_start_break_session(self, dream_client):
+        """Start a break focus session."""
+        response = dream_client.post(
+            "/api/dreams/focus/start/",
+            {"duration_minutes": 5, "session_type": "break"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["session_type"] == "break"
+
+    def test_complete_other_users_session(self, dream_client, dream_user2):
+        """Cannot complete another user's session."""
+        other_session = FocusSession.objects.create(
+            user=dream_user2,
+            duration_minutes=25,
+            session_type="work",
+        )
+        response = dream_client.post(
+            "/api/dreams/focus/complete/",
+            {"session_id": str(other_session.id), "actual_minutes": 25},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestDreamJournalFull:
+    """Full coverage tests for DreamJournalViewSet."""
+
+    def test_list_journals(self, dream_client, test_dream):
+        """List journal entries for user's dreams."""
+        DreamJournal.objects.create(
+            dream=test_dream, content="Entry 1"
+        )
+        DreamJournal.objects.create(
+            dream=test_dream, content="Entry 2", mood="happy"
+        )
+        response = dream_client.get(f"/api/dreams/journal/?dream={test_dream.id}")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        assert len(results) >= 2
+
+    def test_list_journals_filter_by_mood(self, dream_client, test_dream):
+        """Filter journal entries by mood."""
+        DreamJournal.objects.create(
+            dream=test_dream, content="Happy note", mood="happy"
+        )
+        DreamJournal.objects.create(
+            dream=test_dream, content="Sad note", mood="frustrated"
+        )
+        response = dream_client.get("/api/dreams/journal/?mood=happy")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for entry in results:
+            assert entry["mood"] == "happy"
+
+    def test_create_journal(self, dream_client, test_dream):
+        """Create a journal entry for own dream."""
+        response = dream_client.post(
+            "/api/dreams/journal/",
+            {"dream": str(test_dream.id), "content": "New journal entry"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_create_journal_with_mood(self, dream_client, test_dream):
+        """Create a journal entry with mood."""
+        response = dream_client.post(
+            "/api/dreams/journal/",
+            {
+                "dream": str(test_dream.id),
+                "content": "Feeling great today",
+                "mood": "excited",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["mood"] == "excited"
+
+    def test_update_journal(self, dream_client, test_dream):
+        """Update a journal entry."""
+        entry = DreamJournal.objects.create(
+            dream=test_dream, content="Original"
+        )
+        response = dream_client.patch(
+            f"/api/dreams/journal/{entry.id}/",
+            {"content": "Updated content"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["content"] == "Updated content"
+
+    def test_delete_journal_owner(self, dream_client, test_dream):
+        """Owner can delete their own journal entry."""
+        entry = DreamJournal.objects.create(
+            dream=test_dream, content="To delete"
+        )
+        response = dream_client.delete(f"/api/dreams/journal/{entry.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not DreamJournal.objects.filter(id=entry.id).exists()
+
+    def test_delete_journal_other_user(self, dream_client, dream_user2):
+        """Cannot delete another user's journal entry."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other", description="Other dream"
+        )
+        entry = DreamJournal.objects.create(
+            dream=other_dream, content="Not mine"
+        )
+        response = dream_client.delete(f"/api/dreams/journal/{entry.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_create_journal_other_users_dream(self, dream_client, dream_user2):
+        """Cannot create journal entry for another user's dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other", description="Other dream"
+        )
+        response = dream_client.post(
+            "/api/dreams/journal/",
+            {"dream": str(other_dream.id), "content": "Intruder entry"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_list_journals_filter_by_dream(self, dream_client, test_dream, dream_user):
+        """Filter journal entries by dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user, title="Other Dream", description="Another dream"
+        )
+        DreamJournal.objects.create(dream=test_dream, content="Entry A")
+        DreamJournal.objects.create(dream=other_dream, content="Entry B")
+        response = dream_client.get(
+            f"/api/dreams/journal/?dream={test_dream.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for entry in results:
+            assert str(entry["dream"]) == str(test_dream.id)
+
+
+@pytest.mark.django_db
+class TestVisionBoardFull:
+    """Full coverage tests for VisionBoard actions on DreamViewSet."""
+
+    def test_list_vision_board(self, dream_client, test_dream):
+        """List vision board images for a dream."""
+        VisionBoardImage.objects.create(
+            dream=test_dream,
+            image_url="https://example.com/img1.png",
+            caption="Image 1",
+        )
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "images" in response.data
+        assert len(response.data["images"]) >= 1
+
+    def test_list_vision_board_empty(self, dream_client, test_dream):
+        """List returns empty images array when no images exist."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["images"] == []
+
+    def test_add_image_by_url(self, dream_client, test_dream):
+        """Add image via URL."""
+        with patch("core.validators.validate_url_no_ssrf") as mock_ssrf:
+            mock_ssrf.return_value = ("https://example.com/new.png", "1.2.3.4")
+            response = dream_client.post(
+                f"/api/dreams/dreams/{test_dream.id}/vision-board/add/",
+                {"image_url": "https://example.com/new.png", "caption": "New img"},
+                format="multipart",
+            )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert VisionBoardImage.objects.filter(dream=test_dream).exists()
+
+    def test_add_no_image_returns_400(self, dream_client, test_dream):
+        """Adding without image file or URL returns 400."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/add/",
+            {"caption": "No image provided"},
+            format="multipart",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_remove_image(self, dream_client, test_dream):
+        """Remove an existing vision board image."""
+        img = VisionBoardImage.objects.create(
+            dream=test_dream,
+            image_url="https://example.com/to_remove.png",
+        )
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/{img.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not VisionBoardImage.objects.filter(id=img.id).exists()
+
+    def test_remove_image_not_found(self, dream_client, test_dream):
+        """Remove non-existent image returns 404."""
+        fake_id = uuid.uuid4()
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/vision-board/{fake_id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_add_image_invalid_url(self, dream_client, test_dream):
+        """Adding an unsafe URL returns 400."""
+        with patch("core.validators.validate_url_no_ssrf") as mock_ssrf:
+            mock_ssrf.side_effect = ValueError("Unsafe URL")
+            response = dream_client.post(
+                f"/api/dreams/dreams/{test_dream.id}/vision-board/add/",
+                {"image_url": "http://169.254.169.254/metadata", "caption": "SSRF"},
+                format="multipart",
+            )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_remove_image_from_other_users_dream(self, dream_client, dream_user2):
+        """Cannot remove an image from another user's dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other", description="Other dream"
+        )
+        img = VisionBoardImage.objects.create(
+            dream=other_dream,
+            image_url="https://example.com/other.png",
+        )
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{other_dream.id}/vision-board/{img.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestCheckInFull:
+    """Full coverage tests for CheckInViewSet."""
+
+    def test_list(self, dream_client, test_dream):
+        """List check-ins for user's dreams."""
+        PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get("/api/dreams/checkins/")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        assert len(results) >= 1
+
+    def test_list_filter_by_dream(self, dream_client, test_dream):
+        """Filter check-ins by dream."""
+        PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get(
+            f"/api/dreams/checkins/?dream={test_dream.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_list_filter_by_status(self, dream_client, test_dream):
+        """Filter check-ins by status."""
+        PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+        PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get("/api/dreams/checkins/?status=awaiting_user")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for ci in results:
+            assert ci["status"] == "awaiting_user"
+
+    def test_retrieve(self, dream_client, test_dream):
+        """Retrieve a single check-in."""
+        checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get(f"/api/dreams/checkins/{checkin.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert str(response.data["id"]) == str(checkin.id)
+
+    def test_retrieve_other_user(self, dream_client, dream_user2):
+        """Cannot retrieve another user's check-in."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other", description="Other dream"
+        )
+        checkin = PlanCheckIn.objects.create(
+            dream=other_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get(f"/api/dreams/checkins/{checkin.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    @patch("apps.dreams.tasks.process_checkin_responses_task")
+    def test_respond_success(self, mock_task, dream_client, test_dream, dream_user):
+        """Submit check-in responses successfully."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_task.apply_async.return_value = Mock()
+        checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+            questionnaire=[
+                {"id": "q1", "text": "How is it going?", "is_required": True}
+            ],
+        )
+        response = dream_client.post(
+            f"/api/dreams/checkins/{checkin.id}/respond/",
+            {"responses": {"q1": "Great!"}},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["status"] == "processing"
+        checkin.refresh_from_db()
+        assert checkin.status == "ai_processing"
+        assert checkin.user_responses == {"q1": "Great!"}
+
+    def test_respond_not_awaiting(self, dream_client, test_dream, dream_user):
+        """Cannot respond to a check-in that is not awaiting user."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.post(
+            f"/api/dreams/checkins/{checkin.id}/respond/",
+            {"responses": {"q1": "Answer"}},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("apps.dreams.tasks.process_checkin_responses_task")
+    def test_respond_missing_required_question(
+        self, mock_task, dream_client, test_dream, dream_user
+    ):
+        """Respond missing a required question returns 400."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+            questionnaire=[
+                {"id": "q1", "text": "Question 1", "is_required": True},
+                {"id": "q2", "text": "Question 2", "is_required": True},
+            ],
+        )
+        response = dream_client.post(
+            f"/api/dreams/checkins/{checkin.id}/respond/",
+            {"responses": {"q1": "Only answered one"}},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_status_poll(self, dream_client, test_dream):
+        """Poll check-in processing status."""
+        checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="ai_processing",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get(
+            f"/api/dreams/checkins/{checkin.id}/status/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
+    def test_trigger_checkin_with_plan(self, mock_task, dream_client, test_dream, dream_user):
+        """Trigger check-in for a dream with plan."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_task.apply_async.return_value = Mock()
+        test_dream.plan_phase = "full"
+        test_dream.save(update_fields=["plan_phase"])
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/trigger-checkin/"
+        )
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+    def test_trigger_checkin_no_plan(self, dream_client, test_dream, dream_user):
+        """Trigger check-in without a plan returns 400."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        test_dream.plan_phase = "none"
+        test_dream.save(update_fields=["plan_phase"])
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/trigger-checkin/"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
+    def test_trigger_checkin_already_active(self, mock_task, dream_client, test_dream, dream_user):
+        """Trigger check-in when one is already active returns 202 with existing id."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_task.apply_async.return_value = Mock()
+        test_dream.plan_phase = "full"
+        test_dream.save(update_fields=["plan_phase"])
+        active_checkin = PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/trigger-checkin/"
+        )
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["checkin_id"] == str(active_checkin.id)
+
+    def test_list_checkins_on_dream(self, dream_client, test_dream):
+        """List check-ins on a dream via dream action."""
+        PlanCheckIn.objects.create(
+            dream=test_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
+        )
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/checkins/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+class TestDreamTemplateFull:
+    """Full coverage tests for DreamTemplateViewSet."""
+
+    def test_list_templates(self, dream_client):
+        """List active templates."""
+        DreamTemplate.objects.create(
+            title="Learn Python",
+            description="A complete Python guide",
+            category="education",
+            is_active=True,
+            template_goals=[
+                {"title": "Basics", "description": "Learn basics", "order": 0, "tasks": []}
+            ],
+        )
+        response = dream_client.get("/api/dreams/dreams/templates/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_list_inactive_templates_excluded(self, dream_client):
+        """Inactive templates are not listed."""
+        DreamTemplate.objects.create(
+            title="Inactive Template",
+            description="Should not show",
+            category="education",
+            is_active=False,
+            template_goals=[],
+        )
+        response = dream_client.get("/api/dreams/dreams/templates/")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for t in results:
+            assert t["title"] != "Inactive Template"
+
+    def test_list_templates_filter_by_category(self, dream_client):
+        """Filter templates by category."""
+        DreamTemplate.objects.create(
+            title="Health Template",
+            description="Health related template",
+            category="health",
+            is_active=True,
+            template_goals=[],
+        )
+        DreamTemplate.objects.create(
+            title="Career Template",
+            description="Career related template",
+            category="career",
+            is_active=True,
+            template_goals=[],
+        )
+        response = dream_client.get(
+            "/api/dreams/dreams/templates/?category=health"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_featured_templates(self, dream_client):
+        """Get featured templates."""
+        DreamTemplate.objects.create(
+            title="Featured Template",
+            description="A featured template",
+            category="education",
+            is_active=True,
+            is_featured=True,
+            template_goals=[],
+        )
+        DreamTemplate.objects.create(
+            title="Non-featured Template",
+            description="Not featured",
+            category="education",
+            is_active=True,
+            is_featured=False,
+            template_goals=[],
+        )
+        response = dream_client.get(
+            "/api/dreams/dreams/templates/featured/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        for t in response.data:
+            assert t.get("is_featured", True) is True
+
+    def test_use_template(self, dream_client, dream_user):
+        """Create a dream from a template."""
+        template = DreamTemplate.objects.create(
+            title="Template Dream",
+            description="A template for creating dreams",
+            category="education",
+            is_active=True,
+            template_goals=[
+                {
+                    "title": "Goal 1",
+                    "description": "First goal",
+                    "order": 0,
+                    "tasks": [
+                        {"title": "Task 1", "description": "First task", "order": 0}
+                    ],
+                }
+            ],
+        )
+        response = dream_client.post(
+            f"/api/dreams/dreams/templates/{template.id}/use/"
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["title"] == "Template Dream"
+        assert response.data["category"] == "education"
+
+    def test_use_template_creates_goals_and_tasks(self, dream_client, dream_user):
+        """Use template creates goals and tasks from template data."""
+        template = DreamTemplate.objects.create(
+            title="Full Template",
+            description="Template with goals and tasks",
+            category="career",
+            is_active=True,
+            template_goals=[
+                {
+                    "title": "Goal A",
+                    "description": "First goal",
+                    "order": 0,
+                    "tasks": [
+                        {"title": "Task A1", "description": "First task", "order": 0},
+                        {"title": "Task A2", "description": "Second task", "order": 1},
+                    ],
+                },
+                {
+                    "title": "Goal B",
+                    "description": "Second goal",
+                    "order": 1,
+                    "tasks": [],
+                },
+            ],
+        )
+        response = dream_client.post(
+            f"/api/dreams/dreams/templates/{template.id}/use/"
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        dream_id = response.data["id"]
+        dream = Dream.objects.get(id=dream_id)
+        assert dream.goals.count() == 2
+        assert Task.objects.filter(goal__dream=dream).count() == 2
+
+    def test_use_template_increments_usage_count(self, dream_client, dream_user):
+        """Using a template increments its usage_count."""
+        template = DreamTemplate.objects.create(
+            title="Count Template",
+            description="Template usage counter",
+            category="education",
+            is_active=True,
+            usage_count=5,
+            template_goals=[],
+        )
+        dream_client.post(
+            f"/api/dreams/dreams/templates/{template.id}/use/"
+        )
+        template.refresh_from_db()
+        assert template.usage_count == 6
+
+    def test_retrieve_template(self, dream_client):
+        """Retrieve a single template."""
+        template = DreamTemplate.objects.create(
+            title="Retrieve Template",
+            description="Template to retrieve",
+            category="health",
+            is_active=True,
+            template_goals=[],
+        )
+        response = dream_client.get(
+            f"/api/dreams/dreams/templates/{template.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["title"] == "Retrieve Template"
+
+
+@pytest.mark.django_db
+class TestDreamCollaboratorFull:
+    """Full coverage tests for Collaborator actions on DreamViewSet."""
+
+    def test_list_collaborators(self, dream_client, test_dream):
+        """List collaborators on a dream."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/list/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "collaborators" in response.data
+
+    def test_add_collaborator(self, dream_client, test_dream, dream_user2):
+        """Add a collaborator to a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user2.id), "role": "viewer"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert DreamCollaborator.objects.filter(
+            dream=test_dream, user=dream_user2
+        ).exists()
+
+    def test_add_collaborator_self(self, dream_client, test_dream, dream_user):
+        """Cannot add yourself as a collaborator."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user.id), "role": "viewer"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_add_collaborator_nonexistent_user(self, dream_client, test_dream):
+        """Adding a nonexistent user returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(uuid.uuid4()), "role": "viewer"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_add_duplicate_collaborator(self, dream_client, test_dream, dream_user2):
+        """Adding same user twice returns 400."""
+        DreamCollaborator.objects.create(
+            dream=test_dream, user=dream_user2, role="viewer"
+        )
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user2.id), "role": "collaborator"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_remove_collaborator(self, dream_client, test_dream, dream_user2):
+        """Remove a collaborator from a dream."""
+        DreamCollaborator.objects.create(
+            dream=test_dream, user=dream_user2, role="viewer"
+        )
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/{dream_user2.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not DreamCollaborator.objects.filter(
+            dream=test_dream, user=dream_user2
+        ).exists()
+
+    def test_remove_collaborator_not_found(self, dream_client, test_dream):
+        """Remove nonexistent collaborator returns 404."""
+        fake_id = uuid.uuid4()
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/{fake_id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_remove_collaborator_not_owner(self, dream_client2, test_dream, dream_user2):
+        """Non-owner cannot remove collaborators."""
+        DreamCollaborator.objects.create(
+            dream=test_dream, user=dream_user2, role="viewer"
+        )
+        response = dream_client2.delete(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/{dream_user2.id}/"
+        )
+        # Non-owner sees 404 (dream not in their queryset) or 403
+        assert response.status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_add_collaborator_not_owner(self, dream_client2, test_dream, dream_user):
+        """Non-owner cannot add collaborators."""
+        response = dream_client2.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user.id), "role": "viewer"},
+            format="json",
+        )
+        # Non-owner sees 404 (dream not in their queryset) or 403
+        assert response.status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_add_collaborator_role(self, dream_client, test_dream, dream_user2):
+        """Collaborator role is set correctly."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user2.id), "role": "collaborator"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        collab = DreamCollaborator.objects.get(
+            dream=test_dream, user=dream_user2
+        )
+        assert collab.role == "collaborator"
+
+
+@pytest.mark.django_db
+class TestDreamTagFull:
+    """Full coverage tests for Tag actions on DreamViewSet."""
+
+    def test_list_tags(self, dream_client):
+        """List all available tags."""
+        DreamTag.objects.create(name="fitness")
+        DreamTag.objects.create(name="coding")
+        response = dream_client.get("/api/dreams/dreams/tags/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_add_tag(self, dream_client, test_dream):
+        """Add a tag to a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/tags/",
+            {"tag_name": "productivity"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert DreamTagging.objects.filter(
+            dream=test_dream, tag__name="productivity"
+        ).exists()
+
+    def test_add_tag_creates_tag_if_not_exists(self, dream_client, test_dream):
+        """Adding a tag that doesn't exist creates it."""
+        assert not DreamTag.objects.filter(name="newtag").exists()
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/tags/",
+            {"tag_name": "NewTag"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert DreamTag.objects.filter(name="newtag").exists()
+
+    def test_add_tag_idempotent(self, dream_client, test_dream):
+        """Adding the same tag twice doesn't create duplicate."""
+        dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/tags/",
+            {"tag_name": "unique"},
+            format="json",
+        )
+        dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/tags/",
+            {"tag_name": "unique"},
+            format="json",
+        )
+        assert DreamTagging.objects.filter(
+            dream=test_dream, tag__name="unique"
+        ).count() == 1
+
+    def test_remove_tag(self, dream_client, test_dream):
+        """Remove a tag from a dream."""
+        tag = DreamTag.objects.create(name="removable")
+        DreamTagging.objects.create(dream=test_dream, tag=tag)
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/tags/removable/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not DreamTagging.objects.filter(
+            dream=test_dream, tag=tag
+        ).exists()
+
+    def test_remove_nonexistent_tag(self, dream_client, test_dream):
+        """Remove a tag that doesn't exist on the dream returns 404."""
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/tags/doesnotexist/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_tag_name_normalized_lowercase(self, dream_client, test_dream):
+        """Tag names are normalized to lowercase."""
+        dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/tags/",
+            {"tag_name": "UPPERCASE"},
+            format="json",
+        )
+        assert DreamTag.objects.filter(name="uppercase").exists()
+        assert not DreamTag.objects.filter(name="UPPERCASE").exists()
+
+
+@pytest.mark.django_db
+class TestProgressSnapshotFull:
+    """Full coverage tests for ProgressSnapshot-related endpoints."""
+
+    def test_progress_history(self, dream_client, test_dream):
+        """Get progress history snapshots."""
+        from datetime import timedelta as td
+
+        today = timezone.now().date()
+        DreamProgressSnapshot.objects.create(
+            dream=test_dream,
+            progress_percentage=10.0,
+            date=today - td(days=2),
+        )
+        DreamProgressSnapshot.objects.create(
+            dream=test_dream,
+            progress_percentage=20.0,
+            date=today - td(days=1),
+        )
+        DreamProgressSnapshot.objects.create(
+            dream=test_dream,
+            progress_percentage=30.0,
+            date=today,
+        )
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/progress-history/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "snapshots" in response.data
+        assert "current_progress" in response.data
+        assert len(response.data["snapshots"]) == 3
+
+    def test_progress_history_with_days_param(self, dream_client, test_dream):
+        """Progress history respects the days parameter."""
+        from datetime import timedelta as td
+
+        today = timezone.now().date()
+        for i in range(5):
+            DreamProgressSnapshot.objects.create(
+                dream=test_dream,
+                progress_percentage=float(i * 10),
+                date=today - td(days=i),
+            )
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/progress-history/?days=3"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["snapshots"]) <= 3
+
+    def test_analytics(self, dream_client, test_dream):
+        """Get comprehensive analytics for a dream."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/analytics/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "progress_history" in response.data
+        assert "task_stats" in response.data
+        assert "weekly_activity" in response.data
+
+    def test_analytics_with_ranges(self, dream_client, test_dream):
+        """Get analytics with different time range filters."""
+        for range_val in ["1w", "1m", "3m", "all"]:
+            response = dream_client.get(
+                f"/api/dreams/dreams/{test_dream.id}/analytics/?range={range_val}"
+            )
+            assert response.status_code == status.HTTP_200_OK
+            assert "task_stats" in response.data
+
+    def test_analytics_task_stats(self, dream_client, test_dream, test_goal):
+        """Analytics task stats show correct counts."""
+        Task.objects.create(goal=test_goal, title="Done", order=1, status="completed")
+        Task.objects.create(goal=test_goal, title="Pending", order=2, status="pending")
+        Task.objects.create(goal=test_goal, title="Skipped", order=3, status="skipped")
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/analytics/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        stats = response.data["task_stats"]
+        assert stats["completed"] >= 1
+        assert stats["skipped"] >= 1
+
+    def test_record_snapshot(self, test_dream):
+        """DreamProgressSnapshot.record_snapshot creates/updates today's snapshot."""
+        DreamProgressSnapshot.record_snapshot(test_dream)
+        today = timezone.now().date()
+        snap = DreamProgressSnapshot.objects.get(dream=test_dream, date=today)
+        assert snap.progress_percentage == test_dream.progress_percentage
+
+        # Call again to test update
+        DreamProgressSnapshot.record_snapshot(test_dream)
+        assert (
+            DreamProgressSnapshot.objects.filter(
+                dream=test_dream, date=today
+            ).count()
+            == 1
+        )
+
+    def test_progress_history_empty(self, dream_client, test_dream):
+        """Progress history with no snapshots returns empty list."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/progress-history/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["snapshots"] == []
+
+
+# ======================================================================
+#  COMPREHENSIVE COVERAGE: GoalViewSet
+# ======================================================================
+
+
+@pytest.mark.django_db
+class TestGoalViewSetFull:
+    """Full coverage for GoalViewSet (list, create, retrieve, update, delete,
+    complete, refine)."""
+
+    # ── list ──
+
+    def test_list_goals_unauthenticated(self):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.get("/api/dreams/goals/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_goals_only_own(self, dream_client, dream_user2, test_goal):
+        """User does not see goals from another user's dreams."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Not mine at all",
+        )
+        Goal.objects.create(dream=other_dream, title="Other Goal", order=1)
+        response = dream_client.get("/api/dreams/goals/")
+        results = response.data.get("results", response.data)
+        goal_ids = [str(g["id"]) for g in results]
+        assert str(test_goal.id) in goal_ids
+        for g in results:
+            assert str(g["dream"]) != str(other_dream.id)
+
+    def test_list_goals_filter_by_milestone(
+        self, dream_client, test_dream, test_milestone
+    ):
+        """Goals can be filtered by milestone query param."""
+        Goal.objects.create(
+            dream=test_dream, milestone=test_milestone,
+            title="MS Goal", order=1,
+        )
+        Goal.objects.create(
+            dream=test_dream, title="No MS Goal", order=2,
+        )
+        response = dream_client.get(
+            f"/api/dreams/goals/?milestone={test_milestone.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for g in results:
+            assert str(g["milestone"]) == str(test_milestone.id)
+
+    # ── create ──
+
+    def test_create_goal_unauthenticated(self, test_dream):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/dreams/goals/",
+            {"dream": str(test_dream.id), "title": "Nope", "order": 1},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_goal_missing_dream(self, dream_client):
+        """Creating a goal without dream returns 400."""
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {"title": "No Dream Goal"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_goal_missing_title(self, dream_client, test_dream):
+        """Creating a goal without title returns 400."""
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {"dream": str(test_dream.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_goal_nonexistent_dream(self, dream_client):
+        """Creating a goal with non-existent dream returns 400."""
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {
+                "dream": str(uuid.uuid4()),
+                "title": "Ghost Dream Goal",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_goal_auto_order_no_milestone(
+        self, dream_client, test_dream
+    ):
+        """Auto-order without milestone defaults correctly."""
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {
+                "dream": str(test_dream.id),
+                "title": "Auto Order No MS",
+                "description": "No milestone provided",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["order"] is not None
+
+    def test_create_goal_explicit_order(self, dream_client, test_dream):
+        """Explicit order is respected."""
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {
+                "dream": str(test_dream.id),
+                "title": "Order 5 Goal",
+                "description": "With explicit order",
+                "order": 5,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["order"] == 5
+
+    def test_create_goal_idor_other_users_dream(
+        self, dream_client, dream_user2
+    ):
+        """IDOR: cannot create goal for another user's dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Someone else's dream",
+        )
+        response = dream_client.post(
+            "/api/dreams/goals/",
+            {
+                "dream": str(other_dream.id),
+                "title": "IDOR Goal",
+                "description": "Should fail",
+                "order": 1,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # ── retrieve ──
+
+    def test_retrieve_goal(self, dream_client, test_goal):
+        """Retrieve a specific goal."""
+        response = dream_client.get(f"/api/dreams/goals/{test_goal.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert str(response.data["id"]) == str(test_goal.id)
+        assert response.data["title"] == test_goal.title
+
+    def test_retrieve_goal_not_found(self, dream_client):
+        """Non-existent goal returns 404."""
+        response = dream_client.get(f"/api/dreams/goals/{uuid.uuid4()}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_retrieve_goal_other_user(self, dream_client, dream_user2):
+        """Cannot retrieve another user's goal (queryset scoped)."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Hidden Dream",
+            description="Hidden goal",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Hidden Goal", order=1,
+        )
+        response = dream_client.get(f"/api/dreams/goals/{other_goal.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── update ──
+
+    def test_update_goal_title(self, dream_client, test_goal):
+        """PATCH updates goal title."""
+        response = dream_client.patch(
+            f"/api/dreams/goals/{test_goal.id}/",
+            {"title": "New Title"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["title"] == "New Title"
+
+    def test_update_goal_description(self, dream_client, test_goal):
+        """PATCH updates goal description."""
+        response = dream_client.patch(
+            f"/api/dreams/goals/{test_goal.id}/",
+            {"description": "Updated description"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["description"] == "Updated description"
+
+    def test_update_goal_status(self, dream_client, test_goal):
+        """PATCH updates goal status."""
+        response = dream_client.patch(
+            f"/api/dreams/goals/{test_goal.id}/",
+            {"status": "in_progress"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "in_progress"
+
+    def test_update_goal_order(self, dream_client, test_goal):
+        """PATCH updates goal order."""
+        response = dream_client.patch(
+            f"/api/dreams/goals/{test_goal.id}/",
+            {"order": 10},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["order"] == 10
+
+    # ── delete ──
+
+    def test_delete_goal(self, dream_client, test_dream):
+        """Owner can delete a goal."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="Delete Me", order=99,
+        )
+        response = dream_client.delete(f"/api/dreams/goals/{goal.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not Goal.objects.filter(id=goal.id).exists()
+
+    def test_delete_goal_other_user(self, dream_client, dream_user2):
+        """Cannot delete another user's goal."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Other dream desc",
+        )
+        goal = Goal.objects.create(
+            dream=other_dream, title="Protected", order=1,
+        )
+        response = dream_client.delete(f"/api/dreams/goals/{goal.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete_goal_not_found(self, dream_client):
+        """Deleting non-existent goal returns 404."""
+        response = dream_client.delete(f"/api/dreams/goals/{uuid.uuid4()}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── complete ──
+
+    def test_complete_goal(self, dream_client, test_dream):
+        """Complete a goal via action endpoint."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="To Complete", order=1, status="pending",
+        )
+        response = dream_client.post(
+            f"/api/dreams/goals/{goal.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_complete_goal_already_completed(self, dream_client, test_dream):
+        """Completing an already completed goal returns 400."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="Done Goal", order=1, status="completed",
+        )
+        response = dream_client.post(
+            f"/api/dreams/goals/{goal.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_complete_goal_not_found(self, dream_client):
+        """Complete non-existent goal returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/goals/{uuid.uuid4()}/complete/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── refine (AI) ──
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal(
+        self, mock_refine, dream_client, test_dream, test_goal, dream_user
+    ):
+        """Refine a goal via AI (mocked)."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_refine.return_value = {
+            "message": "Here is your refined goal",
+            "refined_goal": {"title": "SMART Goal", "description": "Refined"},
+            "milestones": [],
+            "is_complete": True,
+        }
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {
+                "goal_id": str(test_goal.id),
+                "message": "Help me refine this goal",
+                "history": [],
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "message" in response.data
+        assert response.data["is_complete"] is True
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_missing_goal_id(
+        self, mock_refine, dream_client, dream_user
+    ):
+        """Refine without goal_id returns 400."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"message": "Refine something"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_empty_message(
+        self, mock_refine, dream_client, test_goal, dream_user
+    ):
+        """Refine with empty message returns 400."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"goal_id": str(test_goal.id), "message": "   "},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_not_found(
+        self, mock_refine, dream_client, dream_user
+    ):
+        """Refine with non-existent goal returns 404."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"goal_id": str(uuid.uuid4()), "message": "Refine me"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_other_users_goal(
+        self, mock_refine, dream_client, dream_user, dream_user2
+    ):
+        """Cannot refine another user's goal."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Not mine",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Other Goal", order=1,
+        )
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"goal_id": str(other_goal.id), "message": "Refine other"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_ai_error(
+        self, mock_refine, dream_client, test_goal, dream_user
+    ):
+        """Refine handles AI service error gracefully."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+        from core.exceptions import OpenAIError
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_refine.side_effect = OpenAIError("Service down")
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"goal_id": str(test_goal.id), "message": "Refine please"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    def test_refine_goal_requires_premium(
+        self, dream_client, test_goal
+    ):
+        """Refine requires premium subscription (CanUseAI)."""
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {"goal_id": str(test_goal.id), "message": "Refine please"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    @patch("integrations.openai_service.OpenAIService.refine_goal")
+    def test_refine_goal_with_history(
+        self, mock_refine, dream_client, test_goal, dream_user
+    ):
+        """Refine with conversation history passes history correctly."""
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="premium",
+            defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+        )
+        Subscription.objects.update_or_create(
+            user=dream_user,
+            defaults={
+                "plan": plan,
+                "status": "active",
+                "current_period_start": timezone.now(),
+                "current_period_end": timezone.now() + timedelta(days=30),
+            },
+        )
+        mock_refine.return_value = {
+            "message": "Follow up response",
+            "refined_goal": None,
+            "milestones": None,
+            "is_complete": False,
+        }
+        response = dream_client.post(
+            "/api/dreams/goals/refine/",
+            {
+                "goal_id": str(test_goal.id),
+                "message": "What about timeline?",
+                "history": [
+                    {"role": "user", "content": "Help me refine"},
+                    {"role": "assistant", "content": "Sure, tell me more"},
+                ],
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["is_complete"] is False
+
+
+# ======================================================================
+#  COMPREHENSIVE COVERAGE: TaskViewSet
+# ======================================================================
+
+
+@pytest.mark.django_db
+class TestTaskViewSetFull:
+    """Full coverage for TaskViewSet (list, create, retrieve, update, delete,
+    complete, skip, quick_create, reorder, chain)."""
+
+    # ── list ──
+
+    def test_list_tasks_unauthenticated(self):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.get("/api/dreams/tasks/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_tasks_only_own(self, dream_client, dream_user2, test_task):
+        """User does not see tasks from another user's dreams."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream content",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Other Goal", order=1,
+        )
+        Task.objects.create(
+            goal=other_goal, title="Other Task", order=1,
+        )
+        response = dream_client.get("/api/dreams/tasks/")
+        results = response.data.get("results", response.data)
+        task_ids = [str(t["id"]) for t in results]
+        assert str(test_task.id) in task_ids
+
+    def test_list_tasks_filter_by_goal_full(self, dream_client, test_goal, test_task):
+        """Filter tasks by goal."""
+        response = dream_client.get(
+            f"/api/dreams/tasks/?goal={test_goal.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for t in results:
+            assert str(t["goal"]) == str(test_goal.id)
+
+    def test_list_tasks_filter_by_status_full(self, dream_client, test_task):
+        """Filter tasks by status."""
+        response = dream_client.get("/api/dreams/tasks/?status=pending")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for t in results:
+            assert t["status"] == "pending"
+
+    # ── create ──
+
+    def test_create_task_unauthenticated(self, test_goal):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/dreams/tasks/",
+            {"goal": str(test_goal.id), "title": "Nope", "order": 1},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_task_missing_goal(self, dream_client):
+        """Creating a task without goal returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {"title": "No Goal Task"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_task_nonexistent_goal(self, dream_client):
+        """Creating a task with non-existent goal returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {"goal": str(uuid.uuid4()), "title": "Ghost Goal Task"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_task_with_scheduled_date(
+        self, dream_client, test_goal
+    ):
+        """Create a task with scheduled_date."""
+        sched = (timezone.now() + timedelta(days=1)).isoformat()
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {
+                "goal": str(test_goal.id),
+                "title": "Scheduled Task",
+                "scheduled_date": sched,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["scheduled_date"] is not None
+
+    def test_create_task_idor_other_users_goal(
+        self, dream_client, dream_user2
+    ):
+        """IDOR: cannot create task for another user's goal."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Other dream content",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Other Goal", order=1,
+        )
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {
+                "goal": str(other_goal.id),
+                "title": "IDOR Task",
+                "order": 1,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_create_task_auto_order_full(self, dream_client, test_goal):
+        """Auto-order is computed when not provided."""
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {
+                "goal": str(test_goal.id),
+                "title": "Auto Order Task Full",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["order"] is not None
+        assert response.data["order"] >= 1
+
+    def test_create_task_explicit_order(self, dream_client, test_goal):
+        """Explicit order is respected."""
+        response = dream_client.post(
+            "/api/dreams/tasks/",
+            {
+                "goal": str(test_goal.id),
+                "title": "Order 42 Task",
+                "order": 42,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["order"] == 42
+
+    # ── retrieve ──
+
+    def test_retrieve_task_full(self, dream_client, test_task):
+        """Retrieve a specific task."""
+        response = dream_client.get(f"/api/dreams/tasks/{test_task.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert str(response.data["id"]) == str(test_task.id)
+
+    def test_retrieve_task_not_found(self, dream_client):
+        """Non-existent task returns 404."""
+        response = dream_client.get(f"/api/dreams/tasks/{uuid.uuid4()}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_retrieve_task_other_user(self, dream_client, dream_user2):
+        """Cannot retrieve another user's task (queryset scoped)."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Hidden Dream",
+            description="Hidden content",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Hidden Goal", order=1,
+        )
+        other_task = Task.objects.create(
+            goal=other_goal, title="Hidden Task", order=1,
+        )
+        response = dream_client.get(f"/api/dreams/tasks/{other_task.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── update ──
+
+    def test_update_task_title_full(self, dream_client, test_task):
+        """PATCH updates task title."""
+        response = dream_client.patch(
+            f"/api/dreams/tasks/{test_task.id}/",
+            {"title": "Changed Title"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["title"] == "Changed Title"
+
+    def test_update_task_status_to_completed(self, dream_client, test_task):
+        """PATCH updates task status directly."""
+        response = dream_client.patch(
+            f"/api/dreams/tasks/{test_task.id}/",
+            {"status": "completed"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_update_task_scheduled_date(self, dream_client, test_task):
+        """PATCH updates scheduled_date."""
+        new_date = (timezone.now() + timedelta(days=5)).isoformat()
+        response = dream_client.patch(
+            f"/api/dreams/tasks/{test_task.id}/",
+            {"scheduled_date": new_date},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["scheduled_date"] is not None
+
+    # ── delete ──
+
+    def test_delete_task_full(self, dream_client, test_goal):
+        """Owner can delete a task."""
+        task = Task.objects.create(
+            goal=test_goal, title="Del Task", order=99,
+        )
+        response = dream_client.delete(f"/api/dreams/tasks/{task.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not Task.objects.filter(id=task.id).exists()
+
+    def test_delete_task_not_found(self, dream_client):
+        """Deleting non-existent task returns 404."""
+        response = dream_client.delete(f"/api/dreams/tasks/{uuid.uuid4()}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete_task_other_user(self, dream_client, dream_user2):
+        """Cannot delete another user's task."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream",
+        )
+        other_goal = Goal.objects.create(
+            dream=other_dream, title="Other Goal", order=1,
+        )
+        other_task = Task.objects.create(
+            goal=other_goal, title="Protected", order=1,
+        )
+        response = dream_client.delete(f"/api/dreams/tasks/{other_task.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── complete ──
+
+    def test_complete_task_full(self, dream_client, test_dream):
+        """Complete a pending task via action endpoint."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="CG", order=1,
+        )
+        task = Task.objects.create(
+            goal=goal, title="CT", order=1, status="pending",
+            duration_mins=20,
+        )
+        response = dream_client.post(
+            f"/api/dreams/tasks/{task.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_complete_task_already_completed(
+        self, dream_client, test_dream
+    ):
+        """Completing an already completed task returns 400."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="CG2", order=1,
+        )
+        task = Task.objects.create(
+            goal=goal, title="CT2", order=1, status="completed",
+        )
+        response = dream_client.post(
+            f"/api/dreams/tasks/{task.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_complete_task_not_found(self, dream_client):
+        """Complete non-existent task returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/tasks/{uuid.uuid4()}/complete/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_complete_task_chain_next(self, dream_client, test_dream):
+        """Completing a chain task creates the next task in the chain."""
+        goal = Goal.objects.create(
+            dream=test_dream, title="Chain Goal", order=1,
+        )
+        task = Task.objects.create(
+            goal=goal, title="Chain Root", order=1, status="pending",
+            duration_mins=15, chain_next_delay_days=7, is_chain=True,
+        )
+        response = dream_client.post(
+            f"/api/dreams/tasks/{task.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+        assert "chain_next_task" in response.data
+        assert response.data["chain_next_task"]["is_chain"] is True
+
+    # ── skip ──
+
+    def test_skip_task_full(self, dream_client, test_task):
+        """Skip a task."""
+        response = dream_client.post(
+            f"/api/dreams/tasks/{test_task.id}/skip/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "skipped"
+
+    def test_skip_task_not_found(self, dream_client):
+        """Skip non-existent task returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/tasks/{uuid.uuid4()}/skip/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── quick_create ──
+
+    def test_quick_create_with_dream_id_full(
+        self, dream_client, test_dream, test_goal
+    ):
+        """Quick-create with explicit dream_id."""
+        response = dream_client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": "Quick With Dream", "dream_id": str(test_dream.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["title"] == "Quick With Dream"
+
+    def test_quick_create_without_dream_id_full(
+        self, dream_client, test_dream, test_goal
+    ):
+        """Quick-create without dream_id uses first active dream."""
+        response = dream_client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": "Quick No Dream"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_quick_create_no_title_full(self, dream_client):
+        """Quick-create without title returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": ""},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_quick_create_no_active_dreams_full(self, dream_user2):
+        """Quick-create with no active dreams returns 400."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=dream_user2)
+        response = client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": "Orphan Task"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_quick_create_invalid_dream_id_full(self, dream_client):
+        """Quick-create with non-existent dream_id returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": "Bad Dream", "dream_id": str(uuid.uuid4())},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_quick_create_creates_goal_if_none(
+        self, dream_client, dream_user
+    ):
+        """Quick-create auto-creates a goal if dream has no non-completed goals."""
+        dream = Dream.objects.create(
+            user=dream_user, title="Empty Dream",
+            description="No goals yet", status="active",
+        )
+        response = dream_client.post(
+            "/api/dreams/tasks/quick_create/",
+            {"title": "Auto Goal Task", "dream_id": str(dream.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert dream.goals.count() == 1
+
+    # ── reorder ──
+
+    def test_reorder_tasks_full(self, dream_client, test_goal):
+        """Reorder tasks within a goal."""
+        t1 = Task.objects.create(goal=test_goal, title="R1", order=1)
+        t2 = Task.objects.create(goal=test_goal, title="R2", order=2)
+        t3 = Task.objects.create(goal=test_goal, title="R3", order=3)
+        response = dream_client.post(
+            "/api/dreams/tasks/reorder/",
+            {
+                "goal_id": str(test_goal.id),
+                "task_ids": [str(t3.id), str(t1.id), str(t2.id)],
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        t1.refresh_from_db()
+        t2.refresh_from_db()
+        t3.refresh_from_db()
+        assert t3.order == 0
+        assert t1.order == 1
+        assert t2.order == 2
+
+    def test_reorder_missing_goal_id(self, dream_client):
+        """Reorder without goal_id returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/reorder/",
+            {"task_ids": [str(uuid.uuid4())]},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_reorder_missing_task_ids(self, dream_client):
+        """Reorder without task_ids returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/reorder/",
+            {"goal_id": str(uuid.uuid4())},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_reorder_empty_body(self, dream_client):
+        """Reorder with empty body returns 400."""
+        response = dream_client.post(
+            "/api/dreams/tasks/reorder/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # ── chain ──
+
+    def test_chain_single_task(self, dream_client, test_task):
+        """Chain for a non-chain task returns just that task."""
+        response = dream_client.get(
+            f"/api/dreams/tasks/{test_task.id}/chain/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) >= 1
+
+    def test_chain_linked_tasks_full(self, dream_client, test_goal):
+        """Chain for linked tasks returns full chain."""
+        root = Task.objects.create(
+            goal=test_goal, title="Root", order=1,
+            chain_next_delay_days=7, is_chain=True,
+        )
+        child = Task.objects.create(
+            goal=test_goal, title="Child", order=2,
+            chain_parent=root, is_chain=True,
+        )
+        grandchild = Task.objects.create(
+            goal=test_goal, title="Grandchild", order=3,
+            chain_parent=child, is_chain=True,
+        )
+        response = dream_client.get(
+            f"/api/dreams/tasks/{grandchild.id}/chain/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 3
+
+    def test_chain_not_found(self, dream_client):
+        """Chain for non-existent task returns 404."""
+        response = dream_client.get(
+            f"/api/dreams/tasks/{uuid.uuid4()}/chain/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ======================================================================
+#  COMPREHENSIVE COVERAGE: DreamMilestoneViewSet
+# ======================================================================
+
+
+@pytest.mark.django_db
+class TestMilestoneViewSetFull:
+    """Full coverage for DreamMilestoneViewSet."""
+
+    # ── list ──
+
+    def test_list_milestones_unauthenticated(self):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.get("/api/dreams/milestones/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_milestones_full(self, dream_client, test_milestone):
+        """List milestones for user's dreams."""
+        response = dream_client.get("/api/dreams/milestones/")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        assert len(results) >= 1
+
+    def test_list_milestones_only_own(
+        self, dream_client, dream_user2, test_milestone
+    ):
+        """User does not see milestones from another user's dreams."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream milestone",
+        )
+        other_ms = DreamMilestone.objects.create(
+            dream=other_dream, title="Other MS", order=1,
+        )
+        response = dream_client.get("/api/dreams/milestones/")
+        results = response.data.get("results", response.data)
+        ms_ids = [str(ms["id"]) for ms in results]
+        assert str(other_ms.id) not in ms_ids
+
+    def test_list_milestones_filter_by_dream_full(
+        self, dream_client, test_dream, test_milestone
+    ):
+        """Filter milestones by dream query param."""
+        response = dream_client.get(
+            f"/api/dreams/milestones/?dream={test_dream.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for ms in results:
+            assert str(ms["dream"]) == str(test_dream.id)
+
+    def test_list_milestones_filter_by_status(
+        self, dream_client, test_dream
+    ):
+        """Filter milestones by status."""
+        DreamMilestone.objects.create(
+            dream=test_dream, title="Completed MS",
+            order=2, status="completed",
+        )
+        response = dream_client.get(
+            "/api/dreams/milestones/?status=completed"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for ms in results:
+            assert ms["status"] == "completed"
+
+    # ── create ──
+
+    def test_create_milestone_full(self, dream_client, test_dream):
+        """Create a milestone."""
+        response = dream_client.post(
+            "/api/dreams/milestones/",
+            {
+                "dream": str(test_dream.id),
+                "title": "New Milestone",
+                "description": "Milestone description",
+                "order": 5,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["title"] == "New Milestone"
+        assert response.data["order"] == 5
+
+    def test_create_milestone_unauthenticated(self, test_dream):
+        """Unauthenticated create returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/dreams/milestones/",
+            {
+                "dream": str(test_dream.id),
+                "title": "Nope",
+                "order": 1,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_milestone_missing_dream(self, dream_client):
+        """Creating without dream returns 400."""
+        response = dream_client.post(
+            "/api/dreams/milestones/",
+            {"title": "No Dream MS", "order": 1},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_milestone_missing_title(
+        self, dream_client, test_dream
+    ):
+        """Creating without title returns 400."""
+        response = dream_client.post(
+            "/api/dreams/milestones/",
+            {"dream": str(test_dream.id), "order": 1},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_milestone_idor(self, dream_client, dream_user2):
+        """Cannot create milestone for another user's dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream milestone IDOR",
+        )
+        response = dream_client.post(
+            "/api/dreams/milestones/",
+            {
+                "dream": str(other_dream.id),
+                "title": "IDOR MS",
+                "order": 1,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # ── retrieve ──
+
+    def test_retrieve_milestone_full(self, dream_client, test_milestone):
+        """Retrieve a specific milestone."""
+        response = dream_client.get(
+            f"/api/dreams/milestones/{test_milestone.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert str(response.data["id"]) == str(test_milestone.id)
+
+    def test_retrieve_milestone_not_found(self, dream_client):
+        """Non-existent milestone returns 404."""
+        response = dream_client.get(
+            f"/api/dreams/milestones/{uuid.uuid4()}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_retrieve_milestone_other_user(
+        self, dream_client, dream_user2
+    ):
+        """Cannot retrieve another user's milestone."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other Dream",
+            description="Other dream retrieve MS",
+        )
+        ms = DreamMilestone.objects.create(
+            dream=other_dream, title="Hidden MS", order=1,
+        )
+        response = dream_client.get(f"/api/dreams/milestones/{ms.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── update ──
+
+    def test_update_milestone_title_full(
+        self, dream_client, test_milestone
+    ):
+        """PATCH updates milestone title."""
+        response = dream_client.patch(
+            f"/api/dreams/milestones/{test_milestone.id}/",
+            {"title": "Updated MS"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["title"] == "Updated MS"
+
+    def test_update_milestone_description(
+        self, dream_client, test_milestone
+    ):
+        """PATCH updates milestone description."""
+        response = dream_client.patch(
+            f"/api/dreams/milestones/{test_milestone.id}/",
+            {"description": "New desc"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["description"] == "New desc"
+
+    def test_update_milestone_status(
+        self, dream_client, test_milestone
+    ):
+        """PATCH updates milestone status."""
+        response = dream_client.patch(
+            f"/api/dreams/milestones/{test_milestone.id}/",
+            {"status": "in_progress"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "in_progress"
+
+    # ── delete ──
+
+    def test_delete_milestone_full(self, dream_client, test_dream):
+        """Owner can delete a milestone."""
+        ms = DreamMilestone.objects.create(
+            dream=test_dream, title="Del MS", order=99,
+        )
+        response = dream_client.delete(f"/api/dreams/milestones/{ms.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not DreamMilestone.objects.filter(id=ms.id).exists()
+
+    def test_delete_milestone_not_found(self, dream_client):
+        """Deleting non-existent milestone returns 404."""
+        response = dream_client.delete(
+            f"/api/dreams/milestones/{uuid.uuid4()}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete_milestone_other_user(
+        self, dream_client, dream_user2
+    ):
+        """Cannot delete another user's milestone."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream MS delete",
+        )
+        ms = DreamMilestone.objects.create(
+            dream=other_dream, title="Protected MS", order=1,
+        )
+        response = dream_client.delete(f"/api/dreams/milestones/{ms.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── complete ──
+
+    def test_complete_milestone_full(self, dream_client, test_dream):
+        """Complete a pending milestone via action endpoint."""
+        ms = DreamMilestone.objects.create(
+            dream=test_dream, title="Complete Me", order=1, status="pending",
+        )
+        response = dream_client.post(
+            f"/api/dreams/milestones/{ms.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "completed"
+
+    def test_complete_milestone_already_completed(
+        self, dream_client, test_dream
+    ):
+        """Completing an already completed milestone returns 400."""
+        ms = DreamMilestone.objects.create(
+            dream=test_dream, title="Done MS", order=1, status="completed",
+        )
+        response = dream_client.post(
+            f"/api/dreams/milestones/{ms.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_complete_milestone_not_found(self, dream_client):
+        """Complete non-existent milestone returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/milestones/{uuid.uuid4()}/complete/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_complete_milestone_updates_progress(
+        self, dream_client, test_dream
+    ):
+        """Completing a milestone updates its progress to 100%."""
+        ms = DreamMilestone.objects.create(
+            dream=test_dream, title="Progress MS", order=1,
+            status="pending", progress_percentage=50.0,
+        )
+        response = dream_client.post(
+            f"/api/dreams/milestones/{ms.id}/complete/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        ms.refresh_from_db()
+        assert ms.progress_percentage == 100.0
+        assert ms.completed_at is not None
+
+
+# ======================================================================
+#  COMPREHENSIVE COVERAGE: ObstacleViewSet
+# ======================================================================
+
+
+@pytest.mark.django_db
+class TestObstacleViewSetFull:
+    """Full coverage for ObstacleViewSet."""
+
+    # ── list ──
+
+    def test_list_obstacles_unauthenticated(self):
+        """Unauthenticated request returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.get("/api/dreams/obstacles/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_obstacles_full(self, dream_client, test_dream):
+        """List obstacles for user's dreams."""
+        Obstacle.objects.create(
+            dream=test_dream, title="Obs 1",
+            description="Obstacle description one",
+        )
+        response = dream_client.get("/api/dreams/obstacles/")
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        assert len(results) >= 1
+
+    def test_list_obstacles_only_own(
+        self, dream_client, dream_user2, test_dream
+    ):
+        """User does not see obstacles from another user's dreams."""
+        Obstacle.objects.create(
+            dream=test_dream, title="Mine",
+            description="My obstacle",
+        )
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream obstacle",
+        )
+        other_obs = Obstacle.objects.create(
+            dream=other_dream, title="Theirs",
+            description="Their obstacle",
+        )
+        response = dream_client.get("/api/dreams/obstacles/")
+        results = response.data.get("results", response.data)
+        obs_ids = [str(o["id"]) for o in results]
+        assert str(other_obs.id) not in obs_ids
+
+    def test_list_obstacles_filter_by_dream(
+        self, dream_client, test_dream
+    ):
+        """Filter obstacles by dream."""
+        Obstacle.objects.create(
+            dream=test_dream, title="Filtered Obs",
+            description="Filter test obstacle",
+        )
+        response = dream_client.get(
+            f"/api/dreams/obstacles/?dream={test_dream.id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get("results", response.data)
+        for obs in results:
+            assert str(obs["dream"]) == str(test_dream.id)
+
+    # ── create ──
+
+    def test_create_obstacle_full(self, dream_client, test_dream):
+        """Create an obstacle."""
+        response = dream_client.post(
+            "/api/dreams/obstacles/",
+            {
+                "dream": str(test_dream.id),
+                "title": "Procrastination",
+                "description": "I tend to procrastinate on tasks",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["title"] == "Procrastination"
+
+    def test_create_obstacle_unauthenticated(self, test_dream):
+        """Unauthenticated create returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/dreams/obstacles/",
+            {
+                "dream": str(test_dream.id),
+                "title": "Nope",
+                "description": "Should not be created",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_obstacle_missing_dream(self, dream_client):
+        """Creating without dream returns 400."""
+        response = dream_client.post(
+            "/api/dreams/obstacles/",
+            {"title": "No Dream Obs", "description": "Should fail"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_obstacle_missing_title(
+        self, dream_client, test_dream
+    ):
+        """Creating without title returns 400."""
+        response = dream_client.post(
+            "/api/dreams/obstacles/",
+            {
+                "dream": str(test_dream.id),
+                "description": "No title obstacle",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_obstacle_idor(self, dream_client, dream_user2):
+        """Cannot create obstacle for another user's dream."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream obstacle IDOR",
+        )
+        response = dream_client.post(
+            "/api/dreams/obstacles/",
+            {
+                "dream": str(other_dream.id),
+                "title": "IDOR Obs",
+                "description": "Should be blocked",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # ── retrieve ──
+
+    def test_retrieve_obstacle_full(self, dream_client, test_dream):
+        """Retrieve a specific obstacle."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Retrieve Me",
+            description="Test obstacle retrieval",
+        )
+        response = dream_client.get(f"/api/dreams/obstacles/{obs.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert str(response.data["id"]) == str(obs.id)
+
+    def test_retrieve_obstacle_not_found(self, dream_client):
+        """Non-existent obstacle returns 404."""
+        response = dream_client.get(
+            f"/api/dreams/obstacles/{uuid.uuid4()}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_retrieve_obstacle_other_user(
+        self, dream_client, dream_user2
+    ):
+        """Cannot retrieve another user's obstacle."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream obstacle retrieve",
+        )
+        obs = Obstacle.objects.create(
+            dream=other_dream, title="Hidden Obs",
+            description="Should not be visible",
+        )
+        response = dream_client.get(f"/api/dreams/obstacles/{obs.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── update ──
+
+    def test_update_obstacle_title_full(self, dream_client, test_dream):
+        """PATCH updates obstacle title."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Old Title",
+            description="Obstacle to update",
+        )
+        response = dream_client.patch(
+            f"/api/dreams/obstacles/{obs.id}/",
+            {"title": "New Title"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["title"] == "New Title"
+
+    def test_update_obstacle_status_full(self, dream_client, test_dream):
+        """PATCH updates obstacle status."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Status Obs",
+            description="Obstacle status update",
+        )
+        response = dream_client.patch(
+            f"/api/dreams/obstacles/{obs.id}/",
+            {"status": "resolved"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "resolved"
+
+    # ── delete ──
+
+    def test_delete_obstacle_full(self, dream_client, test_dream):
+        """Owner can delete an obstacle."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Del Obs",
+            description="Obstacle to delete",
+        )
+        response = dream_client.delete(f"/api/dreams/obstacles/{obs.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not Obstacle.objects.filter(id=obs.id).exists()
+
+    def test_delete_obstacle_not_found(self, dream_client):
+        """Deleting non-existent obstacle returns 404."""
+        response = dream_client.delete(
+            f"/api/dreams/obstacles/{uuid.uuid4()}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete_obstacle_other_user(
+        self, dream_client, dream_user2
+    ):
+        """Cannot delete another user's obstacle."""
+        other_dream = Dream.objects.create(
+            user=dream_user2, title="Other",
+            description="Other dream obstacle delete",
+        )
+        obs = Obstacle.objects.create(
+            dream=other_dream, title="Protected",
+            description="Protected obstacle",
+        )
+        response = dream_client.delete(f"/api/dreams/obstacles/{obs.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # ── resolve ──
+
+    def test_resolve_obstacle(self, dream_client, test_dream):
+        """Resolve an obstacle via action endpoint."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Resolve Me",
+            description="Obstacle to resolve",
+        )
+        response = dream_client.post(
+            f"/api/dreams/obstacles/{obs.id}/resolve/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "resolved"
+
+    def test_resolve_obstacle_not_found(self, dream_client):
+        """Resolve non-existent obstacle returns 404."""
+        response = dream_client.post(
+            f"/api/dreams/obstacles/{uuid.uuid4()}/resolve/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_resolve_obstacle_idempotent(
+        self, dream_client, test_dream
+    ):
+        """Resolving an already resolved obstacle still returns 200."""
+        obs = Obstacle.objects.create(
+            dream=test_dream, title="Already Resolved",
+            description="Already resolved obstacle",
+            status="resolved",
+        )
+        response = dream_client.post(
+            f"/api/dreams/obstacles/{obs.id}/resolve/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "resolved"

@@ -1516,7 +1516,7 @@ class DreamViewSet(viewsets.ModelViewSet):
     def vision_board_remove(self, request, pk=None, image_id=None):
         """Remove an image from the dream's vision board."""
         dream = self.get_object()
-        deleted, _ = VisionBoardImage.objects.filter(dream=dream, id=image_id).delete()
+        deleted, _detail = VisionBoardImage.objects.filter(dream=dream, id=image_id).delete()
         if deleted == 0:
             return Response(
                 {"error": _("Image not found.")}, status=status.HTTP_404_NOT_FOUND
@@ -2086,7 +2086,7 @@ class DreamViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         tag_name = serializer.validated_data["tag_name"].strip().lower()
-        tag, _ = DreamTag.objects.get_or_create(name=tag_name)
+        tag, _created = DreamTag.objects.get_or_create(name=tag_name)
 
         DreamTagging.objects.get_or_create(dream=dream, tag=tag)
 
@@ -2105,7 +2105,7 @@ class DreamViewSet(viewsets.ModelViewSet):
     def remove_tag(self, request, pk=None, tag_name=None):
         """Remove a tag from a dream."""
         dream = self.get_object()
-        deleted_count, _ = DreamTagging.objects.filter(
+        deleted_count, _detail = DreamTagging.objects.filter(
             dream=dream,
             tag__name=tag_name.lower(),
         ).delete()

@@ -52,12 +52,13 @@ from .views import (
 )
 
 router = DefaultRouter()
+# Register dreams/templates BEFORE dreams so it takes priority over dreams/<pk>/
+router.register(r"dreams/templates", DreamTemplateViewSet, basename="dream-template")
 router.register(r"dreams", DreamViewSet, basename="dream")
 router.register(r"milestones", DreamMilestoneViewSet, basename="milestone")
 router.register(r"goals", GoalViewSet, basename="goal")
 router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"obstacles", ObstacleViewSet, basename="obstacle")
-router.register(r"dreams/templates", DreamTemplateViewSet, basename="dream-template")
 router.register(r"journal", DreamJournalViewSet, basename="dream-journal")
 router.register(r"checkins", CheckInViewSet, basename="checkin")
 
