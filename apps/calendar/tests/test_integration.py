@@ -696,3 +696,201 @@ class TestTimeBlockTemplates:
             status.HTTP_200_OK,
             status.HTTP_201_CREATED,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar View (day/week/month)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarView:
+    """Tests for GET /api/calendar/view/"""
+
+    def test_calendar_view_default(self, cal_client):
+        """Get calendar view with date range."""
+        from datetime import datetime, timedelta
+        start = (datetime.now() - timedelta(days=7)).isoformat()
+        end = (datetime.now() + timedelta(days=7)).isoformat()
+        response = cal_client.get(f"/api/calendar/view/?start={start}&end={end}")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_calendar_view_no_params(self, cal_client):
+        """Get calendar view without params returns 400."""
+        response = cal_client.get("/api/calendar/view/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_calendar_today(self, cal_client):
+        """Get today's calendar data."""
+        response = cal_client.get("/api/calendar/today/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_calendar_overdue(self, cal_client):
+        """Get overdue tasks."""
+        response = cal_client.get("/api/calendar/overdue/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Schedule Score
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestScheduleScore:
+    """Tests for GET /api/calendar/schedule-score/"""
+
+    def test_schedule_score(self, cal_client):
+        """Get schedule quality score."""
+        response = cal_client.get("/api/calendar/schedule-score/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_schedule_score_with_date(self, cal_client):
+        """Get schedule score for specific date."""
+        from datetime import date
+        today = date.today().isoformat()
+        response = cal_client.get(f"/api/calendar/schedule-score/?date={today}")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Daily Summary
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDailySummary:
+    """Tests for GET /api/calendar/daily-summary/"""
+
+    def test_daily_summary(self, cal_client):
+        """Get daily summary."""
+        response = cal_client.get("/api/calendar/daily-summary/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Suggest Time Slots
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestSuggestTimeSlots:
+    """Tests for GET /api/calendar/suggest-time-slots/"""
+
+    def test_suggest_time_slots(self, cal_client):
+        """Suggest time slots for a task."""
+        response = cal_client.get(
+            "/api/calendar/suggest-time-slots/?duration=30"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Rescue
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarRescue:
+    """Tests for POST /api/calendar/rescue/"""
+
+    def test_rescue_empty(self, cal_client):
+        """Rescue when no overdue tasks."""
+        response = cal_client.post("/api/calendar/rescue/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Focus Mode
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestFocusMode:
+    """Tests for focus mode endpoints."""
+
+    def test_focus_mode_active(self, cal_client):
+        """Check if focus mode is active."""
+        response = cal_client.get("/api/calendar/focus-mode-active/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_focus_block_events(self, cal_client):
+        """Get focus block events."""
+        response = cal_client.get("/api/calendar/focus-block-events/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar Sharing
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarSharing:
+    """Tests for calendar sharing endpoints."""
+
+    def test_shared_with_me_empty(self, cal_client):
+        """Get shared calendars when none shared."""
+        response = cal_client.get("/api/calendar/shared-with-me/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_my_shares_empty(self, cal_client):
+        """Get my shares when none shared."""
+        response = cal_client.get("/api/calendar/my-shares/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_share_link(self, cal_client):
+        """Generate share link."""
+        response = cal_client.post("/api/calendar/share-link/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Dismiss Event
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDismissEvent:
+    """Tests for POST /api/calendar/events/<id>/dismiss/"""
+
+    def test_dismiss_nonexistent(self, cal_client):
+        """Dismiss nonexistent event returns 404."""
+        import uuid
+        response = cal_client.post(
+            f"/api/calendar/events/{uuid.uuid4()}/dismiss/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar Timezone
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarTimezoneEndpoint:
+    """Tests for /api/calendar/timezone/ endpoint."""
+
+    def test_get_timezone_again(self, cal_client):
+        """Get user's calendar timezone."""
+        response = cal_client.get("/api/calendar/timezone/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_set_timezone_valid(self, cal_client):
+        """Set user's calendar timezone."""
+        response = cal_client.put(
+            "/api/calendar/timezone/",
+            {"timezone": "America/New_York"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK

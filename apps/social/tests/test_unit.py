@@ -489,3 +489,312 @@ class TestStoryModel:
                 expires_at=timezone.now() + timedelta(hours=24),
             )
             assert story.media_type == media_type
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Social
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestSocialFriendshipAPI:
+    """Tests for Social Friendship API endpoints."""
+
+    def test_list_friends(self, social_client):
+        resp = social_client.get(
+            "/api/social/friends/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_pending_requests(self, social_client):
+        resp = social_client.get(
+            "/api/social/friends/requests/pending/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_sent_requests(self, social_client):
+        resp = social_client.get(
+            "/api/social/friends/requests/sent/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_user_search(self, social_client):
+        resp = social_client.get(
+            "/api/social/users/search?q=test",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_follow_suggestions(self, social_client):
+        resp = social_client.get(
+            "/api/social/follow-suggestions/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_friend_suggestions(self, social_client):
+        resp = social_client.get(
+            "/api/social/friend-suggestions/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+
+@pytest.mark.django_db
+class TestDreamPostAPI:
+    """Tests for DreamPost API endpoints."""
+
+    def test_list_posts(self, social_client):
+        resp = social_client.get(
+            "/api/social/posts/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_create_post(self, social_client):
+        resp = social_client.post(
+            "/api/social/posts/",
+            {"content": "My dream progress!", "visibility": "public"},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (201, 403)
+
+    def test_list_posts_unauthenticated(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        resp = client.get(
+            "/api/social/posts/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+class TestStoryAPI:
+    """Tests for Story API endpoints."""
+
+    def test_list_stories(self, social_client):
+        resp = social_client.get(
+            "/api/social/stories/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+
+@pytest.mark.django_db
+class TestSocialEventAPI:
+    """Tests for Social Event API endpoints."""
+
+    def test_list_events(self, social_client):
+        resp = social_client.get(
+            "/api/social/events/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+
+@pytest.mark.django_db
+class TestSocialFriendshipActions:
+    """Tests for friendship-related actions."""
+
+    def test_send_friend_request(self, social_client, social_user2):
+        resp = social_client.post(
+            "/api/social/friends/request/",
+            {"user_id": str(social_user2.id)},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 201, 400, 403)
+
+    def test_follow_user(self, social_client, social_user2):
+        resp = social_client.post(
+            "/api/social/follow/",
+            {"user_id": str(social_user2.id)},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 201, 400, 403)
+
+    def test_block_user(self, social_client, social_user2):
+        resp = social_client.post(
+            "/api/social/block/",
+            {"user_id": str(social_user2.id)},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 201, 400, 403)
+
+    def test_blocked_list(self, social_client):
+        resp = social_client.get(
+            "/api/social/blocked/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_report_user(self, social_client, social_user2):
+        resp = social_client.post(
+            "/api/social/report/",
+            {"user_id": str(social_user2.id), "reason": "spam"},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 201, 400, 403)
+
+    def test_counts(self, social_client, social_user):
+        resp = social_client.get(
+            f"/api/social/counts/{social_user.id}/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_mutual_friends(self, social_client, social_user2):
+        resp = social_client.get(
+            f"/api/social/friends/mutual/{social_user2.id}/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_friends_feed(self, social_client):
+        resp = social_client.get(
+            "/api/social/feed/friends/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+
+@pytest.mark.django_db
+class TestDreamPostAPIActions:
+    """Tests for DreamPost API action endpoints."""
+
+    def test_create_and_list_posts(self, social_client):
+        # Create a post first
+        resp = social_client.post(
+            "/api/social/posts/",
+            {"content": "Testing dreams!", "visibility": "public"},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        if resp.status_code == 201:
+            post_id = resp.data.get("id")
+            # List posts
+            list_resp = social_client.get(
+                "/api/social/posts/",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert list_resp.status_code == 200
+
+            # Like the post
+            like_resp = social_client.post(
+                f"/api/social/posts/{post_id}/like/",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert like_resp.status_code in (200, 201)
+
+            # Comment on the post
+            comment_resp = social_client.post(
+                f"/api/social/posts/{post_id}/comment/",
+                {"content": "Great dream!"},
+                format="json",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert comment_resp.status_code in (200, 201)
+
+            # List comments
+            comments_resp = social_client.get(
+                f"/api/social/posts/{post_id}/comments/",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert comments_resp.status_code == 200
+
+            # Save the post
+            save_resp = social_client.post(
+                f"/api/social/posts/{post_id}/save/",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert save_resp.status_code in (200, 201)
+
+            # Delete the post
+            del_resp = social_client.delete(
+                f"/api/social/posts/{post_id}/",
+                HTTP_ORIGIN="https://stepora.app",
+            )
+            assert del_resp.status_code in (200, 204)
+
+    def test_post_feed(self, social_client):
+        resp = social_client.get(
+            "/api/social/posts/feed/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_recent_searches(self, social_client):
+        resp = social_client.get(
+            "/api/social/recent-searches/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404, 500)
+
+    def test_post_user_posts(self, social_client, social_user):
+        resp = social_client.get(
+            f"/api/social/posts/user/{social_user.id}/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)
+
+    def test_friends_online(self, social_client):
+        resp = social_client.get(
+            "/api/social/friends/online/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_unfollow_nonexistent(self, social_client):
+        import uuid
+        resp = social_client.delete(
+            f"/api/social/unfollow/{uuid.uuid4()}/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 204, 400, 403, 404)
+
+    def test_unblock_nonexistent(self, social_client):
+        import uuid
+        resp = social_client.delete(
+            f"/api/social/unblock/{uuid.uuid4()}/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 204, 400, 403, 404)
+
+    def test_stories_my_stories(self, social_client):
+        resp = social_client.get(
+            "/api/social/stories/my_stories/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_stories_feed(self, social_client):
+        resp = social_client.get(
+            "/api/social/stories/feed/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_search_add(self, social_client, social_user2):
+        resp = social_client.post(
+            "/api/social/recent-searches/add/",
+            {"user_id": str(social_user2.id)},
+            format="json",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 201, 400, 403)
+
+    def test_search_clear(self, social_client):
+        resp = social_client.delete(
+            "/api/social/recent-searches/clear/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 204, 403)

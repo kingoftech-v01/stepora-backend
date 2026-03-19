@@ -2054,7 +2054,7 @@ class DreamViewSet(viewsets.ModelViewSet):
     def unshare(self, request, pk=None, user_id=None):
         """Remove a dream share."""
         dream = self.get_object()
-        deleted_count, _ = SharedDream.objects.filter(
+        deleted_count, _deleted_info = SharedDream.objects.filter(
             dream=dream,
             shared_by=request.user,
             shared_with_id=user_id,

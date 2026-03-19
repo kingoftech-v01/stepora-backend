@@ -253,3 +253,35 @@ class TestSeasonRewardModel:
         )
         result = reward.claim()
         assert result is False
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Leagues
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestLeagueAPI:
+    """Tests for League API endpoints."""
+
+    def test_list_leagues(self, league_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=league_user)
+        resp = client.get(
+            "/api/leagues/leagues/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_leaderboard(self, league_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=league_user)
+        resp = client.get(
+            "/api/leagues/leaderboard/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)

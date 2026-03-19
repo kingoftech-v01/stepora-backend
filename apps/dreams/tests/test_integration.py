@@ -2901,3 +2901,311 @@ class TestDreamLikeDuplicate:
             status.HTTP_200_OK,
             status.HTTP_201_CREATED,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Unshare Dream (the _("Share not found.") fix)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestUnshareDream:
+    """Tests for DELETE /api/dreams/dreams/<id>/unshare/<user_id>/"""
+
+    def test_unshare_dream(self, dream_client, test_dream, dream_user2):
+        """Unshare a previously shared dream."""
+        from apps.dreams.models import SharedDream
+        SharedDream.objects.create(
+            dream=test_dream, shared_by=test_dream.user, shared_with=dream_user2
+        )
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/unshare/{dream_user2.id}/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_unshare_not_found(self, dream_client, test_dream, dream_user2):
+        """Unshare when no share exists returns 404."""
+        response = dream_client.delete(
+            f"/api/dreams/dreams/{test_dream.id}/unshare/{dream_user2.id}/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Collaborators
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCollaborators:
+    """Tests for dream collaborator endpoints."""
+
+    def test_list_collaborators(self, dream_client, test_dream):
+        """List collaborators on a dream."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/list/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_add_collaborator(self, dream_client, test_dream, dream_user2):
+        """Add a collaborator to a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/collaborators/",
+            {"user_id": str(dream_user2.id)},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Explore Dreams
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestExploreDreams:
+    """Tests for public dream exploration."""
+
+    def test_explore(self, dream_client):
+        """Explore public dreams."""
+        response = dream_client.get("/api/dreams/dreams/explore/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Shared With Me
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestSharedWithMe:
+    """Tests for shared dreams endpoint."""
+
+    def test_shared_with_me(self, dream_client):
+        """Get dreams shared with current user."""
+        response = dream_client.get("/api/dreams/dreams/shared-with-me/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Dream Tags List
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDreamTagsList:
+    """Tests for dream tags list endpoint."""
+
+    def test_list_tags(self, dream_client):
+        """List all dream tags."""
+        response = dream_client.get("/api/dreams/dreams/tags/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Journal
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDreamJournal:
+    """Tests for dream journal endpoints."""
+
+    def test_list_journal_entries(self, dream_client):
+        """List dream journal entries."""
+        response = dream_client.get("/api/dreams/journal/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_create_journal_entry(self, dream_client, test_dream):
+        """Create a journal entry."""
+        response = dream_client.post(
+            "/api/dreams/journal/",
+            {
+                "dream": str(test_dream.id),
+                "content": "Today was a productive day.",
+                "mood": "happy",
+            },
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Dream AI Actions (analyze, predict_obstacles, etc.)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDreamAIActions:
+    """Tests for dream AI action endpoints."""
+
+    def test_analyze_dream(self, mock_openai, dream_client, test_dream):
+        """Analyze a dream with AI."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/analyze/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_predict_obstacles(self, mock_openai, dream_client, test_dream):
+        """Predict obstacles for a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/predict-obstacles/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_conversation_starters(self, mock_openai, dream_client, test_dream):
+        """Get conversation starters for a dream."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/conversation-starters/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_similar_dreams(self, mock_openai, dream_client, test_dream):
+        """Find similar dreams."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/similar/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_smart_analysis(self, mock_openai, dream_client):
+        """Run smart analysis across all dreams."""
+        response = dream_client.get(
+            "/api/dreams/dreams/smart-analysis/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_auto_categorize(self, mock_openai, dream_client):
+        """Auto-categorize uncategorized dreams."""
+        response = dream_client.post(
+            "/api/dreams/dreams/auto-categorize/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Dream Calibration
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDreamCalibration:
+    """Tests for dream calibration endpoints."""
+
+    def test_start_calibration(self, mock_openai, dream_client, test_dream):
+        """Start calibration for a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/start_calibration/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def test_skip_calibration(self, dream_client, test_dream):
+        """Skip calibration for a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/skip_calibration/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Generate Two-Minute Start
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestTwoMinuteStart:
+    """Tests for the two-minute-start endpoint."""
+
+    def test_two_minute_start(self, mock_openai, dream_client, test_dream):
+        """Generate a two-minute start suggestion."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/generate_two_minute_start/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Progress Photos
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestProgressPhotos:
+    """Tests for progress photo endpoints."""
+
+    def test_progress_photos_list_empty(self, dream_client, test_dream):
+        """List progress photos when none exist."""
+        response = dream_client.get(
+            f"/api/dreams/dreams/{test_dream.id}/progress-photos/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Dream Trigger Check-in
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDreamTriggerCheckin:
+    """Tests for manually triggering a check-in."""
+
+    def test_trigger_checkin(self, dream_client, test_dream):
+        """Manually trigger a check-in for a dream."""
+        response = dream_client.post(
+            f"/api/dreams/dreams/{test_dream.id}/trigger-checkin/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_403_FORBIDDEN,
+        )

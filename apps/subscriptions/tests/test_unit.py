@@ -847,3 +847,48 @@ class TestStripeServiceCreateCustomer:
         assert result.stripe_customer_id == "cus_test_123"
         # Should not create a new one
         assert StripeCustomer.objects.filter(user=sub_user).count() == 1
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Subscriptions
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestSubscriptionAPI:
+    """Tests for Subscription API endpoints."""
+
+    def test_list_plans(self, sub_client):
+        resp = sub_client.get(
+            "/api/subscriptions/plans/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_my_subscription(self, sub_client):
+        resp = sub_client.get(
+            "/api/subscriptions/my-subscription/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)
+
+    def test_billing_history(self, sub_client):
+        resp = sub_client.get(
+            "/api/subscriptions/billing-history/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)
+
+    def test_referral(self, sub_client):
+        resp = sub_client.get(
+            "/api/subscriptions/referral/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)
+
+    def test_promotions_active(self, sub_client):
+        resp = sub_client.get(
+            "/api/subscriptions/promotions/active/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)

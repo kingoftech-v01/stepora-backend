@@ -256,3 +256,37 @@ class TestGiftModel:
         s = str(gift)
         assert "Gold Frame" in s
         assert "pending" in s
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Store
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestStoreAPI:
+    """Tests for Store API endpoints."""
+
+    def test_list_items(self, store_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=store_user)
+        resp = client.get(
+            "/api/store/items/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_list_categories(self, store_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=store_user)
+        resp = client.get(
+            "/api/store/categories/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)

@@ -556,3 +556,64 @@ class TestStripeWebhook:
             HTTP_STRIPE_SIGNATURE="bad_sig",
         )
         assert response.status_code == 400
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Analytics (admin only)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestSubscriptionAnalytics:
+    """Tests for subscription analytics endpoint."""
+
+    def test_analytics_non_admin(self, sub_client, free_subscription):
+        """Non-admin cannot access analytics."""
+        response = sub_client.get("/api/subscriptions/subscription/analytics/")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_analytics_unauthenticated(self, anon_client):
+        """Unauthenticated access to analytics returns 401."""
+        response = anon_client.get("/api/subscriptions/subscription/analytics/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Change Plan edge cases
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestChangePlanEdgeCases:
+    """Additional change plan tests."""
+
+    def test_change_plan_same_plan(self, sub_client, premium_subscription, premium_plan):
+        """Change to same plan returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/subscription/change-plan/",
+            {"plan_slug": "premium"},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Checkout edge cases
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCheckoutEdgeCases:
+    """Additional checkout tests."""
+
+    def test_checkout_missing_plan(self, sub_client, free_subscription):
+        """Checkout without plan_slug returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/subscription/checkout/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST

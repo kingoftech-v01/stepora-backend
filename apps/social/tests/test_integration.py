@@ -1386,3 +1386,106 @@ class TestOnlineAndMutualFriends:
             f"/api/social/friends/mutual/{uuid.uuid4()}/"
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Online Friends
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestOnlineFriends:
+    """Tests for online friends endpoint."""
+
+    def test_online_friends(self, social_client):
+        """Get online friends."""
+        response = social_client.get("/api/social/friends/online/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Recent Searches
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestRecentSearches:
+    """Tests for recent search endpoints."""
+
+    def test_list_searches(self, social_client):
+        """List recent searches."""
+        response = social_client.get("/api/social/recent-searches/list/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_add_search(self, social_client, social_user2):
+        """Add a recent search."""
+        response = social_client.post(
+            "/api/social/recent-searches/add/",
+            {"user_id": str(social_user2.id)},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_clear_searches(self, social_client):
+        """Clear all recent searches."""
+        response = social_client.delete("/api/social/recent-searches/clear/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Follow Suggestions
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestFollowSuggestions:
+    """Tests for follow/friend suggestion endpoints."""
+
+    def test_follow_suggestions(self, social_client):
+        """Get follow suggestions (may require premium)."""
+        response = social_client.get("/api/social/follow-suggestions/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_friend_suggestions(self, social_client):
+        """Get friend suggestions (may require premium)."""
+        response = social_client.get("/api/social/friend-suggestions/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Feed Like and Comment
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestFeedLikeComment:
+    """Tests for feed like and comment endpoints."""
+
+    def test_feed_like_nonexistent(self, social_client):
+        """Like nonexistent activity returns 404."""
+        response = social_client.post(
+            f"/api/social/feed/{uuid.uuid4()}/like/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_feed_comment_nonexistent(self, social_client):
+        """Comment on nonexistent activity returns 404."""
+        response = social_client.post(
+            f"/api/social/feed/{uuid.uuid4()}/comment/",
+            {"content": "Great job!"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND

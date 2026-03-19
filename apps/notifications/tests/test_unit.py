@@ -711,3 +711,69 @@ class TestNotificationDeliveryServiceWebPush:
         # With no VAPID key configured (default), should return False
         result = service._send_webpush(notification)
         assert result is False
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Notifications
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestNotificationAPI:
+    """Tests for Notification API endpoints."""
+
+    def test_list_notifications(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_mark_all_read(self, notif_client):
+        resp = notif_client.post(
+            "/api/notifications/mark_all_read/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 204, 404)
+
+    def test_unread_count(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/unread_count/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_list_devices(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/devices/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_grouped(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/grouped/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_templates(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/templates/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_push_subscriptions(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/push-subscriptions/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 200
+
+    def test_batches(self, notif_client):
+        resp = notif_client.get(
+            "/api/notifications/batches/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)

@@ -236,3 +236,26 @@ class TestBuddyEncouragementModel:
         )
         s = str(enc)
         assert "Buddy One" in s
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Buddies
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestBuddyAPI:
+    """Tests for Buddy API endpoints."""
+
+    def test_list_pairings(self, buddy_user1):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=buddy_user1)
+        resp = client.get(
+            "/api/buddies/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)

@@ -361,3 +361,84 @@ class TestUserDevices:
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Notification Templates
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestNotificationTemplates:
+    """Tests for notification template endpoints."""
+
+    def test_list_templates(self, notif_client):
+        """List notification templates."""
+        response = notif_client.get("/api/notifications/templates/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_list_templates_unauthenticated(self):
+        """Templates require authentication."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        response = client.get("/api/notifications/templates/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Notification Batches
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestNotificationBatches:
+    """Tests for notification batch endpoints."""
+
+    def test_list_batches_non_admin(self, notif_client):
+        """Non-admin cannot list notification batches."""
+        response = notif_client.get("/api/notifications/batches/")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_list_batches_unauthenticated(self):
+        """Batches require authentication."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        response = client.get("/api/notifications/batches/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Create Notification
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCreateNotification:
+    """Tests for creating notifications."""
+
+    def test_create_notification(self, notif_client, notif_user):
+        """Create a notification."""
+        response = notif_client.post(
+            "/api/notifications/",
+            {
+                "notification_type": "reminder",
+                "title": "Test Reminder",
+                "body": "Don't forget to check your tasks!",
+            },
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_201_CREATED,
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_delete_notification(self, notif_client, sample_notification):
+        """Delete a notification."""
+        response = notif_client.delete(
+            f"/api/notifications/{sample_notification.id}/"
+        )
+        assert response.status_code in (
+            status.HTTP_204_NO_CONTENT,
+            status.HTTP_200_OK,
+        )

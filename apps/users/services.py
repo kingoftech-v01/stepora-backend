@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # Backward compatibility — BuddyMatchingService moved to apps.buddies.services
+from apps.buddies.models import BuddyPairing  # noqa: F401
 from apps.buddies.services import BuddyMatchingService  # noqa: F401
 
 
@@ -236,7 +237,7 @@ class _BuddyMatchingServiceDeprecated:
         target_user: User,
         compatibility_score: float,
         shared_categories: List[str],
-    ) -> BuddyPairing:
+    ) -> "BuddyPairing":
         """
         Create a new buddy pairing request.
 

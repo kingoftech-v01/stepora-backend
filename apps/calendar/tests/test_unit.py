@@ -209,3 +209,37 @@ class TestTimeBlockModel:
         time_block.save()
         time_block.refresh_from_db()
         assert time_block.is_active is False
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Calendar
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestCalendarAPI:
+    """Tests for Calendar API endpoints."""
+
+    def test_list_events(self, cal_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=cal_user)
+        resp = client.get(
+            "/api/calendar/events/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_list_time_blocks(self, cal_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=cal_user)
+        resp = client.get(
+            "/api/calendar/time-blocks/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403, 404)

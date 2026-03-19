@@ -357,3 +357,36 @@ class TestAIMessageCreateSerializer:
         serializer = AIMessageCreateSerializer(data={"content": "  Hello!  "})
         assert serializer.is_valid()
         assert serializer.validated_data["content"] == "Hello!"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — AI
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestAIConversationAPI:
+    """Tests for AI Conversation API endpoints."""
+
+    def test_list_conversations(self, ai_client):
+        resp = ai_client.get(
+            "/api/ai/conversations/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_list_templates(self, ai_client):
+        resp = ai_client.get(
+            "/api/ai/templates/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_list_memories(self, ai_client):
+        resp = ai_client.get(
+            "/api/ai/memories/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)

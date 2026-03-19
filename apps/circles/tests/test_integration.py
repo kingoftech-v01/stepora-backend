@@ -2,11 +2,14 @@
 Integration tests for the Circles app API endpoints.
 """
 
+import uuid
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.circles.models import Circle, CircleMembership
 
@@ -495,3 +498,283 @@ class TestCircleListFilters:
             f"/api/circles/circles/{test_circle.id}/join/"
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Circle Post CRUD (edit, delete, react, unreact)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCirclePostCRUD:
+    """Tests for circle post edit, delete, and reactions."""
+
+    def test_edit_post_as_author(self, circle_pro_client, test_circle, test_post):
+        """Edit own post in circle."""
+        response = circle_pro_client.put(
+            f"/api/circles/circles/{test_circle.id}/posts/{test_post.id}/edit/",
+            {"content": "Updated content"},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_delete_post_as_author(self, circle_pro_client, test_circle, test_post):
+        """Delete own post in circle."""
+        response = circle_pro_client.delete(
+            f"/api/circles/circles/{test_circle.id}/posts/{test_post.id}/delete/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+    def test_react_to_post(self, circle_pro_client, test_circle, test_post):
+        """React to a circle post."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/posts/{test_post.id}/react/",
+            {"reaction_type": "heart"},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )
+
+    def test_unreact_to_post(self, circle_pro_client, test_circle, test_post):
+        """Remove reaction from a circle post."""
+        # First react
+        circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/posts/{test_post.id}/react/",
+            {"reaction_type": "heart"},
+            format="json",
+        )
+        # Then unreact (DELETE method)
+        response = circle_pro_client.delete(
+            f"/api/circles/circles/{test_circle.id}/posts/{test_post.id}/unreact/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Circle Member Management
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCircleMemberManagement:
+    """Tests for member promote/demote/remove."""
+
+    def test_promote_member(self, circle_pro_client, test_circle, circle_user):
+        """Promote a member to moderator."""
+        from apps.circles.models import CircleMembership
+        membership = CircleMembership.objects.create(
+            circle=test_circle, user=circle_user, role="member",
+        )
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/members/{membership.id}/promote/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_demote_member(self, circle_pro_client, test_circle, circle_user):
+        """Demote a moderator to member."""
+        from apps.circles.models import CircleMembership
+        membership = CircleMembership.objects.create(
+            circle=test_circle, user=circle_user, role="moderator",
+        )
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/members/{membership.id}/demote/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_remove_member(self, circle_pro_client, test_circle, circle_user):
+        """Remove a member from circle."""
+        from apps.circles.models import CircleMembership
+        membership = CircleMembership.objects.create(
+            circle=test_circle, user=circle_user, role="member",
+        )
+        response = circle_pro_client.delete(
+            f"/api/circles/circles/{test_circle.id}/members/{membership.id}/remove/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Circle Invite
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCircleInvite:
+    """Tests for circle invitation endpoints."""
+
+    def test_invite_user(self, circle_pro_client, test_circle, circle_user):
+        """Invite a user to the circle."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/invite/",
+            {"user_id": str(circle_user.id)},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_invite_link(self, circle_pro_client, test_circle):
+        """Generate invite link for circle."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/invite-link/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )
+
+    def test_list_invitations(self, circle_pro_client, test_circle):
+        """List pending invitations for circle."""
+        response = circle_pro_client.get(
+            f"/api/circles/circles/{test_circle.id}/invitations/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_my_invitations(self, circle_client):
+        """List user's received invitations."""
+        response = circle_client.get("/api/circles/circles/my-invitations/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Circle Chat
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCircleChat:
+    """Tests for circle chat endpoints."""
+
+    def test_chat_history(self, circle_pro_client, test_circle):
+        """Get circle chat history."""
+        response = circle_pro_client.get(
+            f"/api/circles/circles/{test_circle.id}/chat/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_chat_send(self, circle_pro_client, test_circle):
+        """Send a message in circle chat."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/chat/send/",
+            {"content": "Hello circle!"},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Circle Calls
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCircleCalls:
+    """Tests for circle call endpoints."""
+
+    def test_call_start(self, circle_pro_client, test_circle):
+        """Start a circle call."""
+        with patch(
+            "apps.circles.views.CircleViewSet._generate_agora_token",
+            return_value={"token": "fake-token", "uid": "test-uid", "expires_in": 3600},
+        ):
+            response = circle_pro_client.post(
+                f"/api/circles/circles/{test_circle.id}/call/start/"
+            )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_call_active_none(self, circle_pro_client, test_circle):
+        """Check active call when none exists."""
+        response = circle_pro_client.get(
+            f"/api/circles/circles/{test_circle.id}/call/active/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Challenge Join & Progress
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestChallengeEndpoints:
+    """Tests for challenge-related endpoints."""
+
+    def test_join_challenge(self, circle_pro_client, test_challenge):
+        """Join a circle challenge."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/challenges/{test_challenge.id}/join/"
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_submit_progress(self, circle_pro_client, test_circle, test_challenge):
+        """Submit progress for a challenge."""
+        response = circle_pro_client.post(
+            f"/api/circles/circles/{test_circle.id}/challenges/{test_challenge.id}/progress/",
+            {"value": 5},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_challenge_leaderboard(self, circle_pro_client, test_circle, test_challenge):
+        """Get challenge leaderboard."""
+        response = circle_pro_client.get(
+            f"/api/circles/circles/{test_circle.id}/challenges/{test_challenge.id}/leaderboard/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Join by Invite Code
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestJoinByInviteCode:
+    """Tests for joining circle by invite code."""
+
+    def test_join_invalid_code(self, circle_pro_client):
+        """Join with invalid invite code returns 404."""
+        response = circle_pro_client.post(
+            "/api/circles/circles/join/INVALIDCODE/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND

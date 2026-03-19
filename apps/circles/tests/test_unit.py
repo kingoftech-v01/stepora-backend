@@ -265,3 +265,22 @@ class TestPostReactionModel:
             PostReaction.objects.create(
                 post=test_post, user=circle_user, reaction_type="heart"
             )
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Circles
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestCircleAPI:
+    """Tests for Circle API endpoints."""
+
+    def test_list_circles(self, circle_client):
+        resp = circle_client.get(
+            "/api/circles/circles/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)

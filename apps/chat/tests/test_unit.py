@@ -324,3 +324,32 @@ class TestChatMessageCreateSerializer:
         serializer = ChatMessageCreateSerializer(data={"content": "  Hi there  "})
         assert serializer.is_valid()
         assert serializer.validated_data["content"] == "Hi there"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  API ENDPOINT TESTS — Chat
+# ══════════════════════════════════════════════════════════════════════
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestChatAPI:
+    """Tests for Chat API endpoints."""
+
+    def test_list_conversations(self, chat_client):
+        resp = chat_client.get(
+            "/api/chat/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code in (200, 403)
+
+    def test_list_conversations_unauthenticated(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        resp = client.get(
+            "/api/chat/",
+            HTTP_ORIGIN="https://stepora.app",
+        )
+        assert resp.status_code == 401
