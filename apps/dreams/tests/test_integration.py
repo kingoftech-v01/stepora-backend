@@ -836,7 +836,7 @@ class TestCheckIns:
         """Submit check-in responses (requires premium for throttle)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -866,7 +866,7 @@ class TestCheckIns:
         """Cannot respond to a check-in that is not awaiting user input."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -930,7 +930,7 @@ class TestGeneratePlan:
         # Make dream_user premium for CanUseAI permission
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1227,7 +1227,7 @@ class TestDreamAIActions:
         """Analyze a dream with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1259,7 +1259,7 @@ class TestDreamAIActions:
         """Predict obstacles with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1287,7 +1287,7 @@ class TestDreamAIActions:
         """Get conversation starters with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1313,7 +1313,7 @@ class TestDreamAIActions:
         """Find similar dreams with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1338,7 +1338,7 @@ class TestDreamAIActions:
         """Smart cross-dream analysis with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1365,7 +1365,7 @@ class TestDreamAIActions:
         from apps.subscriptions.models import Subscription, SubscriptionPlan
         from rest_framework.test import APIClient
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1521,7 +1521,7 @@ class TestCalibrationAndPlan:
         """Start calibration for a dream with AI (mocked)."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1717,7 +1717,7 @@ class TestAutoCategorize:
         """Auto-categorize returns AI-suggested category and tags."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1740,7 +1740,7 @@ class TestAutoCategorize:
         """Auto-categorize without title returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1762,7 +1762,7 @@ class TestAutoCategorize:
         """Auto-categorize with too-short description returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1785,7 +1785,7 @@ class TestAutoCategorize:
         from apps.subscriptions.models import Subscription, SubscriptionPlan
         from core.exceptions import OpenAIError
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1828,7 +1828,7 @@ class TestCalibrationExtended:
         """Start calibration when already completed returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -1855,7 +1855,7 @@ class TestCalibrationExtended:
         """Answer calibration with no answers returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2240,7 +2240,7 @@ class TestTriggerCheckIn:
         """Trigger a manual check-in."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2263,7 +2263,7 @@ class TestTriggerCheckIn:
         """Trigger check-in without a plan returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2285,7 +2285,7 @@ class TestTriggerCheckIn:
         """Trigger check-in when one is already active returns 202."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2346,7 +2346,7 @@ class TestDreamAIActionsExtended:
         """Generate a 2-minute start action."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2367,7 +2367,7 @@ class TestDreamAIActionsExtended:
         """Two-minute start already generated returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2390,7 +2390,7 @@ class TestDreamAIActionsExtended:
         from apps.subscriptions.models import Subscription, SubscriptionPlan
         from core.exceptions import OpenAIError
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2412,7 +2412,7 @@ class TestDreamAIActionsExtended:
         from apps.subscriptions.models import Subscription, SubscriptionPlan
         from core.exceptions import OpenAIError
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2591,7 +2591,7 @@ class TestCheckInRespondMissing:
         """Respond missing required questions returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2649,7 +2649,7 @@ class TestGoalRefine:
         """Refine a goal with AI."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2677,7 +2677,7 @@ class TestGoalRefine:
         """Refine goal without goal_id returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={
@@ -2698,7 +2698,7 @@ class TestGoalRefine:
         """Refine goal with empty message returns 400."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-        plan = SubscriptionPlan.objects.get(slug="premium")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
             user=dream_user,
             defaults={

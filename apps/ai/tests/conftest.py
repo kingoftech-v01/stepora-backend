@@ -23,7 +23,7 @@ def ai_user(db):
         display_name="AI Test User",
         timezone="Europe/Paris",
     )
-    plan = SubscriptionPlan.objects.get(slug="premium")
+    plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
     Subscription.objects.update_or_create(
         user=user,
         defaults={

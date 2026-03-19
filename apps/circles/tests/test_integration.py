@@ -86,7 +86,7 @@ class TestJoinCircle:
         user2 = User.objects.create_user(
             email="joiner@example.com", password="testpass123"
         )
-        plan = SubscriptionPlan.objects.get(slug="pro")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
         Subscription.objects.update_or_create(
             user=user2,
             defaults={
@@ -225,7 +225,7 @@ class TestLeaveCircle:
         user = User.objects.create_user(
             email="leaver@example.com", password="testpass123"
         )
-        plan = SubscriptionPlan.objects.get(slug="pro")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
         Subscription.objects.update_or_create(
             user=user,
             defaults={
@@ -258,7 +258,7 @@ class TestLeaveCircle:
         user = User.objects.create_user(
             email="notmember@example.com", password="testpass123"
         )
-        plan = SubscriptionPlan.objects.get(slug="pro")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
         Subscription.objects.update_or_create(
             user=user,
             defaults={
@@ -285,7 +285,7 @@ class TestLeaveCircle:
         user2 = User.objects.create_user(
             email="leaver_member@example.com", password="testpass123"
         )
-        plan = SubscriptionPlan.objects.get(slug="pro")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
         Subscription.objects.update_or_create(
             user=user2,
             defaults={
@@ -478,7 +478,7 @@ class TestCircleListFilters:
         test_circle.save()
 
         # Need pro plan to access circles
-        plan = SubscriptionPlan.objects.get(slug="pro")
+        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
         Subscription.objects.update_or_create(
             user=circle_user,
             defaults={

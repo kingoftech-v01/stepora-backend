@@ -49,7 +49,7 @@ def premium_league_user(league_user):
     """Make league_user premium."""
     from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-    plan = SubscriptionPlan.objects.get(slug="premium")
+    plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
     Subscription.objects.update_or_create(
         user=league_user,
         defaults={
@@ -75,7 +75,7 @@ def premium_league_user2(league_user2):
     """Make league_user2 premium."""
     from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-    plan = SubscriptionPlan.objects.get(slug="premium")
+    plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
     Subscription.objects.update_or_create(
         user=league_user2,
         defaults={
