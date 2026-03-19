@@ -528,3 +528,171 @@ class TestHabits:
             format="json",
         )
         assert response.status_code == status.HTTP_201_CREATED
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar Preferences
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarPreferences:
+    """Tests for calendar preferences endpoint."""
+
+    def test_get_preferences(self, cal_client):
+        """Get calendar preferences."""
+        response = cal_client.get("/api/calendar/preferences/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_set_preferences(self, cal_client):
+        """Set calendar preferences."""
+        response = cal_client.post(
+            "/api/calendar/preferences/",
+            {
+                "default_event_duration": 30,
+                "work_start_hour": 9,
+                "work_end_hour": 17,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar Timezone
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarTimezone:
+    """Tests for calendar timezone endpoint."""
+
+    def test_get_timezone(self, cal_client):
+        """Get user timezone."""
+        response = cal_client.get("/api/calendar/timezone/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_set_timezone(self, cal_client):
+        """Set user timezone."""
+        response = cal_client.put(
+            "/api/calendar/timezone/",
+            {"timezone": "America/New_York"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Calendar Tasks View
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCalendarTasks:
+    """Tests for calendar task views."""
+
+    def test_upcoming_alerts(self, cal_client):
+        """Get upcoming alerts."""
+        response = cal_client.get("/api/calendar/upcoming-alerts/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_overdue_tasks(self, cal_client):
+        """Get overdue tasks."""
+        response = cal_client.get("/api/calendar/overdue/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Event Search
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestEventSearch:
+    """Tests for event search endpoint."""
+
+    def test_search_events(self, cal_client, cal_event):
+        """Search events by query."""
+        response = cal_client.get("/api/calendar/events/search/?q=Meeting")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_search_events_empty(self, cal_client):
+        """Search with no results."""
+        response = cal_client.get("/api/calendar/events/search/?q=nonexistent")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Event Categories
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestEventCategories:
+    """Tests for event categories endpoint."""
+
+    def test_list_categories(self, cal_client):
+        """List event categories."""
+        response = cal_client.get("/api/calendar/events/categories/")
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Event Snooze & Dismiss
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestEventSnoozeDismiss:
+    """Tests for snooze and dismiss event endpoints."""
+
+    def test_snooze_event(self, cal_client, cal_event):
+        """Snooze an event."""
+        response = cal_client.post(
+            f"/api/calendar/events/{cal_event.id}/snooze/",
+            {"snooze_minutes": 15},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_dismiss_event(self, cal_client, cal_event):
+        """Dismiss an event alert."""
+        response = cal_client.post(
+            f"/api/calendar/events/{cal_event.id}/dismiss/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Time Block Templates
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestTimeBlockTemplates:
+    """Tests for time block template endpoints."""
+
+    def test_list_templates(self, cal_client):
+        """List time block templates."""
+        response = cal_client.get("/api/calendar/timeblock-templates/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_presets(self, cal_client):
+        """Get time block presets."""
+        response = cal_client.get("/api/calendar/timeblock-templates/presets/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_save_current_blocks(self, cal_client, time_block):
+        """Save current blocks as template."""
+        response = cal_client.post(
+            "/api/calendar/timeblock-templates/save-current/",
+            {"name": "My Schedule"},
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        )

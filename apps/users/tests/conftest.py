@@ -46,3 +46,36 @@ def users_client2(users_user2):
     client = APIClient()
     client.force_authenticate(user=users_user2)
     return client
+
+
+@pytest.fixture
+def premium_users_user(users_user):
+    """Make users_user have a premium subscription with AI access."""
+    from decimal import Decimal
+
+    from apps.subscriptions.models import Subscription, SubscriptionPlan
+
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        slug="premium",
+        defaults={
+            "name": "Premium",
+            "price_monthly": Decimal("19.99"),
+            "has_ai": True,
+            "has_buddy": True,
+            "has_circles": True,
+            "is_active": True,
+        },
+    )
+    Subscription.objects.update_or_create(
+        user=users_user,
+        defaults={"plan": plan, "status": "active"},
+    )
+    return users_user
+
+
+@pytest.fixture
+def premium_users_client(premium_users_user):
+    """Authenticated API client for a premium user."""
+    client = APIClient()
+    client.force_authenticate(user=premium_users_user)
+    return client

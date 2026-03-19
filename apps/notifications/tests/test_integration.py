@@ -243,3 +243,121 @@ class TestUnreadCount:
         response = notif_client.get("/api/notifications/unread_count/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["unread_count"] == 0
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Mark Opened
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestMarkOpened:
+    """Integration tests for marking notifications as opened."""
+
+    def test_mark_opened(self, notif_client, sample_notification):
+        """User can mark a notification as opened."""
+        response = notif_client.post(
+            f"/api/notifications/{sample_notification.id}/opened/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_mark_opened_nonexistent(self, notif_client):
+        """Marking a nonexistent notification as opened returns 404."""
+        import uuid
+
+        response = notif_client.post(f"/api/notifications/{uuid.uuid4()}/opened/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Grouped Notifications
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestGroupedNotifications:
+    """Integration tests for grouped notifications endpoint."""
+
+    def test_grouped(self, notif_client, multiple_notifications):
+        """Get grouped notifications by type."""
+        response = notif_client.get("/api/notifications/grouped/")
+        assert response.status_code == status.HTTP_200_OK
+        assert "groups" in response.data
+
+    def test_grouped_empty(self, notif_client):
+        """Grouped returns empty list when no notifications."""
+        response = notif_client.get("/api/notifications/grouped/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["groups"] == []
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Web Push Subscriptions
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestWebPushSubscriptions:
+    """Integration tests for web push subscription endpoints."""
+
+    def test_list_push_subscriptions(self, notif_client):
+        """List push subscriptions."""
+        response = notif_client.get("/api/notifications/push-subscriptions/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_list_push_subscriptions_unauthenticated(self):
+        """Unauthenticated returns 401."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.get("/api/notifications/push-subscriptions/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_push_subscription(self, notif_client):
+        """Create a push subscription."""
+        response = notif_client.post(
+            "/api/notifications/push-subscriptions/",
+            {
+                "endpoint": "https://fcm.googleapis.com/fcm/send/test",
+                "keys": {
+                    "p256dh": "testkey",
+                    "auth": "testauthkey",
+                },
+            },
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_201_CREATED,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  User Devices
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestUserDevices:
+    """Integration tests for user device registration endpoints."""
+
+    def test_list_devices(self, notif_client):
+        """List user devices."""
+        response = notif_client.get("/api/notifications/devices/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_register_device(self, notif_client):
+        """Register a device."""
+        response = notif_client.post(
+            "/api/notifications/devices/",
+            {
+                "device_type": "android",
+                "device_token": "test_fcm_token_12345",
+            },
+            format="json",
+        )
+        assert response.status_code in (
+            status.HTTP_201_CREATED,
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        )

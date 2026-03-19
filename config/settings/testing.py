@@ -69,6 +69,9 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "ai_plan": "10000/minute",
     "ai_calibration": "10000/minute",
     "ai_voice": "10000/minute",
+    "ai_motivation": "10000/minute",
+    "ai_checkin": "10000/minute",
+    "ai_notification_timing": "10000/minute",
     "subscription": "10000/minute",
     "store_purchase": "10000/minute",
     "auth": "10000/minute",
@@ -80,4 +83,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "api_read": "10000/minute",
     "api_write": "10000/minute",
     "upload": "10000/minute",
+    "referral": "10000/minute",
+    "two_factor": "10000/minute",
+    "email_verification": "10000/minute",
 }

@@ -223,3 +223,336 @@ class TestCheckoutFlow:
             format="json",
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ── Portal Session ────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestPortalSession:
+    """Tests for the Stripe portal session endpoint."""
+
+    @patch("apps.subscriptions.views.StripeService.create_portal_session")
+    def test_portal_success(self, mock_portal, sub_client, free_subscription):
+        """Portal session returns URL on success."""
+        mock_session = MagicMock()
+        mock_session.url = "https://billing.stripe.com/session/test"
+        mock_portal.return_value = mock_session
+
+        response = sub_client.post(
+            "/api/subscriptions/subscription/portal/",
+            {"return_url": "https://example.com"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "portal_url" in response.data
+
+    @patch(
+        "apps.subscriptions.views.StripeService.create_portal_session",
+        side_effect=ValueError("No Stripe customer"),
+    )
+    def test_portal_no_customer(self, mock_portal, sub_client, free_subscription):
+        """Portal returns 400 when no Stripe customer exists."""
+        response = sub_client.post(
+            "/api/subscriptions/subscription/portal/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_portal_unauthenticated(self, anon_client):
+        """Portal returns 401 for unauthenticated users."""
+        response = anon_client.post("/api/subscriptions/subscription/portal/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ── Reactivate ────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestReactivateSubscription:
+    """Tests for subscription reactivation."""
+
+    @patch("apps.subscriptions.views.StripeService.reactivate_subscription")
+    def test_reactivate_success(
+        self, mock_reactivate, sub_client, premium_subscription
+    ):
+        """Reactivate a pending cancellation."""
+        mock_reactivate.return_value = premium_subscription
+        response = sub_client.post("/api/subscriptions/subscription/reactivate/")
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch("apps.subscriptions.views.StripeService.reactivate_subscription")
+    def test_reactivate_no_pending(self, mock_reactivate, sub_client, free_subscription):
+        """Reactivate returns 404 when no pending cancellation."""
+        mock_reactivate.return_value = None
+        response = sub_client.post("/api/subscriptions/subscription/reactivate/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ── Sync ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestSyncSubscription:
+    """Tests for subscription sync."""
+
+    @patch("apps.subscriptions.views.StripeService.sync_subscription_status")
+    def test_sync_success(self, mock_sync, sub_client, premium_subscription):
+        """Sync returns updated subscription."""
+        mock_sync.return_value = premium_subscription
+        response = sub_client.post("/api/subscriptions/subscription/sync/")
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch("apps.subscriptions.views.StripeService.sync_subscription_status")
+    def test_sync_no_subscription(self, mock_sync, sub_client, free_subscription):
+        """Sync returns 404 when no subscription."""
+        mock_sync.return_value = None
+        response = sub_client.post("/api/subscriptions/subscription/sync/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ── Invoices ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestInvoices:
+    """Tests for invoice listing."""
+
+    @patch("apps.subscriptions.views.StripeService.list_invoices")
+    def test_list_invoices(self, mock_invoices, sub_client, free_subscription):
+        """List invoices returns results."""
+        mock_invoices.return_value = []
+        response = sub_client.get("/api/subscriptions/subscription/invoices/")
+        assert response.status_code == status.HTTP_200_OK
+        assert "results" in response.data
+
+    def test_list_invoices_unauthenticated(self, anon_client):
+        """Invoices returns 401 for unauthenticated."""
+        response = anon_client.get("/api/subscriptions/subscription/invoices/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ── Cancel Pending Change ─────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCancelPendingChange:
+    """Tests for cancelling a pending plan change."""
+
+    @patch("apps.subscriptions.views.StripeService.cancel_pending_change")
+    def test_cancel_pending_success(
+        self, mock_cancel, sub_client, premium_subscription
+    ):
+        """Cancel pending change returns subscription."""
+        mock_cancel.return_value = premium_subscription
+        response = sub_client.post(
+            "/api/subscriptions/subscription/cancel-pending-change/"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch("apps.subscriptions.views.StripeService.cancel_pending_change")
+    def test_cancel_pending_none(self, mock_cancel, sub_client, free_subscription):
+        """Cancel pending returns 404 when no pending change."""
+        mock_cancel.return_value = None
+        response = sub_client.post(
+            "/api/subscriptions/subscription/cancel-pending-change/"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ── Apply Coupon ──────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestApplyCoupon:
+    """Tests for applying coupon codes."""
+
+    def test_apply_coupon_no_code(self, sub_client, free_subscription):
+        """Apply coupon without code returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/subscription/current/apply-coupon/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("apps.subscriptions.views.StripeService.apply_coupon")
+    def test_apply_coupon_success(
+        self, mock_apply, sub_client, premium_subscription
+    ):
+        """Apply valid coupon succeeds."""
+        mock_apply.return_value = premium_subscription
+        response = sub_client.post(
+            "/api/subscriptions/subscription/current/apply-coupon/",
+            {"coupon_code": "SAVE20"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "subscription" in response.data
+
+    @patch(
+        "apps.subscriptions.views.StripeService.apply_coupon",
+        side_effect=ValueError("Invalid coupon"),
+    )
+    def test_apply_coupon_invalid(
+        self, mock_apply, sub_client, premium_subscription
+    ):
+        """Apply invalid coupon returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/subscription/current/apply-coupon/",
+            {"coupon_code": "INVALID"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+# ── Referral ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestReferral:
+    """Tests for referral endpoints."""
+
+    def test_get_referral_info(self, sub_client, sub_user):
+        """Get referral code and stats."""
+        response = sub_client.get("/api/subscriptions/referral/")
+        assert response.status_code == status.HTTP_200_OK
+        assert "referral_code" in response.data
+
+    def test_post_referral_no_code(self, sub_client):
+        """Post referral without code returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/referral/",
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_post_referral_own_code(self, sub_client, sub_user):
+        """Cannot use own referral code."""
+        from apps.subscriptions.models import Referral
+
+        code = Referral.get_referral_code(sub_user)
+        response = sub_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_post_referral_invalid_code(self, sub_client):
+        """Invalid referral code returns 400."""
+        response = sub_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": "INVALID-CODE-XXX"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_post_referral_success(self, sub_client, sub_user, sub_user2):
+        """Apply valid referral code from another user."""
+        from apps.subscriptions.models import Referral
+
+        code = Referral.get_referral_code(sub_user2)
+        response = sub_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_post_referral_already_used(self, sub_client, sub_user, sub_user2):
+        """Cannot use referral code twice."""
+        from apps.subscriptions.models import Referral
+
+        code = Referral.get_referral_code(sub_user2)
+        Referral.objects.create(
+            referrer=sub_user2, referred=sub_user, referral_code=code
+        )
+        response = sub_client.post(
+            "/api/subscriptions/referral/",
+            {"referral_code": code},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_referral_unauthenticated(self, anon_client):
+        """Referral endpoints return 401 for unauthenticated users."""
+        response = anon_client.get("/api/subscriptions/referral/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ── Promotions ────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestPromotions:
+    """Tests for promotion endpoints."""
+
+    @patch("apps.subscriptions.views.PromotionService.get_active_promotions")
+    def test_active_promotions(self, mock_promos, sub_client, free_subscription):
+        """Get active promotions."""
+        mock_promos.return_value = []
+        response = sub_client.get("/api/subscriptions/promotions/active/")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_active_promotions_unauthenticated(self, anon_client):
+        """Promotions return 401 for unauthenticated."""
+        response = anon_client.get("/api/subscriptions/promotions/active/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ── Stripe Webhook ────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestStripeWebhook:
+    """Tests for Stripe webhook endpoint."""
+
+    def test_webhook_no_signature(self):
+        """Webhook without signature returns 400."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/subscriptions/webhook/stripe/",
+            b"{}",
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    @patch("apps.subscriptions.views.StripeService.handle_webhook_event")
+    def test_webhook_success(self, mock_handle):
+        """Webhook processes valid event."""
+        from rest_framework.test import APIClient
+
+        mock_handle.return_value = {
+            "event_type": "customer.subscription.updated",
+            "event_id": "evt_test_123",
+        }
+        client = APIClient()
+        response = client.post(
+            "/api/subscriptions/webhook/stripe/",
+            b'{"type": "customer.subscription.updated"}',
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="test_sig",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch(
+        "apps.subscriptions.views.StripeService.handle_webhook_event",
+        side_effect=ValueError("Invalid signature"),
+    )
+    def test_webhook_invalid_signature(self, mock_handle):
+        """Webhook with invalid signature returns 400."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        response = client.post(
+            "/api/subscriptions/webhook/stripe/",
+            b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="bad_sig",
+        )
+        assert response.status_code == 400
