@@ -23,7 +23,6 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone as django_timezone
 
-from apps.users.models import User
 
 
 class League(models.Model):
@@ -435,7 +434,7 @@ class LeagueStanding(models.Model):
         help_text="Unique identifier for this standing record.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="league_standings",
         help_text="The user this standing belongs to.",
@@ -539,7 +538,7 @@ class SeasonReward(models.Model):
         help_text="The season this reward is from.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="season_rewards",
         help_text="The user who earned this reward.",
@@ -726,7 +725,7 @@ class RankSnapshot(models.Model):
         editable=False,
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="rank_snapshots",
     )

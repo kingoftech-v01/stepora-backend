@@ -14,266 +14,20 @@ from django.db.models import Q
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
-from apps.users.models import User
+from django.conf import settings
 
 
-class BlockedUser(models.Model):
-    """
-    Represents a user blocking another user.
 
-    Blocked users are excluded from search results, friend requests,
-    follows, buddy matching, and circle interactions.
-    """
-
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    blocker = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="blocked_users",
-        help_text="The user who performed the block.",
-    )
-    blocked = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="blocked_by",
-        help_text="The user who was blocked.",
-    )
-    reason = EncryptedTextField(
-        blank=True,
-        default="",
-        help_text="Optional reason for blocking (encrypted at rest).",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "blocked_users"
-        ordering = ["-created_at"]
-        verbose_name = "Blocked User"
-        verbose_name_plural = "Blocked Users"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["blocker", "blocked"], name="unique_blocker_blocked"
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["blocker"], name="idx_blocked_blocker"),
-            models.Index(fields=["blocked"], name="idx_blocked_blocked"),
-        ]
-
-    def __str__(self):
-        return (
-            f"{self.blocker.display_name or self.blocker.email} blocked "
-            f"{self.blocked.display_name or self.blocked.email}"
-        )
-
-    @staticmethod
-    def is_blocked(user_a, user_b):
-        """Check if either user has blocked the other."""
-        return BlockedUser.objects.filter(
-            Q(blocker=user_a, blocked=user_b) | Q(blocker=user_b, blocked=user_a)
-        ).exists()
-
-
-class ReportedUser(models.Model):
-    """
-    Represents a user report for moderation.
-    """
-
-    CATEGORY_CHOICES = [
-        ("spam", "Spam"),
-        ("harassment", "Harassment"),
-        ("inappropriate", "Inappropriate Content"),
-        ("other", "Other"),
-    ]
-
-    STATUS_CHOICES = [
-        ("pending", "Pending Review"),
-        ("reviewed", "Reviewed"),
-        ("dismissed", "Dismissed"),
-    ]
-
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    reporter = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="reports_made",
-        help_text="The user who filed the report.",
-    )
-    reported = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="reports_received",
-        help_text="The user being reported.",
-    )
-    reason = EncryptedTextField(
-        help_text="Description of why the user is being reported (encrypted at rest)."
-    )
-    category = models.CharField(
-        max_length=20,
-        choices=CATEGORY_CHOICES,
-        default="other",
-        help_text="Category of the report.",
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="pending",
-        db_index=True,
-    )
-    admin_notes = models.TextField(
-        blank=True, default="", help_text="Internal notes from admin review."
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "reported_users"
-        ordering = ["-created_at"]
-        verbose_name = "Reported User"
-        verbose_name_plural = "Reported Users"
-        indexes = [
-            models.Index(fields=["status"], name="idx_report_status"),
-            models.Index(fields=["-created_at"], name="idx_report_created"),
-        ]
-
-    def __str__(self):
-        return (
-            f"Report: {self.reporter.display_name or self.reporter.email} -> "
-            f"{self.reported.display_name or self.reported.email} ({self.category})"
-        )
-
-
-class Friendship(models.Model):
-    """
-    Represents a friendship request/relationship between two users.
-
-    Friendships are bidirectional and require mutual acceptance.
-    user1 is always the sender of the request and user2 is the receiver.
-    Status transitions: pending -> accepted/rejected.
-    """
-
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("accepted", "Accepted"),
-        ("rejected", "Rejected"),
-    ]
-
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text="Unique identifier for this friendship.",
-    )
-    user1 = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="friendships_sent",
-        help_text="The user who sent the friend request.",
-    )
-    user2 = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="friendships_received",
-        help_text="The user who received the friend request.",
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="pending",
-        db_index=True,
-        help_text="Current status of the friendship.",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "friendships"
-        ordering = ["-created_at"]
-        verbose_name = "Friendship"
-        verbose_name_plural = "Friendships"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user1", "user2"], name="unique_friendship_pair"
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["user1", "status"], name="idx_friendship_user1_status"
-            ),
-            models.Index(
-                fields=["user2", "status"], name="idx_friendship_user2_status"
-            ),
-            models.Index(fields=["status"], name="idx_friendship_status"),
-            models.Index(fields=["-created_at"], name="idx_friendship_created"),
-        ]
-
-    def __str__(self):
-        return (
-            f"{self.user1.display_name or self.user1.email} -> "
-            f"{self.user2.display_name or self.user2.email} ({self.status})"
-        )
-
-
-class UserFollow(models.Model):
-    """
-    Represents a unidirectional follow relationship.
-
-    Unlike friendships, follows do not require acceptance. A user can
-    follow anyone to see their public activity in the feed.
-    """
-
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text="Unique identifier for this follow.",
-    )
-    follower = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="following_set",
-        help_text="The user who is following.",
-    )
-    following = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="followers_set",
-        help_text="The user being followed.",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "user_follows"
-        ordering = ["-created_at"]
-        verbose_name = "User Follow"
-        verbose_name_plural = "User Follows"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["follower", "following"], name="unique_follower_following"
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["follower"], name="idx_follow_follower"),
-            models.Index(fields=["following"], name="idx_follow_following"),
-        ]
-
-    def __str__(self):
-        return (
-            f"{self.follower.display_name or self.follower.email} follows "
-            f"{self.following.display_name or self.following.email}"
-        )
+# ── Backward-compatible imports ──
+# Models moved to apps.friends.models. Re-exported here so that
+# existing ``from apps.social.models import Friendship`` etc.
+# continue to work throughout the codebase.
+from apps.friends.models import (  # noqa: F401, E402
+    BlockedUser,
+    Friendship,
+    ReportedUser,
+    UserFollow,
+)
 
 
 class ActivityFeedItem(models.Model):
@@ -303,7 +57,7 @@ class ActivityFeedItem(models.Model):
         help_text="Unique identifier for this activity item.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="activity_items",
         help_text="The user who performed the activity.",
@@ -320,7 +74,7 @@ class ActivityFeedItem(models.Model):
         help_text="Structured content data for the activity (e.g., task title, dream name).",
     )
     related_user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -348,6 +102,7 @@ class ActivityFeedItem(models.Model):
         return f"{self.user.display_name or self.user.email}: {self.activity_type}"
 
 
+
 class ActivityLike(models.Model):
     """
     Represents a like on an activity feed item.
@@ -358,7 +113,7 @@ class ActivityLike(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="activity_likes",
         help_text="The user who liked the activity.",
@@ -391,6 +146,7 @@ class ActivityLike(models.Model):
         return f"{self.user.display_name or self.user.email} liked {self.activity_id}"
 
 
+
 class ActivityComment(models.Model):
     """
     Represents a comment on an activity feed item.
@@ -401,7 +157,7 @@ class ActivityComment(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="activity_comments",
         help_text="The user who wrote the comment.",
@@ -432,6 +188,7 @@ class ActivityComment(models.Model):
         return f"{self.user.display_name or self.user.email} commented on {self.activity_id}"
 
 
+
 class RecentSearch(models.Model):
     """Stores recent search queries for a user."""
 
@@ -443,7 +200,7 @@ class RecentSearch(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="recent_searches",
     )
@@ -465,6 +222,7 @@ class RecentSearch(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.query}"
+
 
 
 class DreamPost(models.Model):
@@ -498,7 +256,7 @@ class DreamPost(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="dream_posts",
     )
@@ -547,7 +305,7 @@ class DreamPost(models.Model):
         help_text="Type of post (regular, achievement, milestone, event).",
     )
     linked_goal = models.ForeignKey(
-        "dreams.Goal",
+        "plans.Goal",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -555,7 +313,7 @@ class DreamPost(models.Model):
         help_text="Goal that was completed (for achievement posts).",
     )
     linked_milestone = models.ForeignKey(
-        "dreams.DreamMilestone",
+        "plans.DreamMilestone",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -563,7 +321,7 @@ class DreamPost(models.Model):
         help_text="Milestone that was reached (for milestone posts).",
     )
     linked_task = models.ForeignKey(
-        "dreams.Task",
+        "plans.Task",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -593,7 +351,7 @@ class DreamPost(models.Model):
 
     # Bookmarks
     saved_by = models.ManyToManyField(
-        User,
+        settings.AUTH_USER_MODEL,
         related_name="saved_posts",
         blank=True,
         help_text="Users who bookmarked this post.",
@@ -619,6 +377,7 @@ class DreamPost(models.Model):
         return f"{self.user.display_name or self.user.email}: {preview}"
 
 
+
 class SavedPost(models.Model):
     """
     Represents a user bookmarking/saving a dream post.
@@ -629,7 +388,7 @@ class SavedPost(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="saved_dream_posts",
         help_text="The user who saved the post.",
@@ -658,6 +417,7 @@ class SavedPost(models.Model):
         return f"{self.user.display_name or self.user.email} saved post {self.post_id}"
 
 
+
 class DreamPostLike(models.Model):
     """Like on a dream post. One per user per post."""
 
@@ -668,7 +428,7 @@ class DreamPostLike(models.Model):
         related_name="likes",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="dream_post_likes",
     )
@@ -688,6 +448,7 @@ class DreamPostLike(models.Model):
         return f"{self.user.display_name or self.user.email} liked post {self.post_id}"
 
 
+
 class DreamPostComment(models.Model):
     """Comment on a dream post, with optional threaded replies."""
 
@@ -698,7 +459,7 @@ class DreamPostComment(models.Model):
         related_name="comments",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="dream_post_comments",
     )
@@ -730,6 +491,7 @@ class DreamPostComment(models.Model):
         return f"{self.user.display_name or self.user.email}: {preview}"
 
 
+
 class DreamEncouragement(models.Model):
     """
     Encouragement on a dream post — distinct from likes (more intentional).
@@ -750,7 +512,7 @@ class DreamEncouragement(models.Model):
         related_name="encouragements",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="given_encouragements",
     )
@@ -778,6 +540,7 @@ class DreamEncouragement(models.Model):
         return f"{self.user.display_name or self.user.email} encouraged: {self.encouragement_type}"
 
 
+
 class PostReaction(models.Model):
     """
     Emoji reaction on a dream post.
@@ -798,7 +561,7 @@ class PostReaction(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="dream_post_reactions",
         help_text="The user who reacted.",
@@ -837,6 +600,7 @@ class PostReaction(models.Model):
         return f"{self.user.display_name or self.user.email} reacted {self.reaction_type} on post {self.post_id}"
 
 
+
 class SocialEvent(models.Model):
     """
     A social event created by a user for community participation.
@@ -861,7 +625,7 @@ class SocialEvent(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     creator = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="created_events",
     )
@@ -962,6 +726,7 @@ class SocialEvent(models.Model):
         return f"{self.title} ({self.event_type}) by {self.creator.display_name or self.creator.email}"
 
 
+
 class SocialEventRegistration(models.Model):
     """
     Tracks user registrations for social events.
@@ -982,7 +747,7 @@ class SocialEventRegistration(models.Model):
         related_name="registrations",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="event_registrations",
     )
@@ -1019,6 +784,7 @@ class SocialEventRegistration(models.Model):
 # ═══════════════════════════════════════════════════════════════════
 
 
+
 class Story(models.Model):
     """
     A story is a short-lived media post (image or video) that expires after 24 hours.
@@ -1032,7 +798,7 @@ class Story(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="stories",
     )
@@ -1083,6 +849,7 @@ class Story(models.Model):
         return f"Story by {self.user.email} ({self.media_type}) - {'active' if self.is_active else 'expired'}"
 
 
+
 class StoryView(models.Model):
     """Tracks which users have viewed a story."""
 
@@ -1093,7 +860,7 @@ class StoryView(models.Model):
         related_name="views",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="story_views",
     )
@@ -1109,3 +876,4 @@ class StoryView(models.Model):
 
     def __str__(self):
         return f"{self.user.email} viewed story {self.story_id}"
+

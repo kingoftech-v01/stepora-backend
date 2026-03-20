@@ -24,6 +24,10 @@ api_v1_patterns = [
     # API endpoints
     path("users/", include("apps.users.urls")),
     path("dreams/", include("apps.dreams.urls")),
+    path("plans/", include("apps.plans.urls")),
+    path("gamification/", include("apps.gamification.urls")),
+    path("friends/", include("apps.friends.urls")),
+    path("referrals/", include("apps.referrals.urls")),
     path("chat/", include("apps.chat.urls")),
     path("ai/", include("apps.ai.urls")),
     path("calendar/", include("apps.calendar.urls")),

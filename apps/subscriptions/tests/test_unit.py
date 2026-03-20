@@ -13,7 +13,6 @@ from apps.subscriptions.models import (
     Promotion,
     PromotionPlanDiscount,
     PromotionRedemption,
-    Referral,
     StripeCustomer,
     StripeWebhookEvent,
     Subscription,
@@ -305,64 +304,7 @@ class TestPromotionPlanDiscountModel:
         assert "%" in s
 
 
-# ── Referral model ────────────────────────────────────────────────────
-
-
-class TestReferralModel:
-    """Tests for the Referral model."""
-
-    def test_get_referral_code(self, sub_user):
-        """get_referral_code generates a deterministic code."""
-        code = Referral.get_referral_code(sub_user)
-        assert code.startswith("DP-REF-")
-        assert len(code) == 15
-        # Same user should produce the same code
-        assert Referral.get_referral_code(sub_user) == code
-
-    def test_resolve_referrer_valid(self, sub_user):
-        """resolve_referrer finds the user from a valid code."""
-        code = Referral.get_referral_code(sub_user)
-        resolved = Referral.resolve_referrer(code)
-        assert resolved is not None
-        assert resolved.id == sub_user.id
-
-    def test_resolve_referrer_invalid_code(self):
-        """resolve_referrer returns None for invalid codes."""
-        assert Referral.resolve_referrer("INVALID") is None
-        assert Referral.resolve_referrer("") is None
-        assert Referral.resolve_referrer(None) is None
-        assert Referral.resolve_referrer("DP-REF-XXXXXXXX") is None  # invalid hex
-
-    def test_get_referrer_stats(self, sub_user, sub_user2):
-        """get_referrer_stats returns correct counts."""
-        code = Referral.get_referral_code(sub_user)
-        Referral.objects.create(
-            referrer=sub_user,
-            referred=sub_user2,
-            referral_code=code,
-            referred_has_paid=False,
-        )
-        stats = Referral.get_referrer_stats(sub_user)
-        assert stats["total_referrals"] == 1
-        assert stats["paid_referrals"] == 0
-        assert stats["free_months_earned"] == 0
-
-    def test_referrer_stats_with_paid(self, db, sub_user):
-        """Stats correctly count paid referrals."""
-        for i in range(3):
-            referred = User.objects.create_user(
-                email=f"referred{i}@example.com",
-                password="testpass123",
-            )
-            Referral.objects.create(
-                referrer=sub_user,
-                referred=referred,
-                referral_code=Referral.get_referral_code(sub_user),
-                referred_has_paid=True,
-            )
-        stats = Referral.get_referrer_stats(sub_user)
-        assert stats["paid_referrals"] == 3
-        assert stats["free_months_earned"] == 1
+# ── Referral model (moved to apps.referrals — see apps/referrals/tests/) ─
 
 
 # ── StripeWebhookEvent model ──────────────────────────────────────────
@@ -881,7 +823,7 @@ class TestSubscriptionAPI:
 
     def test_referral(self, sub_client):
         resp = sub_client.get(
-            "/api/subscriptions/referral/",
+            "/api/referrals/code/",
             HTTP_ORIGIN="https://stepora.app",
         )
         assert resp.status_code in (200, 403, 404)

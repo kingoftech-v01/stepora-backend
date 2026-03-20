@@ -13,7 +13,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from encrypted_model_fields.fields import EncryptedTextField
 
-from apps.users.models import User
+from django.conf import settings
 
 
 class StoreCategory(models.Model):
@@ -226,7 +226,7 @@ class UserInventory(models.Model):
         help_text="Unique identifier for this inventory entry.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="inventory",
         help_text="User who owns this item.",
@@ -283,7 +283,7 @@ class Wishlist(models.Model):
         editable=False,
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="wishlist",
     )
@@ -316,13 +316,13 @@ class Gift(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sender = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="gifts_sent",
         help_text="User who sent the gift.",
     )
     recipient = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="gifts_received",
         help_text="User who receives the gift.",
@@ -374,7 +374,7 @@ class RefundRequest(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="refund_requests",
     )

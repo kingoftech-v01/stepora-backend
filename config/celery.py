@@ -172,6 +172,12 @@ app.conf.beat_schedule = {
         "task": "apps.circles.tasks.expire_circle_invitations",
         "schedule": crontab(hour=2, minute=30),
     },
+    # === Gamification Tasks ===
+    # Reset broken streaks and send at-risk notifications daily at midnight UTC
+    "check-broken-streaks": {
+        "task": "apps.gamification.tasks.check_broken_streaks",
+        "schedule": crontab(hour=0, minute=0),
+    },
     # === User Tasks ===
     # Hard-delete accounts soft-deleted 30+ days ago (GDPR)
     "hard-delete-expired-accounts": {
@@ -209,6 +215,10 @@ app.conf.task_routes = {
     "apps.subscriptions.tasks.*": {"queue": "notifications"},
     "apps.ai.tasks.*": {"queue": "integrations"},
     "apps.users.tasks.*": {"queue": "notifications"},
+    "apps.plans.tasks.*": {"queue": "dreams"},
+    "apps.gamification.tasks.*": {"queue": "notifications"},
+    "apps.friends.tasks.*": {"queue": "social"},
+    "apps.referrals.tasks.*": {"queue": "notifications"},
     "integrations.*": {"queue": "integrations"},
 }
 

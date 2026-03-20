@@ -12,7 +12,6 @@ from .models import (
     PromotionChangeLog,
     PromotionPlanDiscount,
     PromotionRedemption,
-    Referral,
     StripeCustomer,
     StripeWebhookEvent,
     Subscription,
@@ -204,23 +203,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(Referral)
-class ReferralAdmin(admin.ModelAdmin):
-    """Admin interface for Referral model."""
-
-    list_display = [
-        "referrer",
-        "referred",
-        "referral_code",
-        "referred_has_paid",
-        "reward_granted",
-        "created_at",
-        "paid_at",
-    ]
-    list_filter = ["referred_has_paid", "reward_granted", "created_at"]
-    search_fields = ["referrer__email", "referred__email", "referral_code"]
-    readonly_fields = ["created_at"]
-    raw_id_fields = ["referrer", "referred"]
+# Referral admin moved to apps.referrals.admin
 
 
 @admin.register(StripeWebhookEvent)

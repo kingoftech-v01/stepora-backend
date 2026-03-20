@@ -9,7 +9,7 @@ from django.db import models
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
-from apps.users.models import User
+from django.conf import settings
 
 
 class Notification(models.Model):
@@ -17,7 +17,7 @@ class Notification(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="notifications"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
     )
 
     TYPE_CHOICES = [
@@ -201,7 +201,7 @@ class WebPushSubscription(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="webpush_subscriptions"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="webpush_subscriptions"
     )
     subscription_info = models.JSONField(
         help_text="Web Push subscription: {endpoint, keys: {p256dh, auth}}"
@@ -224,7 +224,7 @@ class UserDevice(models.Model):
     """FCM device registration for push notifications."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="devices")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="devices")
 
     fcm_token = models.TextField(
         unique=True,

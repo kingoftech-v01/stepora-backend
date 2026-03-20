@@ -17,9 +17,8 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from core.audit import log_webhook_event
-from core.throttles import ReferralRateThrottle
 
-from .models import Referral, Subscription, SubscriptionPlan
+from .models import Subscription, SubscriptionPlan
 from .serializers import (
     InvoiceSerializer,
     PromotionSerializer,
@@ -557,75 +556,8 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
         return Response(analytics)
 
 
-class ReferralView(views.APIView):
-    """Referral program: refer 3 friends who subscribe → 1 free month."""
 
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [ReferralRateThrottle]
-
-    @extend_schema(
-        summary="Get referral info",
-        description="Get your referral code and stats.",
-        tags=["Referrals"],
-    )
-    def get(self, request):
-        user = request.user
-        code = Referral.get_referral_code(user)
-        stats = Referral.get_referrer_stats(user)
-        return Response(
-            {
-                "referral_code": code,
-                **stats,
-            }
-        )
-
-    @extend_schema(
-        summary="Apply referral code",
-        description="Apply a referral code during signup. Links the current user to the referrer.",
-        tags=["Referrals"],
-    )
-    def post(self, request):
-        code = (request.data.get("referral_code") or "").strip().upper()
-        if not code:
-            return Response(
-                {"error": _("Referral code required.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Check if user already has a referrer
-        if Referral.objects.filter(referred=request.user).exists():
-            return Response(
-                {"error": _("You already used a referral code.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Can't refer yourself
-        own_code = Referral.get_referral_code(request.user)
-        if code == own_code:
-            return Response(
-                {"error": _("You cannot refer yourself.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Resolve referrer from code: DP-REF-<8 hex chars from user UUID>
-        referrer = Referral.resolve_referrer(code)
-        if not referrer:
-            return Response(
-                {"error": _("Invalid referral code.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        Referral.objects.create(
-            referrer=referrer,
-            referred=request.user,
-            referral_code=code,
-        )
-        return Response(
-            {
-                "message": _("Referral code applied!"),
-                "referrer_name": referrer.display_name or referrer.email.split("@")[0],
-            }
-        )
+# ReferralView moved to apps.referrals.views — /api/v1/referrals/
 
 
 class PromotionViewSet(viewsets.GenericViewSet):

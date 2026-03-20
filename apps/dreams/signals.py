@@ -13,7 +13,7 @@ from django.dispatch import receiver
 logger = logging.getLogger(__name__)
 
 
-@receiver(post_delete, sender="dreams.Task")
+@receiver(post_delete, sender="plans.Task")
 def recalculate_goal_progress_on_task_delete(sender, instance, **kwargs):
     """
     Recalculate goal and dream progress when a task is deleted.

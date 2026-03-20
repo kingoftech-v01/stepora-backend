@@ -7,8 +7,7 @@ import uuid
 from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
-from apps.dreams.models import Task
-from apps.users.models import User
+from django.conf import settings
 
 
 class CalendarEvent(models.Model):
@@ -16,10 +15,10 @@ class CalendarEvent(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="calendar_events"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="calendar_events"
     )
     task = models.ForeignKey(
-        Task,
+        "plans.Task",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -171,7 +170,7 @@ class TimeBlock(models.Model):
     """User-defined time blocks for scheduling preferences."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="time_blocks")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_blocks")
 
     BLOCK_TYPE_CHOICES = [
         ("work", "Work"),
@@ -217,7 +216,7 @@ class TimeBlockTemplate(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="timeblock_templates"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="timeblock_templates"
     )
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
@@ -243,7 +242,7 @@ class GoogleCalendarIntegration(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="google_calendar"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="google_calendar"
     )
     access_token = EncryptedTextField()
     refresh_token = EncryptedTextField()
@@ -370,13 +369,13 @@ class CalendarShare(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="shared_calendars",
         help_text="The user who owns the calendar being shared.",
     )
     shared_with = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -443,7 +442,7 @@ class Habit(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="habits")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="habits")
     name = EncryptedCharField(max_length=100)
     description = EncryptedTextField(blank=True, default="")
     frequency = models.CharField(

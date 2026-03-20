@@ -10,7 +10,6 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     PromotionViewSet,
-    ReferralView,
     StripeWebhookView,
     SubscriptionPlanViewSet,
     SubscriptionViewSet,
@@ -23,6 +22,6 @@ router.register(r"promotions", PromotionViewSet, basename="promotion")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("referral/", ReferralView.as_view(), name="referral"),
+    # Referral endpoint moved to apps.referrals — /api/v1/referrals/
     path("webhook/stripe/", StripeWebhookView.as_view(), name="stripe-webhook"),
 ]

@@ -14,7 +14,6 @@ from django.db import models
 from django.utils import timezone as django_timezone
 from encrypted_model_fields.fields import EncryptedTextField
 
-from apps.users.models import User
 
 
 class Circle(models.Model):
@@ -63,7 +62,7 @@ class Circle(models.Model):
         help_text="Whether the circle is publicly visible and joinable.",
     )
     creator = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="created_circles",
         help_text="The user who created this circle.",
@@ -132,7 +131,7 @@ class CircleMembership(models.Model):
         help_text="The circle this membership belongs to.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_memberships",
         help_text="The user who is a member of the circle.",
@@ -187,7 +186,7 @@ class CirclePost(models.Model):
         help_text="The circle this post belongs to.",
     )
     author = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_posts",
         help_text="The user who created this post.",
@@ -251,7 +250,7 @@ class CircleChallenge(models.Model):
         help_text="The circle this challenge belongs to.",
     )
     creator = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="created_challenges",
         null=True,
@@ -283,7 +282,7 @@ class CircleChallenge(models.Model):
         help_text="Current status of the challenge.",
     )
     participants = models.ManyToManyField(
-        User,
+        settings.AUTH_USER_MODEL,
         related_name="circle_challenges",
         blank=True,
         help_text="Users who have joined this challenge.",
@@ -354,7 +353,7 @@ class PostReaction(models.Model):
         help_text="The post this reaction is on.",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="post_reactions",
         help_text="The user who reacted.",
@@ -405,12 +404,12 @@ class CircleInvitation(models.Model):
         related_name="invitations",
     )
     inviter = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_invites_sent",
     )
     invitee = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_invites_received",
         null=True,
@@ -473,7 +472,7 @@ class ChallengeProgress(models.Model):
         related_name="progress_entries",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="challenge_progress",
     )
@@ -514,7 +513,7 @@ class CircleMessage(models.Model):
         related_name="chat_messages",
     )
     sender = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_chat_messages",
     )
@@ -560,7 +559,7 @@ class CircleCall(models.Model):
         related_name="calls",
     )
     initiator = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_calls_initiated",
     )
@@ -603,7 +602,7 @@ class CircleCallParticipant(models.Model):
         related_name="participants",
     )
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="circle_call_participations",
     )

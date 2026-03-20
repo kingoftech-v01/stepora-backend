@@ -11,7 +11,6 @@ from django.conf import settings
 from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
-from apps.users.models import User
 
 
 class ChatConversation(models.Model):
@@ -19,10 +18,10 @@ class ChatConversation(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="chat_conversations"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_conversations"
     )
     target_user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -169,10 +168,10 @@ class Call(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     caller = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="outgoing_calls"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="outgoing_calls"
     )
     callee = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="incoming_calls"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="incoming_calls"
     )
     buddy_pairing = models.ForeignKey(
         "buddies.BuddyPairing",

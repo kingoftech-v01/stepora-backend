@@ -2,52 +2,18 @@
 source = apps,core,integrations
 omit =
     */migrations/*
+    */tests/*
     */tests.py
     */test_*.py
     */tests_*.py
+    */conftest.py
     */__pycache__/*
     */venv/*
     */env/*
     manage.py
+    config/settings/*
     config/wsgi.py
     config/asgi.py
-    */management/commands/*
-    */consumers.py
-    */routing.py
-    */tasks.py
-    */admin.py
-    integrations/google_calendar.py
-    apps/notifications/services.py
-    apps/users/services.py
-    core/websocket_auth.py
-    core/storage.py
-    apps/buddies/services.py
-    apps/leagues/services.py
-    apps/store/services.py
-    apps/search/services.py
-    apps/subscriptions/services.py
-    apps/chat/agora_views.py
-    core/authentication.py
-    apps/notifications/fcm_service.py
-    apps/social/validators.py
-    core/apps.py
-    */tests/conftest.py
-    apps/buddies/views.py
-    apps/calendar/views.py
-    apps/circles/views.py
-    apps/leagues/views.py
-    apps/leagues/models.py
-    apps/leagues/serializers.py
-    apps/calendar/serializers.py
-    apps/store/serializers.py
-    core/email.py
-    core/moderation.py
-    core/ai_validators.py
-    apps/social/serializers.py
-    apps/search/views.py
-    apps/store/views.py
-    apps/subscriptions/signals.py
-    core/auth/social.py
 
 [report]
 precision = 2
@@ -56,12 +22,8 @@ skip_covered = False
 
 exclude_lines =
     pragma: no cover
-    def __repr__
-    def __str__
-    raise AssertionError
-    raise NotImplementedError
     if __name__ == .__main__.:
     if TYPE_CHECKING:
+    raise NotImplementedError
     @abstract
-    except ImportError
     pass$

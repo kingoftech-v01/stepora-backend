@@ -14,7 +14,6 @@ from apps.subscriptions.models import (
     Promotion,
     PromotionPlanDiscount,
     PromotionRedemption,
-    Referral,
     StripeCustomer,
     StripeWebhookEvent,
     Subscription,

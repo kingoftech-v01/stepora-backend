@@ -13,7 +13,6 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from encrypted_model_fields.fields import EncryptedTextField
 
-from apps.users.models import User
 
 
 class BuddyPairing(models.Model):
@@ -39,13 +38,13 @@ class BuddyPairing(models.Model):
         help_text="Unique identifier for this buddy pairing.",
     )
     user1 = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="buddy_pairings_as_user1",
         help_text="The first user in the pairing (initiator).",
     )
     user2 = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="buddy_pairings_as_user2",
         help_text="The second user in the pairing (matched partner).",
@@ -128,7 +127,7 @@ class BuddyEncouragement(models.Model):
         help_text="The buddy pairing this encouragement belongs to.",
     )
     sender = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="sent_encouragements",
         help_text="The user who sent the encouragement.",
