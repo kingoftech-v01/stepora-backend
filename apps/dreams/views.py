@@ -2385,6 +2385,8 @@ class DreamViewSet(viewsets.ModelViewSet):
     )
     def trigger_checkin(self, request, pk=None):
         """Manually trigger an interactive check-in."""
+        from datetime import timedelta
+
         from .tasks import generate_checkin_questionnaire_task
 
         dream = self.get_object()
@@ -2397,6 +2399,21 @@ class DreamViewSet(viewsets.ModelViewSet):
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Rate limit: use next_checkin_at (1 check-in per dream per week)
+        now = timezone.now()
+        if dream.next_checkin_at and dream.next_checkin_at > now:
+            days_remaining = (dream.next_checkin_at - now).days
+            return Response(
+                {
+                    "error": _(
+                        "Check-in available once per week per dream"
+                    ),
+                    "days_remaining": days_remaining,
+                    "next_available": dream.next_checkin_at.isoformat(),
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
         # Guard: no active check-in already in progress
@@ -2424,6 +2441,11 @@ class DreamViewSet(viewsets.ModelViewSet):
             scheduled_for=timezone.now(),
             triggered_by="manual",
         )
+
+        # Set next_checkin_at to +7 days (overrides any Celery-scheduled date)
+        dream.next_checkin_at = timezone.now() + timedelta(days=7)
+        dream.save(update_fields=["next_checkin_at"])
+
         generate_checkin_questionnaire_task.apply_async(
             args=[str(checkin.id)], queue="dreams"
         )

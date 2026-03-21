@@ -1514,6 +1514,10 @@ def run_biweekly_checkins(self):
                 scheduled_for=now,
                 triggered_by="schedule",
             )
+            # Schedule next check-in 7 days from now
+            dream.next_checkin_at = now + timedelta(days=7)
+            dream.save(update_fields=["next_checkin_at"])
+
             # Dispatch interactive questionnaire generation
             generate_checkin_questionnaire_task.apply_async(
                 args=[str(checkin.id)], queue="dreams"
@@ -1923,13 +1927,15 @@ def generate_checkin_questionnaire_task(self, checkin_id):
             ]
         )
 
-        # Send notification
+        # Send notification via all channels (push, in-app, email)
         opening = validated.opening_message or "Time for your check-in!"
         try:
-            NotificationService.create(
+            from apps.notifications.services import NotificationDeliveryService
+
+            notification = NotificationService.create(
                 user=user,
                 notification_type="check_in",
-                title="Check-in time!",
+                title=f'Check-in Ready: "{dream.title}"',
                 body=opening[:500],
                 scheduled_for=timezone.now(),
                 data={
@@ -1939,8 +1945,10 @@ def generate_checkin_questionnaire_task(self, checkin_id):
                     "action": "checkin_questionnaire",
                 },
             )
+            # Deliver immediately via all channels
+            NotificationDeliveryService().deliver(notification)
         except Exception as e:
-            logger.warning(f"Failed to create check-in notification: {e}")
+            logger.warning(f"Failed to create/deliver check-in notification: {e}")
 
         logger.info(
             f"generate_checkin_questionnaire_task: DONE checkin={checkin_id} questions={len(validated.questions)}"

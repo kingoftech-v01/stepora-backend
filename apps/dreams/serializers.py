@@ -328,6 +328,12 @@ class DreamSerializer(serializers.ModelSerializer):
     completed_goals_count = serializers.IntegerField(
         source="_completed_goals_count", read_only=True, default=0
     )
+    next_checkin_days = serializers.SerializerMethodField(
+        help_text="Days until next check-in is available (0 = available now)."
+    )
+    has_pending_checkin = serializers.SerializerMethodField(
+        help_text="Whether this dream has a check-in awaiting user response."
+    )
 
     class Meta:
         model = Dream
@@ -355,6 +361,9 @@ class DreamSerializer(serializers.ModelSerializer):
             "tasks_count",
             "tags",
             "sparkline_data",
+            "next_checkin_days",
+            "next_checkin_at",
+            "has_pending_checkin",
             "created_at",
             "updated_at",
         ]
@@ -362,6 +371,7 @@ class DreamSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "progress_percentage",
+            "next_checkin_at",
             "created_at",
             "updated_at",
             "completed_at",
@@ -451,6 +461,32 @@ class DreamSerializer(serializers.ModelSerializer):
         # External URL or local dev — return as-is
         return obj.vision_image_url
 
+    def get_next_checkin_days(self, obj) -> int:
+        """Days until next check-in based on the scheduled date."""
+        from django.utils import timezone
+
+        from apps.plans.models import PlanCheckIn
+
+        # If there's already a pending check-in, return 0 (available now)
+        if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
+            return 0
+
+        # Use the dream's next_checkin_at (set by Celery beat scheduler)
+        if obj.next_checkin_at:
+            days = (obj.next_checkin_at - timezone.now()).days
+            return max(0, days)
+
+        # No next_checkin_at set — check-in available now
+        return 0
+
+    def get_has_pending_checkin(self, obj) -> bool:
+        """Return True if this dream has a check-in awaiting user response."""
+        from apps.plans.models import PlanCheckIn
+
+        return PlanCheckIn.objects.filter(
+            dream=obj, status="awaiting_user"
+        ).exists()
+
 
 class CalibrationResponseSerializer(serializers.ModelSerializer):
     """Serializer for CalibrationResponse model."""
@@ -519,6 +555,12 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     signed_vision_image_url = serializers.SerializerMethodField(
         help_text="Pre-signed URL for the vision board image."
     )
+    next_checkin_days = serializers.SerializerMethodField(
+        help_text="Days until next check-in is available (0 = available now)."
+    )
+    has_pending_checkin = serializers.SerializerMethodField(
+        help_text="Whether this dream has a check-in awaiting user response."
+    )
 
     class Meta:
         model = Dream
@@ -554,6 +596,9 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             "completed_tasks",
             "days_left",
             "tags",
+            "next_checkin_days",
+            "next_checkin_at",
+            "has_pending_checkin",
             "created_at",
             "updated_at",
         ]
@@ -562,6 +607,7 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             "user",
             "progress_percentage",
             "ai_analysis",
+            "next_checkin_at",
             "created_at",
             "updated_at",
         ]
@@ -640,6 +686,14 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     def get_signed_vision_image_url(self, obj) -> str:
         # Reuse logic from DreamSerializer
         return DreamSerializer.get_signed_vision_image_url(self, obj)
+
+    def get_next_checkin_days(self, obj) -> int:
+        # Reuse logic from DreamSerializer
+        return DreamSerializer.get_next_checkin_days(self, obj)
+
+    def get_has_pending_checkin(self, obj) -> bool:
+        # Reuse logic from DreamSerializer
+        return DreamSerializer.get_has_pending_checkin(self, obj)
 
 
 class PublicGoalSerializer(serializers.ModelSerializer):
