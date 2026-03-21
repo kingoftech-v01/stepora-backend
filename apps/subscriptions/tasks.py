@@ -251,7 +251,7 @@ def send_free_user_upgrade_reminders():
     free_users = User.objects.filter(
         is_active=True,
         subscription="free",
-        date_joined__lte=three_days_ago,
+        created_at__lte=three_days_ago,
         last_login__gte=seven_days_ago,
     ).values_list("id", flat=True)[:100]
 

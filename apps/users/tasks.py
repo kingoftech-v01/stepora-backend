@@ -73,7 +73,7 @@ def export_user_data(user_id: int):
     export = {
         "user": user_data,
         "dreams": list(user.dreams.values()),
-        "conversations": list(user.conversations.values()),
+        "conversations": list(user.ai_conversations.values()),
         "notifications": list(
             user.notifications.values("id", "title", "body", "created_at", "is_read")
         ),

@@ -97,7 +97,7 @@ def member_user(db):
 
 @pytest.fixture
 def outsider_user(db):
-    return _make_premium_user("circle_outsider@test.com", "Outsider")
+    return _make_pro_user("circle_outsider@test.com", "Outsider")
 
 
 @pytest.fixture
@@ -176,9 +176,9 @@ class TestCircleCreate:
             "name": "Auto Admin", "category": "fitness",
         })
         assert resp.status_code == 201
-        circle_id = resp.data["id"]
+        circle = Circle.objects.get(name="Auto Admin")
         assert CircleMembership.objects.filter(
-            circle_id=circle_id, user=admin_user, role="admin"
+            circle=circle, user=admin_user, role="admin"
         ).exists()
 
 

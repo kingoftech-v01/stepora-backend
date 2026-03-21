@@ -407,10 +407,12 @@ class TestCheckAndSendReminders:
         mock_fcm_cls.return_value = mock_fcm
 
         now = timezone.now()
+        # Event starts in 15 min 30 sec, reminder is 15 min before
+        # => reminder fires at now + 30s which is within [now, now+60s]
         event = CalendarEvent.objects.create(
             user=cal_user, title="Meeting",
-            start_time=now + timedelta(minutes=15),
-            end_time=now + timedelta(minutes=75),
+            start_time=now + timedelta(minutes=15, seconds=30),
+            end_time=now + timedelta(minutes=75, seconds=30),
             status="scheduled",
             reminders=[{"minutes_before": 15, "type": "push"}],
             reminders_sent=[],
@@ -441,7 +443,7 @@ class TestCheckAndSendReminders:
         mock_fcm_cls.return_value = Mock()
 
         now = timezone.now()
-        start = now + timedelta(minutes=15)
+        start = now + timedelta(minutes=15, seconds=30)
         reminder_key = "15_%s" % start.isoformat()
 
         CalendarEvent.objects.create(
@@ -488,8 +490,8 @@ class TestCheckAndSendReminders:
         now = timezone.now()
         CalendarEvent.objects.create(
             user=cal_user, title="Legacy Reminder",
-            start_time=now + timedelta(minutes=15),
-            end_time=now + timedelta(hours=1),
+            start_time=now + timedelta(minutes=15, seconds=30),
+            end_time=now + timedelta(hours=1, seconds=30),
             status="scheduled",
             reminders=[],
             reminders_sent=[],

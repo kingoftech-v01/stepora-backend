@@ -2,6 +2,7 @@
 Serializers for Dreams app.
 """
 
+from django.conf import settings
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 

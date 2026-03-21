@@ -19,6 +19,8 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from django.core.cache import cache as django_cache
+
 from apps.leagues.models import (
     League,
     LeagueGroup,
@@ -31,6 +33,16 @@ from apps.leagues.models import (
 )
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
+
+
+@pytest.fixture(autouse=True)
+def clear_league_caches():
+    """Clear league-related caches before each test."""
+    django_cache.delete("active_season")
+    django_cache.delete("active_league_season")
+    yield
+    django_cache.delete("active_season")
+    django_cache.delete("active_league_season")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -108,13 +120,15 @@ def silver_league(db):
 def active_season(db):
     # Deactivate any other active seasons first
     Season.objects.filter(is_active=True).update(is_active=False, status="ended")
-    return Season.objects.create(
+    django_cache.delete("active_season")
+    season = Season.objects.create(
         name="Test Season",
         start_date=timezone.now() - timedelta(days=30),
         end_date=timezone.now() + timedelta(days=150),
         is_active=True,
         status="active",
     )
+    return season
 
 
 @pytest.fixture
@@ -175,8 +189,7 @@ class TestSeasonViewSet:
 
     def test_current_season_none(self, client1, db):
         Season.objects.filter(is_active=True).update(is_active=False, status="ended")
-        from django.core.cache import cache
-        cache.delete("active_season")
+        django_cache.delete("active_season")
         resp = client1.get("/api/v1/leagues/seasons/current/")
         assert resp.status_code == 404
 
@@ -287,13 +300,13 @@ class TestFriendsLeaderboard:
 
 class TestMyStanding:
     def test_my_standing_exists(self, client1, standing1, active_season):
+        django_cache.delete("active_season")
         resp = client1.get("/api/v1/leagues/leaderboard/me/")
         assert resp.status_code == 200
 
     def test_my_standing_no_season(self, client1, db):
         Season.objects.filter(is_active=True).update(is_active=False, status="ended")
-        from django.core.cache import cache
-        cache.delete("active_season")
+        django_cache.delete("active_season")
         resp = client1.get("/api/v1/leagues/leaderboard/me/")
         assert resp.status_code == 204
 
@@ -347,6 +360,7 @@ class TestLeagueGroupViewSet:
         assert resp.status_code == 200
 
     def test_retrieve_group(self, client1, bronze_league, active_season):
+        django_cache.delete("active_season")
         group = LeagueGroup.objects.create(
             season=active_season, league=bronze_league, group_number=1,
         )
@@ -358,6 +372,7 @@ class TestLeagueGroupViewSet:
         assert resp.status_code == 404
 
     def test_mine_with_group(self, client1, user1, bronze_league, active_season, standing1):
+        django_cache.delete("active_season")
         group = LeagueGroup.objects.create(
             season=active_season, league=bronze_league, group_number=1,
         )
@@ -367,6 +382,7 @@ class TestLeagueGroupViewSet:
 
     @patch("apps.leagues.services.LeagueService.get_group_leaderboard")
     def test_group_leaderboard(self, mock_lb, client1, bronze_league, active_season):
+        django_cache.delete("active_season")
         group = LeagueGroup.objects.create(
             season=active_season, league=bronze_league, group_number=1,
         )
@@ -381,8 +397,7 @@ class TestLeagueGroupViewSet:
 def league_season(db):
     # Deactivate existing
     LeagueSeason.objects.filter(is_active=True).update(is_active=False)
-    from django.core.cache import cache
-    cache.delete("active_league_season")
+    django_cache.delete("active_league_season")
     return LeagueSeason.objects.create(
         name="Season of Growth",
         theme="growth",
@@ -418,8 +433,7 @@ class TestLeagueSeasonViewSet:
 
     def test_current_none(self, client1, db):
         LeagueSeason.objects.filter(is_active=True).update(is_active=False)
-        from django.core.cache import cache
-        cache.delete("active_league_season")
+        django_cache.delete("active_league_season")
         resp = client1.get("/api/v1/leagues/league-seasons/current/")
         assert resp.status_code == 404
 

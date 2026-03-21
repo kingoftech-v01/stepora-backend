@@ -305,8 +305,13 @@ class TestCancelSubscription:
         assert result.cancel_at_period_end is True
         assert result.canceled_at is not None
 
-    def test_cancel_no_active_subscription(self, user2):
-        result = StripeService.cancel_subscription(user2)
+    def test_cancel_no_active_subscription(self):
+        # Use a completely fresh user with no subscriptions at all
+        fresh_user = User.objects.create_user(
+            email="canceltest@test.com", password="testpass123", display_name="Cancel Test"
+        )
+        Subscription.objects.filter(user=fresh_user).delete()
+        result = StripeService.cancel_subscription(fresh_user)
         assert result is None
 
     def test_cancel_admin_assigned(self, user, admin_premium_subscription, free_plan):
@@ -367,9 +372,13 @@ class TestPlanChange:
         with pytest.raises(ValueError, match="already on this plan"):
             StripeService.change_plan(user, premium_plan)
 
-    def test_change_no_subscription(self, user2, premium_plan):
+    def test_change_no_subscription(self, premium_plan):
+        fresh_user = User.objects.create_user(
+            email="changetest@test.com", password="testpass123", display_name="Change Test"
+        )
+        Subscription.objects.filter(user=fresh_user).delete()
         with pytest.raises(ValueError, match="No active subscription"):
-            StripeService.change_plan(user2, premium_plan)
+            StripeService.change_plan(fresh_user, premium_plan)
 
     @patch("apps.subscriptions.services.stripe.Subscription.modify")
     def test_downgrade_to_free_delegates_to_cancel(self, mock_modify, user, premium_subscription, free_plan):
@@ -674,8 +683,12 @@ class TestSyncSubscriptionStatus:
         assert result is not None
         assert result.status == "active"
 
-    def test_sync_no_subscription(self, user):
-        result = StripeService.sync_subscription_status(user)
+    def test_sync_no_subscription(self):
+        fresh_user = User.objects.create_user(
+            email="synctest@test.com", password="testpass123", display_name="Sync Test"
+        )
+        Subscription.objects.filter(user=fresh_user).delete()
+        result = StripeService.sync_subscription_status(fresh_user)
         assert result is None
 
     def test_sync_free_subscription(self, user, free_subscription):
