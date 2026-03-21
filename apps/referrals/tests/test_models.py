@@ -10,7 +10,8 @@ from apps.referrals.models import Referral, ReferralCode, ReferralReward
 @pytest.mark.django_db
 class TestReferralCode:
     def test_auto_generate_code(self, referrer):
-        code = ReferralCode.objects.create(user=referrer)
+        # Signal auto-creates a ReferralCode on user creation
+        code = ReferralCode.objects.get(user=referrer)
         assert len(code.code) == 8
         assert code.is_active is True
         assert code.times_used == 0

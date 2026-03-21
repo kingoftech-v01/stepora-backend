@@ -25,7 +25,8 @@ def svc_referred(db):
 
 @pytest.fixture
 def svc_code(svc_referrer):
-    return ReferralCode.objects.create(user=svc_referrer)
+    code, _ = ReferralCode.objects.get_or_create(user=svc_referrer)
+    return code
 
 
 @pytest.mark.django_db

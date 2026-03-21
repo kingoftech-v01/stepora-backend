@@ -365,14 +365,19 @@ class TestDailyAIQuotaThrottleIntegration:
         assert throttle.allow_request(request, None) is True
 
     def test_throttle_blocks_free_user(self, user):
-        """Free user should be blocked (0 quota)."""
+        """Free user should be blocked with PermissionDenied (0 quota)."""
+        from rest_framework.exceptions import PermissionDenied
+
         throttle = AIChatDailyThrottle()
         request = Mock()
         request.user = user
-        assert throttle.allow_request(request, None) is False
+        with pytest.raises(PermissionDenied):
+            throttle.allow_request(request, None)
 
     def test_throttle_blocks_at_limit(self, premium_user):
-        """Should block when daily limit reached."""
+        """Should raise Throttled when daily limit reached."""
+        from rest_framework.exceptions import Throttled
+
         tracker = AIUsageTracker()
         key = tracker._get_key(premium_user.id, "ai_chat")
         cache.set(key, 50, timeout=90000)
@@ -380,8 +385,8 @@ class TestDailyAIQuotaThrottleIntegration:
         throttle = AIChatDailyThrottle()
         request = Mock()
         request.user = premium_user
-        assert throttle.allow_request(request, None) is False
-        assert throttle.usage_info["remaining"] == 0
+        with pytest.raises(Throttled):
+            throttle.allow_request(request, None)
 
 
 # ============================================================

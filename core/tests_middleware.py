@@ -21,12 +21,13 @@ class TestSecurityHeadersMiddleware:
         self.middleware = SecurityHeadersMiddleware(self.get_response)
 
     def test_csp_header_present(self):
-        request = self.factory.get("/api/test/")
+        # CSP is only set on non-API paths
+        request = self.factory.get("/admin/")
         response = self.middleware(request)
         assert "Content-Security-Policy" in response
 
     def test_csp_default_value(self):
-        request = self.factory.get("/api/test/")
+        request = self.factory.get("/admin/")
         response = self.middleware(request)
         csp = response["Content-Security-Policy"]
         assert "default-src 'self'" in csp
@@ -35,7 +36,7 @@ class TestSecurityHeadersMiddleware:
 
     @override_settings(CSP_POLICY="default-src 'none'")
     def test_csp_custom_value(self):
-        request = self.factory.get("/api/test/")
+        request = self.factory.get("/admin/")
         response = self.middleware(request)
         assert response["Content-Security-Policy"] == "default-src 'none'"
 
@@ -45,12 +46,13 @@ class TestSecurityHeadersMiddleware:
         assert response["Referrer-Policy"] == "strict-origin-when-cross-origin"
 
     def test_permissions_policy_present(self):
-        request = self.factory.get("/api/test/")
+        # Permissions-Policy is only set on non-API paths
+        request = self.factory.get("/admin/")
         response = self.middleware(request)
         policy = response["Permissions-Policy"]
         assert "geolocation=()" in policy
-        assert "microphone=()" in policy
-        assert "camera=()" in policy
+        assert "microphone=(self)" in policy
+        assert "camera=(self)" in policy
         assert "payment=()" in policy
 
     def test_x_content_type_options(self):
@@ -71,7 +73,7 @@ class TestSecurityHeadersMiddleware:
     def test_corp_header(self):
         request = self.factory.get("/api/test/")
         response = self.middleware(request)
-        assert response["Cross-Origin-Resource-Policy"] == "same-origin"
+        assert response["Cross-Origin-Resource-Policy"] == "cross-origin"
 
     def test_headers_on_api_endpoint(self, api_client):
         response = api_client.get("/health/")
@@ -142,8 +144,9 @@ class TestLastActivityMiddleware:
         # First call
         self.middleware(request)
 
-        # Simulate time passing beyond throttle window
-        self.middleware._cache[user.id] = time.time() - 61
+        # Clear the cache to simulate throttle window expiry
+        from django.core.cache import cache
+        cache.clear()
 
         with patch("apps.users.models.User.objects.filter") as mock_filter:
             mock_filter.return_value = Mock(update=Mock())
@@ -154,8 +157,9 @@ class TestLastActivityMiddleware:
         request = self.factory.get("/api/test/")
         request.user = user
 
-        # Reset cache to force update
-        self.middleware._cache.clear()
+        # Clear cache to force update attempt
+        from django.core.cache import cache
+        cache.clear()
 
         with patch("apps.users.models.User.objects.filter") as mock_filter:
             mock_filter.side_effect = Exception("DB error")

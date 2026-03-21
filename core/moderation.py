@@ -245,7 +245,7 @@ HARMFUL_DREAM_PATTERNS_ILLEGAL = [
         re.IGNORECASE,
     ),
     re.compile(
-        r"\bvoler\s+(quelqu|qqch|de\s+l\'argent|dans\s+(un|une|le|la|les)\s)",
+        r"\bvoler\s+(quelqu|qqch|de\s+l\'argent|(dans\s+)?(un|une|le|la|les)\s)",
         re.IGNORECASE,
     ),
     re.compile(

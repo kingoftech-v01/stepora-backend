@@ -510,7 +510,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def export_data(self, request):
         """Export all user data as JSON or CSV for GDPR compliance."""
         user = request.user
-        export_format = request.query_params.get("format", "json").lower()
+        export_format = request.query_params.get("export_format", "json").lower()
         log_data_export(user)
 
         data = {

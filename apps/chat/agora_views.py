@@ -28,8 +28,6 @@ def agora_config(request):
 @permission_classes([IsAuthenticated])
 def agora_rtm_token(request):
     """Generate an Agora RTM token for the authenticated user (24h TTL)."""
-    from agora_token_builder.RtmTokenBuilder import Role_Rtm_User, RtmTokenBuilder
-
     app_id = getattr(settings, "AGORA_APP_ID", "")
     app_cert = getattr(settings, "AGORA_APP_CERTIFICATE", "")
     if not app_id or not app_cert:
@@ -37,6 +35,8 @@ def agora_rtm_token(request):
             {"detail": "Agora is not configured."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+    from agora_token_builder.RtmTokenBuilder import Role_Rtm_User, RtmTokenBuilder
 
     user_account = str(request.user.id)
     expiration_seconds = 86400  # 24 hours
@@ -62,8 +62,6 @@ def agora_rtm_token(request):
 @permission_classes([IsAuthenticated])
 def agora_rtc_token(request):
     """Generate an Agora RTC token for a channel (1h TTL)."""
-    from agora_token_builder.RtcTokenBuilder import Role_Publisher, RtcTokenBuilder
-
     app_id = getattr(settings, "AGORA_APP_ID", "")
     app_cert = getattr(settings, "AGORA_APP_CERTIFICATE", "")
     if not app_id or not app_cert:
@@ -132,6 +130,8 @@ def agora_rtc_token(request):
             {"detail": "Not authorized for this channel."},
             status=status.HTTP_403_FORBIDDEN,
         )
+
+    from agora_token_builder.RtcTokenBuilder import Role_Publisher, RtcTokenBuilder
 
     uid = str(request.user.id)
     expiration_seconds = 3600  # 1 hour

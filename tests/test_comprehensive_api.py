@@ -133,7 +133,7 @@ class TestAuthenticationSecurity:
             },
         )
         assert response.status_code == status.HTTP_200_OK
-        assert "key" in response.data or "token" in response.data
+        assert "access" in response.data
 
     def test_login_invalid_password(self, api_client, user):
         response = api_client.post(

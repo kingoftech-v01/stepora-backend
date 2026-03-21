@@ -341,17 +341,10 @@ class TestExportData:
         assert "dreams" in data
 
     def test_export_data_csv(self, users_client):
-        """Export user data as CSV (DRF format suffix may conflict)."""
-        # DRF may intercept ?format=csv for content negotiation
-        # so we test the JSON format explicitly works and accept
-        # either 200 or 404 for CSV (known DRF format suffix conflict)
-        response = users_client.get("/api/users/export-data/?format=csv")
-        if response.status_code == status.HTTP_200_OK:
-            assert "text/csv" in response["Content-Type"]
-        else:
-            # DRF format suffix conflict — test JSON fallback
-            response = users_client.get("/api/users/export-data/")
-            assert response.status_code == status.HTTP_200_OK
+        """Export user data as CSV."""
+        response = users_client.get("/api/users/export-data/?export_format=csv")
+        assert response.status_code == status.HTTP_200_OK
+        assert "text/csv" in response["Content-Type"]
 
     def test_export_data_unauthenticated(self):
         """Export data without authentication returns 401."""
@@ -1353,12 +1346,11 @@ class TestExportDataCSV:
         )
         response = users_client.get(
             "/api/users/export-data/",
-            {"format": "csv"},
+            {"export_format": "csv"},
         )
-        # Accept either 200 (actual CSV) or 406 (DRF format negotiation)
-        if response.status_code == status.HTTP_200_OK:
-            ct = response.get("Content-Type", "")
-            assert "csv" in ct or "json" in ct
+        assert response.status_code == status.HTTP_200_OK
+        ct = response.get("Content-Type", "")
+        assert "csv" in ct
 
     def test_export_data_json_with_goals_and_tasks(self, users_client, users_user):
         """Export JSON includes goals and tasks."""

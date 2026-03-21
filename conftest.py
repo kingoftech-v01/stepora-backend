@@ -48,6 +48,7 @@ from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, NotificationTemplate, UserDevice
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import GamificationProfile, User
+from core.auth.models import EmailAddress
 
 
 @pytest.fixture(scope="session")
@@ -75,9 +76,14 @@ def user_data():
 
 @pytest.fixture
 def user(db, user_data):
-    """Create and return a test user"""
+    """Create and return a test user with verified email"""
     password = user_data.pop("password", "testpassword123")
     user = User.objects.create_user(**user_data, password=password)
+    EmailAddress.objects.get_or_create(
+        user=user,
+        email=user.email,
+        defaults={"verified": True, "primary": True},
+    )
     return user
 
 
@@ -89,6 +95,10 @@ def premium_user(db):
         password="testpassword123",
         display_name="Premium User",
         timezone="Europe/Paris",
+    )
+    EmailAddress.objects.get_or_create(
+        user=user, email=user.email,
+        defaults={"verified": True, "primary": True},
     )
     plan = SubscriptionPlan.objects.get(slug="premium")
     Subscription.objects.update_or_create(
@@ -110,6 +120,10 @@ def pro_user(db):
         email="prouser@example.com",
         password="testpassword123",
         display_name="Pro User",
+    )
+    EmailAddress.objects.get_or_create(
+        user=user, email=user.email,
+        defaults={"verified": True, "primary": True},
     )
     plan = SubscriptionPlan.objects.get(slug="pro")
     Subscription.objects.update_or_create(

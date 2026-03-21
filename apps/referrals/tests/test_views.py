@@ -52,7 +52,7 @@ class TestMyReferralCodeView:
 @pytest.mark.django_db
 class TestRedeemCodeView:
     def test_redeem_valid_code(self, auth_client_b, ref_user_a, ref_user_b):
-        code = ReferralCode.objects.create(user=ref_user_a)
+        code, _ = ReferralCode.objects.get_or_create(user=ref_user_a)
         response = auth_client_b.post(
             "/api/v1/referrals/redeem/",
             {"code": code.code},
@@ -61,7 +61,7 @@ class TestRedeemCodeView:
         assert response.status_code == 200
 
     def test_redeem_own_code(self, auth_client_a, ref_user_a):
-        code = ReferralCode.objects.create(user=ref_user_a)
+        code, _ = ReferralCode.objects.get_or_create(user=ref_user_a)
         response = auth_client_a.post(
             "/api/v1/referrals/redeem/",
             {"code": code.code},

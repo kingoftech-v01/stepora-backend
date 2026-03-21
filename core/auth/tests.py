@@ -405,8 +405,8 @@ class TestTwoFactor:
             },
         )
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data["tfaRequired"] is True
-        assert "challengeToken" in resp.data
+        assert resp.data["tfa_required"] is True
+        assert "challenge_token" in resp.data
         # Should NOT contain access token
         assert "access" not in resp.data
 
@@ -419,14 +419,14 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challengeToken"]
+        challenge = resp.data["challenge_token"]
 
         # Step 2: submit TOTP code
         totp = pyotp.TOTP(tfa_user.totp_secret)
         resp = client.post(
             "/api/auth/2fa-challenge/",
             {
-                "challengeToken": challenge,
+                "challenge_token": challenge,
                 "code": totp.now(),
             },
         )
@@ -442,12 +442,12 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challengeToken"]
+        challenge = resp.data["challenge_token"]
 
         resp = client.post(
             "/api/auth/2fa-challenge/",
             {
-                "challengeToken": challenge,
+                "challenge_token": challenge,
                 "code": "000000",
             },
         )
@@ -462,13 +462,13 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challengeToken"]
+        challenge = resp.data["challenge_token"]
 
         # Tamper with the token to simulate expiry
         resp = client.post(
             "/api/auth/2fa-challenge/",
             {
-                "challengeToken": "invalid-token",
+                "challenge_token": "invalid-token",
                 "code": "123456",
             },
         )
@@ -495,12 +495,12 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challengeToken"]
+        challenge = resp.data["challenge_token"]
 
         resp = client.post(
             "/api/auth/2fa-challenge/",
             {
-                "challengeToken": challenge,
+                "challenge_token": challenge,
                 "code": code,
             },
         )
@@ -519,12 +519,12 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challengeToken"]
+        challenge = resp.data["challenge_token"]
 
         totp = pyotp.TOTP(tfa_user.totp_secret)
         resp = client.post(
             "/api/auth/2fa-challenge/",
-            {"challengeToken": challenge, "code": totp.now()},
+            {"challenge_token": challenge, "code": totp.now()},
             HTTP_X_CLIENT_PLATFORM="native",
         )
         assert resp.status_code == status.HTTP_200_OK
@@ -1082,15 +1082,15 @@ class TestFullFlows:
                 "password": PASSWORD,
             },
         )
-        assert resp.data["tfaRequired"] is True
-        challenge = resp.data["challengeToken"]
+        assert resp.data["tfa_required"] is True
+        challenge = resp.data["challenge_token"]
 
         # 2. Submit TOTP
         totp = pyotp.TOTP(secret)
         resp = client.post(
             "/api/auth/2fa-challenge/",
             {
-                "challengeToken": challenge,
+                "challenge_token": challenge,
                 "code": totp.now(),
             },
         )
