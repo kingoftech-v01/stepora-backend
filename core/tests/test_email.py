@@ -141,8 +141,9 @@ class TestAuthTaskDisplayNames:
         from core.auth.models import EmailAddress
         from core.auth.tasks import send_verification_email
 
-        email_addr = EmailAddress.objects.create(
-            user=user, email=user.email, verified=False, primary=True
+        email_addr, _ = EmailAddress.objects.update_or_create(
+            user=user, email=user.email,
+            defaults={"verified": False, "primary": True},
         )
 
         send_verification_email(user.id, email_addr.id)
