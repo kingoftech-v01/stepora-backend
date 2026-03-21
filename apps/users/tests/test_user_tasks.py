@@ -77,20 +77,15 @@ class TestExportUserData:
     @patch("core.email.send_templated_email")
     @patch("django.core.files.storage.default_storage")
     def test_exports_and_emails(self, mock_storage, mock_send_email, users_user):
-        """Exports user data to storage and sends download link.
-
-        Known code issue: task accesses user.conversations but
-        related_name is ai_conversations. Test verifies task at least
-        reaches the user lookup stage.
-        """
+        """Exports user data to storage and sends download link."""
         mock_storage.save.return_value = "exports/test.json"
 
         from apps.users.tasks import export_user_data
 
-        # Task will raise AttributeError on user.conversations (which is ai_conversations).
-        # Verify the task at least finds the user and starts the export process.
-        with pytest.raises(AttributeError, match="conversations"):
-            export_user_data(users_user.pk)
+        export_user_data(users_user.pk)
+
+        mock_storage.save.assert_called_once()
+        mock_send_email.assert_called_once()
 
     @patch("core.email.send_templated_email")
     @patch("django.core.files.storage.default_storage")

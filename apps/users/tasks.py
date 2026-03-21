@@ -75,7 +75,7 @@ def export_user_data(user_id: int):
         "dreams": list(user.dreams.values()),
         "conversations": list(user.ai_conversations.values()),
         "notifications": list(
-            user.notifications.values("id", "title", "body", "created_at", "is_read")
+            user.notifications.values("id", "title", "body", "created_at", "read_at")
         ),
     }
 
