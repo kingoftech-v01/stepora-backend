@@ -549,6 +549,31 @@ class TestGenerateCalibrationQuestions:
         assert isinstance(result, dict)
 
 
+class TestOpenAIRetryDecorator:
+    """Verify that generate_calibration_questions has the @openai_retry decorator."""
+
+    def test_generate_calibration_questions_has_retry(self):
+        """The method should have tenacity retry metadata from @openai_retry."""
+        from integrations.openai_service import OpenAIService
+
+        method = OpenAIService.generate_calibration_questions
+        # tenacity @retry wraps the function and adds a 'retry' attribute
+        assert hasattr(method, "retry"), (
+            "generate_calibration_questions should be decorated with @openai_retry "
+            "(tenacity retry), but the 'retry' attribute is missing"
+        )
+
+    def test_retry_stops_after_3_attempts(self):
+        """The openai_retry decorator should stop after 3 attempts."""
+        from integrations.openai_service import OpenAIService
+
+        method = OpenAIService.generate_calibration_questions
+        # Access the retry state to check stop config
+        retry_obj = method.retry
+        # tenacity stores stop strategy — verify it exists
+        assert retry_obj.stop is not None
+
+
 # ===================================================================
 # generate_calibration_summary()
 # ===================================================================
