@@ -1260,14 +1260,15 @@ class TestCoreMiddleware:
 
         mw = OriginValidationMiddleware(get_response=lambda r: HttpResponse("OK"))
         factory = RequestFactory()
-        request = factory.get(
+        request = factory.post(
             "/api/test/",
             HTTP_ORIGIN="https://evil.com",
             REMOTE_ADDR="8.8.8.8",
         )
         assert mw(request).status_code == 403
 
-    def test_origin_validation_valid_referer(self):
+    def test_origin_validation_valid_referer_on_post(self):
+        """Mutating POST with valid referer passes."""
         from django.http import HttpResponse
         from django.test import RequestFactory
 
@@ -1275,7 +1276,7 @@ class TestCoreMiddleware:
 
         mw = OriginValidationMiddleware(get_response=lambda r: HttpResponse("OK"))
         factory = RequestFactory()
-        request = factory.get(
+        request = factory.post(
             "/api/test/",
             HTTP_REFERER="https://stepora.app/page",
             REMOTE_ADDR="8.8.8.8",

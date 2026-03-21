@@ -18,15 +18,20 @@ logger = logging.getLogger(__name__)
 
 class OriginValidationMiddleware:
     """
-    Validates that API requests come from allowed origins.
-    Checks Origin and Referer headers to ensure requests originate
-    from the Stepora frontend domains.
+    Validates that mutating API requests come from allowed origins.
+
+    Only checks Origin/Referer headers on state-changing methods
+    (POST, PUT, PATCH, DELETE).  Safe methods (GET, HEAD, OPTIONS)
+    are always allowed through -- browsers never send Origin on
+    same-origin navigations, and CSRF-style attacks only apply to
+    mutating requests.
 
     Exempt from validation:
+    - Safe HTTP methods (GET, HEAD, OPTIONS)
     - Health check endpoints (/health/)
     - Stripe webhooks (/api/subscriptions/webhook/)
     - Native mobile app requests (X-Client-Platform: native/ios/android/capacitor)
-    - Internal IPs (127.0.0.1, 10.x.x.x — ALB health checks, ECS exec)
+    - Internal IPs (127.0.0.1, 10.x.x.x -- ALB health checks, ECS exec)
     - Localhost origins (development)
     """
 
@@ -45,59 +50,67 @@ class OriginValidationMiddleware:
     ]
 
     _NATIVE_PLATFORMS = frozenset(("native", "ios", "android", "capacitor"))
+    _SAFE_METHODS = frozenset(("GET", "HEAD", "OPTIONS"))
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # 1. Skip exempt paths (health checks, Stripe webhooks)
+        # 1. Safe methods never need origin validation
+        if request.method in self._SAFE_METHODS:
+            return self.get_response(request)
+
+        # 2. Skip exempt paths (health checks, Stripe webhooks)
         for path_prefix in self.EXEMPT_PATHS:
             if request.path.startswith(path_prefix):
                 return self.get_response(request)
 
-        # 2. Skip native mobile app requests
+        # 3. Skip native mobile app requests
         platform = request.META.get("HTTP_X_CLIENT_PLATFORM", "").lower().strip()
         if platform in self._NATIVE_PLATFORMS:
             return self.get_response(request)
 
-        # 3. Skip internal IPs (127.0.0.1, 10.x.x.x for ALB/ECS)
+        # 4. Skip internal IPs (127.0.0.1, 10.x.x.x for ALB/ECS)
         remote_ip = self._get_remote_ip(request)
         if remote_ip == "127.0.0.1" or remote_ip.startswith("10."):
             return self.get_response(request)
 
-        # 4. Check Origin header
+        # 5. Check Origin header
         origin = request.META.get("HTTP_ORIGIN", "")
         if origin:
             if self._is_allowed_origin(origin):
                 return self.get_response(request)
             logger.warning(
-                "Blocked request from disallowed origin: %s (path=%s, ip=%s)",
+                "Blocked request from disallowed origin: %s (path=%s, method=%s, ip=%s)",
                 origin,
                 request.path,
+                request.method,
                 remote_ip,
             )
             return JsonResponse(
                 {"error": "Forbidden", "code": "invalid_origin"}, status=403
             )
 
-        # 5. No Origin — check Referer
+        # 6. No Origin -- check Referer
         referer = request.META.get("HTTP_REFERER", "")
         if referer:
             if self._is_allowed_origin(referer):
                 return self.get_response(request)
             logger.warning(
-                "Blocked request with disallowed referer: %s (path=%s, ip=%s)",
+                "Blocked request with disallowed referer: %s (path=%s, method=%s, ip=%s)",
                 referer,
                 request.path,
+                request.method,
                 remote_ip,
             )
             return JsonResponse(
                 {"error": "Forbidden", "code": "invalid_origin"}, status=403
             )
 
-        # 6. Neither Origin nor Referer present — block
+        # 7. Neither Origin nor Referer present on mutating request -- block
         logger.warning(
-            "Blocked request with no Origin/Referer (path=%s, ip=%s)",
+            "Blocked %s request with no Origin/Referer (path=%s, ip=%s)",
+            request.method,
             request.path,
             remote_ip,
         )
