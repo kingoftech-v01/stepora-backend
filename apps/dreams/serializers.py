@@ -462,22 +462,54 @@ class DreamSerializer(serializers.ModelSerializer):
         return obj.vision_image_url
 
     def get_next_checkin_days(self, obj) -> int:
-        """Days until next check-in based on the scheduled date."""
+        """Days until next check-in.
+
+        Logic:
+        - If awaiting_user check-in exists → 0 (available now)
+        - If no check-in done this week → 0 (available now)
+        - If already done this week → max(7_days_after_last, celery_scheduled)
+          - If celery date > 7 days → use celery date
+          - If celery date < 7 days → use 7 days (minimum cooldown)
+        """
+        from datetime import timedelta
+
         from django.utils import timezone
 
         from apps.plans.models import PlanCheckIn
+
+        now = timezone.now()
 
         # If there's already a pending check-in, return 0 (available now)
         if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
             return 0
 
-        # Use the dream's next_checkin_at (set by Celery beat scheduler)
-        if obj.next_checkin_at:
-            days = (obj.next_checkin_at - timezone.now()).days
-            return max(0, days)
+        # Check if user already did a check-in this week
+        last_completed = (
+            PlanCheckIn.objects.filter(dream=obj, status="completed")
+            .order_by("-completed_at")
+            .first()
+        )
 
-        # No next_checkin_at set — check-in available now
-        return 0
+        if not last_completed:
+            # Never done a check-in → available now
+            return 0
+
+        days_since_last = (now - last_completed.completed_at).days
+
+        if days_since_last >= 7:
+            # Last check-in was over a week ago → available now
+            return 0
+
+        # Already did a check-in this week — compute cooldown
+        min_next = last_completed.completed_at + timedelta(days=7)
+        celery_next = obj.next_checkin_at
+
+        if celery_next and celery_next > min_next:
+            # Celery scheduled later than 7-day minimum → use celery date
+            return max(0, (celery_next - now).days)
+        else:
+            # Use 7-day minimum cooldown
+            return max(0, (min_next - now).days)
 
     def get_has_pending_checkin(self, obj) -> bool:
         """Return True if this dream has a check-in awaiting user response."""
