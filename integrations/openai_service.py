@@ -2115,6 +2115,7 @@ Respond ONLY with JSON:
 
         return merged_plan
 
+    @openai_retry
     def generate_calibration_questions(
         self,
         dream_title,
@@ -2310,10 +2311,11 @@ Respond ONLY with JSON:
                 timeout=self.timeout,
             )
 
-            result = json.loads(response.choices[0].message.content)
+            content = (response.choices[0].message.content or "{}") if response.choices else "{}"
+            result = json.loads(content)
             return result
 
-        except (json.JSONDecodeError, openai.APIError) as e:
+        except (json.JSONDecodeError, openai.APIError, TypeError, IndexError, AttributeError) as e:
             raise OpenAIError(f"Calibration question generation failed: {str(e)}")
 
     def generate_calibration_summary(self, dream_title, dream_description, qa_pairs):

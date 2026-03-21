@@ -602,6 +602,7 @@ class CalibrationQuestionsResponseSchema(BaseModel):
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
     missing_areas: list[str] = Field(default_factory=list)
     questions: list[CalibrationQuestionSchema] = Field(default_factory=list)
+    refusal_reason: Optional[str] = Field(default=None)
 
     @field_validator("confidence_score", mode="before")
     @classmethod

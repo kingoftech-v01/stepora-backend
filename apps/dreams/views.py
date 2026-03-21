@@ -798,6 +798,21 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Resume if already in progress — return existing unanswered questions
+        if dream.calibration_status == "in_progress":
+            existing = CalibrationResponse.objects.filter(
+                dream=dream, answer=""
+            ).order_by("question_number")
+            if existing.exists():
+                return Response(
+                    {
+                        "status": "in_progress",
+                        "questions": CalibrationResponseSerializer(
+                            existing, many=True
+                        ).data,
+                    }
+                )
+
         try:
             # Generate initial batch of 7 questions
             # Get category from dream field or AI analysis
@@ -833,6 +848,13 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Validate AI output
             result = validate_calibration_questions(raw_result)
+
+            # Check for AI refusal
+            if result.refusal_reason:
+                return Response(
+                    {"error": result.refusal_reason},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # Increment AI usage counter
             AIUsageTracker().increment(request.user, "ai_plan")
@@ -920,6 +942,13 @@ class DreamViewSet(viewsets.ModelViewSet):
         Returns either more questions or marks calibration as complete.
         """
         dream = self.get_object()
+
+        if dream.calibration_status in ("completed", "skipped"):
+            return Response(
+                {"error": _("Calibration already completed")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         answers_data = request.data.get("answers", [])
 
         # Support single-answer format from frontend:
@@ -952,6 +981,12 @@ class DreamViewSet(viewsets.ModelViewSet):
                 answer_text = ans.get("answer", "")
                 if not answer_text:
                     continue
+
+                if len(answer_text.strip()) < 3:
+                    return Response(
+                        {"error": _("Answer too short"), "min_length": 3},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 # Moderate each answer
                 mod_result = moderation.moderate_text(
@@ -1055,6 +1090,13 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Validate AI output
             result = validate_calibration_questions(raw_result)
+
+            # Check for AI refusal
+            if result.refusal_reason:
+                return Response(
+                    {"error": result.refusal_reason},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # Increment AI usage counter
             AIUsageTracker().increment(request.user, "ai_plan")
