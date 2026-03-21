@@ -22,6 +22,9 @@ class TaskSerializer(serializers.ModelSerializer):
     chain_position = serializers.SerializerMethodField(
         help_text="Position of this task within its chain."
     )
+    xp = serializers.SerializerMethodField(
+        help_text="XP reward for completing this task."
+    )
 
     class Meta:
         model = Task
@@ -45,6 +48,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "chain_parent",
             "is_chain",
             "chain_position",
+            "xp",
             "created_at",
             "updated_at",
         ]
@@ -54,6 +58,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "updated_at",
             "completed_at",
             "chain_position",
+            "xp",
         ]
 
     def get_chain_position(self, obj):
@@ -61,6 +66,9 @@ class TaskSerializer(serializers.ModelSerializer):
         if pos is None:
             return None
         return {"position": pos, "total": total}
+
+    def get_xp(self, obj):
+        return max(10, (obj.duration_mins or 30) // 3)
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
