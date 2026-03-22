@@ -467,9 +467,9 @@ class DreamSerializer(serializers.ModelSerializer):
         Logic:
         - If awaiting_user check-in exists → 0 (available now)
         - If no check-in done this week → 0 (available now)
-        - If already done this week → max(7_days_after_last, celery_scheduled)
-          - If celery date > 7 days → use celery date
-          - If celery date < 7 days → use 7 days (minimum cooldown)
+        - If already done this week → min(7_day_cooldown, celery_scheduled)
+          - Cooldown = 7 - days_since_last
+          - Take the earliest opportunity (min)
         """
         from datetime import timedelta
 
@@ -500,16 +500,11 @@ class DreamSerializer(serializers.ModelSerializer):
             # Last check-in was over a week ago → available now
             return 0
 
-        # Already did a check-in this week — compute cooldown
-        min_next = last_completed.completed_at + timedelta(days=7)
-        celery_next = obj.next_checkin_at
-
-        if celery_next and celery_next > min_next:
-            # Celery scheduled later than 7-day minimum → use celery date
-            return max(0, (celery_next - now).days)
-        else:
-            # Use 7-day minimum cooldown
-            return max(0, (min_next - now).days)
+        # Already did a check-in this week — 7 day cooldown is the floor
+        cooldown_remaining = 7 - days_since_last
+        # Cooldown is always enforced (1/week rule)
+        # Celery can only matter AFTER cooldown expires
+        return cooldown_remaining
 
     def get_has_pending_checkin(self, obj) -> bool:
         """Return True if this dream has a check-in awaiting user response."""
