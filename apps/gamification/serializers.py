@@ -179,14 +179,9 @@ class HabitChainSerializer(serializers.ModelSerializer):
         model = HabitChain
         fields = [
             "id",
-            "name",
-            "description",
-            "frequency",
-            "current_streak",
-            "longest_streak",
-            "last_completed_at",
-            "is_active",
+            "date",
+            "chain_type",
+            "completed",
             "created_at",
-            "updated_at",
         ]
-        read_only_fields = ["id", "current_streak", "longest_streak", "created_at", "updated_at"]
+        read_only_fields = fields
