@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from core.sanitizers import sanitize_text
 
+from apps.dreams.models import Dream
 from .models import (
     CalendarEvent,
     CalendarShare,
@@ -438,17 +439,27 @@ class TimeBlockSerializer(serializers.ModelSerializer):
     day_name = serializers.SerializerMethodField(
         help_text="Human-readable name of the day of week."
     )
+    dream_id = serializers.PrimaryKeyRelatedField(
+        source="dream",
+        queryset=Dream.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="UUID of the associated dream.",
+    )
 
     class Meta:
         model = TimeBlock
         fields = [
             "id",
             "user",
+            "title",
             "block_type",
             "day_of_week",
             "day_name",
             "start_time",
             "end_time",
+            "color",
+            "dream_id",
             "is_active",
             "focus_block",
             "created_at",
@@ -458,14 +469,17 @@ class TimeBlockSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "id": {"help_text": "Unique identifier for the time block."},
             "user": {"help_text": "Owner of the time block."},
+            "title": {"help_text": "User-facing label for the time block."},
             "block_type": {
-                "help_text": "Category of the time block (e.g., work, rest)."
+                "help_text": "Category of the time block (e.g., work, personal).",
+                "required": False,
             },
             "day_of_week": {
                 "help_text": "Day of week as integer (0=Monday, 6=Sunday)."
             },
             "start_time": {"help_text": "Start time of the block."},
             "end_time": {"help_text": "End time of the block."},
+            "color": {"help_text": "Hex color code for the time block."},
             "is_active": {"help_text": "Whether this time block is currently active."},
             "focus_block": {
                 "help_text": "Whether this block is a focus/DND block that suppresses notifications."

@@ -172,6 +172,13 @@ class TimeBlock(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_blocks")
 
+    title = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Optional user-facing label for this time block.",
+    )
+
     BLOCK_TYPE_CHOICES = [
         ("work", "Work"),
         ("personal", "Personal"),
@@ -179,12 +186,27 @@ class TimeBlock(models.Model):
         ("exercise", "Exercise"),
         ("blocked", "Blocked"),
     ]
-    block_type = models.CharField(max_length=20, choices=BLOCK_TYPE_CHOICES)
+    block_type = models.CharField(max_length=20, choices=BLOCK_TYPE_CHOICES, default="personal")
 
     # Recurring schedule
     day_of_week = models.IntegerField(help_text="0=Monday, 6=Sunday")
     start_time = models.TimeField()
     end_time = models.TimeField()
+
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="#8B5CF6",
+        help_text="Hex color code for the time block.",
+    )
+    dream = models.ForeignKey(
+        "dreams.Dream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="time_blocks",
+        help_text="Optional associated dream.",
+    )
 
     is_active = models.BooleanField(default=True)
 
