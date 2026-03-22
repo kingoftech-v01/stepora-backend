@@ -629,8 +629,31 @@ Objects generated per duration (1 milestone/month, 4+ goals/milestone, 4+ tasks/
 
 ## Testing
 
+Test files in `tests/`:
+
+| File | Focus | Tests |
+|---|---|---|
+| `test_dreams_complete.py` | **Comprehensive endpoint coverage** -- CRUD, AI, tags, templates, vision board, journal, photos, sharing, collaboration, calibration, check-ins, focus, IDOR guards, subscription guards | 207 |
+| `test_integration.py` | Integration tests for API endpoints | ~200 |
+| `test_views_coverage.py` | Branch coverage for views.py edge cases | ~100 |
+| `test_unit.py` | Model-level unit tests | ~50 |
+| `test_calibration.py` | Calibration flow tests | ~25 |
+| `test_tasks.py` | Celery task tests | ~20 |
+| `test_dream_tasks.py` | Dream task model tests | ~30 |
+| `test_checkin_system.py` | Check-in system tests | ~15 |
+| `test_dream_serializers.py` | Serializer tests | ~25 |
+| `test_production_bugfixes.py` | Regression tests for prod bugs | ~10 |
+| `conftest.py` | Shared fixtures | -- |
+
 ```bash
-pytest apps/dreams/tests.py -v
+# All dreams tests
+TEST_DB_NAME=test_stepora_dreams ./venv/bin/python -m pytest apps/dreams/tests/ --override-ini="addopts=" -q
+
+# Just the comprehensive test file
+TEST_DB_NAME=test_stepora_dc ./venv/bin/python -m pytest apps/dreams/tests/test_dreams_complete.py --override-ini="addopts=" -q
+
+# With coverage
+TEST_DB_NAME=test_stepora_dc ./venv/bin/python -m pytest apps/dreams/tests/test_dreams_complete.py --override-ini="addopts=" --cov=apps.dreams.views --cov-report=term-missing
 ```
 
 ## Configuration
