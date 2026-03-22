@@ -2451,6 +2451,59 @@ Reference the actual goal details. Provide at least 3 key_challenges."""
             raise OpenAIError(f"Analysis failed: {str(e)}")
 
     @openai_retry
+    def refine_dream(self, title, description):
+        """Refine dream title and description. Returns suggested improvements."""
+        prompt = f"""You are a dream coach helping someone articulate their dream clearly.
+
+The user wrote:
+Title: "{title}"
+Description: "{description}"
+
+Improve BOTH the title and description:
+- Title: Make it specific, concise (max 60 chars), action-oriented, motivating
+- Description: Make it detailed, clear goals, measurable outcomes, realistic timeline context
+
+Keep the user's original intent. Don't change the meaning.
+If the original is already good, return it unchanged.
+Write in the same language as the user.
+
+Return JSON:
+{{
+  "suggested_title": "...",
+  "suggested_description": "...",
+  "title_changed": true/false,
+  "description_changed": true/false,
+  "improvements": ["list of what was improved"]
+}}"""
+
+        response = _client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a dream planning coach. Return valid JSON only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            response_format={"type": "json_object"},
+            max_tokens=500,
+            timeout=self.timeout,
+        )
+
+        content = response.choices[0].message.content or "{}"
+        try:
+            return json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            return {
+                "suggested_title": title,
+                "suggested_description": description,
+                "title_changed": False,
+                "description_changed": False,
+                "improvements": [],
+            }
+
+    @openai_retry
     def auto_categorize(self, dream_title, dream_description):
         """
         Analyze a dream and suggest the best category and relevant tags.

@@ -731,6 +731,35 @@ class DreamViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
+        url_path="refine",
+        permission_classes=[IsAuthenticated, CanUseAI],
+        throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle],
+    )
+    def refine(self, request):
+        """AI refines dream title and description together."""
+        title = request.data.get("title", "").strip()
+        description = request.data.get("description", "").strip()
+
+        if not title and not description:
+            return Response(
+                {"error": _("Provide title or description.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ai_service = OpenAIService()
+
+        try:
+            result = ai_service.refine_dream(title, description)
+            AIUsageTracker().increment(request.user, "ai_plan")
+            return Response(result)
+        except OpenAIError as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(
+        detail=False,
+        methods=["post"],
         url_path="auto-categorize",
         permission_classes=[IsAuthenticated, CanUseAI],
         throttle_classes=[AIPlanRateThrottle, AIPlanDailyThrottle],

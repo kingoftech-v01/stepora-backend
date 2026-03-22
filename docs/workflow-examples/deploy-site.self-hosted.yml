@@ -1,0 +1,135 @@
+# CI/CD Site Vitrine — Self-Hosted Runner Version
+#
+# Changes from original:
+#   1. All jobs use `runs-on: self-hosted` instead of `ubuntu-latest`
+#   2. Docker cleanup step added
+#
+# To apply: replace .github/workflows/deploy-site.yml in stepora-site repo
+
+name: CI/CD Site Vitrine
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+env:
+  PYTHON_VERSION: "3.11"
+  AWS_REGION: eu-west-3
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Lint (runs on all branches)
+  # ------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install linters
+        run: pip install black isort flake8
+      - name: Check Black formatting
+        run: black --check --exclude='migrations|venv' .
+      - name: Check isort imports
+        run: isort --check-only --skip-glob='*/migrations/*' --profile black .
+
+  # ------------------------------------------------------------------
+  # 2. Build Docker image and push to ECR (main only)
+  # ------------------------------------------------------------------
+  build-and-push:
+    needs: lint
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          ECR_REPO: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}"
+          docker build \
+            -t "${FULL_IMAGE}:${IMAGE_TAG}" \
+            -t "${FULL_IMAGE}:latest" \
+            .
+          docker push "${FULL_IMAGE}:${IMAGE_TAG}"
+          docker push "${FULL_IMAGE}:latest"
+
+      - name: Cleanup old Docker images
+        if: always()
+        run: docker image prune -f 2>/dev/null || true
+
+  # ------------------------------------------------------------------
+  # 3. Deploy to ECS (main only)
+  # ------------------------------------------------------------------
+  deploy:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: self-hosted
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS service
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          ECR_REPO: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
+
+          CURRENT_TD=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          aws ecs describe-task-definition \
+            --task-definition "${CURRENT_TD}" \
+            --query 'taskDefinition' \
+            | jq --arg IMG "${FULL_IMAGE}" \
+              '.containerDefinitions[0].image = $IMG
+               | del(.taskDefinitionArn, .revision, .status,
+                     .requiresAttributes, .compatibilities,
+                     .registeredAt, .registeredBy)' \
+            > /tmp/new-task-def.json
+
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/new-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "New task definition: ${NEW_TD_ARN}"
+
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --task-definition "${NEW_TD_ARN}" \
+            --force-new-deployment
+
+          echo "Waiting for service stability..."
+          aws ecs wait services-stable \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}"
+          echo "Deployment complete"
