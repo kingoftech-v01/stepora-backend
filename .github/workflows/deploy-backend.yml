@@ -21,11 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: pip install -r requirements/production.txt
+      - name: Create venv and install dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements/production.txt
 
       - name: Compile check (syntax errors)
-        run: python3 -m py_compile manage.py
+        run: |
+          source .venv/bin/activate
+          python -m py_compile manage.py
 
       - name: Django system check
         env:
@@ -35,8 +40,9 @@ jobs:
           FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DB_NAME: ":memory:"
         run: |
+          source .venv/bin/activate
           mkdir -p logs
-          python3 manage.py check
+          python manage.py check
 
   # ------------------------------------------------------------------
   # 2. Build Docker image and push to ECR
@@ -47,10 +53,6 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        run: |
-          aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         run: |
@@ -81,10 +83,6 @@ jobs:
     needs: build-and-push
     runs-on: self-hosted
     steps:
-      - name: Configure AWS credentials
-        run: |
-          aws sts get-caller-identity
-
       - name: Deploy all backend services (web + celery + celery-beat)
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
@@ -94,10 +92,6 @@ jobs:
         run: |
           FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
 
-          # Map ECS service names to CONTAINER_ROLE values.
-          # The entrypoint.sh uses CONTAINER_ROLE to decide whether to run
-          # gunicorn (web), celery worker (worker), or celery beat (beat).
-          # Worker auto-discovers all queues from task_routes in celery.py.
           declare -A ROLES=(
             [stepora-backend]=web
             [stepora-celery]=worker
@@ -108,15 +102,12 @@ jobs:
             echo "=== Deploying ${SERVICE_NAME} (role: ${ROLES[$SERVICE_NAME]}) ==="
             ROLE="${ROLES[$SERVICE_NAME]}"
 
-            # Get current task definition from running service
             CURRENT_TD=$(aws ecs describe-services \
               --cluster "${ECS_CLUSTER}" \
               --services "${SERVICE_NAME}" \
               --query 'services[0].taskDefinition' \
               --output text)
 
-            # Swap image, set CONTAINER_ROLE env var, remove hardcoded command
-            # (entrypoint.sh handles role-based startup), strip read-only fields
             aws ecs describe-task-definition \
               --task-definition "${CURRENT_TD}" \
               --query 'taskDefinition' \
@@ -132,14 +123,12 @@ jobs:
                        .registeredAt, .registeredBy)' \
               > /tmp/new-task-def.json
 
-            # Register new revision
             NEW_TD_ARN=$(aws ecs register-task-definition \
               --cli-input-json file:///tmp/new-task-def.json \
               --query 'taskDefinition.taskDefinitionArn' \
               --output text)
             echo "New task definition: ${NEW_TD_ARN}"
 
-            # Update the service
             aws ecs update-service \
               --cluster "${ECS_CLUSTER}" \
               --service "${SERVICE_NAME}" \
@@ -147,7 +136,6 @@ jobs:
               --force-new-deployment
           done
 
-          # Wait for all services to stabilize
           echo "Waiting for all services to stabilize..."
           aws ecs wait services-stable \
             --cluster "${ECS_CLUSTER}" \

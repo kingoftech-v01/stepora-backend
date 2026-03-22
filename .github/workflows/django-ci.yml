@@ -40,9 +40,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Create venv and install dependencies
         run: |
-          python3 -m pip install --upgrade pip
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements/production.txt
           pip install -r requirements/testing.txt
 
@@ -58,8 +60,9 @@ jobs:
           FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DEBUG: 'True'
         run: |
+          source .venv/bin/activate
           mkdir -p logs
-          python3 manage.py migrate
+          python manage.py migrate
 
       - name: Run tests with coverage
         env:
@@ -73,7 +76,9 @@ jobs:
           SECRET_KEY: test-secret-key
           FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
           DEBUG: 'True'
-        run: pytest --override-ini="addopts=" --cov=. --cov-report=xml --cov-report=html -v
+        run: |
+          source .venv/bin/activate
+          pytest --override-ini="addopts=" --cov=. --cov-report=xml --cov-report=html -v
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -87,14 +92,23 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - name: Install linters
-        run: pip install black isort flake8
+      - name: Create venv and install linters
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install black isort flake8
       - name: Check Black formatting
-        run: black --check --exclude='migrations|venv' .
+        run: |
+          source .venv/bin/activate
+          black --check --exclude='migrations|venv' .
       - name: Check isort imports
-        run: isort --check-only --skip-glob='*/migrations/*' --profile black .
+        run: |
+          source .venv/bin/activate
+          isort --check-only --skip-glob='*/migrations/*' --profile black .
       - name: Run Flake8
-        run: flake8 .
+        run: |
+          source .venv/bin/activate
+          flake8 .
 
   build:
     name: Build Docker

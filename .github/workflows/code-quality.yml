@@ -13,20 +13,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Create venv and install dependencies
         run: |
-          python3 -m pip install --upgrade pip
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements/base.txt
           pip install flake8 black isort
 
       - name: Run Black (format check)
-        run: black --check .
+        run: |
+          source .venv/bin/activate
+          black --check .
 
       - name: Run isort (import check)
-        run: isort --check-only .
+        run: |
+          source .venv/bin/activate
+          isort --check-only .
 
       - name: Run Flake8 (linting)
-        run: flake8 .
+        run: |
+          source .venv/bin/activate
+          flake8 .
 
   comment-results:
     name: Comment PR
