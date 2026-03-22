@@ -2,6 +2,8 @@
 Unit tests for the Users app models.
 """
 
+from unittest.mock import patch
+
 import pytest
 from django.utils import timezone
 
@@ -1282,6 +1284,7 @@ class TestCoreMiddleware:
         assert mw(request).status_code == 200
 
     def test_origin_validation_no_origin_no_referer(self):
+        """Mutating request (POST) without Origin/Referer from non-local IP is blocked."""
         from django.http import HttpResponse
         from django.test import RequestFactory
 
@@ -1289,7 +1292,8 @@ class TestCoreMiddleware:
 
         mw = OriginValidationMiddleware(get_response=lambda r: HttpResponse("OK"))
         factory = RequestFactory()
-        request = factory.get("/api/test/", REMOTE_ADDR="8.8.8.8")
+        # POST request without Origin/Referer from external IP should be blocked
+        request = factory.post("/api/test/", REMOTE_ADDR="8.8.8.8")
         assert mw(request).status_code == 403
 
     def test_security_headers(self):
@@ -1512,7 +1516,8 @@ class TestCorePermissions:
         plan = Mock(has_circle_create=False, has_circles=True)
         user.get_active_plan.return_value = plan
         request = Mock(user=user, method="POST")
-        assert perm.has_permission(request, None) is False
+        view = Mock(action="create")
+        assert perm.has_permission(request, view) is False
 
     def test_can_use_circles_no_plan(self):
         from unittest.mock import Mock
@@ -2011,7 +2016,8 @@ class TestUserViewSetActions:
         )
         assert resp.status_code in (200, 400, 403)
 
-    def test_change_email(self, users_client):
+    @patch("apps.users.tasks.send_email_change_verification.delay")
+    def test_change_email(self, mock_task, users_client):
         resp = users_client.post(
             "/api/users/change-email/",
             {"new_email": "newemail@example.com", "password": "testpassword123"},

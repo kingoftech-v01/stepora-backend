@@ -3089,7 +3089,7 @@ class UserViewSet(viewsets.ModelViewSet):
         completed_by_dow = (
             tasks_in_period.filter(status="completed", completed_at__isnull=False)
             .filter(completed_at__date__gte=thirty_days_ago)
-            .extra(select={"dow": "EXTRACT(DOW FROM completed_at)"})
+            .extra(select={"dow": 'EXTRACT(DOW FROM "tasks"."completed_at")'})
             .values("dow")
             .annotate(completed=Count("id"))
             .order_by("dow")

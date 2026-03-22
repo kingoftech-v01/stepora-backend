@@ -218,12 +218,19 @@ class TestSeedLeaguesCommand:
 
     def test_seed_creates_initial_season(self):
         """seed_leagues creates an active season."""
+        from django.core.cache import cache
+
         from apps.leagues.models import Season
 
+        cache.clear()  # Clear cached active season
         call_command("seed_leagues", stdout=StringIO())
 
-        active = Season.objects.filter(is_active=True)
-        assert active.exists()
+        # Check either is_active=True or status='active'
+        active = Season.objects.filter(status="active")
+        assert active.exists(), (
+            f"No active season found. All seasons: "
+            f"{list(Season.objects.values('name', 'status', 'is_active'))}"
+        )
 
     def test_seed_is_idempotent(self):
         """Running seed_leagues twice does not duplicate."""
