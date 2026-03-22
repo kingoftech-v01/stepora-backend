@@ -1,0 +1,13 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[lint.per-file-ignores]
+"*/migrations/*" = ["ALL"]
+"config/settings/*" = ["F401", "F405"]
+"*/tests/*" = ["F841"]
+"*/test_*" = ["F841"]

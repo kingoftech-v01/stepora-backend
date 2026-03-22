@@ -26,6 +26,12 @@ jobs:
           python3 -m venv .venv
           source .venv/bin/activate
           pip install -r requirements/production.txt
+          pip install ruff
+
+      - name: Lint (ruff) — warnings only until violations are fixed
+        run: |
+          source .venv/bin/activate
+          ruff check apps/ core/ integrations/ config/ --config ruff.toml || true
 
       - name: Compile check (syntax errors)
         run: |
