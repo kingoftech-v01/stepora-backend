@@ -1452,8 +1452,13 @@ class RecentSearchViewSet(viewsets.GenericViewSet):
                 {"error": _("query is required.")}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Avoid duplicates — delete older same query
-        RecentSearch.objects.filter(user=request.user, query=query).delete()
+        # Avoid duplicates — delete older entries with the same query.
+        # query is EncryptedCharField, so DB-level filter won't match plaintext.
+        # We iterate in Python to compare decrypted values.
+        existing = RecentSearch.objects.filter(user=request.user)
+        dup_ids = [s.id for s in existing if s.query == query]
+        if dup_ids:
+            RecentSearch.objects.filter(id__in=dup_ids).delete()
         RecentSearch.objects.create(
             user=request.user, query=query, search_type=search_type
         )
@@ -1631,7 +1636,7 @@ class DreamPostViewSet(viewsets.ModelViewSet):
             try:
                 linked_task = Task.objects.get(
                     id=data["linked_task_id"],
-                    dream__user=request.user,
+                    goal__dream__user=request.user,
                 )
             except Task.DoesNotExist:
                 return Response(

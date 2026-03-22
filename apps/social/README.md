@@ -1,6 +1,6 @@
 # Social App
 
-Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, follow suggestions, and the dream post social platform for the Stepora community.
+Django application implementing the social graph (friendships, follows, blocking, reporting), activity feed, user search, follow suggestions, dream post social platform, stories, social events, and friend suggestions for the Stepora community.
 
 ## Overview
 
@@ -13,9 +13,14 @@ The Social app provides:
 5. **Activity Feed** - Aggregated feed from friends and followed users (premium+ for full feed)
 6. **User Search** - Discovery by display name with friendship/follow status
 7. **Follow Suggestions** - Algorithm-based user recommendations (premium+)
-8. **Recent Searches** - Saved search history per user
-9. **Dream Posts** - Public dream sharing with images, GoFundMe links, and visibility controls
-10. **Dream Post Interactions** - Likes, threaded comments, and typed encouragements
+8. **Friend Suggestions** - Smart recommendation engine scored by mutual friends (40%), similar dream categories (30%), activity level (15%), and shared circles (15%), cached 1 hour
+9. **Recent Searches** - Saved search history per user (max 20, deduplication)
+10. **Dream Posts** - Public dream sharing with images/video/audio, GoFundMe links, visibility controls, and linked achievements/milestones
+11. **Dream Post Interactions** - Likes, emoji reactions (6 types), threaded comments, typed encouragements (5 types), sharing/reposting, and bookmarking/saving
+12. **Social Events** - Virtual, physical, and challenge events with registration, capacity limits, atomic participant counting, and event feeds
+13. **Stories** - Ephemeral 24-hour media posts (image/video) with view tracking, grouped feeds (unviewed first), and viewer lists
+14. **Post Reactions** - Emoji reactions (like, love, fire, clap, wow, celebrate) with toggle and change support
+15. **3-Tier Social Feed Algorithm** - T1 friends (highest priority, all visibility except private), T2 friends-of-friends (public only, capped at 500 IDs), T3 follows + trending (public posts from last 7 days), interleaved ~8/4/3 per page of 15
 
 ## Models
 

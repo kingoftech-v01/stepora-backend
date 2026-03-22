@@ -1844,8 +1844,8 @@ class TestPermissions:
         request.user = user
         assert perm.has_permission(request, None) is True
 
-    def test_can_use_circles_post(self):
-        """CanUseCircles checks has_circle_create for POST."""
+    def test_can_use_circles_post_create(self):
+        """CanUseCircles checks has_circle_create for POST with action=create."""
         from core.permissions import CanUseCircles
 
         perm = CanUseCircles()
@@ -1858,7 +1858,27 @@ class TestPermissions:
         request = Mock()
         request.user = user
         request.method = "POST"
-        assert perm.has_permission(request, None) is True
+        view = Mock()
+        view.action = "create"
+        assert perm.has_permission(request, view) is True
+
+    def test_can_use_circles_post_non_create(self):
+        """CanUseCircles allows POST non-create actions with has_circles."""
+        from core.permissions import CanUseCircles
+
+        perm = CanUseCircles()
+        user = Mock()
+        user.is_authenticated = True
+        plan = Mock()
+        plan.has_circle_create = False
+        plan.has_circles = True
+        user.get_active_plan.return_value = plan
+        request = Mock()
+        request.user = user
+        request.method = "POST"
+        view = Mock()
+        view.action = "join"
+        assert perm.has_permission(request, view) is True
 
     def test_can_use_circles_get(self):
         """CanUseCircles checks has_circles for GET."""
@@ -1876,7 +1896,7 @@ class TestPermissions:
         assert perm.has_permission(request, None) is True
 
     def test_can_use_circles_denied_create(self):
-        """CanUseCircles denies POST when no circle_create."""
+        """CanUseCircles denies POST create when no circle_create."""
         from core.permissions import CanUseCircles
 
         perm = CanUseCircles()
@@ -1889,7 +1909,9 @@ class TestPermissions:
         request = Mock()
         request.user = user
         request.method = "POST"
-        assert perm.has_permission(request, None) is False
+        view = Mock()
+        view.action = "create"
+        assert perm.has_permission(request, view) is False
 
     def test_can_use_vision_board(self):
         """CanUseVisionBoard checks has_vision_board."""

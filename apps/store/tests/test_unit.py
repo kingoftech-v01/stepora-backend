@@ -18,6 +18,7 @@ from apps.store.models import (
 # ── StoreItem model ───────────────────────────────────────────────────
 
 
+@pytest.mark.django_db
 class TestStoreItemModel:
     """Tests for the StoreItem model."""
 
@@ -124,6 +125,7 @@ class TestStoreItemModel:
 # ── StoreCategory model ──────────────────────────────────────────────
 
 
+@pytest.mark.django_db
 class TestStoreCategoryModel:
     """Tests for the StoreCategory model."""
 
@@ -162,6 +164,7 @@ class TestStoreCategoryModel:
 # ── UserInventory model ──────────────────────────────────────────────
 
 
+@pytest.mark.django_db
 class TestUserInventoryModel:
     """Tests for the UserInventory model."""
 
@@ -210,6 +213,7 @@ class TestUserInventoryModel:
 # ── Wishlist model ────────────────────────────────────────────────────
 
 
+@pytest.mark.django_db
 class TestWishlistModel:
     """Tests for the Wishlist model."""
 
@@ -229,6 +233,7 @@ class TestWishlistModel:
 # ── Gift model ────────────────────────────────────────────────────────
 
 
+@pytest.mark.django_db
 class TestGiftModel:
     """Tests for the Gift model."""
 

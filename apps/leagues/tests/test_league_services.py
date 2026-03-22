@@ -474,25 +474,7 @@ class TestIncrementCounters:
 
 
 class TestAssignUserToGroup:
-    """
-    Tests for assign_user_to_group.
-
-    Note: LeagueGroup has a @property `member_count` that clashes with the
-    `.annotate(member_count=Count(...))` in the service. Django's ORM
-    cannot set a Python property from an annotation value. We patch the
-    property to add a setter so the annotated queryset can materialise.
-    """
-
-    @pytest.fixture(autouse=True)
-    def _patch_member_count_property(self):
-        """Allow ORM annotation to coexist with the model property."""
-        original = LeagueGroup.member_count
-        LeagueGroup.member_count = property(
-            fget=original.fget,
-            fset=lambda self, val: None,  # ignore setter from annotation
-        )
-        yield
-        LeagueGroup.member_count = original
+    """Tests for assign_user_to_group."""
 
     def test_creates_group_if_none_exists(
         self, bronze_league, test_season, season_config

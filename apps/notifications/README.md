@@ -51,13 +51,10 @@ Push notification with multi-channel delivery support.
 | `rescue` | Rescue |
 | `buddy` | Buddy |
 | `system` | System |
+| `missed_call` | Missed Call |
 | `dream_completed` | Dream Completed |
 | `weekly_report` | Weekly Report |
-| `dream_post_like` | Dream Post Like |
-| `dream_post_comment` | Dream Post Comment |
-| `dream_post_encouragement` | Dream Post Encouragement |
-| `circle_call` | Circle Call |
-| `buddy_message` | Buddy Message |
+| `daily_summary` | Daily Summary |
 
 **Methods:**
 
@@ -104,6 +101,24 @@ Browser Web Push subscription using VAPID protocol.
 
 **DB table:** `webpush_subscriptions`
 
+### UserDevice
+
+FCM device registration for push notifications.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Primary key |
+| user | FK(User) | Device owner (related_name: `devices`) |
+| fcm_token | TextField | Firebase Cloud Messaging token (unique) |
+| platform | CharField(10) | `android`, `ios`, or `web` |
+| device_name | EncryptedCharField(255) | Human-readable device name (encrypted at rest) |
+| app_version | CharField(50) | App version at registration |
+| is_active | BooleanField | Active status (default: True) |
+| created_at | DateTimeField | Auto-set on creation |
+| updated_at | DateTimeField | Auto-set on update |
+
+**DB table:** `user_devices`
+
 ### NotificationBatch
 
 Batch of notifications sent together with progress tracking.
@@ -133,10 +148,10 @@ Batch of notifications sent together with progress tracking.
 | GET | `/{id}/` | Notification detail |
 | PUT | `/{id}/` | Update a notification |
 | DELETE | `/{id}/` | Delete a notification |
-| POST | `/{id}/mark-read/` | Mark notification as read |
+| POST | `/{id}/mark_read/` | Mark notification as read |
 | POST | `/{id}/opened/` | Mark notification as opened (analytics) |
-| POST | `/mark-all-read/` | Mark all notifications as read |
-| GET | `/unread-count/` | Get count of unread sent notifications |
+| POST | `/mark_all_read/` | Delete all notifications (clears inbox) |
+| GET | `/unread_count/` | Get count of unread sent notifications |
 | GET | `/grouped/` | Get notifications grouped by type with total and unread counts |
 
 **ViewSet:** `NotificationViewSet` (ModelViewSet)
@@ -167,6 +182,31 @@ Batch of notifications sent together with progress tracking.
 
 - Permission: `IsAuthenticated`
 
+### User Devices (FCM)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/devices/` | List active devices for current user |
+| POST | `/devices/` | Register FCM device token (re-register deletes old token first) |
+| DELETE | `/devices/{id}/` | Soft-delete device (set `is_active=False`) |
+
+**ViewSet:** `UserDeviceViewSet` (ModelViewSet, GET/POST/DELETE only)
+
+- Permission: `IsAuthenticated`
+- On create: subscribes device to FCM topics based on user prefs
+- On delete: unsubscribes device from all FCM topics
+
+### Notification Batches (Admin)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/batches/` | List batches (filterable by `notification_type`, `status`) |
+| GET | `/batches/{id}/` | Batch detail |
+
+**ViewSet:** `NotificationBatchViewSet` (ReadOnlyModelViewSet)
+
+- Permission: `IsAuthenticated`, `IsAdminUser`
+
 ## Serializers
 
 | Serializer | Purpose |
@@ -176,6 +216,7 @@ Batch of notifications sent together with progress tracking.
 | `NotificationTemplateSerializer` | Full template with `available_variables` |
 | `NotificationBatchSerializer` | Batch with computed `success_rate` percentage |
 | `WebPushSubscriptionSerializer` | Push subscription with `subscription_info`, `browser` |
+| `UserDeviceSerializer` | FCM device with `fcm_token` (validated: min 20, max 4096 chars), `platform`, `device_name`, `app_version` |
 
 ## WebSocket Consumer
 
@@ -185,14 +226,18 @@ Real-time notification delivery via WebSocket.
 
 **URL:** `ws://host/ws/notifications/`
 
-**Authentication:** DRF Token via query param or scope
+**Authentication:** JWT token via post-connect `authenticate` message (preferred) or middleware
+
+**Rate limiting:** 20 messages per 60-second sliding window
 
 **Flow:**
 
-1. Connection: verify user is authenticated
-2. Join user-specific group `notifications_{user_id}`
-3. Send connection confirmation with current `unread_count`
-4. Receive real-time notifications as they are sent
+1. Connection: accept and wait for `authenticate` message
+2. Client sends `{"type": "authenticate", "token": "<jwt_access_token>"}`
+3. Join user-specific group `notifications_{user_id}`
+4. Send connection confirmation with current `unread_count`
+5. Start heartbeat loop (ping every 45s to keep connection alive)
+6. Receive real-time notifications as they are sent
 
 **Message format:**
 
@@ -226,14 +271,32 @@ Orchestrates multi-channel notification delivery based on user preferences.
 | Channel | Default | Description |
 |---------|---------|-------------|
 | WebSocket | Enabled | Real-time via channel layer `group_send` |
-| Email | Disabled (opt-in) | HTML/text email via Django's `EmailMultiAlternatives` |
-| Web Push | Enabled | VAPID-based browser push via `pywebpush` |
+| FCM Push | Enabled | Firebase Cloud Messaging to mobile/web devices |
+| Web Push | Fallback | VAPID-based browser push via `pywebpush` (only if FCM fails) |
+| Email | Disabled (opt-in) | HTML/text email via `send_templated_email` |
 
 **Delivery logic:**
 
-- Checks user's `notification_prefs` for per-channel toggles (`websocket_enabled`, `email_enabled`, `push_enabled`)
-- Returns `True` if at least one channel succeeds
-- Expired/invalid Web Push subscriptions are automatically deactivated (HTTP 404/410)
+1. Skip if `retry_count >= max_retries`
+2. Send via WebSocket (if `websocket_enabled`, default True)
+3. Send via email (if `email_enabled`, default False)
+4. Send via FCM (if `push_enabled`, default True)
+5. If FCM fails, fall back to Web Push VAPID
+6. If all channels fail and email was not already tried, send email as last resort
+7. Returns `True` if at least one channel succeeds
+8. Invalid/expired FCM tokens and Web Push subscriptions are auto-deactivated
+
+### FCMService
+
+Firebase Cloud Messaging service (`fcm_service.py`).
+
+- **Singleton Firebase app**: initialized once per process via `get_firebase_app()`
+- **Credentials**: `FIREBASE_CREDENTIALS_JSON` env var (for ECS) or `FIREBASE_CREDENTIALS_PATH` setting
+- **send_to_token()**: Send to single device, raises `InvalidTokenError` on bad token
+- **send_multicast()**: Send to multiple tokens, auto-chunks lists > 500
+- **send_to_topic()**: Send to all devices subscribed to a topic
+- **subscribe_to_topic() / unsubscribe_from_topic()**: Manage topic subscriptions
+- **Platform configs**: Android (high priority, custom channel), APNS (sound, mutable content), WebPush (icon)
 
 ## Do Not Disturb (DND)
 
@@ -257,6 +320,11 @@ DND supports crossing midnight (e.g., 22:00 to 07:00). Notifications during DND 
 | `cleanup_old_notifications` | 3 | Delete read notifications older than 30 days |
 | `send_streak_milestone_notification` | 3 | Send notification at streak milestones (7, 14, 30, 60, 100, 365 days) |
 | `send_level_up_notification` | 3 | Send notification when user reaches a new level |
+| `expire_ringing_calls` | 3 | Expire calls stuck in 'ringing' > 30s, notify both caller and callee |
+| `check_due_tasks` | 3 | Send FCM push for tasks due in next 3 minutes |
+| `cleanup_stale_fcm_tokens` | 3 | Deactivate FCM tokens not updated in 60+ days |
+| `send_weekly_digests` | 0 | Dispatcher: fans out per-user `send_user_digest` tasks |
+| `send_user_digest` | 3 | Generate weekly digest: stats, push, email for a single user |
 
 ## Management Commands
 
@@ -290,13 +358,36 @@ Variables available in notification templates:
 ## Testing
 
 ```bash
-pytest apps/notifications/tests.py -v
+pytest apps/notifications/tests/ -v
 ```
+
+**Test files:**
+
+| File | Coverage |
+|------|----------|
+| `test_unit.py` | Model CRUD, __str__, mark_sent/read/opened/failed, should_send, DND, data JSON |
+| `test_integration.py` | API endpoints: list, create, delete, mark_read, mark_all_read, unread_count, grouped, templates, devices, batches |
+| `test_notification_views.py` | ViewSet: CRUD, free-tier filtering, premium access, IDOR, templates, WebPush CRUD, device CRUD with FCM topic mocking, batch admin-only |
+| `test_notification_services.py` | NotificationService.create, NotificationDeliveryService: multi-channel delivery, max retries, email fallback, FCM/WebPush/WebSocket channels |
+| `test_notification_tasks.py` | All 12 Celery tasks: process_pending, daily_motivation, weekly_digests, check_inactive, reminders, cleanup, streak, level_up, expire_calls, check_due_tasks, cleanup_stale_tokens, _pick_motivational_message |
+| `test_fcm_service.py` | FCMService: build_message, send_to_token, send_multicast (chunking, invalid tokens), send_to_topic, subscribe/unsubscribe, InvalidTokenError, MulticastResult |
+| `test_notifications_complete.py` | IDOR protection (10 tests), DND logic (8 tests), template render, serializer validation (XSS, FCM token), batch success_rate, model __str__, edge cases |
+
+## Admin Bulk Send
+
+Custom admin view at `/admin/notifications/bulk-send/` for sending notifications to user segments:
+
+- **Audience segments**: all, free, premium, pro, premium+pro, has_device
+- **Platform filter**: android, ios, web (optional)
+- **Delivery modes**: send now or schedule for later
+- Creates `NotificationBatch` record with progress tracking
 
 ## Configuration
 
 Environment variables:
 
+- `FIREBASE_CREDENTIALS_JSON` - Firebase Admin SDK credentials (JSON string, preferred for ECS)
+- `FIREBASE_CREDENTIALS_PATH` - Path to Firebase credentials file (alternative)
 - `WEBPUSH_SETTINGS.VAPID_PRIVATE_KEY` - VAPID private key for Web Push
 - `WEBPUSH_SETTINGS.VAPID_ADMIN_EMAIL` - Admin email for VAPID claims
 - `DEFAULT_FROM_EMAIL` - Sender email for notification emails
@@ -304,7 +395,9 @@ Environment variables:
 
 ## Dependencies
 
-- `channels` - WebSocket support
-- `channels-redis` - Redis channel layer
-- `pywebpush` - Web Push delivery (optional)
+- `channels` - WebSocket support (ASGI)
+- `channels-redis` - Redis channel layer backend
+- `firebase-admin` - FCM push notification delivery
+- `pywebpush` - Web Push VAPID delivery (fallback)
+- `django-encrypted-model-fields` - Encrypted title, body, device_name at rest
 - `openai` - AI-generated messages (motivation, rescue, weekly reports)

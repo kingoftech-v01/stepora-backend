@@ -122,6 +122,15 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Block enforcement
+        from apps.social.models import BlockedUser
+
+        if BlockedUser.is_blocked(request.user, target):
+            return Response(
+                {"error": _("Cannot chat with this user.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Get or create conversation (check both directions)
         conv = (
             ChatConversation.objects.filter(

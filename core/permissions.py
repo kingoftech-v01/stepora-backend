@@ -202,7 +202,14 @@ class CanUseCircles(permissions.BasePermission):
         plan = request.user.get_active_plan()
         if not plan:
             return False
-        if request.method == "POST":
+        # Circle creation (POST to the list endpoint) requires has_circle_create.
+        # Other POST actions (join, post, react, vote, invite, chat, call)
+        # only require has_circles (premium+).
+        is_circle_create = (
+            request.method == "POST"
+            and getattr(view, "action", None) == "create"
+        )
+        if is_circle_create:
             if not plan.has_circle_create:
                 self.required_tier = "pro"
                 self.message = "Creating circles is not available on your current plan."

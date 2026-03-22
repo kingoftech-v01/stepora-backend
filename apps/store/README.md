@@ -186,45 +186,66 @@ Tracks refund requests for purchased items.
 | POST | `/wishlist/` | Add item to wishlist (body: `{"item_id": "UUID"}`) |
 | DELETE | `/wishlist/{id}/` | Remove item from wishlist |
 
-### Gifts (Authenticated)
+### Store Items -- Preview (Public)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/items/{slug}/preview/` | Try-before-buy preview config (theme colors, frame styles, etc.) |
+
+### Gifts (Authenticated + CanUseStore for send)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/gifts/send/` | Purchase and send an item as a gift (body: `{"item_id": "UUID", "recipient_id": "UUID", "message": "text"}`) |
-| GET | `/gifts/received/` | List received gifts |
+| GET | `/gifts/` | List unclaimed gifts received by the current user |
 | POST | `/gifts/{id}/claim/` | Claim a received gift (adds to inventory) |
 
 ### Refunds (Authenticated)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/refunds/` | Request a refund (body: `{"inventory_item_id": "UUID", "reason": "text"}`) |
+| POST | `/refunds/` | Request a refund (body: `{"inventory_id": "UUID", "reason": "text"}`) |
 | GET | `/refunds/` | List user's refund requests |
 
-### Purchase Flow (Authenticated)
+### Refunds -- Admin (IsAdminUser)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/purchase/` | Create Stripe PaymentIntent for an item |
-| POST | `/purchase/confirm/` | Confirm purchase after payment succeeds |
-| POST | `/purchase/xp/` | Purchase an item using XP (body: `{"item_id": "UUID"}`) |
-| GET | `/purchase/history/` | Get purchase history |
+| GET | `/admin/refunds/` | List all refund requests (filterable by `?status=pending`) |
+| POST | `/admin/refunds/` | Approve or reject (body: `{"refund_id": "UUID", "action": "approve|reject", "admin_notes": "text"}`) |
 
-**Views:** `PurchaseView`, `PurchaseConfirmView` (APIView)
-- Permission: `IsAuthenticated`
+### Purchase Flow (Authenticated + CanUseStore)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/purchase/` | Create Stripe PaymentIntent for an item (body: `{"item_id": "UUID"}`) |
+| POST | `/purchase/confirm/` | Confirm purchase after payment succeeds (body: `{"item_id": "UUID", "payment_intent_id": "pi_..."}`) |
+| POST | `/purchase/xp/` | Purchase an item using XP (body: `{"item_id": "UUID"}`) |
+| GET | `/inventory/history/` | Get purchase history |
+
+**Views:** `PurchaseView`, `PurchaseConfirmView`, `XPPurchaseView` (APIView)
+- Permission: `IsAuthenticated` + `CanUseStore` (premium+ subscription required)
 
 ## Serializers
 
 | Serializer | Purpose |
 |------------|---------|
-| `StoreItemSerializer` | Item with `rarity_display`, `item_type_display`, `category_name` |
+| `StoreItemSerializer` | Item with `rarity_display`, `item_type_display`, `category_name`, `preview_type_display` |
 | `StoreItemDetailSerializer` | Extends StoreItemSerializer with `owners_count` and `is_owned` |
 | `StoreCategorySerializer` | Category with computed `items_count` |
 | `StoreCategoryDetailSerializer` | Category with nested active items list |
 | `UserInventorySerializer` | Inventory entry with nested `StoreItemSerializer` |
 | `PurchaseSerializer` | Input: `item_id` (UUID). Validates item exists, is active, and not already owned |
 | `PurchaseConfirmSerializer` | Input: `item_id` (UUID) + `payment_intent_id` (must start with `pi_`) |
+| `XPPurchaseSerializer` | Input: `item_id` (UUID). Validates item exists, is active, and has xp_price > 0 |
 | `EquipSerializer` | Input: `equip` (boolean) |
+| `WishlistSerializer` | Input: `item_id` (UUID). Validates item exists and not already wishlisted |
+| `GiftSendSerializer` | Input: `item_id`, `recipient_id` (UUIDs), optional `message`. Sanitizes message |
+| `GiftSerializer` | Read-only display with nested item + sender/recipient names |
+| `ItemPreviewSerializer` | Preview config with `preview_type`, `preview_data`, `is_owned` |
+| `RefundRequestSerializer` | Input: `inventory_id` (UUID), `reason` (sanitized) |
+| `RefundRequestDisplaySerializer` | Read-only display with `item_name`, status, admin notes |
+| `RefundProcessSerializer` | Admin input: `refund_id` (UUID), `action` (approve/reject), optional `admin_notes` |
 
 ## Services (StoreService)
 
@@ -234,9 +255,14 @@ All store business logic is encapsulated in `StoreService`:
 |--------|-------------|
 | `create_payment_intent(user, item)` | Create Stripe PaymentIntent; returns `client_secret`, `payment_intent_id`, `amount` |
 | `confirm_purchase(user, item, payment_intent_id)` | Verify payment with Stripe and create inventory entry (atomic) |
+| `purchase_with_xp(user, item)` | Deduct XP and create inventory entry (atomic, row-level locking) |
 | `get_user_inventory(user)` | Return queryset of user's inventory with prefetched relations |
 | `equip_item(user, inventory_id)` | Equip item, auto-unequip others of same type (atomic) |
 | `unequip_item(user, inventory_id)` | Unequip an item |
+| `send_gift(sender, recipient, item, message)` | Create Stripe PaymentIntent + Gift record (atomic) |
+| `claim_gift(user, gift_id)` | Claim gift, create inventory entry, mark gift claimed (atomic) |
+| `request_refund(user, inventory_id, reason)` | Create RefundRequest (guards: ownership, paid purchase, no duplicate pending) |
+| `process_refund(refund_request_id, approve, admin_notes)` | Approve (Stripe refund + delete inventory) or reject (atomic) |
 
 ### Custom Exceptions
 
@@ -248,6 +274,7 @@ All store business logic is encapsulated in `StoreService`:
 | `ItemNotActiveError` | Item is not available for purchase |
 | `PaymentVerificationError` | Stripe payment verification failed |
 | `InventoryNotFoundError` | Inventory entry not found |
+| `InsufficientXPError` | User does not have enough XP for the purchase |
 
 ### Payment Verification
 
@@ -267,8 +294,11 @@ The `confirm_purchase` method performs four checks before granting the item:
 
 ## Admin
 
-All three models are registered with Django admin:
+All six models are registered with Django admin:
 
 - **StoreCategoryAdmin** - Includes `StoreItemInline` for editing items within categories. Shows `items_count`
 - **StoreItemAdmin** - List-editable `is_active` and `price` fields. Shows `owners_count`. Filter by item type, rarity, category
 - **UserInventoryAdmin** - Filter by equipped status, item type, rarity. Search by user email, item name, or payment intent ID
+- **WishlistAdmin** - Filter by item type, rarity, date. Search by user email, item name
+- **GiftAdmin** - Filter by claimed status, item type, date. Search by sender/recipient email, item name
+- **RefundRequestAdmin** - Filter by status, date. Read-only user/inventory/reason fields; editable status, admin_notes, stripe_refund_id

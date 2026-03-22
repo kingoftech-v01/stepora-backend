@@ -13,6 +13,8 @@ from rest_framework import status
 
 from apps.ai.models import AIConversation, AIMessage, ConversationBranch
 
+pytestmark = pytest.mark.django_db
+
 
 class TestListAIConversations:
     """Tests for GET /api/ai/conversations/"""

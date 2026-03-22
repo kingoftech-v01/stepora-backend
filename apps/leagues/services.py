@@ -530,16 +530,23 @@ class LeagueService:
         # Remove any existing membership for this standing (handles tier changes)
         LeagueGroupMembership.objects.filter(standing=standing).delete()
 
-        # Find active groups with room, ordered by member count (fewest first)
-        groups = (
+        # Find active groups with room, ordered by member count (fewest first).
+        # Note: select_for_update() cannot be combined with GROUP BY in PostgreSQL,
+        # so we find the candidate first, then lock it separately.
+        candidate = (
             LeagueGroup.objects.filter(season=season, league=league, is_active=True)
-            .select_for_update()
-            .annotate(member_count=Count("memberships"))
-            .filter(member_count__lt=config.group_max_size)
-            .order_by("member_count", "group_number")
+            .annotate(num_members=Count("memberships"))
+            .filter(num_members__lt=config.group_max_size)
+            .order_by("num_members", "group_number")
+            .values_list("pk", flat=True)
+            .first()
         )
 
-        group = groups.first()
+        group = (
+            LeagueGroup.objects.select_for_update().get(pk=candidate)
+            if candidate
+            else None
+        )
 
         if not group:
             # Determine next group number

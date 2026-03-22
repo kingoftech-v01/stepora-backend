@@ -20,6 +20,9 @@ if os.getenv("DB_HOST"):
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST"),
             "PORT": os.getenv("DB_PORT", "5432"),
+            "TEST": {
+                "NAME": os.getenv("TEST_DB_NAME", "test_stepora"),
+            },
         }
     }
 else:

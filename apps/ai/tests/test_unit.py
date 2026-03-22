@@ -19,6 +19,8 @@ from apps.ai.serializers import (
     AIMessageCreateSerializer,
 )
 
+pytestmark = pytest.mark.django_db
+
 
 class TestAIConversationModel:
     """Tests for AIConversation model."""
