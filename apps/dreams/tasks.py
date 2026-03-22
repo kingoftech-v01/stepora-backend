@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, time, timedelta
 
 from celery import shared_task
+from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -1482,56 +1483,66 @@ def generate_initial_tasks_task(self, dream_id, user_id):
 @shared_task(bind=True, max_retries=0)
 def run_biweekly_checkins(self):
     """
-    Beat task: Find all dreams due for a check-in and fan out interactive questionnaires.
-    Runs daily at 6 AM, processes dreams where next_checkin_at <= now.
+    Beat task: Send reminder notifications for dreams eligible for check-in.
+    Celery does NOT create check-ins — only reminds the user.
+    The user always triggers check-ins manually via the button.
+    Runs daily at 6 AM.
     """
     try:
         now = timezone.now()
-        due_dreams = Dream.objects.filter(
+
+        # Find dreams eligible for check-in (7-day cooldown passed or never checked in)
+        eligible_dreams = Dream.objects.filter(
             status="active",
             plan_phase__in=["partial", "full"],
-            next_checkin_at__lte=now,
-        ).select_related("user")
-
-        checkin_count = 0
-        for dream in due_dreams:
-            # Skip if there's already an active check-in for this dream
-            active_exists = PlanCheckIn.objects.filter(
-                dream=dream,
+        ).exclude(
+            # Exclude dreams with active check-ins
+            id__in=PlanCheckIn.objects.filter(
                 status__in=[
                     "pending",
                     "questionnaire_generating",
                     "awaiting_user",
                     "ai_processing",
-                ],
+                ]
+            ).values("dream_id")
+        ).filter(
+            # Either never checked in, or last check-in was 7+ days ago
+            models.Q(last_checkin_at__isnull=True)
+            | models.Q(last_checkin_at__lte=now - timedelta(days=7))
+        ).select_related("user")
+
+        reminder_count = 0
+        for dream in eligible_dreams:
+            # Don't spam: check if we already sent a reminder in last 3 days
+            from apps.notifications.models import Notification
+
+            recent_reminder = Notification.objects.filter(
+                user=dream.user,
+                notification_type="checkin_reminder",
+                data__dream_id=str(dream.id),
+                created_at__gte=now - timedelta(days=3),
             ).exists()
-            if active_exists:
+            if recent_reminder:
                 continue
 
-            checkin = PlanCheckIn.objects.create(
-                dream=dream,
-                status="pending",
-                scheduled_for=now,
-                triggered_by="schedule",
+            NotificationService.create(
+                user=dream.user,
+                notification_type="checkin_reminder",
+                title="Check-in available",
+                body=f"Your dream \"{dream.title}\" is ready for a check-in!",
+                data={"dream_id": str(dream.id)},
+                action_url=f"/dream/{dream.id}",
             )
-            # Schedule next check-in 7 days from now
-            dream.next_checkin_at = now + timedelta(days=7)
-            dream.save(update_fields=["next_checkin_at"])
-
-            # Dispatch interactive questionnaire generation
-            generate_checkin_questionnaire_task.apply_async(
-                args=[str(checkin.id)], queue="dreams"
-            )
-            checkin_count += 1
+            reminder_count += 1
 
         logger.info(
-            f"run_biweekly_checkins: dispatched {checkin_count} interactive check-ins"
+            f"run_biweekly_checkins: sent {reminder_count} check-in reminders"
         )
-        return {"dispatched": checkin_count}
+        return {"reminders_sent": reminder_count}
 
     except Exception as e:
         logger.error(f"run_biweekly_checkins error: {e}", exc_info=True)
-        return {"dispatched": 0, "error": str(e)}
+        return {"reminders_sent": 0, "error": str(e)}
 
 
 @shared_task(bind=True, max_retries=1, soft_time_limit=300, time_limit=360)

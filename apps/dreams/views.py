@@ -2401,20 +2401,20 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Rate limit: use next_checkin_at (1 check-in per dream per week)
+        # Rate limit: 7-day cooldown based on last_checkin_at
         now = timezone.now()
-        if dream.next_checkin_at and dream.next_checkin_at > now:
-            days_remaining = (dream.next_checkin_at - now).days
-            return Response(
-                {
-                    "error": _(
-                        "Check-in available once per week per dream"
-                    ),
-                    "days_remaining": days_remaining,
-                    "next_available": dream.next_checkin_at.isoformat(),
-                },
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
+        if dream.last_checkin_at:
+            days_since = (now - dream.last_checkin_at).days
+            if days_since < 7:
+                return Response(
+                    {
+                        "error": _(
+                            "1 check-in per week per dream"
+                        ),
+                        "days_remaining": 7 - days_since,
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
 
         # Guard: no active check-in already in progress
         active = PlanCheckIn.objects.filter(

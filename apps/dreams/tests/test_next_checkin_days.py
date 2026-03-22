@@ -1,11 +1,13 @@
 """
-TDD tests for get_next_checkin_days serializer method.
+TDD tests for can_checkin + days_until_checkin serializer methods.
 
 Logic:
-- awaiting_user check-in exists → 0
-- never done a check-in → 0
-- last check-in >= 7 days ago → 0
-- last check-in < 7 days ago → min(7_day_cooldown, celery_scheduled)
+- pending check-in exists (awaiting_user) -> can_checkin=False, days=0 (finish this one first)
+- in-progress check-in (pending/generating/processing) -> can_checkin=False, days=0
+- never done a check-in -> can_checkin=True, days=0
+- last_checkin_at >= 7 days ago -> can_checkin=True, days=0
+- last_checkin_at < 7 days ago -> can_checkin=False, days=7-days_since
+- no plan (plan_phase not partial/full) -> can_checkin=False
 
 Run: DJANGO_SETTINGS_MODULE=config.settings.testing python -m pytest apps/dreams/tests/test_next_checkin_days.py -v
 """
@@ -38,261 +40,175 @@ def dream(user):
 
 
 def serialize_dream(dream, user):
-    """Helper to get next_checkin_days from serializer."""
+    """Helper to get can_checkin and days_until_checkin from serializer."""
     from rest_framework.test import APIRequestFactory
 
     factory = APIRequestFactory()
     request = factory.get("/")
     request.user = user
     s = DreamSerializer(dream, context={"request": request})
-    return s.data.get("next_checkin_days")
+    return s.data.get("can_checkin"), s.data.get("days_until_checkin")
 
 
 # ============================================================
-# Case 1: awaiting_user check-in exists → 0
+# Case 1: awaiting_user check-in exists -> can_checkin=False, days=0
 # ============================================================
 @pytest.mark.django_db
 class TestAwaitingUser:
-    def test_returns_0_when_checkin_awaiting_user(self, dream, user):
+    def test_cannot_checkin_when_awaiting_user(self, dream, user):
         PlanCheckIn.objects.create(
             dream=dream, status="awaiting_user", triggered_by="auto",
             scheduled_for=timezone.now(),
         )
-        assert serialize_dream(dream, user) == 0
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 0
 
-    def test_returns_0_even_if_last_completed_recent(self, dream, user):
-        """Even if we did a check-in yesterday, if a new one is awaiting, return 0."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=1),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
+    def test_cannot_checkin_even_if_last_completed_old(self, dream, user):
+        """Even if last check-in was 30 days ago, if awaiting_user exists, can't trigger new."""
+        dream.last_checkin_at = timezone.now() - timedelta(days=30)
+        dream.save(update_fields=["last_checkin_at"])
         PlanCheckIn.objects.create(
             dream=dream, status="awaiting_user", triggered_by="auto",
             scheduled_for=timezone.now(),
         )
-        assert serialize_dream(dream, user) == 0
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 0
 
 
 # ============================================================
-# Case 2: never done a check-in → 0
+# Case 2: in-progress check-in (pending/generating/processing)
 # ============================================================
 @pytest.mark.django_db
-class TestNeverCheckedIn:
-    def test_returns_0_no_checkins_ever(self, dream, user):
-        assert serialize_dream(dream, user) == 0
-
-    def test_returns_0_with_pending_checkin_not_completed(self, dream, user):
-        """A check-in in 'pending' or 'generating' doesn't count as completed."""
+class TestInProgressCheckin:
+    def test_cannot_checkin_when_pending(self, dream, user):
         PlanCheckIn.objects.create(
             dream=dream, status="pending", triggered_by="auto",
             scheduled_for=timezone.now(),
         )
-        assert serialize_dream(dream, user) == 0
+        can, days = serialize_dream(dream, user)
+        assert can is False
+
+    def test_cannot_checkin_when_questionnaire_generating(self, dream, user):
+        PlanCheckIn.objects.create(
+            dream=dream, status="questionnaire_generating", triggered_by="auto",
+            scheduled_for=timezone.now(),
+        )
+        can, days = serialize_dream(dream, user)
+        assert can is False
+
+    def test_cannot_checkin_when_ai_processing(self, dream, user):
+        PlanCheckIn.objects.create(
+            dream=dream, status="ai_processing", triggered_by="auto",
+            scheduled_for=timezone.now(),
+        )
+        can, days = serialize_dream(dream, user)
+        assert can is False
 
 
 # ============================================================
-# Case 3: last check-in >= 7 days ago → 0
+# Case 3: never done a check-in -> can_checkin=True, days=0
+# ============================================================
+@pytest.mark.django_db
+class TestNeverCheckedIn:
+    def test_can_checkin_no_checkins_ever(self, dream, user):
+        can, days = serialize_dream(dream, user)
+        assert can is True
+        assert days == 0
+
+    def test_can_checkin_with_only_failed_checkin(self, dream, user):
+        """A failed check-in doesn't block; last_checkin_at stays None."""
+        PlanCheckIn.objects.create(
+            dream=dream, status="failed", triggered_by="auto",
+            scheduled_for=timezone.now(),
+        )
+        can, days = serialize_dream(dream, user)
+        assert can is True
+        assert days == 0
+
+
+# ============================================================
+# Case 4: last check-in >= 7 days ago -> can_checkin=True, days=0
 # ============================================================
 @pytest.mark.django_db
 class TestCheckinOverAWeekAgo:
-    def test_returns_0_exactly_7_days_ago(self, dream, user):
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=7),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        assert serialize_dream(dream, user) == 0
+    def test_can_checkin_exactly_7_days_ago(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=7)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is True
+        assert days == 0
 
-    def test_returns_0_10_days_ago(self, dream, user):
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=10),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        assert serialize_dream(dream, user) == 0
+    def test_can_checkin_10_days_ago(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=10)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is True
+        assert days == 0
 
-    def test_returns_0_30_days_ago(self, dream, user):
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=30),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        assert serialize_dream(dream, user) == 0
+    def test_can_checkin_30_days_ago(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=30)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is True
+        assert days == 0
 
 
 # ============================================================
-# Case 4: check-in done today → min(7_day_cooldown, celery)
+# Case 5: check-in done today -> can_checkin=False, days ~= 7
 # ============================================================
 @pytest.mark.django_db
 class TestCheckinToday:
-    def test_cooldown_7_days_no_celery(self, dream, user):
-        """Done today, no celery date → 7 days cooldown."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now(),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = None
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 6 or result == 7  # 6 or 7 depending on time of day
-
-    def test_cooldown_7_when_celery_21_days(self, dream, user):
-        """Done today, celery in 21 days → min(7, 21) = 7."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now(),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=21)
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 6 or result == 7  # 7 day cooldown wins
-
-    def test_cooldown_7_when_celery_14_days(self, dream, user):
-        """Done today, celery in 14 days → min(7, 14) = 7."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now(),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=14)
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 6 or result == 7
-
-    def test_cooldown_7_when_celery_3_days(self, dream, user):
-        """Done today, celery in 3 days → min(7, 3) = 3... BUT 7 day minimum!
-
-        Since we just did a check-in today, minimum is 7 days regardless.
-        Celery at 3 days makes no sense (would violate 1/week rule).
-        So result should be 7, not 3.
-
-        BUT with min() logic and celery < cooldown, we take the cooldown (7).
-        The cooldown IS 7 days, so min(7, 3) shouldn't apply here.
-        The correct logic: if days_since_last < 7, the cooldown = 7 - days_since.
-        Celery date only matters if it's AFTER the cooldown expires.
-        """
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now(),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=3)
-        dream.save()
-        result = serialize_dream(dream, user)
-        # Cooldown = 7 days. Celery = 3 days.
-        # Celery is before cooldown expires → use cooldown (7)
-        assert result == 6 or result == 7
+    def test_cannot_checkin_done_today(self, dream, user):
+        dream.last_checkin_at = timezone.now()
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 6 or days == 7  # depends on time-of-day rounding
 
 
 # ============================================================
-# Case 5: check-in done 5 days ago → cooldown remaining = 2 days
+# Case 6: check-in done 5 days ago -> can_checkin=False, days=2
 # ============================================================
 @pytest.mark.django_db
 class TestCheckin5DaysAgo:
-    def test_2_days_remaining_no_celery(self, dream, user):
-        """Done 5 days ago → 2 days remaining cooldown."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=5),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = None
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 1 or result == 2
-
-    def test_2_days_remaining_celery_10_days(self, dream, user):
-        """Done 5 days ago, celery in 10 days → min(2, 10) = 2."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=5),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=10)
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 1 or result == 2
-
-    def test_2_days_remaining_celery_1_day(self, dream, user):
-        """Done 5 days ago, celery tomorrow → min(2, 1) = 1.
-
-        Celery is tomorrow which is before cooldown expires (2 days).
-        But 1/week rule means cooldown minimum. So result = 2, not 1.
-        """
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=5),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=1)
-        dream.save()
-        result = serialize_dream(dream, user)
-        # Cooldown = 2 days remaining. Celery = 1 day.
-        # Celery before cooldown → use cooldown (2)
-        assert result == 1 or result == 2
+    def test_cannot_checkin_2_days_remaining(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=5)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 1 or days == 2  # depends on time-of-day rounding
 
 
 # ============================================================
-# Case 6: check-in done 3 days ago → cooldown remaining = 4 days
+# Case 7: check-in done 3 days ago -> can_checkin=False, days=4
 # ============================================================
 @pytest.mark.django_db
 class TestCheckin3DaysAgo:
-    def test_4_days_remaining_celery_2_days(self, dream, user):
-        """Done 3 days ago, celery in 2 days → cooldown 4 wins over celery 2."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=3),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=2)
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 3 or result == 4
-
-    def test_4_days_remaining_celery_6_days(self, dream, user):
-        """Done 3 days ago, celery in 6 days → min(4, 6) = 4."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=3),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
-        dream.next_checkin_at = timezone.now() + timedelta(days=6)
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 3 or result == 4
+    def test_cannot_checkin_4_days_remaining(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=3)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 3 or days == 4  # depends on time-of-day rounding
 
 
 # ============================================================
-# Case 7: multiple dreams independent
+# Case 8: check-in done 6 days ago -> can_checkin=False, days=1
+# ============================================================
+@pytest.mark.django_db
+class TestCheckin6DaysAgo:
+    def test_cannot_checkin_1_day_remaining(self, dream, user):
+        dream.last_checkin_at = timezone.now() - timedelta(days=6)
+        dream.save(update_fields=["last_checkin_at"])
+        can, days = serialize_dream(dream, user)
+        assert can is False
+        assert days == 0 or days == 1  # depends on time-of-day rounding
+
+
+# ============================================================
+# Case 9: multiple dreams independent
 # ============================================================
 @pytest.mark.django_db
 class TestMultipleDreamsIndependent:
@@ -305,37 +221,27 @@ class TestMultipleDreamsIndependent:
         )
 
         # Check-in on dream1 today
-        PlanCheckIn.objects.create(
-            dream=dream1,
-            status="completed",
-            completed_at=timezone.now(),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
-        )
+        dream1.last_checkin_at = timezone.now()
+        dream1.save(update_fields=["last_checkin_at"])
 
-        # Dream1 should have cooldown, Dream2 should be available
-        d1_days = serialize_dream(dream1, user)
-        d2_days = serialize_dream(dream2, user)
+        can1, days1 = serialize_dream(dream1, user)
+        can2, days2 = serialize_dream(dream2, user)
 
-        assert d1_days >= 6  # cooldown active
-        assert d2_days == 0  # no check-in done, available
+        assert can1 is False
+        assert days1 >= 6  # cooldown active
+        assert can2 is True
+        assert days2 == 0  # no check-in done, available
 
 
 # ============================================================
-# Case 8: edge case — check-in done 6 days ago
+# Case 10: no plan -> can_checkin=False
 # ============================================================
 @pytest.mark.django_db
-class TestCheckin6DaysAgo:
-    def test_1_day_remaining(self, dream, user):
-        """Done 6 days ago → 1 day remaining."""
-        PlanCheckIn.objects.create(
-            dream=dream,
-            status="completed",
-            completed_at=timezone.now() - timedelta(days=6),
-            triggered_by="manual",
-            scheduled_for=timezone.now(),
+class TestNoPlan:
+    def test_cannot_checkin_without_plan(self, user):
+        dream = Dream.objects.create(
+            user=user, title="No Plan Dream", description="NP",
+            category="career", plan_phase="none",
         )
-        dream.next_checkin_at = None
-        dream.save()
-        result = serialize_dream(dream, user)
-        assert result == 0 or result == 1
+        can, days = serialize_dream(dream, user)
+        assert can is False

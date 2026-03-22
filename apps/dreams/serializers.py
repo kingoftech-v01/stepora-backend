@@ -328,8 +328,11 @@ class DreamSerializer(serializers.ModelSerializer):
     completed_goals_count = serializers.IntegerField(
         source="_completed_goals_count", read_only=True, default=0
     )
-    next_checkin_days = serializers.SerializerMethodField(
-        help_text="Days until next check-in is available (0 = available now)."
+    can_checkin = serializers.SerializerMethodField(
+        help_text="Whether the user can trigger a check-in now."
+    )
+    days_until_checkin = serializers.SerializerMethodField(
+        help_text="Days until next check-in is available (0 if can_checkin=True or pending)."
     )
     has_pending_checkin = serializers.SerializerMethodField(
         help_text="Whether this dream has a check-in awaiting user response."
@@ -361,7 +364,8 @@ class DreamSerializer(serializers.ModelSerializer):
             "tasks_count",
             "tags",
             "sparkline_data",
-            "next_checkin_days",
+            "can_checkin",
+            "days_until_checkin",
             "next_checkin_at",
             "has_pending_checkin",
             "created_at",
@@ -461,50 +465,63 @@ class DreamSerializer(serializers.ModelSerializer):
         # External URL or local dev — return as-is
         return obj.vision_image_url
 
-    def get_next_checkin_days(self, obj) -> int:
-        """Days until next check-in.
+    def get_can_checkin(self, obj) -> bool:
+        """Whether the user can trigger a check-in now.
 
         Logic:
-        - If awaiting_user check-in exists → 0 (available now)
-        - If no check-in done this week → 0 (available now)
-        - If already done this week → min(7_day_cooldown, celery_scheduled)
-          - Cooldown = 7 - days_since_last
-          - Take the earliest opportunity (min)
+        - Must have a plan (partial or full)
+        - No awaiting_user check-in (finish that one first)
+        - No in-progress check-in (pending/generating/processing)
+        - Either never done, or last_checkin_at >= 7 days ago
         """
-        from datetime import timedelta
-
         from django.utils import timezone
 
         from apps.plans.models import PlanCheckIn
 
-        now = timezone.now()
+        # Must have a plan
+        if obj.plan_phase not in ("partial", "full"):
+            return False
 
-        # If there's already a pending check-in, return 0 (available now)
+        # If awaiting_user check-in exists -> can't trigger new one
+        if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
+            return False
+
+        # If any check-in in progress -> wait
+        if PlanCheckIn.objects.filter(
+            dream=obj,
+            status__in=["pending", "questionnaire_generating", "ai_processing"],
+        ).exists():
+            return False
+
+        # Check cooldown
+        if not obj.last_checkin_at:
+            return True  # Never done
+
+        days_since = (timezone.now() - obj.last_checkin_at).days
+        return days_since >= 7
+
+    def get_days_until_checkin(self, obj) -> int:
+        """Days until next check-in is available.
+
+        Returns 0 if can_checkin=True or if there's a pending check-in
+        (user needs to finish it, not wait).
+        """
+        from django.utils import timezone
+
+        from apps.plans.models import PlanCheckIn
+
+        if self.get_can_checkin(obj):
+            return 0
+
+        # If pending check-in -> 0 (they need to finish it, not wait)
         if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
             return 0
 
-        # Check if user already did a check-in this week
-        last_completed = (
-            PlanCheckIn.objects.filter(dream=obj, status="completed")
-            .order_by("-completed_at")
-            .first()
-        )
-
-        if not last_completed:
-            # Never done a check-in → available now
+        if not obj.last_checkin_at:
             return 0
 
-        days_since_last = (now - last_completed.completed_at).days
-
-        if days_since_last >= 7:
-            # Last check-in was over a week ago → available now
-            return 0
-
-        # Already did a check-in this week — 7 day cooldown is the floor
-        cooldown_remaining = 7 - days_since_last
-        # Cooldown is always enforced (1/week rule)
-        # Celery can only matter AFTER cooldown expires
-        return cooldown_remaining
+        days_since = (timezone.now() - obj.last_checkin_at).days
+        return max(0, 7 - days_since)
 
     def get_has_pending_checkin(self, obj) -> bool:
         """Return True if this dream has a check-in awaiting user response."""
@@ -582,8 +599,11 @@ class DreamDetailSerializer(serializers.ModelSerializer):
     signed_vision_image_url = serializers.SerializerMethodField(
         help_text="Pre-signed URL for the vision board image."
     )
-    next_checkin_days = serializers.SerializerMethodField(
-        help_text="Days until next check-in is available (0 = available now)."
+    can_checkin = serializers.SerializerMethodField(
+        help_text="Whether the user can trigger a check-in now."
+    )
+    days_until_checkin = serializers.SerializerMethodField(
+        help_text="Days until next check-in is available (0 if can_checkin=True or pending)."
     )
     has_pending_checkin = serializers.SerializerMethodField(
         help_text="Whether this dream has a check-in awaiting user response."
@@ -623,7 +643,8 @@ class DreamDetailSerializer(serializers.ModelSerializer):
             "completed_tasks",
             "days_left",
             "tags",
-            "next_checkin_days",
+            "can_checkin",
+            "days_until_checkin",
             "next_checkin_at",
             "has_pending_checkin",
             "created_at",
@@ -714,9 +735,13 @@ class DreamDetailSerializer(serializers.ModelSerializer):
         # Reuse logic from DreamSerializer
         return DreamSerializer.get_signed_vision_image_url(self, obj)
 
-    def get_next_checkin_days(self, obj) -> int:
+    def get_can_checkin(self, obj) -> bool:
         # Reuse logic from DreamSerializer
-        return DreamSerializer.get_next_checkin_days(self, obj)
+        return DreamSerializer.get_can_checkin(self, obj)
+
+    def get_days_until_checkin(self, obj) -> int:
+        # Reuse logic from DreamSerializer
+        return DreamSerializer.get_days_until_checkin(self, obj)
 
     def get_has_pending_checkin(self, obj) -> bool:
         # Reuse logic from DreamSerializer
