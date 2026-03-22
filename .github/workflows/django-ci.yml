@@ -12,7 +12,7 @@ env:
 jobs:
   test:
     name: Test Django
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     services:
       postgres:
@@ -94,7 +94,7 @@ jobs:
 
   lint:
     name: Lint Django
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -111,7 +111,7 @@ jobs:
 
   build:
     name: Build Docker
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [test, lint]
 
     steps:
@@ -138,7 +138,7 @@ jobs:
 
   deploy:
     name: Deploy
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 

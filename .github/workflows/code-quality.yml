@@ -7,7 +7,7 @@ on:
 jobs:
   backend-quality:
     name: Django Code Quality
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -37,7 +37,7 @@ jobs:
 
   comment-results:
     name: Comment PR
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [backend-quality]
     if: always()
 
