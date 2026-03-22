@@ -6,10 +6,8 @@ import logging
 import uuid
 
 import requests as http_requests
+from django.core.cache import cache
 from django.db.models import Max
-
-logger = logging.getLogger(__name__)
-
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -51,6 +49,7 @@ from core.throttles import (
     AIPlanRateThrottle,
 )
 from integrations.openai_service import OpenAIService
+from integrations.plan_processors import detect_category_with_ambiguity
 
 from .models import (
     CalibrationResponse,
@@ -75,6 +74,7 @@ from .serializers import (
     AddCollaboratorSerializer,
     AddTagSerializer,
     CalibrationResponseSerializer,
+    CheckInResponseSubmitSerializer,
     DreamCollaboratorSerializer,
     DreamCreateSerializer,
     DreamDetailSerializer,
@@ -90,17 +90,17 @@ from .serializers import (
     GoalCreateSerializer,
     GoalSerializer,
     ObstacleSerializer,
+    PlanCheckInDetailSerializer,
+    PlanCheckInSerializer,
     ProgressPhotoSerializer,
     SharedDreamSerializer,
     ShareDreamRequestSerializer,
     TaskCreateSerializer,
     TaskSerializer,
     VisionBoardImageSerializer,
-    PlanCheckInSerializer,
-    PlanCheckInDetailSerializer,
-    CheckInResponseSubmitSerializer,
 )
-from integrations.plan_processors import detect_category_with_ambiguity
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -857,9 +857,8 @@ class DreamViewSet(viewsets.ModelViewSet):
     def start_calibration(self, request, pk=None):
         """Generate initial calibration questions (7 questions) for the dream."""
         dream = self.get_object()
-        ai_service = OpenAIService()
 
-        # Check if calibration already completed
+        # Guard: calibration already completed
         if dream.calibration_status == "completed":
             return Response(
                 {"message": _("Calibration already completed for this dream")},
@@ -880,8 +879,31 @@ class DreamViewSet(viewsets.ModelViewSet):
                         ).data,
                     }
                 )
+            # All questions answered — AI may be generating follow-ups
+            # or calibration should be completed via answer_calibration.
+            # Check Redis lock to prevent duplicate generation.
+            lock_key = f"calibration:generating:{dream.id}"
+            if cache.get(lock_key):
+                return Response(
+                    {
+                        "status": "generating",
+                        "message": _("Calibration questions are being generated. Please wait."),
+                    }
+                )
+
+        # Acquire Redis lock to prevent concurrent question generation (60s TTL)
+        lock_key = f"calibration:generating:{dream.id}"
+        acquired = cache.add(lock_key, "1", timeout=60)
+        if not acquired:
+            return Response(
+                {
+                    "status": "generating",
+                    "message": _("Calibration questions are being generated. Please wait."),
+                }
+            )
 
         try:
+            ai_service = OpenAIService()
             # Generate initial batch of 7 questions
             # Get category from dream field or AI analysis
             cat = dream.category
@@ -956,6 +978,9 @@ class DreamViewSet(viewsets.ModelViewSet):
             dream.calibration_status = "in_progress"
             dream.save(update_fields=["calibration_status"])
 
+            # Release generation lock
+            cache.delete(lock_key)
+
             return Response(
                 {
                     "status": "in_progress",
@@ -968,6 +993,7 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         except AIValidationError as e:
+            cache.delete(lock_key)
             return Response(
                 {
                     "error": _("AI produced invalid calibration questions: %(msg)s")
@@ -976,6 +1002,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except OpenAIError as e:
+            cache.delete(lock_key)
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -1014,6 +1041,13 @@ class DreamViewSet(viewsets.ModelViewSet):
         if dream.calibration_status in ("completed", "skipped"):
             return Response(
                 {"error": _("Calibration already completed")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guard: calibration not yet started
+        if dream.calibration_status == "pending":
+            return Response(
+                {"error": _("Start calibration first")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1095,6 +1129,16 @@ class DreamViewSet(viewsets.ModelViewSet):
                         question_number=question_number or next_num,
                     )
 
+                # Guard: prevent answering the same question twice
+                if cr.answer and cr.answer.strip():
+                    return Response(
+                        {
+                            "error": _("Question already answered"),
+                            "question_id": str(cr.id),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 cr.answer = answer_text
                 cr.save(update_fields=["answer"])
             except (KeyError, ValueError):
@@ -1143,6 +1187,17 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         # Ask AI if we have enough info or need more questions
+        # Acquire Redis lock to prevent concurrent follow-up generation (60s TTL)
+        lock_key = f"calibration:generating:{dream.id}"
+        acquired = cache.add(lock_key, "1", timeout=60)
+        if not acquired:
+            return Response(
+                {
+                    "status": "generating",
+                    "message": _("Follow-up questions are being generated. Please wait."),
+                }
+            )
+
         ai_service = OpenAIService()
 
         try:
@@ -1161,6 +1216,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Check for AI refusal
             if result.refusal_reason:
+                cache.delete(lock_key)
                 return Response(
                     {"error": result.refusal_reason},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1174,6 +1230,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 dream.calibration_status = "completed"
                 dream.save(update_fields=["calibration_status"])
 
+                cache.delete(lock_key)
                 return Response(
                     {
                         "status": "completed",
@@ -1200,6 +1257,7 @@ class DreamViewSet(viewsets.ModelViewSet):
 
                 new_total = total_questions + len(new_questions)
 
+                cache.delete(lock_key)
                 return Response(
                     {
                         "status": "in_progress",
@@ -1214,6 +1272,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 )
 
         except AIValidationError as e:
+            cache.delete(lock_key)
             return Response(
                 {
                     "error": _("AI produced invalid follow-up questions: %(msg)s")
@@ -1222,6 +1281,7 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except OpenAIError as e:
+            cache.delete(lock_key)
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -1232,13 +1292,27 @@ class DreamViewSet(viewsets.ModelViewSet):
         tags=["Dreams"],
         responses={
             200: dict,
+            400: OpenApiResponse(description="Calibration already completed."),
             404: OpenApiResponse(description="Dream not found."),
+            429: OpenApiResponse(description="Rate limit exceeded."),
         },
     )
-    @action(detail=True, methods=["post"])
+    @action(
+        detail=True,
+        methods=["post"],
+        throttle_classes=[AICalibrationRateThrottle],
+    )
     def skip_calibration(self, request, pk=None):
         """Allow user to skip calibration and proceed with basic info."""
         dream = self.get_object()
+
+        # Guard: cannot skip if already completed
+        if dream.calibration_status == "completed":
+            return Response(
+                {"error": _("Calibration already completed")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         dream.calibration_status = "skipped"
         dream.save(update_fields=["calibration_status"])
 
