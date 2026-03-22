@@ -7,6 +7,7 @@ Routes:
     /my-referrals/            - List my referrals
     /rewards/                 - List my rewards
     /rewards/<id>/claim/      - Claim a reward
+    /dashboard/               - Combined dashboard (GET stats + POST redeem)
 """
 
 from django.urls import path
@@ -17,6 +18,7 @@ from .views import (
     MyReferralsView,
     MyRewardsView,
     RedeemCodeView,
+    ReferralDashboardView,
 )
 
 urlpatterns = [
@@ -29,4 +31,5 @@ urlpatterns = [
         ClaimRewardView.as_view(),
         name="referral-claim-reward",
     ),
+    path("dashboard/", ReferralDashboardView.as_view(), name="referral-dashboard"),
 ]
