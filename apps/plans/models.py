@@ -335,11 +335,13 @@ class Task(models.Model):
         self.goal.dream.user.add_xp(xp_amount)
         self.goal.dream._award_category_xp(xp_amount)
 
+        # Streak FIRST, then activity (streak checks last_activity to detect
+        # consecutive days — update_activity would set it to today, making
+        # streak always see "already recorded" and return early).
+        self._update_streak()
+
         # Update user activity
         self.goal.dream.user.update_activity()
-
-        # Update streak
-        self._update_streak()
 
         # Record daily activity for heatmap
         from apps.gamification.models import DailyActivity
