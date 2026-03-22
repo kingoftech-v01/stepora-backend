@@ -737,12 +737,51 @@ class DreamViewSet(viewsets.ModelViewSet):
     )
     def refine(self, request):
         """AI refines dream title and description together."""
-        title = request.data.get("title", "").strip()
-        description = request.data.get("description", "").strip()
+        from core.moderation import ContentModerationService
+        from core.sanitizers import sanitize_text
 
-        if not title and not description:
+        title = sanitize_text(request.data.get("title", "")).strip()
+        description = sanitize_text(request.data.get("description", "")).strip()
+
+        if not title:
             return Response(
-                {"error": _("Provide title or description.")},
+                {"error": _("Title is required"), "field": "title"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not description:
+            return Response(
+                {"error": _("Description is required"), "field": "description"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(title) < 3:
+            return Response(
+                {
+                    "error": _("Title too short (min 3 characters)"),
+                    "field": "title",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(description) < 10:
+            return Response(
+                {
+                    "error": _("Description too short (min 10 characters)"),
+                    "field": "description",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Content moderation check before AI call
+        mod = ContentModerationService()
+        mod_result = mod.moderate_text(
+            title + " " + description, context="dream_refine"
+        )
+        if mod_result and mod_result.is_flagged:
+            return Response(
+                {
+                    "error": mod_result.user_message
+                    or _("Content flagged by moderation."),
+                    "moderation": True,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
