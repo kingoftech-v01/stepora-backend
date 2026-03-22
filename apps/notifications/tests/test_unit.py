@@ -2,10 +2,8 @@
 Unit tests for the Notifications app models and services.
 """
 
-import json
-import uuid
 from datetime import timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from django.utils import timezone
@@ -17,7 +15,6 @@ from apps.notifications.models import (
 )
 from apps.notifications.services import NotificationDeliveryService, NotificationService
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Notification Model
@@ -172,7 +169,6 @@ class TestNotificationModel:
 
     def test_should_send_false_for_future(self, notif_user):
         """should_send() returns False for notifications scheduled in the future."""
-        from datetime import timedelta
 
         notification = Notification.objects.create(
             user=notif_user,

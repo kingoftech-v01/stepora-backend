@@ -4,10 +4,9 @@ Calendar models for scheduling and time management.
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
-
-from django.conf import settings
 
 
 class CalendarEvent(models.Model):

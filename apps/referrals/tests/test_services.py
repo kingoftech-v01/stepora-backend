@@ -4,7 +4,7 @@ Tests for referrals services.
 
 import pytest
 
-from apps.referrals.models import Referral, ReferralCode, ReferralReward
+from apps.referrals.models import ReferralCode, ReferralReward
 from apps.referrals.services import ReferralService
 from apps.users.models import User
 

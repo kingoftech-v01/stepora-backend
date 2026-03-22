@@ -3,13 +3,11 @@ Shared fixtures for Dreams app tests.
 """
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.dreams.models import (
     Dream,
     DreamMilestone,
-    DreamProgressSnapshot,
     FocusSession,
     Goal,
     Task,

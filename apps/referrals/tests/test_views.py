@@ -5,7 +5,7 @@ Tests for referrals views.
 import pytest
 from rest_framework.test import APIClient
 
-from apps.referrals.models import Referral, ReferralCode, ReferralReward
+from apps.referrals.models import ReferralCode
 from apps.users.models import User
 
 

@@ -2,13 +2,11 @@
 Tests for apps/dreams/serializers.py
 """
 
-import json
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
-from rest_framework.test import APIRequestFactory
 
 from apps.dreams.models import (
     Dream,
@@ -26,8 +24,6 @@ from apps.dreams.models import (
 )
 from apps.dreams.serializers import (
     AddCollaboratorSerializer,
-    AddTagSerializer,
-    CalibrationResponseSerializer,
     DreamCollaboratorSerializer,
     DreamCreateSerializer,
     DreamDetailSerializer,
@@ -38,21 +34,18 @@ from apps.dreams.serializers import (
     DreamTemplateSerializer,
     DreamUpdateSerializer,
     FocusSessionCompleteSerializer,
-    FocusSessionSerializer,
     FocusSessionStartSerializer,
     GoalCreateSerializer,
     GoalSerializer,
-    ObstacleSerializer,
     PlanCheckInSerializer,
     ProgressPhotoSerializer,
-    ShareDreamRequestSerializer,
     SharedDreamSerializer,
+    ShareDreamRequestSerializer,
     TaskCreateSerializer,
     TaskSerializer,
     VisionBoardImageSerializer,
 )
 from apps.users.models import User
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

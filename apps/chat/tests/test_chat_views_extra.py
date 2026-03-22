@@ -22,10 +22,9 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus
+from apps.chat.models import Call, ChatConversation, ChatMessage
 from apps.friends.models import BlockedUser
 from apps.users.models import User
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

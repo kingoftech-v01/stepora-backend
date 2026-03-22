@@ -7,7 +7,6 @@ from django.utils import timezone
 
 from apps.users.models import DailyActivity, User
 
-
 # ──────────────────────────────────────────────────────────────────────
 #  User Model
 # ──────────────────────────────────────────────────────────────────────
@@ -371,7 +370,7 @@ class TestUserMethods:
         assert result is False
 
     def test_can_create_dream_no_plan(self):
-        from unittest.mock import Mock, patch
+        from unittest.mock import Mock
 
         user = User.objects.create_user(
             email="nodream@example.com", password="testpassword123"
@@ -1188,9 +1187,8 @@ class TestCoreAudit:
         assert _get_client_ip(request) == "10.0.0.1"
 
     def test_log_functions_dont_raise(self):
-        from unittest.mock import Mock
-
         import uuid as _uuid
+        from unittest.mock import Mock
 
         from core.audit import (
             log_account_change,
@@ -1640,8 +1638,8 @@ class TestCoreThrottles:
 
     def test_throttle_scope_attributes(self):
         from core.throttles import (
-            AIRateThrottle,
             AIPlanRateThrottle,
+            AIRateThrottle,
             AuthLoginRateThrottle,
             AuthPasswordRateThrottle,
             AuthRateThrottle,
@@ -1694,7 +1692,8 @@ class TestCoreAIUsage:
     """Tests for core.ai_usage.AIUsageTracker."""
 
     def test_get_reset_time(self):
-        from datetime import datetime, timezone as tz
+        from datetime import datetime
+        from datetime import timezone as tz
 
         from core.ai_usage import AIUsageTracker
 

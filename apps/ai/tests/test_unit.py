@@ -7,23 +7,16 @@ Tests model creation, field defaults, serializer output, and validation.
 import uuid
 
 import pytest
-from django.utils import timezone
-from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.ai.models import (
     AIConversation,
     AIMessage,
     ChatMemory,
-    ConversationBranch,
-    ConversationSummary,
     ConversationTemplate,
 )
 from apps.ai.serializers import (
     AIConversationSerializer,
     AIMessageCreateSerializer,
-    AIMessageSerializer,
-    ChatMemorySerializer,
-    ConversationTemplateSerializer,
 )
 
 
@@ -363,7 +356,6 @@ class TestAIMessageCreateSerializer:
 #  API ENDPOINT TESTS — AI
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

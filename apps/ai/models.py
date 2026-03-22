@@ -7,7 +7,6 @@ AI conversations have no target_user or buddy_pairing fields.
 
 import uuid
 
-from django.conf import settings
 from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 

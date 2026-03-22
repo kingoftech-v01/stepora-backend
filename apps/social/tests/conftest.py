@@ -2,11 +2,8 @@
 Fixtures for social app tests.
 """
 
-import uuid
-from datetime import timedelta
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.users.models import User

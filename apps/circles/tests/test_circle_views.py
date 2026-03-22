@@ -12,7 +12,6 @@ Covers:
 - Chat, calls
 """
 
-import uuid
 from datetime import timedelta
 from decimal import Decimal
 
@@ -23,21 +22,14 @@ from rest_framework.test import APIClient
 from apps.circles.models import (
     ChallengeProgress,
     Circle,
-    CircleCall,
-    CircleCallParticipant,
     CircleChallenge,
-    CircleInvitation,
     CircleMembership,
-    CircleMessage,
     CirclePoll,
     CirclePost,
     PollOption,
-    PollVote,
-    PostReaction,
 )
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

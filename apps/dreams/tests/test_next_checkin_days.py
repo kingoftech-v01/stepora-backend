@@ -12,13 +12,15 @@ Logic:
 Run: DJANGO_SETTINGS_MODULE=config.settings.testing python -m pytest apps/dreams/tests/test_next_checkin_days.py -v
 """
 
-import pytest
 from datetime import timedelta
+
+import pytest
 from django.utils import timezone
-from apps.users.models import User
+
 from apps.dreams.models import Dream
-from apps.plans.models import PlanCheckIn
 from apps.dreams.serializers import DreamSerializer
+from apps.plans.models import PlanCheckIn
+from apps.users.models import User
 
 
 @pytest.fixture

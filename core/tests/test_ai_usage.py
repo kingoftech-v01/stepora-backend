@@ -13,7 +13,6 @@ from django.core.cache import cache
 
 from core.ai_usage import QUOTA_CATEGORIES, AIUsageTracker
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 

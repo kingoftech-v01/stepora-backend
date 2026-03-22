@@ -9,17 +9,15 @@ Covers:
 - send_accountability_checkins
 """
 
-import uuid
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
 from django.utils import timezone
 
-from apps.dreams.models import Dream, Goal, Task
+from apps.dreams.models import Dream
 from apps.notifications.models import Notification
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  send_email_change_verification

@@ -15,7 +15,6 @@ from django.utils import timezone as django_timezone
 from encrypted_model_fields.fields import EncryptedTextField
 
 
-
 class Circle(models.Model):
     """
     Represents a Dream Circle - a small group of users with shared goals.

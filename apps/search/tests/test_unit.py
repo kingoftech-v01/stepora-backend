@@ -8,10 +8,7 @@ encrypted fields. These tests mock the DB queries to test the service logic.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from apps.search.services import SearchService
-
 
 # ── SearchService basic functionality ─────────────────────────────────
 

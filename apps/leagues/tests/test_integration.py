@@ -8,7 +8,7 @@ authentication and premium+ subscription.
 
 import uuid
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -16,16 +16,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.leagues.models import (
-    League,
-    LeagueGroup,
-    LeagueGroupMembership,
     LeagueSeason,
-    LeagueStanding,
     Season,
     SeasonParticipant,
-    SeasonReward,
 )
-from apps.users.models import User
 
 
 @pytest.fixture

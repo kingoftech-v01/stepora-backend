@@ -5,7 +5,6 @@ Integration tests for the Updates (OTA) app.
 from unittest.mock import patch
 
 import pytest
-from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 

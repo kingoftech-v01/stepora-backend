@@ -27,7 +27,6 @@ from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, UserDevice
 from apps.users.models import User
 
-
 # ──────────────────────────────────────────────────────────────────────
 #  process_pending_notifications
 # ──────────────────────────────────────────────────────────────────────

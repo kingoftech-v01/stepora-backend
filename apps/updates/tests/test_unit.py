@@ -5,7 +5,6 @@ Tests AppBundle model and update check/upload API endpoints.
 """
 
 import pytest
-from rest_framework.test import APIClient
 
 from apps.updates.models import AppBundle
 

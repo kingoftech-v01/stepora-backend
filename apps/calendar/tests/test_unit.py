@@ -8,8 +8,6 @@ import pytest
 from django.utils import timezone
 
 from apps.calendar.models import CalendarEvent, TimeBlock
-from apps.users.models import User
-
 
 # ── CalendarEvent model ───────────────────────────────────────────────
 
@@ -215,7 +213,6 @@ class TestTimeBlockModel:
 #  API ENDPOINT TESTS — Calendar
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

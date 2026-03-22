@@ -17,7 +17,6 @@ from apps.buddies.services import BuddyMatchingService
 from apps.dreams.models import Dream
 from apps.users.models import User
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  Activity similarity scoring
 # ══════════════════════════════════════════════════════════════════════

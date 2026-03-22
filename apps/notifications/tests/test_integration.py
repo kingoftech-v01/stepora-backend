@@ -9,7 +9,6 @@ from rest_framework import status
 from apps.notifications.models import Notification
 from apps.users.models import User
 
-
 # ──────────────────────────────────────────────────────────────────────
 #  List Notifications
 # ──────────────────────────────────────────────────────────────────────

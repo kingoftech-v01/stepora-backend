@@ -14,23 +14,20 @@ Tests cover:
 - Group management (join / leave on connect / disconnect)
 """
 
-import json
 import uuid
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth.models import AnonymousUser
-from django.test import override_settings
 
 from apps.buddies.models import BuddyPairing
 from apps.chat.consumers import BuddyChatConsumer
 from apps.chat.models import ChatConversation, ChatMessage
 from apps.users.models import User
 from core.consumers import MAX_MSG_CONTENT_LEN, MAX_MSG_SIZE
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Helpers

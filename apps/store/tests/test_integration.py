@@ -9,7 +9,7 @@ authentication and premium+ subscription.
 import uuid
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -17,14 +17,12 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.store.models import (
-    Gift,
     RefundRequest,
     StoreCategory,
     StoreItem,
     UserInventory,
     Wishlist,
 )
-from apps.users.models import User
 
 
 @pytest.fixture
@@ -504,7 +502,6 @@ class TestXPPurchase:
     def test_xp_purchase_success(self, mock_purchase, premium_store_client, xp_item, store_user):
         """XP purchase successfully."""
         # Create a real inventory entry to avoid serializer issues with Mock
-        from apps.store.models import UserInventory
         inventory_entry = UserInventory.objects.create(
             user=store_user, item=xp_item, stripe_payment_intent_id="", is_equipped=False,
         )

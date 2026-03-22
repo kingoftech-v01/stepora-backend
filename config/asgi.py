@@ -15,13 +15,13 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 django_asgi_app = get_asgi_application()
 
 # Import routing after Django setup
-from apps.ai.routing import websocket_urlpatterns as ai_chat_ws
-from apps.chat.routing import websocket_urlpatterns as buddy_chat_ws
-from apps.circles.routing import websocket_urlpatterns as circle_chat_ws
-from apps.leagues.routing import websocket_urlpatterns as league_ws
-from apps.notifications.routing import websocket_urlpatterns as notification_ws
-from apps.social.routing import websocket_urlpatterns as social_ws
-from core.websocket_auth import TokenAuthMiddlewareStack
+from apps.ai.routing import websocket_urlpatterns as ai_chat_ws  # noqa: E402
+from apps.chat.routing import websocket_urlpatterns as buddy_chat_ws  # noqa: E402
+from apps.circles.routing import websocket_urlpatterns as circle_chat_ws  # noqa: E402
+from apps.leagues.routing import websocket_urlpatterns as league_ws  # noqa: E402
+from apps.notifications.routing import websocket_urlpatterns as notification_ws  # noqa: E402
+from apps.social.routing import websocket_urlpatterns as social_ws  # noqa: E402
+from core.websocket_auth import TokenAuthMiddlewareStack  # noqa: E402
 
 application = ProtocolTypeRouter(
     {

@@ -8,19 +8,16 @@ Tests for core utilities:
 """
 
 import uuid
-from datetime import timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.test import RequestFactory, override_settings
-from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from apps.users.models import User
 from core.auth.models import EmailAddress
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  SANITIZERS
@@ -307,7 +304,7 @@ class TestValidateSearchQuery:
         assert "<b>" not in result
 
     def test_truncates_long_query(self):
-        from core.validators import validate_search_query, MAX_SEARCH_QUERY_LENGTH
+        from core.validators import MAX_SEARCH_QUERY_LENGTH, validate_search_query
 
         long_query = "a" * 500
         result = validate_search_query(long_query)
@@ -1187,6 +1184,7 @@ class TestTwoFactorAuth:
     def test_2fa_challenge_valid_totp(self, mock_notif):
         """2FA challenge with valid TOTP code succeeds."""
         import pyotp
+
         from core.auth.views import _create_challenge_token
 
         mock_notif.delay.return_value = None
@@ -2055,9 +2053,8 @@ class TestAuthTokens:
 
     def test_make_email_verification_key(self):
         """Make and verify email verification key."""
-        from core.auth.tokens import make_email_verification_key
-
         from core.auth.models import EmailAddress
+        from core.auth.tokens import make_email_verification_key
 
         user = User.objects.create_user(
             email="tokentest@example.com", password="test123"

@@ -2,13 +2,10 @@
 Integration tests for the Users app API endpoints.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 from rest_framework import status
-
-from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Get User Profile (GET /api/users/me/)
@@ -1378,7 +1375,7 @@ class TestExportDataCSV:
 
 
 @pytest.mark.django_db
-class TestMotivation:
+class TestMotivationCoverage:
     """Integration tests for the AI motivation endpoint."""
 
     def test_motivation_success(self, premium_users_client):
@@ -1411,7 +1408,7 @@ class TestMotivation:
 
 
 @pytest.mark.django_db
-class TestMorningBriefing:
+class TestMorningBriefingCoverage:
     """Integration tests for the AI morning briefing endpoint."""
 
     def test_morning_briefing_success(self, premium_users_client):
@@ -1438,7 +1435,7 @@ class TestMorningBriefing:
 
 
 @pytest.mark.django_db
-class TestWeeklyReport:
+class TestWeeklyReportCoverage:
     """Integration tests for the weekly report endpoint."""
 
     def test_weekly_report_success(self, premium_users_client):
@@ -1463,7 +1460,7 @@ class TestWeeklyReport:
 
 
 @pytest.mark.django_db
-class TestCheckIn:
+class TestCheckInCoverage:
     """Integration tests for the check-in endpoint."""
 
     def test_check_in_success(self, premium_users_client, mock_openai):
@@ -1491,7 +1488,7 @@ class TestCheckIn:
 
 
 @pytest.mark.django_db
-class TestCelebrate:
+class TestCelebrateCoverage:
     """Integration tests for the celebrate endpoint."""
 
     def test_celebrate_success(self, premium_users_client):

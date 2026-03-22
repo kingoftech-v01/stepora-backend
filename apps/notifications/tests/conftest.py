@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.notifications.models import Notification, WebPushSubscription, UserDevice
+from apps.notifications.models import Notification
 from apps.users.models import User
 
 

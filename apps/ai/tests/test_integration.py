@@ -4,11 +4,14 @@ Integration tests for the AI Coaching app.
 Tests API endpoints via the DRF test client.
 """
 
+import uuid
+from unittest.mock import Mock, patch
+
 import pytest
-from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 
-from apps.ai.models import AIConversation, AIMessage
+from apps.ai.models import AIConversation, AIMessage, ConversationBranch
 
 
 class TestListAIConversations:
@@ -222,14 +225,6 @@ class TestAIConversationDelete:
 # ──────────────────────────────────────────────────────────────────────
 #  Send Message (mock OpenAI)
 # ──────────────────────────────────────────────────────────────────────
-
-import uuid
-from io import BytesIO
-from unittest.mock import AsyncMock, Mock, patch
-
-from django.core.files.uploadedfile import SimpleUploadedFile
-
-from apps.ai.models import ConversationBranch
 
 
 class TestAISendMessage:

@@ -8,7 +8,7 @@ All Stripe calls are mocked.
 
 import uuid
 from decimal import Decimal
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
@@ -16,7 +16,6 @@ from django.utils import timezone
 from apps.store.models import (
     Gift,
     RefundRequest,
-    StoreCategory,
     StoreItem,
     UserInventory,
 )
@@ -30,8 +29,6 @@ from apps.store.services import (
     StoreService,
     StoreServiceError,
 )
-from apps.users.models import User
-
 
 # ── fixtures ────────────────────────────────────────────────────
 

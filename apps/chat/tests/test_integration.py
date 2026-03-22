@@ -7,7 +7,6 @@ Tests API endpoints via the DRF test client.
 import uuid
 from unittest.mock import patch
 
-import pytest
 from rest_framework import status
 
 from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus

@@ -2,7 +2,6 @@
 Tests for SecurityHeadersMiddleware and LastActivityMiddleware.
 """
 
-import time
 from unittest.mock import Mock, patch
 
 from django.http import HttpResponse

@@ -462,7 +462,7 @@ class TestTwoFactor:
                 "password": PASSWORD,
             },
         )
-        challenge = resp.data["challenge_token"]
+        _challenge = resp.data["challenge_token"]  # noqa: F841
 
         # Tamper with the token to simulate expiry
         resp = client.post(
@@ -980,7 +980,7 @@ class TestFullFlows:
     def test_register_verify_login_flow(self, client):
         """Complete flow: register -> verify email -> login."""
         # 1. Register
-        with patch("core.auth.tasks.send_verification_email.delay") as mock_send:
+        with patch("core.auth.tasks.send_verification_email.delay") as _mock_send:  # noqa: F841
             resp = client.post(
                 "/api/auth/registration/",
                 {

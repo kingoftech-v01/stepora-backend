@@ -6,6 +6,9 @@ Plan-related admin classes (Goal, Task, Milestone, etc.) are in apps.plans.admin
 
 from django.contrib import admin
 
+# Import Goal/Obstacle for inline use (still valid via backward-compat)
+from apps.plans.models import Goal, Obstacle
+
 from .models import (
     Dream,
     DreamCollaborator,
@@ -17,9 +20,6 @@ from .models import (
     SharedDream,
     VisionBoardImage,
 )
-
-# Import Goal/Obstacle for inline use (still valid via backward-compat)
-from apps.plans.models import Goal, Obstacle
 
 
 class GoalInline(admin.TabularInline):

@@ -5,27 +5,16 @@ Target: 100% line coverage on views.py.
 Exercises every endpoint, action, error branch, and edge case.
 """
 
-import io
 import json
 import uuid
 from datetime import date, timedelta
-from unittest.mock import MagicMock, Mock, PropertyMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
-
-# Prevent Stripe signal from hitting real API during user creation
-pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _mock_stripe_signal():
-    """Prevent Stripe customer creation signal from hitting real API."""
-    with patch("apps.subscriptions.services.StripeService.create_customer"):
-        yield
 
 from apps.dreams.models import (
     CalibrationResponse,
@@ -49,6 +38,15 @@ from apps.dreams.models import (
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
 
+# Prevent Stripe signal from hitting real API during user creation
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _mock_stripe_signal():
+    """Prevent Stripe customer creation signal from hitting real API."""
+    with patch("apps.subscriptions.services.StripeService.create_customer"):
+        yield
 
 # ── Fixtures ────────────────────────────────────────────────────────
 
@@ -2993,7 +2991,7 @@ class TestEdgeCoverage:
 
     def test_remove_collaborator_not_owner(self, dream_user, dream_user2, dream_client2, test_dream):
         """Line 2225: Only owner can remove collaborators."""
-        from apps.dreams.models import SharedDream, DreamCollaborator
+        from apps.dreams.models import DreamCollaborator, SharedDream
         SharedDream.objects.create(dream=test_dream, shared_with=dream_user2, shared_by=dream_user)
         DreamCollaborator.objects.create(dream=test_dream, user=dream_user2)
         response = dream_client2.delete(

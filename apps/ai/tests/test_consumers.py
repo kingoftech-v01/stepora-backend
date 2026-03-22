@@ -5,16 +5,10 @@ Uses channels.testing.WebsocketCommunicator to test connect/disconnect
 and message handling with mocked OpenAI service.
 """
 
-import json
-import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from channels.db import database_sync_to_async
-from channels.testing import WebsocketCommunicator
-from django.test import override_settings
 
-from apps.ai.models import AIConversation, AIMessage
+from apps.ai.models import AIConversation
 from apps.users.models import User
 
 

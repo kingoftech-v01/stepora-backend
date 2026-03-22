@@ -3,11 +3,8 @@ Tests for the 3-tier social feed algorithm, CRUD permissions,
 and post visibility filtering.
 """
 
-import uuid
-from datetime import timedelta
 
 import pytest
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 
@@ -20,7 +17,6 @@ from apps.social.models import (
     UserFollow,
 )
 from apps.users.models import User
-
 
 # ---------------------------------------------------------------------------
 # Helpers

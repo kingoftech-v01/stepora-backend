@@ -28,7 +28,6 @@ from apps.leagues.models import (
 from apps.leagues.services import LeagueService
 from apps.users.models import User
 
-
 # ── Helpers / Fixtures ────────────────────────────────────────────────
 
 

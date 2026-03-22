@@ -86,7 +86,7 @@ class ReferralService:
     @staticmethod
     def get_referral_stats(user):
         """Get referral statistics for a user."""
-        from .models import Referral, ReferralCode, ReferralReward
+        from .models import ReferralCode, ReferralReward
 
         try:
             code = ReferralCode.objects.get(user=user)

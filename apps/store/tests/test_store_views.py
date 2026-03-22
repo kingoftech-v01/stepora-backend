@@ -9,7 +9,7 @@ GiftSendView, GiftClaimView, GiftListView, RefundRequestView, RefundAdminView.
 import uuid
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -29,13 +29,11 @@ from apps.store.services import (
     InventoryNotFoundError,
     ItemAlreadyOwnedError,
     ItemNotActiveError,
-    ItemNotFoundError,
     PaymentVerificationError,
     StoreServiceError,
 )
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
-
 
 # ── helpers / fixtures ──────────────────────────────────────────────
 

@@ -13,7 +13,6 @@ from apps.dreams.models import Dream, DreamMilestone, Goal, Task
 from apps.users.models import User
 from integrations.checkin_tools import CheckInToolExecutor
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

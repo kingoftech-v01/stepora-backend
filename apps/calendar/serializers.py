@@ -5,9 +5,9 @@ Serializers for Calendar app.
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
+from apps.dreams.models import Dream
 from core.sanitizers import sanitize_text
 
-from apps.dreams.models import Dream
 from .models import (
     CalendarEvent,
     CalendarShare,

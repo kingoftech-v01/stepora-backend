@@ -7,7 +7,6 @@ Tests the three-tier content moderation pipeline:
 3. OpenAI Moderation API (mocked)
 """
 
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,7 +22,6 @@ from core.moderation import (
     ContentModerationService,
     ModerationResult,
 )
-
 
 # ── ModerationResult ─────────────────────────────────────────────────
 

@@ -24,34 +24,20 @@ Key areas:
 
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _mock_stripe_signal():
-    with patch("apps.subscriptions.services.StripeService.create_customer"):
-        yield
-
-
-from apps.dreams.models import Dream, DreamMilestone, Goal, Task
+from apps.dreams.models import Dream, DreamMilestone, Goal
 from apps.social.models import (
-    ActivityComment,
     ActivityFeedItem,
-    ActivityLike,
     BlockedUser,
-    DreamEncouragement,
     DreamPost,
     DreamPostComment,
-    DreamPostLike,
     Friendship,
-    PostReaction,
     RecentSearch,
     SavedPost,
     SocialEvent,
@@ -63,6 +49,13 @@ from apps.social.models import (
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
 
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _mock_stripe_signal():
+    with patch("apps.subscriptions.services.StripeService.create_customer"):
+        yield
 
 # ── Fixtures ────────────────────────────────────────────────────────
 

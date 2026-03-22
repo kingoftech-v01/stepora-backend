@@ -24,7 +24,6 @@ from django.db import models
 from django.utils import timezone as django_timezone
 
 
-
 class League(models.Model):
     """
     Represents a competitive league tier in the ranking system.

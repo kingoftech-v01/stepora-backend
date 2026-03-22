@@ -7,8 +7,7 @@ iCal feed/import, Calendar sharing, Focus mode endpoints.
 """
 
 import uuid
-from datetime import date, datetime, time, timedelta
-from datetime import timezone as dt_timezone
+from datetime import date, time, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,15 +20,13 @@ from apps.calendar.models import (
     CalendarShare,
     GoogleCalendarIntegration,
     Habit,
-    HabitCompletion,
     RecurrenceException,
     TimeBlock,
     TimeBlockTemplate,
 )
 from apps.dreams.models import Dream
-from apps.plans.models import FocusSession, Goal, Task
+from apps.plans.models import Goal, Task
 from apps.users.models import User
-
 
 # ─── Fixtures ───────────────────────────────────────────────────
 

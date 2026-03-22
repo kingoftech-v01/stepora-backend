@@ -19,7 +19,6 @@ from django.utils import timezone
 
 from apps.subscriptions.models import (
     Promotion,
-    PromotionChangeLog,
     PromotionPlanDiscount,
     PromotionRedemption,
     StripeCustomer,
@@ -35,7 +34,6 @@ from apps.subscriptions.services import (
     _timestamp_to_datetime,
 )
 from apps.users.models import User
-
 
 # ─── Fixtures ───────────────────────────────────────────────────
 

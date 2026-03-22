@@ -12,7 +12,6 @@ from django.utils import timezone
 
 from integrations.google_calendar import GoogleCalendarService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

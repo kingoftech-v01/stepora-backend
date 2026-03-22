@@ -2,12 +2,10 @@
 Integration tests for the Subscriptions app API endpoints.
 """
 
-from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.utils import timezone
 from rest_framework import status
 
 from apps.subscriptions.models import (
@@ -15,7 +13,6 @@ from apps.subscriptions.models import (
     SubscriptionPlan,
 )
 from apps.users.models import User
-
 
 # ── List Plans (GET /api/subscriptions/plans/) ────────────────────────
 

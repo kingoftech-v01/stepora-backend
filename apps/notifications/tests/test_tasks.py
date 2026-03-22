@@ -17,7 +17,7 @@ Covers:
 
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.utils import timezone
@@ -25,7 +25,6 @@ from django.utils import timezone
 from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, UserDevice
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  check_due_tasks

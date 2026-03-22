@@ -2,20 +2,16 @@
 Unit tests for the Buddies app models and services.
 """
 
-from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
 
 from apps.buddies.models import (
-    AccountabilityContract,
     BuddyEncouragement,
     BuddyPairing,
 )
 from apps.buddies.services import BuddyMatchingService
-from apps.users.models import User
-
 
 # ── BuddyPairing model ───────────────────────────────────────────────
 
@@ -242,7 +238,6 @@ class TestBuddyEncouragementModel:
 #  API ENDPOINT TESTS — Buddies
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

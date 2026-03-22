@@ -12,7 +12,7 @@ Covers:
 """
 
 import uuid
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -27,7 +27,6 @@ from apps.notifications.models import (
     WebPushSubscription,
 )
 from apps.users.models import User
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -254,6 +253,7 @@ class TestFreeTierFiltering:
     def test_premium_user_sees_all(self, db):
         """Premium user sees all notification types."""
         from decimal import Decimal
+
         from apps.subscriptions.models import Subscription, SubscriptionPlan
 
         # Create a fresh premium user and update the subscription CharField

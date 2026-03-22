@@ -18,9 +18,7 @@ from rest_framework.request import Request
 from apps.store.models import (
     Gift,
     RefundRequest,
-    StoreCategory,
     StoreItem,
-    UserInventory,
     Wishlist,
 )
 from apps.store.serializers import (
@@ -41,8 +39,6 @@ from apps.store.serializers import (
     WishlistSerializer,
     XPPurchaseSerializer,
 )
-from apps.users.models import User
-
 
 # ── helpers ──────────────────────────────────────────────────────
 

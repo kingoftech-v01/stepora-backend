@@ -4,8 +4,7 @@ Tests for integrations.context_builder — build_dream_context and helpers.
 All functions query real Django models, so these are @pytest.mark.django_db tests.
 """
 
-import json
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -28,7 +27,6 @@ from integrations.context_builder import (
     _build_persona,
     build_dream_context,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

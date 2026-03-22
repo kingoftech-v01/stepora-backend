@@ -6,14 +6,12 @@ All OpenAI API calls are mocked — no real API traffic.
 
 import json
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
+from unittest.mock import AsyncMock, Mock, mock_open, patch
 
 import openai
 import pytest
-from django.utils import timezone
 
 from core.exceptions import OpenAIError
-
 
 # ---------------------------------------------------------------------------
 # Helper: build a mock OpenAI ChatCompletion response

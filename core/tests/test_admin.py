@@ -622,10 +622,10 @@ class TestAdminCustomMethods:
 
     def test_promotion_redemption_count(self):
         """PromotionAdmin.redemption_count works."""
+        from django.utils import timezone
+
         from apps.subscriptions.admin import PromotionAdmin
         from apps.subscriptions.models import Promotion
-
-        from django.utils import timezone
 
         promo = Promotion.objects.create(
             name="Test Promo",

@@ -15,8 +15,7 @@ import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.dreams.models import Dream, Goal, Task
-from apps.users.models import User
+from apps.dreams.models import Dream
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ Shared fixtures for Chat app tests.
 import pytest
 from rest_framework.test import APIClient
 
-from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus
+from apps.chat.models import Call, ChatConversation, ChatMessage
 from apps.users.models import User
 
 

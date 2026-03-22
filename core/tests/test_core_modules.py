@@ -8,19 +8,18 @@ Tests for core modules:
 """
 
 import logging
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
-from django.test import RequestFactory
 from rest_framework.exceptions import (
     AuthenticationFailed,
-    NotAuthenticated,
     NotFound,
     PermissionDenied,
     Throttled,
+)
+from rest_framework.exceptions import (
     ValidationError as DRFValidationError,
 )
-
 
 # ── storage.py tests ────────────────────────────────────────────────────
 

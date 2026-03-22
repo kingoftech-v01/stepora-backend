@@ -8,9 +8,8 @@ Verifies that:
 - Each email-sending task passes the correct from_name
 """
 
-from unittest.mock import patch, ANY
+from unittest.mock import patch
 
-import pytest
 from django.test import override_settings
 
 TEST_FROM_EMAIL = "info@stepora.net"
@@ -216,6 +215,7 @@ class TestUserTaskDisplayNames:
         # instead of user.ai_conversations). We verify the from_name by
         # directly inspecting the task source code for the correct argument.
         import inspect
+
         from apps.users.tasks import export_user_data
 
         source = inspect.getsource(export_user_data)

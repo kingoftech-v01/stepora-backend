@@ -9,14 +9,10 @@ acceptance), while follows are unidirectional.
 import uuid
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import models
-from django.db.models import Q
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
-
-from django.conf import settings
-
-
 
 # ── Backward-compatible imports ──
 # Models moved to apps.friends.models. Re-exported here so that

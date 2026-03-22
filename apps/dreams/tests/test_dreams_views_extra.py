@@ -12,24 +12,13 @@ Lines targeted:
   3212-3216 - TaskViewSet.perform_create: auto-order when order not provided
 """
 
-import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
-
-pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _mock_stripe_signal():
-    """Prevent Stripe customer creation signal from hitting real API."""
-    with patch("apps.subscriptions.services.StripeService.create_customer"):
-        yield
-
 
 from apps.dreams.models import (
     CalibrationResponse,
@@ -42,6 +31,14 @@ from apps.dreams.models import (
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
 
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _mock_stripe_signal():
+    """Prevent Stripe customer creation signal from hitting real API."""
+    with patch("apps.subscriptions.services.StripeService.create_customer"):
+        yield
 
 # ── Fixtures ────────────────────────────────────────────────────────
 

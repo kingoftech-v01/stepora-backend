@@ -10,14 +10,10 @@ from django.utils import timezone
 
 from apps.leagues.models import (
     League,
-    LeagueSeason,
     LeagueStanding,
     Season,
-    SeasonConfig,
     SeasonReward,
 )
-from apps.users.models import User
-
 
 # ── League model ──────────────────────────────────────────────────────
 
@@ -82,7 +78,7 @@ class TestLeagueModel:
         League.objects.all().delete()
         leagues = League.seed_defaults()
         assert len(leagues) == 7
-        tiers = {l.tier for l in leagues}
+        tiers = {league.tier for league in leagues}
         assert tiers == {"bronze", "silver", "gold", "platinum", "diamond", "master", "legend"}
 
     def test_seed_defaults_idempotent(self, db):
@@ -96,7 +92,7 @@ class TestLeagueModel:
     def test_ordering(self, bronze_league, silver_league, legend_league):
         """Leagues are ordered by min_xp."""
         leagues = list(League.objects.all())
-        xps = [l.min_xp for l in leagues]
+        xps = [league.min_xp for league in leagues]
         assert xps == sorted(xps)
 
 

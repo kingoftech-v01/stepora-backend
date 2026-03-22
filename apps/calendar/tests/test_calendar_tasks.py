@@ -16,11 +16,10 @@ from unittest.mock import Mock, patch
 import pytest
 from django.utils import timezone
 
-from apps.calendar.models import CalendarEvent, TimeBlock
+from apps.calendar.models import CalendarEvent
 from apps.dreams.models import Dream, Goal, Task
 from apps.notifications.models import Notification, UserDevice
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  send_daily_summaries
@@ -539,8 +538,9 @@ class TestNextOccurrence:
         assert result == now + timedelta(weeks=2)
 
     def test_monthly(self):
-        from apps.calendar.tasks import _next_occurrence
         from dateutil.relativedelta import relativedelta
+
+        from apps.calendar.tasks import _next_occurrence
 
         now = timezone.now()
         result = _next_occurrence(now, "monthly", 1)

@@ -13,10 +13,9 @@ Tests cover:
 - Routing URL patterns
 """
 
-import json
 import uuid
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from channels.db import database_sync_to_async
@@ -27,7 +26,6 @@ from apps.ai.consumers import AIChatConsumer
 from apps.ai.models import AIConversation, AIMessage
 from apps.users.models import User
 from core.consumers import MAX_MSG_CONTENT_LEN, MAX_MSG_SIZE
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Helpers

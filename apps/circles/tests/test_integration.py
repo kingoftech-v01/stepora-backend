@@ -13,7 +13,6 @@ from rest_framework.test import APIClient
 
 from apps.circles.models import Circle, CircleMembership
 
-
 # ── List Circles ──────────────────────────────────────────────────────
 
 
@@ -81,10 +80,10 @@ class TestJoinCircle:
     def test_join_public_circle(self, circle_pro_client, test_circle):
         """Pro user can join a public circle."""
         # Create a separate pro user to join (the fixture pro user is the creator)
-        from apps.users.models import User
-        from apps.subscriptions.models import Subscription, SubscriptionPlan
         from datetime import timedelta
-        from decimal import Decimal
+
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
+        from apps.users.models import User
 
         user2 = User.objects.create_user(
             email="joiner@example.com", password="testpass123"
@@ -99,7 +98,6 @@ class TestJoinCircle:
                 "current_period_end": timezone.now() + timedelta(days=30),
             },
         )
-        from rest_framework.test import APIClient
 
         client = APIClient()
         client.force_authenticate(user=user2)
@@ -126,7 +124,6 @@ class TestJoinCircle:
 
     def test_join_nonexistent_circle(self, circle_pro_client):
         """Joining a nonexistent circle returns 404."""
-        import uuid
 
         fake_id = uuid.uuid4()
         response = circle_pro_client.post(
@@ -221,9 +218,8 @@ class TestLeaveCircle:
 
     def test_leave_circle_as_member(self, test_circle):
         """Member can leave a circle."""
-        from apps.users.models import User
         from apps.subscriptions.models import Subscription, SubscriptionPlan
-        from rest_framework.test import APIClient
+        from apps.users.models import User
 
         user = User.objects.create_user(
             email="leaver@example.com", password="testpass123"
@@ -254,9 +250,8 @@ class TestLeaveCircle:
     def test_leave_circle_not_member(self, circle_pro_client, test_circle):
         """Non-member leaving returns 400 (pro user who is not a member but is the admin)."""
         # circle_pro_user is already admin, let's create another pro user
-        from apps.users.models import User
         from apps.subscriptions.models import Subscription, SubscriptionPlan
-        from rest_framework.test import APIClient
+        from apps.users.models import User
 
         user = User.objects.create_user(
             email="notmember@example.com", password="testpass123"
@@ -282,8 +277,8 @@ class TestLeaveCircle:
         self, circle_pro_client, test_circle, circle_pro_user
     ):
         """Last admin leaving auto-transfers ownership."""
-        from apps.users.models import User
         from apps.subscriptions.models import Subscription, SubscriptionPlan
+        from apps.users.models import User
 
         user2 = User.objects.create_user(
             email="leaver_member@example.com", password="testpass123"
@@ -405,7 +400,6 @@ class TestCircleRetrieve:
 
     def test_retrieve_nonexistent_circle(self, circle_pro_client):
         """Retrieve nonexistent circle returns 404."""
-        import uuid
 
         response = circle_pro_client.get(
             f"/api/circles/circles/{uuid.uuid4()}/"
@@ -474,7 +468,6 @@ class TestCircleListFilters:
     def test_join_private_circle(self, test_circle, circle_user):
         """Cannot join a private circle without invitation."""
         from apps.subscriptions.models import Subscription, SubscriptionPlan
-        from rest_framework.test import APIClient
 
         # Make it private
         test_circle.is_public = False

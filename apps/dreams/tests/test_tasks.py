@@ -12,7 +12,6 @@ Covers:
 - Helper functions: set_plan_status, get_plan_status, _parse_date
 """
 
-import json
 import uuid
 from datetime import timedelta
 from unittest.mock import Mock, patch
@@ -22,8 +21,6 @@ from django.utils import timezone
 
 from apps.dreams.models import Dream, DreamMilestone, Goal, Obstacle, Task
 from apps.notifications.models import Notification
-from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Helpers: set_plan_status / get_plan_status / _parse_date

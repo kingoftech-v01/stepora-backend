@@ -8,7 +8,6 @@ activity heatmaps, daily stats, streaks, and leaderboards.
 import logging
 from datetime import date, timedelta
 
-from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -102,7 +101,6 @@ class AchievementsView(APIView):
 
     def _compute_achievement_progress(self, user):
         """Compute live progress values for each achievement condition type."""
-        from apps.dreams.models import Dream, Task
 
         progress = {}
         progress["streak_days"] = user.streak_days or 0
@@ -121,8 +119,9 @@ class AchievementsView(APIView):
         )
 
         try:
-            from apps.social.models import Friendship
             from django.db.models import Q
+
+            from apps.social.models import Friendship
 
             progress["friends_count"] = Friendship.objects.filter(
                 Q(user1=user) | Q(user2=user), status="accepted"
@@ -131,8 +130,9 @@ class AchievementsView(APIView):
             progress["friends_count"] = 0
 
         try:
-            from apps.buddies.models import BuddyPairing
             from django.db.models import Q
+
+            from apps.buddies.models import BuddyPairing
 
             progress["first_buddy"] = (
                 1

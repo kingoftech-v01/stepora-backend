@@ -8,14 +8,12 @@ Covers 4 specific fixes:
 4. `is_read` -> `read_at` in users/tasks.py (notification field name)
 """
 
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
 from django.utils import timezone
 
 from apps.users.models import User
-
 
 # ───────────────────────────────────────────────────────────────────
 # Fixtures

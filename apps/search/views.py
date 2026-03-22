@@ -9,9 +9,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.ai.models import AIMessage as Message
 from apps.calendar.models import CalendarEvent
 from apps.circles.models import CirclePost
-from apps.ai.models import AIMessage as Message
 from apps.dreams.models import Dream, Goal, Task
 from apps.search.services import SearchService
 from apps.users.models import User

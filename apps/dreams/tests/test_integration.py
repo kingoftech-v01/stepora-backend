@@ -12,7 +12,22 @@ import pytest
 from django.utils import timezone
 from rest_framework import status
 
-from apps.dreams.models import Dream, Goal, Task
+from apps.dreams.models import (
+    Dream,
+    DreamCollaborator,
+    DreamJournal,
+    DreamMilestone,
+    DreamProgressSnapshot,
+    DreamTag,
+    DreamTagging,
+    DreamTemplate,
+    FocusSession,
+    Goal,
+    Obstacle,
+    PlanCheckIn,
+    Task,
+    VisionBoardImage,
+)
 
 
 class TestListDreams:
@@ -386,16 +401,6 @@ class TestDreamDelete:
 # ──────────────────────────────────────────────────────────────────────
 #  Milestone CRUD
 # ──────────────────────────────────────────────────────────────────────
-
-from apps.dreams.models import (
-    DreamMilestone,
-    DreamProgressSnapshot,
-    DreamTemplate,
-    FocusSession,
-    Obstacle,
-    PlanCheckIn,
-    VisionBoardImage,
-)
 
 
 class TestMilestoneCRUD:
@@ -1382,8 +1387,9 @@ class TestDreamAIActions:
 
     def test_smart_analysis_no_active_dreams(self, dream_user):
         """Smart analysis with no active dreams returns 400."""
-        from apps.subscriptions.models import Subscription, SubscriptionPlan
         from rest_framework.test import APIClient
+
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
 
         plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
         Subscription.objects.update_or_create(
@@ -2742,7 +2748,7 @@ class TestGoalRefine:
 
 
 @pytest.mark.django_db
-class TestDreamTemplates:
+class TestDreamTemplatesCoverage:
     """Tests for dream template endpoints."""
 
     def test_list_templates(self, dream_client):
@@ -2763,7 +2769,7 @@ class TestDreamTemplates:
 
 
 @pytest.mark.django_db
-class TestDreamTags:
+class TestDreamTagsCoverage:
     """Tests for dream tag endpoints."""
 
     def test_list_tags(self, dream_client):
@@ -2778,7 +2784,7 @@ class TestDreamTags:
 
 
 @pytest.mark.django_db
-class TestSharedWithMe:
+class TestSharedWithMeCoverage:
     """Tests for shared with me endpoint."""
 
     def test_list_shared_with_me(self, dream_client):
@@ -2793,7 +2799,7 @@ class TestSharedWithMe:
 
 
 @pytest.mark.django_db
-class TestDreamExplore:
+class TestDreamExploreCoverage:
     """Tests for dream explore endpoint."""
 
     def test_explore_public_dreams(self, dream_client):
@@ -2851,7 +2857,7 @@ class TestDreamPDFExport:
 
 
 @pytest.mark.django_db
-class TestDreamCollaborators:
+class TestDreamCollaboratorsCoverage:
     """Tests for dream collaborator endpoints."""
 
     def test_list_collaborators(self, dream_client, test_dream):
@@ -2929,7 +2935,7 @@ class TestDreamLikeDuplicate:
 
 
 @pytest.mark.django_db
-class TestUnshareDream:
+class TestUnshareDreamCoverage:
     """Tests for DELETE /api/dreams/dreams/<id>/unshare/<user_id>/"""
 
     def test_unshare_dream(self, dream_client, test_dream, dream_user2):
@@ -3001,7 +3007,7 @@ class TestExploreDreams:
 
 
 @pytest.mark.django_db
-class TestSharedWithMe:
+class TestSharedWithMeExtended:
     """Tests for shared dreams endpoint."""
 
     def test_shared_with_me(self, dream_client):
@@ -3031,7 +3037,7 @@ class TestDreamTagsList:
 
 
 @pytest.mark.django_db
-class TestDreamJournal:
+class TestDreamJournalCoverage:
     """Tests for dream journal endpoints."""
 
     def test_list_journal_entries(self, dream_client):
@@ -3063,7 +3069,7 @@ class TestDreamJournal:
 
 
 @pytest.mark.django_db
-class TestDreamAIActions:
+class TestDreamAIActionsCoverage:
     """Tests for dream AI action endpoints."""
 
     def test_analyze_dream(self, mock_openai, dream_client, test_dream):
@@ -3198,7 +3204,7 @@ class TestTwoMinuteStart:
 
 
 @pytest.mark.django_db
-class TestProgressPhotos:
+class TestProgressPhotosCoverage:
     """Tests for progress photo endpoints."""
 
     def test_progress_photos_list_empty(self, dream_client, test_dream):
@@ -3235,13 +3241,6 @@ class TestDreamTriggerCheckin:
 #  100% COVERAGE: FocusSession, Journal, VisionBoard, CheckIn,
 #  Template, Collaborator, Tag, ProgressSnapshot
 # ──────────────────────────────────────────────────────────────────────
-
-from apps.dreams.models import (
-    DreamCollaborator,
-    DreamJournal,
-    DreamTag,
-    DreamTagging,
-)
 
 
 @pytest.mark.django_db

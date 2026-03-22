@@ -16,10 +16,9 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
+from django.core.cache import cache as django_cache
 from django.utils import timezone
 from rest_framework.test import APIClient
-
-from django.core.cache import cache as django_cache
 
 from apps.leagues.models import (
     League,

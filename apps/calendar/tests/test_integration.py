@@ -6,15 +6,14 @@ and Google Calendar sync endpoints (mocked).
 """
 
 import uuid
-from datetime import time, timedelta
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
-from unittest.mock import patch, Mock
 
-from apps.calendar.models import CalendarEvent, TimeBlock, Habit, HabitCompletion
+from apps.calendar.models import CalendarEvent
 from apps.users.models import User
 
 
@@ -469,7 +468,8 @@ class TestCalendarOverview:
 
     def test_heatmap(self, cal_client):
         """Get activity heatmap with date range."""
-        from datetime import date, timedelta as td
+        from datetime import date
+        from datetime import timedelta as td
 
         today = date.today()
         start = (today - td(days=27)).isoformat()

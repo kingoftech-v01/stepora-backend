@@ -7,14 +7,11 @@ Tests model creation, field defaults, serializer output, and validation.
 import uuid
 
 import pytest
-from django.utils import timezone
 
 from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus
 from apps.chat.serializers import (
-    CallHistorySerializer,
     ChatConversationSerializer,
     ChatMessageCreateSerializer,
-    ChatMessageSerializer,
 )
 
 
@@ -330,7 +327,6 @@ class TestChatMessageCreateSerializer:
 #  API ENDPOINT TESTS — Chat
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

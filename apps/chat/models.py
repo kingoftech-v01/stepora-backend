@@ -12,7 +12,6 @@ from django.db import models
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 
 
-
 class ChatConversation(models.Model):
     """Friend/buddy chat conversation."""
 

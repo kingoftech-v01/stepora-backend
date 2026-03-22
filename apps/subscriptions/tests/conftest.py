@@ -2,7 +2,6 @@
 Fixtures for subscriptions tests.
 """
 
-import uuid
 from datetime import timedelta
 from decimal import Decimal
 
@@ -13,9 +12,7 @@ from rest_framework.test import APIClient
 from apps.subscriptions.models import (
     Promotion,
     PromotionPlanDiscount,
-    PromotionRedemption,
     StripeCustomer,
-    StripeWebhookEvent,
     Subscription,
     SubscriptionPlan,
 )

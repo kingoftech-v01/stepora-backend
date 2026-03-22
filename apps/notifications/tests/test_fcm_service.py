@@ -2,7 +2,7 @@
 Tests for apps.notifications.fcm_service — FCMService, MulticastResult, InvalidTokenError.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -11,7 +11,6 @@ from apps.notifications.fcm_service import (
     InvalidTokenError,
     MulticastResult,
 )
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  InvalidTokenError

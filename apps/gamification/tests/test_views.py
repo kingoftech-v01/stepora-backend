@@ -3,14 +3,11 @@ Tests for gamification views.
 """
 
 import pytest
-from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.gamification.models import (
     Achievement,
-    DailyActivity,
     GamificationProfile,
-    UserAchievement,
 )
 from apps.users.models import User
 

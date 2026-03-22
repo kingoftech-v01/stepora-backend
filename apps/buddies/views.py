@@ -300,7 +300,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
         """Send a buddy chat message (REST fallback when WebSocket unavailable)."""
         from django.db.models import F
 
-        from apps.chat.models import ChatConversation as Conversation, ChatMessage as Message
+        from apps.chat.models import ChatConversation as Conversation
+        from apps.chat.models import ChatMessage as Message
 
         conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"
@@ -455,7 +456,8 @@ class BuddyViewSet(viewsets.GenericViewSet):
         from django.core.files.storage import default_storage
         from django.db.models import F
 
-        from apps.chat.models import ChatConversation as Conversation, ChatMessage as Message
+        from apps.chat.models import ChatConversation as Conversation
+        from apps.chat.models import ChatMessage as Message
 
         conv_id = request.data.get("conversation_id") or request.data.get(
             "conversation_id"

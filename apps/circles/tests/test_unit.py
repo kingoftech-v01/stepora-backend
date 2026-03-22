@@ -15,8 +15,6 @@ from apps.circles.models import (
     CirclePost,
     PostReaction,
 )
-from apps.users.models import User
-
 
 # ── Circle model ──────────────────────────────────────────────────────
 
@@ -271,7 +269,6 @@ class TestPostReactionModel:
 #  API ENDPOINT TESTS — Circles
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

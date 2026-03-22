@@ -2,23 +2,29 @@
 Integration tests for the Social app API endpoints.
 """
 
-import pytest
+import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
 from django.utils import timezone
 from rest_framework import status
 
 from apps.social.models import (
+    ActivityFeedItem,
+    BlockedUser,
+    DreamEncouragement,
     DreamPost,
     DreamPostComment,
     DreamPostLike,
     Friendship,
+    PostReaction,
     SavedPost,
+    SocialEvent,
+    SocialEventRegistration,
+    Story,
     UserFollow,
 )
-from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Social Feed
@@ -419,21 +425,6 @@ class TestFollowUnfollow:
 # ──────────────────────────────────────────────────────────────────────
 #  Block / Unblock User
 # ──────────────────────────────────────────────────────────────────────
-
-import uuid
-from datetime import timedelta
-
-from apps.social.models import (
-    ActivityFeedItem,
-    BlockedUser,
-    DreamEncouragement,
-    PostReaction,
-    ReportedUser,
-    SocialEvent,
-    SocialEventRegistration,
-    Story,
-)
-
 
 @pytest.mark.django_db
 class TestBlockUser:
@@ -1173,8 +1164,9 @@ class TestFollowSuggestions:
 
     def test_follow_suggestions_premium(self, social_user):
         """Premium user can get follow suggestions."""
-        from apps.subscriptions.models import Subscription, SubscriptionPlan
         from rest_framework.test import APIClient
+
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
 
         plan = SubscriptionPlan.objects.get(slug="premium")
         Subscription.objects.update_or_create(
@@ -1208,8 +1200,9 @@ class TestFriendSuggestions:
 
     def test_friend_suggestions_premium(self, social_user):
         """Premium user can get friend suggestions."""
-        from apps.subscriptions.models import Subscription, SubscriptionPlan
         from rest_framework.test import APIClient
+
+        from apps.subscriptions.models import Subscription, SubscriptionPlan
 
         plan = SubscriptionPlan.objects.get(slug="premium")
         Subscription.objects.update_or_create(
@@ -1445,7 +1438,7 @@ class TestRecentSearches:
 
 
 @pytest.mark.django_db
-class TestFollowSuggestions:
+class TestFollowSuggestionsCoverage:
     """Tests for follow/friend suggestion endpoints."""
 
     def test_follow_suggestions(self, social_client):
@@ -1471,7 +1464,7 @@ class TestFollowSuggestions:
 
 
 @pytest.mark.django_db
-class TestFeedLikeComment:
+class TestFeedLikeCommentCoverage:
     """Tests for feed like and comment endpoints."""
 
     def test_feed_like_nonexistent(self, social_client):

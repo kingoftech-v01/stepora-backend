@@ -28,10 +28,10 @@ jobs:
           pip install -r requirements/production.txt
           pip install ruff
 
-      - name: Lint (ruff) — warnings only until violations are fixed
+      - name: Lint (ruff)
         run: |
           source .venv/bin/activate
-          ruff check apps/ core/ integrations/ config/ --config ruff.toml || true
+          ruff check apps/ core/ integrations/ config/ --config ruff.toml
 
       - name: Compile check (syntax errors)
         run: |

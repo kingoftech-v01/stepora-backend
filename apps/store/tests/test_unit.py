@@ -14,8 +14,6 @@ from apps.store.models import (
     UserInventory,
     Wishlist,
 )
-from apps.users.models import User
-
 
 # ── StoreItem model ───────────────────────────────────────────────────
 
@@ -262,7 +260,6 @@ class TestGiftModel:
 #  API ENDPOINT TESTS — Store
 # ══════════════════════════════════════════════════════════════════════
 
-import pytest
 
 
 @pytest.mark.django_db

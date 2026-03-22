@@ -19,21 +19,17 @@ Covers:
 - Morning briefing
 """
 
-import io
-import uuid
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pyotp
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.dreams.models import Dream, Goal, Task
-from apps.friends.models import BlockedUser, Friendship
-from apps.notifications.models import Notification
+from apps.friends.models import Friendship
 from apps.users.models import (
     Achievement,
     DailyActivity,
@@ -42,7 +38,6 @@ from apps.users.models import (
     User,
     UserAchievement,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -112,6 +107,7 @@ def xclient2(xuser2):
 def premium_xuser(xuser):
     """Give xuser a premium subscription for AI access."""
     from decimal import Decimal
+
     from apps.subscriptions.models import Subscription, SubscriptionPlan
 
     plan, _ = SubscriptionPlan.objects.get_or_create(
@@ -957,7 +953,7 @@ class TestStreakDetails:
 
     def test_streak_details_with_activity(self, xclient, xuser):
         """Streak history reflects activity."""
-        from datetime import date, timedelta
+        from datetime import date
 
         today = date.today()
         for i in range(3):

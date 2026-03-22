@@ -4,50 +4,36 @@ Tests for apps/social/serializers.py
 
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
-from apps.dreams.models import Dream, DreamMilestone, Goal, Task
+from apps.dreams.models import Dream, Goal
 from apps.social.models import (
     ActivityFeedItem,
-    DreamEncouragement,
     DreamPost,
     DreamPostComment,
     Friendship,
-    PostReaction,
-    SavedPost,
-    SocialEvent,
-    SocialEventRegistration,
     Story,
-    StoryView,
 )
 from apps.social.serializers import (
     ActivityFeedItemSerializer,
-    BlockedUserSerializer,
     BlockUserSerializer,
-    DreamEncouragementSerializer,
     DreamPostCommentSerializer,
     DreamPostCreateSerializer,
     DreamPostSerializer,
     FollowUserSerializer,
     FriendRequestSerializer,
-    FriendSerializer,
     ReportUserSerializer,
     SendFriendRequestSerializer,
     SocialEventCreateSerializer,
-    SocialEventRegistrationSerializer,
-    SocialEventSerializer,
     StoryCreateSerializer,
-    StoryFeedGroupSerializer,
     StorySerializer,
     UserPublicSerializer,
-    UserSearchResultSerializer,
 )
 from apps.users.models import User
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

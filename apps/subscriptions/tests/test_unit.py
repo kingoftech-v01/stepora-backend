@@ -20,7 +20,6 @@ from apps.subscriptions.models import (
 )
 from apps.users.models import User
 
-
 # ── SubscriptionPlan model ────────────────────────────────────────────
 
 

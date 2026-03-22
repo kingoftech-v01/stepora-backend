@@ -9,14 +9,12 @@ from typing import List, Optional, Tuple
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from apps.buddies.models import BuddyPairing  # noqa: F401
+from apps.buddies.services import BuddyMatchingService  # noqa: F401
+
 from .models import User
 
 logger = logging.getLogger(__name__)
-
-
-# Backward compatibility — BuddyMatchingService moved to apps.buddies.services
-from apps.buddies.models import BuddyPairing  # noqa: F401
-from apps.buddies.services import BuddyMatchingService  # noqa: F401
 
 
 class _BuddyMatchingServiceDeprecated:

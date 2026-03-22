@@ -8,14 +8,12 @@ Covers:
 - TokenAuthMiddlewareStack convenience function
 """
 
-import uuid
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from channels.testing import WebsocketCommunicator
+from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from django.test import override_settings
 
 from apps.users.models import User
 from core.websocket_auth import (
@@ -24,7 +22,6 @@ from core.websocket_auth import (
     TokenWebSocketMiddleware,
     get_user_from_token,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  get_user_from_token
@@ -259,9 +256,6 @@ class TestTokenAuthMiddlewareStack:
 # ──────────────────────────────────────────────────────────────────────
 #  Helpers
 # ──────────────────────────────────────────────────────────────────────
-
-
-from channels.db import database_sync_to_async
 
 
 @database_sync_to_async

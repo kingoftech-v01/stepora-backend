@@ -12,21 +12,17 @@ Covers:
 
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.buddies.models import (
-    AccountabilityContract,
     BuddyEncouragement,
     BuddyPairing,
-    ContractCheckIn,
 )
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

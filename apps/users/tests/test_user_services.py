@@ -8,15 +8,12 @@ backward-compat re-export tested in apps/buddies/tests/.
 """
 
 from datetime import timedelta
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from django.utils import timezone
 
 from apps.dreams.models import Dream, Goal, Task
-from apps.users.models import User
 from apps.users.services import AchievementService, UserStatsService
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  UserStatsService

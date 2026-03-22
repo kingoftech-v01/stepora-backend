@@ -24,7 +24,6 @@ from .models import (
     StoryView,
 )
 
-
 # Friendship, UserFollow, BlockedUser, ReportedUser admin moved to apps.friends.admin
 
 

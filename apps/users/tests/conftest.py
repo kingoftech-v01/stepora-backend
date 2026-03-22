@@ -3,10 +3,9 @@ Fixtures for users app tests.
 """
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.users.models import User, DailyActivity
+from apps.users.models import User
 
 
 @pytest.fixture

@@ -5,11 +5,10 @@ Notification models for push notifications and reminders.
 import uuid
 import zoneinfo
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
-
-from django.conf import settings
 
 
 class Notification(models.Model):

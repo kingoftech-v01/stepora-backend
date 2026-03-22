@@ -2,15 +2,13 @@
 Tests for apps.notifications.services — NotificationService & NotificationDeliveryService.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.utils import timezone
 
 from apps.notifications.models import Notification, UserDevice, WebPushSubscription
 from apps.notifications.services import NotificationDeliveryService, NotificationService
-from apps.users.models import User
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  NotificationService.create
@@ -305,7 +303,6 @@ class TestNotificationDeliveryService:
     def test_send_websocket_success(self, delivery_service, pending_notification):
         """_send_websocket returns True when channel layer succeeds."""
         # async_to_sync wraps group_send, so make it a coroutine mock
-        import asyncio
 
         async def fake_group_send(*args, **kwargs):
             pass
@@ -318,7 +315,6 @@ class TestNotificationDeliveryService:
         self, delivery_service, pending_notification
     ):
         """_send_websocket returns False when channel layer raises."""
-        import asyncio
 
         async def fail_group_send(*args, **kwargs):
             raise Exception("boom")
@@ -455,7 +451,6 @@ class TestNotificationDeliveryService:
             }
             mock_settings.FRONTEND_URL = "https://stepora.app"
             # Re-import to pick up our mocked pywebpush
-            import importlib
 
             # Instead of re-import, directly patch the webpush callable
             with patch(

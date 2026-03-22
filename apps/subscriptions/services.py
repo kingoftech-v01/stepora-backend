@@ -7,7 +7,6 @@ and keeps a single place to manage API keys and error handling.
 """
 
 import logging
-import math
 import os
 from datetime import datetime, timedelta
 from typing import Optional

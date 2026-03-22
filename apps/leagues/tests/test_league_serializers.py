@@ -8,7 +8,6 @@ LeagueGroupSerializer, SeasonConfigSerializer.
 """
 
 from datetime import timedelta
-from unittest.mock import patch, PropertyMock
 
 import pytest
 from django.utils import timezone
@@ -21,7 +20,6 @@ from apps.leagues.models import (
     LeagueGroupMembership,
     LeagueSeason,
     LeagueStanding,
-    Season,
     SeasonConfig,
     SeasonParticipant,
     SeasonReward,
@@ -38,7 +36,6 @@ from apps.leagues.serializers import (
     SeasonSerializer,
 )
 from apps.users.models import User
-
 
 # ── Helpers ───────────────────────────────────────────────────────────
 

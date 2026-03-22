@@ -9,11 +9,10 @@ user inventory tracking for purchased and equipped items.
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 from encrypted_model_fields.fields import EncryptedTextField
-
-from django.conf import settings
 
 
 class StoreCategory(models.Model):

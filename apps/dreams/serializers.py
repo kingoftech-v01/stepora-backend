@@ -440,7 +440,6 @@ class DreamSerializer(serializers.ModelSerializer):
 
     def get_signed_vision_image_url(self, obj) -> str:
         """Return a pre-signed URL for the vision image stored on S3."""
-        from core.storage import presigned_url
 
         if not obj.vision_image_url:
             return ""

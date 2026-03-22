@@ -24,7 +24,6 @@ from apps.plans.models import PlanCheckIn
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
 
-
 # ───────────────────────────────────────────────────────────────────
 # Fixtures
 # ───────────────────────────────────────────────────────────────────
@@ -237,9 +236,8 @@ class TestCheckinCeleryTask:
         checkin_dream,
     ):
         """Celery task creates notification when check-in becomes awaiting_user."""
-        from core.ai_validators import CheckInQuestionSchema, CheckInQuestionnaireSchema
-
         from apps.dreams.tasks import generate_checkin_questionnaire_task
+        from core.ai_validators import CheckInQuestionnaireSchema, CheckInQuestionSchema
 
         checkin = PlanCheckIn.objects.create(
             dream=checkin_dream,

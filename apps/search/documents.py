@@ -9,9 +9,9 @@ and pass it to Elasticsearch as plaintext for indexing.
 from django_elasticsearch_dsl import Document, fields
 from django_elasticsearch_dsl.registries import registry
 
+from apps.ai.models import AIMessage
 from apps.calendar.models import CalendarEvent
 from apps.circles.models import CircleChallenge, CirclePost
-from apps.ai.models import AIMessage
 from apps.dreams.models import Dream, Goal, Task
 from apps.social.models import ActivityComment
 from apps.users.models import User

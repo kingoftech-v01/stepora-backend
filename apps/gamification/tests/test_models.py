@@ -5,7 +5,6 @@ Tests for gamification models.
 import pytest
 
 from apps.gamification.models import (
-    Achievement,
     DailyActivity,
     GamificationProfile,
     HabitChain,

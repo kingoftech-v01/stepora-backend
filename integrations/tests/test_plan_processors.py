@@ -4,7 +4,6 @@ Tests for integrations.plan_processors — processors, detection, and language.
 No database needed; all logic is pure Python.
 """
 
-import pytest
 
 from integrations.plan_processors import (
     CATEGORY_DISPLAY_NAMES,
@@ -28,7 +27,6 @@ from integrations.plan_processors import (
     detect_language,
     get_processor,
 )
-
 
 # ===================================================================
 # get_processor()

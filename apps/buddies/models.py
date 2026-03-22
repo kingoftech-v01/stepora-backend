@@ -14,7 +14,6 @@ from django.db import models
 from encrypted_model_fields.fields import EncryptedTextField
 
 
-
 class BuddyPairing(models.Model):
     """
     Represents a Dream Buddy accountability pairing between two users.

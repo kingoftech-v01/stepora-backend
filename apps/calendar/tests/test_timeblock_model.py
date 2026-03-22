@@ -10,14 +10,11 @@ Covers:
 from datetime import time
 
 import pytest
-from django.utils import timezone
-from rest_framework.test import APIClient
 
 from apps.calendar.models import TimeBlock
 from apps.calendar.serializers import TimeBlockSerializer
 from apps.dreams.models import Dream
 from apps.users.models import User
-
 
 # ───────────────────────────────────────────────────────────────────
 # Fixtures

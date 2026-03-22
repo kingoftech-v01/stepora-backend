@@ -14,14 +14,11 @@ Covers:
 """
 
 import uuid
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from django.utils import timezone
 
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  _get_user helper

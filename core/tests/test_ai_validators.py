@@ -13,22 +13,16 @@ from core.ai_validators import (
     AnalysisResponseSchema,
     CalibrationQuestionSchema,
     CalibrationQuestionsResponseSchema,
-    CalibrationSummaryResponseSchema,
     ChatResponseSchema,
-    CheckInQuestionSchema,
     CheckInQuestionnaireSchema,
+    CheckInQuestionSchema,
     FunctionCallSchema,
     PlanGoalSchema,
     PlanMilestoneSchema,
-    PlanObstacleSchema,
     PlanResponseSchema,
     PlanTaskSchema,
-    SkeletonGoalSchema,
-    SkeletonMilestoneSchema,
     SkeletonResponseSchema,
     SmartAnalysisPatternSchema,
-    SmartAnalysisResponseSchema,
-    SmartAnalysisSynergySchema,
     TaskPatchSchema,
     UserProfileSchema,
     check_ai_character_integrity,
@@ -45,7 +39,6 @@ from core.ai_validators import (
     validate_smart_analysis_response,
     validate_task_patches,
 )
-
 
 # ── PlanTaskSchema ────────────────────────────────────────────────────
 

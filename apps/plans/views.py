@@ -9,19 +9,15 @@ import logging
 
 from django.db.models import Max
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.permissions import IsOwner
-
 from .models import (
-    CalibrationResponse,
     DreamMilestone,
-    DreamProgressSnapshot,
     FocusSession,
     Goal,
     Obstacle,
@@ -29,7 +25,6 @@ from .models import (
     Task,
 )
 from .serializers import (
-    CalibrationResponseSerializer,
     CheckInResponseSubmitSerializer,
     DreamMilestoneSerializer,
     FocusSessionCompleteSerializer,

@@ -13,10 +13,7 @@ and that the service gracefully handles errors.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from apps.search.services import SearchService, _es_search
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  _es_search helper

@@ -8,7 +8,6 @@ import pytest
 from django.utils import timezone
 
 from apps.calendar.models import CalendarEvent, TimeBlock
-from apps.dreams.models import Dream
 from apps.users.models import User
 
 

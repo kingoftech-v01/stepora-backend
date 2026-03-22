@@ -22,8 +22,6 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-logger = logging.getLogger(__name__)
-
 from core.ai_usage import AIUsageTracker
 from core.audit import log_account_change, log_data_export
 from core.permissions import CanUseAI
@@ -50,6 +48,8 @@ from .serializers import (
     UserUpdateSerializer,
 )
 from .two_factor import _hash_code as hash_backup_code
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(

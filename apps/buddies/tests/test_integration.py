@@ -8,20 +8,11 @@ authentication and premium+ subscription.
 
 import uuid
 from datetime import timedelta
-from unittest.mock import Mock, patch
 
 import pytest
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
-
-from apps.buddies.models import (
-    AccountabilityContract,
-    BuddyEncouragement,
-    BuddyPairing,
-    ContractCheckIn,
-)
-from apps.users.models import User
 
 
 @pytest.fixture

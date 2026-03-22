@@ -57,7 +57,6 @@ from apps.calendar.serializers import (
 )
 from apps.users.models import User
 
-
 # ── helpers ──────────────────────────────────────────────────────
 
 def _drf_request(user=None):
