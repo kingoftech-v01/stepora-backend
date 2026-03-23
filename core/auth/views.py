@@ -653,6 +653,12 @@ class GoogleLoginView(APIView):
     throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
+        if not settings.USE_GOOGLE_AUTH:
+            return Response(
+                {"error": "Google authentication is not available."},
+                status=http_status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         id_token_str = request.data.get("id_token", "") or request.data.get(
             "access_token", ""
         )

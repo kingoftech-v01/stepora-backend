@@ -483,6 +483,10 @@ DP_AUTH = {
     "APPLE_CLIENT_ID": os.getenv("APPLE_CLIENT_ID", ""),
 }
 
+# Feature flags
+USE_GOOGLE_AUTH = os.getenv("USE_GOOGLE_AUTH", "false").lower() == "true"
+USE_GOOGLE_CALENDAR = os.getenv("USE_GOOGLE_CALENDAR", "false").lower() == "true"
+
 # Google Calendar OAuth
 GOOGLE_CALENDAR_CLIENT_ID = os.getenv("GOOGLE_CALENDAR_CLIENT_ID", "")
 GOOGLE_CALENDAR_CLIENT_SECRET = os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET", "")

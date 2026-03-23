@@ -3025,6 +3025,13 @@ class GoogleCalendarStatusView(APIView):
         },
     )
     def get(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
         try:
             integration = GoogleCalendarIntegration.objects.get(
                 user=request.user, sync_enabled=True
@@ -3074,6 +3081,12 @@ class GoogleCalendarAuthView(APIView):
     def get(self, request):
         from django.conf import settings
 
+        if not getattr(settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         from integrations.google_calendar import GoogleCalendarService
 
         # Allow frontend to override redirect_uri for native OAuth flow
@@ -3087,7 +3100,7 @@ class GoogleCalendarAuthView(APIView):
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
-        service = GoogleCalendarService()
+        service = GoogleCalendarService(user=request.user)
         auth_url = service.get_auth_url(redirect_uri)
         return Response({"auth_url": auth_url})
 
@@ -3119,6 +3132,12 @@ class GoogleCalendarCallbackView(APIView):
     def post(self, request):
         from django.conf import settings
 
+        if not getattr(settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         from integrations.google_calendar import GoogleCalendarService
 
         code = request.data.get("code")
@@ -3132,7 +3151,7 @@ class GoogleCalendarCallbackView(APIView):
             "redirect_uri",
             getattr(settings, "GOOGLE_CALENDAR_REDIRECT_URI", ""),
         )
-        service = GoogleCalendarService()
+        service = GoogleCalendarService(user=request.user)
 
         try:
             tokens = service.exchange_code(code, redirect_uri)
@@ -3182,6 +3201,14 @@ class GoogleCalendarSyncView(APIView):
         },
     )
     def post(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         from .tasks import sync_google_calendar
 
         try:
@@ -3218,6 +3245,14 @@ class GoogleCalendarDisconnectView(APIView):
         },
     )
     def post(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         deleted, _ = GoogleCalendarIntegration.objects.filter(
             user=request.user
         ).delete()
@@ -3241,6 +3276,14 @@ class GoogleCalendarSyncSettingsView(APIView):
         responses={200: dict},
     )
     def get(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         try:
             integration = GoogleCalendarIntegration.objects.get(
                 user=request.user,
@@ -3305,6 +3348,14 @@ class GoogleCalendarSyncSettingsView(APIView):
         },
     )
     def post(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         try:
             integration = GoogleCalendarIntegration.objects.get(
                 user=request.user,
@@ -3658,6 +3709,14 @@ class GoogleCalendarNativeRedirectView(APIView):
         responses={200: OpenApiResponse(description="HTML redirect page")},
     )
     def get(self, request):
+        from django.conf import settings as django_settings
+
+        if not getattr(django_settings, "USE_GOOGLE_CALENDAR", False):
+            return Response(
+                {"error": "Google Calendar is not available."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         import html
         import json as json_mod
 
