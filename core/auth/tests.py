@@ -896,6 +896,136 @@ class TestGoogleLogin:
         resp = client.post("/api/auth/google/", {})
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
+    @patch("core.auth.views.verify_google_token")
+    def test_google_login_with_access_token_field(self, mock_verify, client):
+        """Frontend may send the token as 'access_token' instead of 'id_token'."""
+        mock_verify.return_value = (
+            "google-uid-at",
+            "access_token_user@test.com",
+            "AT User",
+            "",
+        )
+        resp = client.post("/api/auth/google/", {"access_token": "ya29.opaque-token"})
+        assert resp.status_code == status.HTTP_200_OK
+        assert "access" in resp.data
+        mock_verify.assert_called_once_with("ya29.opaque-token")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# GOOGLE TOKEN TYPE DETECTION (unit tests)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestGoogleTokenTypeDetection:
+    """Unit tests for verify_google_token dispatching based on token format."""
+
+    @patch("core.auth.social._verify_google_id_token")
+    def test_jwt_token_routes_to_id_token_verifier(self, mock_id_verify):
+        """A token with 3 dot-separated segments should be treated as a JWT."""
+        from core.auth.social import verify_google_token
+
+        mock_id_verify.return_value = ("uid", "email@test.com", "Name", "")
+        result = verify_google_token("header.payload.signature")
+        mock_id_verify.assert_called_once_with("header.payload.signature")
+        assert result == ("uid", "email@test.com", "Name", "")
+
+    @patch("core.auth.social._verify_google_access_token")
+    def test_opaque_token_routes_to_access_token_verifier(self, mock_at_verify):
+        """A token without 3 segments should be treated as an opaque access token."""
+        from core.auth.social import verify_google_token
+
+        mock_at_verify.return_value = ("uid", "email@test.com", "Name", "pic")
+        result = verify_google_token("ya29.a0ARrdaM_opaque_token_value")
+        mock_at_verify.assert_called_once_with("ya29.a0ARrdaM_opaque_token_value")
+        assert result == ("uid", "email@test.com", "Name", "pic")
+
+    @patch("core.auth.social._verify_google_access_token")
+    def test_single_segment_token_routes_to_access_token(self, mock_at_verify):
+        """A token with no dots should be treated as an opaque access token."""
+        from core.auth.social import verify_google_token
+
+        mock_at_verify.return_value = ("uid", "e@t.com", "", "")
+        verify_google_token("some_opaque_token_no_dots")
+        mock_at_verify.assert_called_once()
+
+
+class TestGoogleAccessTokenVerification:
+    """Unit tests for _verify_google_access_token calling Google UserInfo API."""
+
+    @patch("core.auth.social.http_requests.get")
+    def test_valid_access_token(self, mock_get):
+        """Valid access token returns user info from Google UserInfo API."""
+        from core.auth.social import _verify_google_access_token
+
+        mock_get.return_value = Mock(
+            status_code=200,
+            json=Mock(
+                return_value={
+                    "sub": "google-uid-999",
+                    "email": "user@gmail.com",
+                    "email_verified": True,
+                    "name": "Test User",
+                    "picture": "https://lh3.googleusercontent.com/photo.jpg",
+                }
+            ),
+        )
+
+        uid, email, name, picture = _verify_google_access_token("ya29.valid_token")
+        assert uid == "google-uid-999"
+        assert email == "user@gmail.com"
+        assert name == "Test User"
+        assert picture == "https://lh3.googleusercontent.com/photo.jpg"
+        mock_get.assert_called_once_with(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": "Bearer ya29.valid_token"},
+            timeout=10,
+        )
+
+    @patch("core.auth.social.http_requests.get")
+    def test_invalid_access_token_returns_401(self, mock_get):
+        """Invalid/expired access token should raise ValidationError."""
+        from core.auth.social import _verify_google_access_token
+
+        mock_get.return_value = Mock(
+            status_code=401,
+            text="Unauthorized",
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            _verify_google_access_token("ya29.expired_token")
+        assert "Invalid Google access token" in str(exc_info.value.detail)
+
+    @patch("core.auth.social.http_requests.get")
+    def test_unverified_email_rejected(self, mock_get):
+        """Access token with unverified email should raise ValidationError."""
+        from core.auth.social import _verify_google_access_token
+
+        mock_get.return_value = Mock(
+            status_code=200,
+            json=Mock(
+                return_value={
+                    "sub": "uid",
+                    "email": "unverified@test.com",
+                    "email_verified": False,
+                }
+            ),
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            _verify_google_access_token("ya29.some_token")
+        assert "not verified" in str(exc_info.value.detail)
+
+    @patch("core.auth.social.http_requests.get")
+    def test_network_error_raises_validation_error(self, mock_get):
+        """Network error calling UserInfo API should raise ValidationError."""
+        from core.auth.social import _verify_google_access_token
+
+        mock_get.side_effect = Exception("Connection refused")
+
+        with pytest.raises(Exception) as exc_info:
+            _verify_google_access_token("ya29.some_token")
+        assert "Invalid Google token" in str(exc_info.value.detail)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # SOCIAL LOGIN (Apple)

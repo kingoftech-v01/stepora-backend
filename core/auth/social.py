@@ -22,9 +22,25 @@ _GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 _GOOGLE_ISSUERS = ("accounts.google.com", "https://accounts.google.com")
 
 
-def verify_google_token(id_token_str):
+def verify_google_token(token_str):
     """
-    Verify a Google ID token and return (uid, email, name, picture).
+    Verify a Google token and return (uid, email, name, picture).
+    Handles both ID tokens (JWT) and access tokens (opaque).
+    Raises serializers.ValidationError on failure.
+    """
+    # Detect token type: JWTs have exactly 3 dot-separated segments
+    parts = token_str.split(".")
+    if len(parts) == 3:
+        # Looks like a JWT (id_token) — verify signature
+        return _verify_google_id_token(token_str)
+    else:
+        # Opaque token (access_token, e.g. ya29.xxx) — call UserInfo API
+        return _verify_google_access_token(token_str)
+
+
+def _verify_google_id_token(id_token_str):
+    """
+    Verify a Google ID token (JWT) and return (uid, email, name, picture).
     Raises serializers.ValidationError on failure.
     """
     try:
@@ -61,7 +77,48 @@ def verify_google_token(id_token_str):
     except serializers.ValidationError:
         raise
     except Exception as e:
-        logger.warning("Google token verification failed: %s", e)
+        logger.warning("Google ID token verification failed: %s", e)
+        raise serializers.ValidationError("Invalid Google token.")
+
+
+def _verify_google_access_token(access_token):
+    """
+    Verify a Google access token by calling the UserInfo API.
+    Returns (uid, email, name, picture).
+    Raises serializers.ValidationError on failure.
+    """
+    try:
+        response = http_requests.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+
+        if response.status_code != 200:
+            logger.warning(
+                "Google UserInfo API returned %s: %s",
+                response.status_code,
+                response.text[:200],
+            )
+            raise serializers.ValidationError("Invalid Google access token.")
+
+        userinfo = response.json()
+
+        # Require verified email
+        if not userinfo.get("email_verified", False):
+            raise serializers.ValidationError("Google email is not verified.")
+
+        uid = userinfo["sub"]
+        email = userinfo["email"]
+        name = userinfo.get("name", "")
+        picture = userinfo.get("picture", "")
+
+        return uid, email, name, picture
+
+    except serializers.ValidationError:
+        raise
+    except Exception as e:
+        logger.warning("Google access token verification failed: %s", e)
         raise serializers.ValidationError("Invalid Google token.")
 
 
