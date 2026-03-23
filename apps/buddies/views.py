@@ -190,9 +190,7 @@ class BuddyViewSet(viewsets.GenericViewSet):
         # If not a user ID, maybe it's a conversation ID (from ConversationList)
         if not target_user:
             try:
-                conv = Conversation.objects.get(
-                    id=target_user_id
-                )
+                conv = Conversation.objects.get(id=target_user_id)
                 # Find the buddy (the other user in the pairing)
                 buddy_user = None
                 if conv.buddy_pairing:

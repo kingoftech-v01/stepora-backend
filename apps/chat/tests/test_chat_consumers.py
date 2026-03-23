@@ -37,14 +37,19 @@ from core.consumers import MAX_MSG_CONTENT_LEN, MAX_MSG_SIZE
 @database_sync_to_async
 def _create_user(email, display_name="Test User"):
     return User.objects.create_user(
-        email=email, password="testpassword123", display_name=display_name,
+        email=email,
+        password="testpassword123",
+        display_name=display_name,
     )
 
 
 @database_sync_to_async
 def _create_buddy_pairing(user1, user2, status="active"):
     return BuddyPairing.objects.create(
-        user1=user1, user2=user2, status=status, compatibility_score=0.85,
+        user1=user1,
+        user2=user2,
+        status=status,
+        compatibility_score=0.85,
     )
 
 
@@ -232,7 +237,9 @@ class TestBuddyChatPostAuth:
         connected, _ = await communicator.connect()
         assert connected
 
-        await communicator.send_json_to({"type": "authenticate", "token": "invalid-token"})
+        await communicator.send_json_to(
+            {"type": "authenticate", "token": "invalid-token"}
+        )
 
         # Should receive error message
         response = await communicator.receive_json_from()
@@ -326,7 +333,9 @@ class TestBuddyChatSendReceive:
             await communicator.receive_json_from()
 
             long_content = "a" * (MAX_MSG_CONTENT_LEN + 1)
-            await communicator.send_json_to({"type": "message", "message": long_content})
+            await communicator.send_json_to(
+                {"type": "message", "message": long_content}
+            )
             response = await communicator.receive_json_from()
             assert response["type"] == "error"
             assert "character limit" in response["error"].lower()
@@ -411,9 +420,7 @@ class TestBuddyChatTyping:
             connected, _ = await communicator.connect()
             await communicator.receive_json_from()
 
-            await communicator.send_json_to(
-                {"type": "typing", "is_typing": True}
-            )
+            await communicator.send_json_to({"type": "typing", "is_typing": True})
             # The typing_status handler filters out own user_id, so the sender
             # won't receive their own typing event. We verify no error is raised.
             # (In a two-communicator test, user2 would receive it.)
@@ -444,9 +451,7 @@ class TestBuddyChatReadReceipt:
             await communicator.receive_json_from()
 
             # Send a message first so there's something to mark read
-            await communicator.send_json_to(
-                {"type": "message", "message": "Read me"}
-            )
+            await communicator.send_json_to({"type": "message", "message": "Read me"})
             await communicator.receive_json_from()  # consume broadcast
 
             await communicator.send_json_to({"type": "mark_read"})

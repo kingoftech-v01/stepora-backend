@@ -5,7 +5,6 @@ Uses channels.testing.WebsocketCommunicator to test connect/disconnect
 and message handling with mocked OpenAI service.
 """
 
-
 import pytest
 
 from apps.ai.models import AIConversation

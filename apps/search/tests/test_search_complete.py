@@ -21,7 +21,6 @@ from rest_framework.test import APIClient
 
 from apps.search.services import MAX_RESULTS, SearchService, _es_search
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  Fixtures
 # ══════════════════════════════════════════════════════════════════════

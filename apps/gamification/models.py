@@ -65,7 +65,9 @@ class DailyActivity(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="daily_activities"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="daily_activities",
     )
     date = models.DateField()
     tasks_completed = models.IntegerField(default=0)
@@ -178,7 +180,9 @@ class UserAchievement(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_achievements"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="user_achievements",
     )
     achievement = models.ForeignKey(
         Achievement, on_delete=models.CASCADE, related_name="user_achievements"

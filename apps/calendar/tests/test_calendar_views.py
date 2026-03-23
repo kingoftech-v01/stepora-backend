@@ -515,15 +515,11 @@ class TestTimeBlockTemplate:
                 }
             ],
         }
-        resp = client.post(
-            "/api/calendar/timeblock-templates/", data, format="json"
-        )
+        resp = client.post("/api/calendar/timeblock-templates/", data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
 
     def test_apply_template(self, client, template):
-        resp = client.post(
-            f"/api/calendar/timeblock-templates/{template.id}/apply/"
-        )
+        resp = client.post(f"/api/calendar/timeblock-templates/{template.id}/apply/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["count"] == 1
 
@@ -921,10 +917,15 @@ class TestGoogleCalendarIntegration:
     @patch("integrations.google_calendar.GoogleCalendarService")
     def test_auth_url(self, mock_service_cls, client):
         mock_service = MagicMock()
-        mock_service.get_auth_url.return_value = "https://accounts.google.com/o/oauth2/auth?test=1"
+        mock_service.get_auth_url.return_value = (
+            "https://accounts.google.com/o/oauth2/auth?test=1"
+        )
         mock_service_cls.return_value = mock_service
 
-        with patch("django.conf.settings.GOOGLE_CALENDAR_REDIRECT_URI", "https://example.com/callback"):
+        with patch(
+            "django.conf.settings.GOOGLE_CALENDAR_REDIRECT_URI",
+            "https://example.com/callback",
+        ):
             resp = client.get("/api/calendar/google/auth/")
 
         assert resp.status_code == status.HTTP_200_OK
@@ -967,7 +968,9 @@ class TestGoogleCalendarIntegration:
         resp = client.post("/api/calendar/google/disconnect/")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["status"] == "disconnected"
-        assert not GoogleCalendarIntegration.objects.filter(user=google_integration.user).exists()
+        assert not GoogleCalendarIntegration.objects.filter(
+            user=google_integration.user
+        ).exists()
 
     def test_disconnect_not_connected(self, client, user):
         # Ensure no integration exists

@@ -2,6 +2,7 @@
 Search API views.
 """
 
+from django.conf import settings
 from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -22,6 +23,7 @@ class GlobalSearchView(APIView):
     GET /api/search/?q=<query>&type=dreams,users,messages
 
     Returns categorized search results powered by Elasticsearch.
+    Gated by the USE_SEARCH feature flag — returns 501 when disabled.
     """
 
     permission_classes = [IsAuthenticated]
@@ -29,6 +31,16 @@ class GlobalSearchView(APIView):
     throttle_scope = "search"
 
     def get(self, request):
+        # Feature flag: search requires Elasticsearch which may not be running
+        if not getattr(settings, "USE_SEARCH", False):
+            return Response(
+                {
+                    "error": _("Search is not available."),
+                    "coming_soon": True,
+                },
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
         query = request.query_params.get("q", "").strip()
         if not query or len(query) < 2:
             return Response(

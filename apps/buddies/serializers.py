@@ -79,7 +79,9 @@ class AIBuddyMatchSerializer(serializers.Serializer):
     dreamer_type = serializers.CharField(
         allow_blank=True, default="", help_text="User dreamer type."
     )
-    compatibility_score = serializers.FloatField(help_text="AI compatibility score 0-1.")
+    compatibility_score = serializers.FloatField(
+        help_text="AI compatibility score 0-1."
+    )
     reasons = serializers.ListField(
         child=serializers.CharField(), help_text="Reasons why these users match well."
     )
@@ -161,9 +163,7 @@ class ContractCheckInSerializer(serializers.Serializer):
     """Serializer for a contract check-in entry."""
 
     id = serializers.UUIDField(read_only=True, help_text="Check-in ID.")
-    user_id = serializers.UUIDField(
-        read_only=True, help_text="User who checked in."
-    )
+    user_id = serializers.UUIDField(read_only=True, help_text="User who checked in.")
     username = serializers.CharField(
         read_only=True, help_text="Display name of the user."
     )
@@ -195,9 +195,7 @@ class AccountabilityContractSerializer(serializers.Serializer):
     """Serializer for accountability contract list and detail."""
 
     id = serializers.UUIDField(read_only=True, help_text="Contract ID.")
-    pairing_id = serializers.UUIDField(
-        help_text="Buddy pairing ID."
-    )
+    pairing_id = serializers.UUIDField(help_text="Buddy pairing ID.")
     title = serializers.CharField(max_length=200, help_text="Contract title.")
     description = serializers.CharField(
         required=False, allow_blank=True, default="", help_text="Contract description."
@@ -208,14 +206,10 @@ class AccountabilityContractSerializer(serializers.Serializer):
         default="weekly",
         help_text="Check-in frequency.",
     )
-    start_date = serializers.DateField(
-        help_text="Contract start date."
-    )
+    start_date = serializers.DateField(help_text="Contract start date.")
     end_date = serializers.DateField(help_text="Contract end date.")
     status = serializers.CharField(read_only=True, help_text="Contract status.")
-    created_by_id = serializers.UUIDField(
-        read_only=True, help_text="Creator user ID."
-    )
+    created_by_id = serializers.UUIDField(read_only=True, help_text="Creator user ID.")
     accepted_by_partner = serializers.BooleanField(
         read_only=True,
         help_text="Whether partner accepted.",

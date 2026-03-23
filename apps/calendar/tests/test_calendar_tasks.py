@@ -43,7 +43,10 @@ class TestSendDailySummaries:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="pending",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="pending",
             scheduled_date=timezone.now(),
         )
 
@@ -62,7 +65,8 @@ class TestSendDailySummaries:
         mock_fcm_cls.return_value = Mock()
 
         CalendarEvent.objects.create(
-            user=cal_user, title="Meeting",
+            user=cal_user,
+            title="Meeting",
             start_time=timezone.now() + timedelta(hours=1),
             end_time=timezone.now() + timedelta(hours=2),
             status="scheduled",
@@ -79,7 +83,8 @@ class TestSendDailySummaries:
         mock_fcm_cls.return_value = Mock()
 
         User.objects.create_user(
-            email="empty_calendar_tsk@test.com", password="pass",
+            email="empty_calendar_tsk@test.com",
+            password="pass",
             timezone="UTC",
         )
 
@@ -94,7 +99,8 @@ class TestSendDailySummaries:
         mock_fcm_cls.return_value = Mock()
 
         user = User.objects.create_user(
-            email="nosummary_tsk@test.com", password="pass",
+            email="nosummary_tsk@test.com",
+            password="pass",
             timezone="UTC",
             notification_prefs={"daily_summary_enabled": False},
         )
@@ -103,7 +109,10 @@ class TestSendDailySummaries:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T", order=1, status="pending",
+            goal=goal,
+            title="T",
+            order=1,
+            status="pending",
             scheduled_date=timezone.now(),
         )
 
@@ -121,8 +130,10 @@ class TestSendDailySummaries:
         mock_fcm_cls.return_value = mock_fcm
 
         device = UserDevice.objects.create(
-            user=cal_user, fcm_token="bad-token",
-            platform="android", is_active=True,
+            user=cal_user,
+            fcm_token="bad-token",
+            platform="android",
+            is_active=True,
         )
 
         dream = Dream.objects.create(
@@ -130,7 +141,10 @@ class TestSendDailySummaries:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T", order=1, status="pending",
+            goal=goal,
+            title="T",
+            order=1,
+            status="pending",
             scheduled_date=timezone.now(),
         )
 
@@ -155,7 +169,8 @@ class TestGenerateRecurringEvents:
         """Creates future instances for a weekly recurring event."""
         now = timezone.now()
         parent = CalendarEvent.objects.create(
-            user=cal_user, title="Weekly Meeting",
+            user=cal_user,
+            title="Weekly Meeting",
             start_time=now - timedelta(days=1),
             end_time=now - timedelta(days=1) + timedelta(hours=1),
             status="scheduled",
@@ -175,7 +190,8 @@ class TestGenerateRecurringEvents:
         """Creates daily recurring instances."""
         now = timezone.now()
         CalendarEvent.objects.create(
-            user=cal_user, title="Daily Standup",
+            user=cal_user,
+            title="Daily Standup",
             start_time=now - timedelta(hours=2),
             end_time=now - timedelta(hours=1),
             status="scheduled",
@@ -193,7 +209,8 @@ class TestGenerateRecurringEvents:
         now = timezone.now()
         tomorrow = now + timedelta(days=1)
         CalendarEvent.objects.create(
-            user=cal_user, title="Limited",
+            user=cal_user,
+            title="Limited",
             start_time=now - timedelta(days=2),
             end_time=now - timedelta(days=2) + timedelta(hours=1),
             status="scheduled",
@@ -215,7 +232,8 @@ class TestGenerateRecurringEvents:
         """Running twice does not create duplicate instances."""
         now = timezone.now()
         CalendarEvent.objects.create(
-            user=cal_user, title="Weekly",
+            user=cal_user,
+            title="Weekly",
             start_time=now - timedelta(days=1),
             end_time=now - timedelta(days=1) + timedelta(hours=1),
             status="scheduled",
@@ -232,7 +250,8 @@ class TestGenerateRecurringEvents:
     def test_skips_non_recurring_events(self, cal_user):
         """Non-recurring events are ignored."""
         CalendarEvent.objects.create(
-            user=cal_user, title="One-time",
+            user=cal_user,
+            title="One-time",
             start_time=timezone.now() + timedelta(hours=1),
             end_time=timezone.now() + timedelta(hours=2),
             status="scheduled",
@@ -275,7 +294,8 @@ class TestSyncGoogleCalendar:
 
         # Create a local event to push
         CalendarEvent.objects.create(
-            user=cal_user, title="Local Event",
+            user=cal_user,
+            title="Local Event",
             start_time=timezone.now() + timedelta(hours=1),
             end_time=timezone.now() + timedelta(hours=2),
             status="scheduled",
@@ -289,7 +309,9 @@ class TestSyncGoogleCalendar:
                 "summary": "Google Event",
                 "description": "from Google",
                 "status": "confirmed",
-                "start": {"dateTime": (timezone.now() + timedelta(hours=3)).isoformat()},
+                "start": {
+                    "dateTime": (timezone.now() + timedelta(hours=3)).isoformat()
+                },
                 "end": {"dateTime": (timezone.now() + timedelta(hours=4)).isoformat()},
                 "location": "Office",
             }
@@ -314,7 +336,8 @@ class TestSyncGoogleCalendar:
         integration = self._create_integration(cal_user, direction="push_only")
 
         CalendarEvent.objects.create(
-            user=cal_user, title="Push Event",
+            user=cal_user,
+            title="Push Event",
             start_time=timezone.now() + timedelta(hours=1),
             end_time=timezone.now() + timedelta(hours=2),
             status="scheduled",
@@ -360,7 +383,8 @@ class TestSyncGoogleCalendar:
 
         # Pre-create a local event with a google_event_id
         existing = CalendarEvent.objects.create(
-            user=cal_user, title="Old Title",
+            user=cal_user,
+            title="Old Title",
             start_time=timezone.now() + timedelta(hours=1),
             end_time=timezone.now() + timedelta(hours=2),
             status="scheduled",
@@ -374,7 +398,9 @@ class TestSyncGoogleCalendar:
                 "summary": "Updated Title",
                 "description": "Updated desc",
                 "status": "confirmed",
-                "start": {"dateTime": (timezone.now() + timedelta(hours=1)).isoformat()},
+                "start": {
+                    "dateTime": (timezone.now() + timedelta(hours=1)).isoformat()
+                },
                 "end": {"dateTime": (timezone.now() + timedelta(hours=2)).isoformat()},
                 "location": "Home",
             }
@@ -409,7 +435,8 @@ class TestCheckAndSendReminders:
         # Event starts in 15 min 30 sec, reminder is 15 min before
         # => reminder fires at now + 30s which is within [now, now+60s]
         event = CalendarEvent.objects.create(
-            user=cal_user, title="Meeting",
+            user=cal_user,
+            title="Meeting",
             start_time=now + timedelta(minutes=15, seconds=30),
             end_time=now + timedelta(minutes=75, seconds=30),
             status="scheduled",
@@ -418,8 +445,10 @@ class TestCheckAndSendReminders:
         )
 
         UserDevice.objects.create(
-            user=cal_user, fcm_token="tok-reminder-cal",
-            platform="android", is_active=True,
+            user=cal_user,
+            fcm_token="tok-reminder-cal",
+            platform="android",
+            is_active=True,
         )
 
         from apps.calendar.tasks import check_and_send_reminders
@@ -446,7 +475,8 @@ class TestCheckAndSendReminders:
         reminder_key = "15_%s" % start.isoformat()
 
         CalendarEvent.objects.create(
-            user=cal_user, title="Meeting",
+            user=cal_user,
+            title="Meeting",
             start_time=start,
             end_time=start + timedelta(hours=1),
             status="scheduled",
@@ -467,7 +497,8 @@ class TestCheckAndSendReminders:
 
         now = timezone.now()
         CalendarEvent.objects.create(
-            user=cal_user, title="Snoozed",
+            user=cal_user,
+            title="Snoozed",
             start_time=now + timedelta(minutes=15),
             end_time=now + timedelta(hours=1),
             status="scheduled",
@@ -488,7 +519,8 @@ class TestCheckAndSendReminders:
 
         now = timezone.now()
         CalendarEvent.objects.create(
-            user=cal_user, title="Legacy Reminder",
+            user=cal_user,
+            title="Legacy Reminder",
             start_time=now + timedelta(minutes=15, seconds=30),
             end_time=now + timedelta(hours=1, seconds=30),
             status="scheduled",
@@ -498,8 +530,10 @@ class TestCheckAndSendReminders:
         )
 
         UserDevice.objects.create(
-            user=cal_user, fcm_token="tok-legacy-cal",
-            platform="android", is_active=True,
+            user=cal_user,
+            fcm_token="tok-legacy-cal",
+            platform="android",
+            is_active=True,
         )
 
         from apps.calendar.tasks import check_and_send_reminders

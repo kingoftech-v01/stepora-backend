@@ -244,24 +244,24 @@ class TestDreamSerializer:
         assert data["tags"] == ["education"]
 
     def test_sparkline_data_from_prefetched(self, ser_dream):
-        ser_dream._prefetched_sparkline = [
-            {"date": "2026-03-01", "progress": 10}
-        ]
+        ser_dream._prefetched_sparkline = [{"date": "2026-03-01", "progress": 10}]
         data = DreamSerializer(ser_dream).data
-        assert data["sparkline_data"] == [
-            {"date": "2026-03-01", "progress": 10}
-        ]
+        assert data["sparkline_data"] == [{"date": "2026-03-01", "progress": 10}]
 
     def test_signed_vision_image_url_empty_when_no_image(self, ser_dream):
         data = DreamSerializer(ser_dream).data
         assert data["signed_vision_image_url"] == ""
 
     @patch("apps.dreams.serializers.settings", create=True)
-    def test_signed_vision_image_url_passthrough_external(self, mock_settings, ser_dream):
+    def test_signed_vision_image_url_passthrough_external(
+        self, mock_settings, ser_dream
+    ):
         mock_settings.AWS_STORAGE_BUCKET_NAME = None
         ser_dream.vision_image_url = "https://external.example.com/image.png"
         data = DreamSerializer(ser_dream).data
-        assert data["signed_vision_image_url"] == "https://external.example.com/image.png"
+        assert (
+            data["signed_vision_image_url"] == "https://external.example.com/image.png"
+        )
 
     def test_completed_goals_count_default(self, ser_dream):
         data = DreamSerializer(ser_dream).data

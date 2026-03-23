@@ -16,8 +16,7 @@ Fills coverage gaps not addressed by existing test files:
 
 import uuid
 from datetime import date, timedelta
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache as django_cache
@@ -39,7 +38,6 @@ from apps.leagues.models import (
 from apps.leagues.services import LeagueService
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

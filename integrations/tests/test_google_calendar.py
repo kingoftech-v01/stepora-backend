@@ -4,10 +4,12 @@ Tests for integrations.google_calendar.GoogleCalendarService.
 All Google API calls are mocked — no real API traffic.
 """
 
+import uuid
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
+from django.core.cache import cache
 from django.utils import timezone
 
 from integrations.google_calendar import GoogleCalendarService
@@ -15,6 +17,14 @@ from integrations.google_calendar import GoogleCalendarService
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _make_user(user_id=None, email="test@example.com"):
+    """Build a mock User instance."""
+    user = Mock()
+    user.id = user_id or uuid.uuid4()
+    user.email = email
+    return user
+
 
 def _make_integration(
     access_token="access-tok",
@@ -30,7 +40,7 @@ def _make_integration(
     integration.calendar_id = calendar_id
     integration.sync_token = sync_token
     integration.token_expiry = token_expiry or (timezone.now() + timedelta(hours=1))
-    integration.user = Mock(email="test@example.com")
+    integration.user = _make_user()
     integration.last_sync_at = None
     integration.save = Mock()
     return integration
@@ -61,8 +71,20 @@ def _make_calendar_event(
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def service():
-    """Return a GoogleCalendarService instance with no integration."""
+def mock_user():
+    """Return a mock user for PKCE auth flow."""
+    return _make_user()
+
+
+@pytest.fixture
+def service(mock_user):
+    """Return a GoogleCalendarService instance with a user but no integration."""
+    return GoogleCalendarService(user=mock_user)
+
+
+@pytest.fixture
+def service_no_user():
+    """Return a GoogleCalendarService instance with no user or integration."""
     return GoogleCalendarService()
 
 
@@ -75,7 +97,7 @@ def integration():
 @pytest.fixture
 def service_with_integration(integration):
     """Return a GoogleCalendarService with a mock integration."""
-    return GoogleCalendarService(integration=integration)
+    return GoogleCalendarService(user=integration.user, integration=integration)
 
 
 # ===================================================================
@@ -86,10 +108,16 @@ class TestInit:
 
     def test_no_integration(self, service):
         assert service.integration is None
+        assert service.user is not None
+
+    def test_no_user(self, service_no_user):
+        assert service_no_user.user is None
+        assert service_no_user.integration is None
 
     def test_with_integration(self, service_with_integration):
         assert service_with_integration.integration is not None
         assert service_with_integration.integration.access_token == "access-tok"
+        assert service_with_integration.user is not None
 
 
 # ===================================================================
@@ -141,6 +169,32 @@ class TestGetAuthUrl:
         call_args = mock_from_config.call_args
         assert call_args[1]["redirect_uri"] == "https://my-app.com/gcal/callback"
 
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_passes_pkce_code_verifier(self, mock_from_config, service):
+        mock_flow = Mock()
+        mock_flow.authorization_url.return_value = ("url", "state")
+        mock_from_config.return_value = mock_flow
+
+        service.get_auth_url("https://example.com/callback")
+
+        call_kwargs = mock_from_config.call_args[1]
+        assert "code_verifier" in call_kwargs
+        assert call_kwargs["code_verifier"] is not None
+        assert len(call_kwargs["code_verifier"]) >= 43
+        assert call_kwargs["autogenerate_code_verifier"] is False
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_caches_code_verifier(self, mock_from_config, service):
+        mock_flow = Mock()
+        mock_flow.authorization_url.return_value = ("url", "state")
+        mock_from_config.return_value = mock_flow
+
+        service.get_auth_url("https://example.com/callback")
+
+        cached = cache.get(service._cache_key())
+        assert cached is not None
+        assert cached == service._generate_code_verifier()
+
 
 # ===================================================================
 # exchange_code()
@@ -176,6 +230,62 @@ class TestExchangeCode:
 
         call_args = mock_from_config.call_args
         assert call_args[1]["redirect_uri"] == "https://my-app.com/callback"
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_passes_pkce_code_verifier(self, mock_from_config, service):
+        mock_flow = Mock()
+        mock_flow.credentials = Mock(token="t", refresh_token="r", expiry=None)
+        mock_from_config.return_value = mock_flow
+
+        service.exchange_code("code", "https://example.com/callback")
+
+        call_kwargs = mock_from_config.call_args[1]
+        assert "code_verifier" in call_kwargs
+        assert call_kwargs["code_verifier"] is not None
+        assert call_kwargs["autogenerate_code_verifier"] is False
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_uses_cached_verifier(self, mock_from_config, service):
+        """exchange_code should use the Redis-cached verifier when available."""
+        mock_flow = Mock()
+        mock_flow.credentials = Mock(token="t", refresh_token="r", expiry=None)
+        mock_from_config.return_value = mock_flow
+
+        # Pre-populate cache (simulating get_auth_url having been called)
+        cache.set(service._cache_key(), "cached-verifier-value", timeout=900)
+
+        service.exchange_code("code", "https://example.com/callback")
+
+        call_kwargs = mock_from_config.call_args[1]
+        assert call_kwargs["code_verifier"] == "cached-verifier-value"
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_clears_cache_after_exchange(self, mock_from_config, service):
+        """Cache key should be deleted after successful token exchange."""
+        mock_flow = Mock()
+        mock_flow.credentials = Mock(token="t", refresh_token="r", expiry=None)
+        mock_from_config.return_value = mock_flow
+
+        cache.set(service._cache_key(), "cached-verifier-value", timeout=900)
+        service.exchange_code("code", "https://example.com/callback")
+
+        assert cache.get(service._cache_key()) is None
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_deterministic_fallback_on_cache_miss(self, mock_from_config, service):
+        """exchange_code should fall back to deterministic verifier if cache is empty."""
+        mock_flow = Mock()
+        mock_flow.credentials = Mock(token="t", refresh_token="r", expiry=None)
+        mock_from_config.return_value = mock_flow
+
+        # Ensure no cache entry exists
+        cache.delete(service._cache_key())
+
+        service.exchange_code("code", "https://example.com/callback")
+
+        call_kwargs = mock_from_config.call_args[1]
+        expected_verifier = service._generate_code_verifier()
+        assert call_kwargs["code_verifier"] == expected_verifier
 
 
 # ===================================================================
@@ -499,3 +609,78 @@ class TestScopes:
 
     def test_scopes_defined(self, service):
         assert service.SCOPES == ["https://www.googleapis.com/auth/calendar"]
+
+
+# ===================================================================
+# PKCE code_verifier generation and caching
+# ===================================================================
+
+class TestPKCECodeVerifier:
+
+    def test_deterministic_is_consistent(self, service):
+        """Same user always generates the same code_verifier."""
+        v1 = service._generate_code_verifier()
+        v2 = service._generate_code_verifier()
+        assert v1 == v2
+
+    def test_different_users_different_verifiers(self):
+        """Each user gets a unique code_verifier."""
+        user1 = _make_user(email="user1@test.com")
+        user2 = _make_user(email="user2@test.com")
+        s1 = GoogleCalendarService(user=user1)
+        s2 = GoogleCalendarService(user=user2)
+        assert s1._generate_code_verifier() != s2._generate_code_verifier()
+
+    def test_verifier_meets_pkce_length_requirements(self, service):
+        """PKCE spec requires 43-128 characters."""
+        verifier = service._generate_code_verifier()
+        assert 43 <= len(verifier) <= 128
+
+    def test_verifier_uses_base64url_charset(self, service):
+        """Verifier should only contain base64url-safe characters."""
+        import re
+        verifier = service._generate_code_verifier()
+        assert re.match(r'^[A-Za-z0-9_-]+$', verifier)
+
+    def test_raises_without_user(self, service_no_user):
+        """_generate_code_verifier requires a user."""
+        with pytest.raises(ValueError, match="User required"):
+            service_no_user._generate_code_verifier()
+
+    def test_cache_key_includes_user_id(self, service):
+        """Cache key should be unique per user."""
+        key = service._cache_key()
+        assert str(service.user.id) in key
+
+    @patch("google_auth_oauthlib.flow.Flow.from_client_config")
+    def test_full_auth_then_exchange_flow(self, mock_from_config, service):
+        """End-to-end: get_auth_url caches verifier, exchange_code uses it."""
+        # Setup mock for get_auth_url
+        mock_flow_auth = Mock()
+        mock_flow_auth.authorization_url.return_value = ("url", "state")
+
+        # Setup mock for exchange_code
+        mock_flow_exchange = Mock()
+        mock_flow_exchange.credentials = Mock(
+            token="t", refresh_token="r", expiry=None
+        )
+
+        mock_from_config.side_effect = [mock_flow_auth, mock_flow_exchange]
+
+        # Step 1: get auth URL (caches verifier)
+        service.get_auth_url("https://example.com/callback")
+
+        # Verify verifier is cached
+        cached_verifier = cache.get(service._cache_key())
+        assert cached_verifier is not None
+
+        # Step 2: exchange code (uses cached verifier)
+        service.exchange_code("code", "https://example.com/callback")
+
+        # Both calls should use the same verifier
+        auth_kwargs = mock_from_config.call_args_list[0][1]
+        exchange_kwargs = mock_from_config.call_args_list[1][1]
+        assert auth_kwargs["code_verifier"] == exchange_kwargs["code_verifier"]
+
+        # Cache should be cleared after exchange
+        assert cache.get(service._cache_key()) is None

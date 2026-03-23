@@ -27,10 +27,7 @@ from apps.subscriptions.models import (
     PromotionChangeLog,
     PromotionPlanDiscount,
     PromotionRedemption,
-    StripeCustomer,
-    StripeWebhookEvent,
     Subscription,
-    SubscriptionPlan,
 )
 from apps.subscriptions.services import (
     PromotionService,
@@ -39,7 +36,6 @@ from apps.subscriptions.services import (
     _timestamp_to_datetime,
 )
 from apps.users.models import User
-
 
 # ═══════════════════════════════════════════════════════════════════
 # Fixtures

@@ -59,6 +59,7 @@ from apps.users.models import User
 
 # ── helpers ──────────────────────────────────────────────────────
 
+
 def _drf_request(user=None):
     factory = RequestFactory()
     r = factory.get("/")
@@ -183,11 +184,13 @@ class TestCalendarEventCreateSerializer:
         ser = CalendarEventCreateSerializer(data=data)
         # Actually make end_time < start_time explicitly
         now = timezone.now()
-        ser2 = CalendarEventCreateSerializer(data={
-            "title": "Bad",
-            "start_time": (now + timedelta(hours=2)).isoformat(),
-            "end_time": now.isoformat(),
-        })
+        ser2 = CalendarEventCreateSerializer(
+            data={
+                "title": "Bad",
+                "start_time": (now + timedelta(hours=2)).isoformat(),
+                "end_time": now.isoformat(),
+            }
+        )
         assert not ser2.is_valid()
 
     def test_sanitizes_title(self):
@@ -427,18 +430,22 @@ class TestCalendarEventRescheduleSerializer:
 
     def test_valid(self):
         now = timezone.now()
-        ser = CalendarEventRescheduleSerializer(data={
-            "start_time": now.isoformat(),
-            "end_time": (now + timedelta(hours=1)).isoformat(),
-        })
+        ser = CalendarEventRescheduleSerializer(
+            data={
+                "start_time": now.isoformat(),
+                "end_time": (now + timedelta(hours=1)).isoformat(),
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_end_before_start(self):
         now = timezone.now()
-        ser = CalendarEventRescheduleSerializer(data={
-            "start_time": (now + timedelta(hours=2)).isoformat(),
-            "end_time": now.isoformat(),
-        })
+        ser = CalendarEventRescheduleSerializer(
+            data={
+                "start_time": (now + timedelta(hours=2)).isoformat(),
+                "end_time": now.isoformat(),
+            }
+        )
         assert not ser.is_valid()
 
 
@@ -450,24 +457,30 @@ class TestCalendarEventRescheduleSerializer:
 class TestSuggestTimeSlotsSerializer:
 
     def test_valid(self):
-        ser = SuggestTimeSlotsSerializer(data={
-            "date": "2026-04-01",
-            "duration_mins": 30,
-        })
+        ser = SuggestTimeSlotsSerializer(
+            data={
+                "date": "2026-04-01",
+                "duration_mins": 30,
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_duration_too_small(self):
-        ser = SuggestTimeSlotsSerializer(data={
-            "date": "2026-04-01",
-            "duration_mins": 2,
-        })
+        ser = SuggestTimeSlotsSerializer(
+            data={
+                "date": "2026-04-01",
+                "duration_mins": 2,
+            }
+        )
         assert not ser.is_valid()
 
     def test_duration_too_large(self):
-        ser = SuggestTimeSlotsSerializer(data={
-            "date": "2026-04-01",
-            "duration_mins": 999,
-        })
+        ser = SuggestTimeSlotsSerializer(
+            data={
+                "date": "2026-04-01",
+                "duration_mins": 999,
+            }
+        )
         assert not ser.is_valid()
 
 
@@ -486,34 +499,48 @@ class TestTimeBlockSerializer:
         assert data["day_of_week"] == 0
 
     def test_valid_creation_data(self):
-        ser = TimeBlockSerializer(data={
-            "block_type": "personal",
-            "day_of_week": 3,
-            "start_time": "09:00",
-            "end_time": "12:00",
-        })
+        ser = TimeBlockSerializer(
+            data={
+                "block_type": "personal",
+                "day_of_week": 3,
+                "start_time": "09:00",
+                "end_time": "12:00",
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_end_before_start(self):
-        ser = TimeBlockSerializer(data={
-            "block_type": "work",
-            "day_of_week": 0,
-            "start_time": "17:00",
-            "end_time": "09:00",
-        })
+        ser = TimeBlockSerializer(
+            data={
+                "block_type": "work",
+                "day_of_week": 0,
+                "start_time": "17:00",
+                "end_time": "09:00",
+            }
+        )
         assert not ser.is_valid()
 
     def test_invalid_day_of_week(self):
-        ser = TimeBlockSerializer(data={
-            "block_type": "work",
-            "day_of_week": 7,
-            "start_time": "09:00",
-            "end_time": "17:00",
-        })
+        ser = TimeBlockSerializer(
+            data={
+                "block_type": "work",
+                "day_of_week": 7,
+                "start_time": "09:00",
+                "end_time": "17:00",
+            }
+        )
         assert not ser.is_valid()
 
     def test_day_name_all_days(self, cal_user):
-        expected = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        expected = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]
         for i, name in enumerate(expected):
             tb = TimeBlock.objects.create(
                 user=cal_user,
@@ -535,67 +562,79 @@ class TestTimeBlockSerializer:
 class TestTimeBlockTemplateSerializer:
 
     def test_valid(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Work Week",
-            "description": "Standard work week",
-            "blocks": [
-                {
-                    "block_type": "work",
-                    "day_of_week": 0,
-                    "start_time": "09:00",
-                    "end_time": "17:00",
-                }
-            ],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Work Week",
+                "description": "Standard work week",
+                "blocks": [
+                    {
+                        "block_type": "work",
+                        "day_of_week": 0,
+                        "start_time": "09:00",
+                        "end_time": "17:00",
+                    }
+                ],
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_empty_blocks(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Empty",
-            "blocks": [],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Empty",
+                "blocks": [],
+            }
+        )
         assert not ser.is_valid()
 
     def test_blocks_not_array(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Bad",
-            "blocks": "not_array",
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Bad",
+                "blocks": "not_array",
+            }
+        )
         assert not ser.is_valid()
 
     def test_block_missing_field(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Missing",
-            "blocks": [{"block_type": "work"}],  # missing day_of_week etc.
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Missing",
+                "blocks": [{"block_type": "work"}],  # missing day_of_week etc.
+            }
+        )
         assert not ser.is_valid()
 
     def test_block_invalid_type(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Bad Type",
-            "blocks": [
-                {
-                    "block_type": "gaming",
-                    "day_of_week": 0,
-                    "start_time": "09:00",
-                    "end_time": "17:00",
-                }
-            ],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Bad Type",
+                "blocks": [
+                    {
+                        "block_type": "gaming",
+                        "day_of_week": 0,
+                        "start_time": "09:00",
+                        "end_time": "17:00",
+                    }
+                ],
+            }
+        )
         assert not ser.is_valid()
 
     def test_block_invalid_day(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Bad Day",
-            "blocks": [
-                {
-                    "block_type": "work",
-                    "day_of_week": 8,
-                    "start_time": "09:00",
-                    "end_time": "17:00",
-                }
-            ],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Bad Day",
+                "blocks": [
+                    {
+                        "block_type": "work",
+                        "day_of_week": 8,
+                        "start_time": "09:00",
+                        "end_time": "17:00",
+                    }
+                ],
+            }
+        )
         assert not ser.is_valid()
 
     def test_block_count(self, cal_user):
@@ -603,8 +642,18 @@ class TestTimeBlockTemplateSerializer:
             user=cal_user,
             name="Test",
             blocks=[
-                {"block_type": "work", "day_of_week": 0, "start_time": "09:00", "end_time": "17:00"},
-                {"block_type": "personal", "day_of_week": 1, "start_time": "18:00", "end_time": "20:00"},
+                {
+                    "block_type": "work",
+                    "day_of_week": 0,
+                    "start_time": "09:00",
+                    "end_time": "17:00",
+                },
+                {
+                    "block_type": "personal",
+                    "day_of_week": 1,
+                    "start_time": "18:00",
+                    "end_time": "20:00",
+                },
             ],
         )
         data = TimeBlockTemplateSerializer(tmpl).data
@@ -620,20 +669,29 @@ class TestTimeBlockTemplateSerializer:
         assert data["block_count"] == 0
 
     def test_sanitizes_name(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "<script>x</script>My Template",
-            "blocks": [
-                {"block_type": "work", "day_of_week": 0, "start_time": "09:00", "end_time": "17:00"},
-            ],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "<script>x</script>My Template",
+                "blocks": [
+                    {
+                        "block_type": "work",
+                        "day_of_week": 0,
+                        "start_time": "09:00",
+                        "end_time": "17:00",
+                    },
+                ],
+            }
+        )
         assert ser.is_valid(), ser.errors
         assert "<script>" not in ser.validated_data["name"]
 
     def test_block_item_not_dict(self):
-        ser = TimeBlockTemplateSerializer(data={
-            "name": "Bad",
-            "blocks": ["not_a_dict"],
-        })
+        ser = TimeBlockTemplateSerializer(
+            data={
+                "name": "Bad",
+                "blocks": ["not_a_dict"],
+            }
+        )
         assert not ser.is_valid()
 
 
@@ -646,14 +704,16 @@ class TestTimeBlockTemplateSerializer:
 class TestHabitSerializer:
 
     def test_valid(self):
-        ser = HabitSerializer(data={
-            "name": "Meditate",
-            "frequency": "daily",
-            "target_per_day": 1,
-            "color": "#8B5CF6",
-            "icon": "brain",
-            "custom_days": [],
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Meditate",
+                "frequency": "daily",
+                "target_per_day": 1,
+                "color": "#8B5CF6",
+                "icon": "brain",
+                "custom_days": [],
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_completions_today(self, cal_user):
@@ -681,69 +741,83 @@ class TestHabitSerializer:
         assert data["completions_today"] == 0
 
     def test_invalid_color(self):
-        ser = HabitSerializer(data={
-            "name": "Bad Color",
-            "frequency": "daily",
-            "color": "red",
-            "custom_days": [],
-            "target_per_day": 1,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Bad Color",
+                "frequency": "daily",
+                "color": "red",
+                "custom_days": [],
+                "target_per_day": 1,
+            }
+        )
         assert not ser.is_valid()
         assert "color" in ser.errors
 
     def test_valid_color(self):
-        ser = HabitSerializer(data={
-            "name": "Good Color",
-            "frequency": "daily",
-            "color": "#FF00AA",
-            "custom_days": [],
-            "target_per_day": 1,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Good Color",
+                "frequency": "daily",
+                "color": "#FF00AA",
+                "custom_days": [],
+                "target_per_day": 1,
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_invalid_custom_days(self):
-        ser = HabitSerializer(data={
-            "name": "Bad Days",
-            "frequency": "custom",
-            "custom_days": [7],
-            "target_per_day": 1,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Bad Days",
+                "frequency": "custom",
+                "custom_days": [7],
+                "target_per_day": 1,
+            }
+        )
         assert not ser.is_valid()
 
     def test_custom_days_not_list(self):
-        ser = HabitSerializer(data={
-            "name": "Bad Days",
-            "frequency": "custom",
-            "custom_days": "MWF",
-            "target_per_day": 1,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Bad Days",
+                "frequency": "custom",
+                "custom_days": "MWF",
+                "target_per_day": 1,
+            }
+        )
         assert not ser.is_valid()
 
     def test_target_per_day_too_low(self):
-        ser = HabitSerializer(data={
-            "name": "Low",
-            "frequency": "daily",
-            "custom_days": [],
-            "target_per_day": 0,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "Low",
+                "frequency": "daily",
+                "custom_days": [],
+                "target_per_day": 0,
+            }
+        )
         assert not ser.is_valid()
 
     def test_target_per_day_too_high(self):
-        ser = HabitSerializer(data={
-            "name": "High",
-            "frequency": "daily",
-            "custom_days": [],
-            "target_per_day": 101,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "High",
+                "frequency": "daily",
+                "custom_days": [],
+                "target_per_day": 101,
+            }
+        )
         assert not ser.is_valid()
 
     def test_sanitizes_name(self):
-        ser = HabitSerializer(data={
-            "name": "<b>Bold Habit</b>",
-            "frequency": "daily",
-            "custom_days": [],
-            "target_per_day": 1,
-        })
+        ser = HabitSerializer(
+            data={
+                "name": "<b>Bold Habit</b>",
+                "frequency": "daily",
+                "custom_days": [],
+                "target_per_day": 1,
+            }
+        )
         assert ser.is_valid(), ser.errors
         assert "<b>" not in ser.validated_data["name"]
 
@@ -793,10 +867,12 @@ class TestHabitCompleteSerializer:
         assert ser.is_valid(), ser.errors
 
     def test_sanitizes_note(self):
-        ser = HabitCompleteSerializer(data={
-            "date": "2026-04-01",
-            "note": "<script>bad</script>Good",
-        })
+        ser = HabitCompleteSerializer(
+            data={
+                "date": "2026-04-01",
+                "note": "<script>bad</script>Good",
+            }
+        )
         assert ser.is_valid()
         assert "<script>" not in ser.validated_data["note"]
 
@@ -859,28 +935,34 @@ class TestModifyOccurrenceSerializer:
 
     def test_with_modified_times(self):
         now = timezone.now()
-        ser = ModifyOccurrenceSerializer(data={
-            "original_date": "2026-04-01",
-            "title": "Modified",
-            "start_time": now.isoformat(),
-            "end_time": (now + timedelta(hours=1)).isoformat(),
-        })
+        ser = ModifyOccurrenceSerializer(
+            data={
+                "original_date": "2026-04-01",
+                "title": "Modified",
+                "start_time": now.isoformat(),
+                "end_time": (now + timedelta(hours=1)).isoformat(),
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_end_before_start(self):
         now = timezone.now()
-        ser = ModifyOccurrenceSerializer(data={
-            "original_date": "2026-04-01",
-            "start_time": (now + timedelta(hours=2)).isoformat(),
-            "end_time": now.isoformat(),
-        })
+        ser = ModifyOccurrenceSerializer(
+            data={
+                "original_date": "2026-04-01",
+                "start_time": (now + timedelta(hours=2)).isoformat(),
+                "end_time": now.isoformat(),
+            }
+        )
         assert not ser.is_valid()
 
     def test_sanitizes_title(self):
-        ser = ModifyOccurrenceSerializer(data={
-            "original_date": "2026-04-01",
-            "title": "<img src=x>Title",
-        })
+        ser = ModifyOccurrenceSerializer(
+            data={
+                "original_date": "2026-04-01",
+                "title": "<img src=x>Title",
+            }
+        )
         assert ser.is_valid()
         assert "<img" not in ser.validated_data["title"]
 
@@ -893,24 +975,30 @@ class TestModifyOccurrenceSerializer:
 class TestCalendarShareCreateSerializer:
 
     def test_valid_view(self):
-        ser = CalendarShareCreateSerializer(data={
-            "user_id": str(uuid.uuid4()),
-            "permission": "view",
-        })
+        ser = CalendarShareCreateSerializer(
+            data={
+                "user_id": str(uuid.uuid4()),
+                "permission": "view",
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_valid_suggest(self):
-        ser = CalendarShareCreateSerializer(data={
-            "user_id": str(uuid.uuid4()),
-            "permission": "suggest",
-        })
+        ser = CalendarShareCreateSerializer(
+            data={
+                "user_id": str(uuid.uuid4()),
+                "permission": "suggest",
+            }
+        )
         assert ser.is_valid()
 
     def test_invalid_permission(self):
-        ser = CalendarShareCreateSerializer(data={
-            "user_id": str(uuid.uuid4()),
-            "permission": "admin",
-        })
+        ser = CalendarShareCreateSerializer(
+            data={
+                "user_id": str(uuid.uuid4()),
+                "permission": "admin",
+            }
+        )
         assert not ser.is_valid()
 
 
@@ -952,27 +1040,33 @@ class TestTimeSuggestionSerializer:
 
     def test_valid(self):
         now = timezone.now()
-        ser = TimeSuggestionSerializer(data={
-            "suggested_start": now.isoformat(),
-            "suggested_end": (now + timedelta(hours=1)).isoformat(),
-        })
+        ser = TimeSuggestionSerializer(
+            data={
+                "suggested_start": now.isoformat(),
+                "suggested_end": (now + timedelta(hours=1)).isoformat(),
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_end_before_start(self):
         now = timezone.now()
-        ser = TimeSuggestionSerializer(data={
-            "suggested_start": (now + timedelta(hours=2)).isoformat(),
-            "suggested_end": now.isoformat(),
-        })
+        ser = TimeSuggestionSerializer(
+            data={
+                "suggested_start": (now + timedelta(hours=2)).isoformat(),
+                "suggested_end": now.isoformat(),
+            }
+        )
         assert not ser.is_valid()
 
     def test_sanitizes_note(self):
         now = timezone.now()
-        ser = TimeSuggestionSerializer(data={
-            "suggested_start": now.isoformat(),
-            "suggested_end": (now + timedelta(hours=1)).isoformat(),
-            "note": "<b>Check this</b>",
-        })
+        ser = TimeSuggestionSerializer(
+            data={
+                "suggested_start": now.isoformat(),
+                "suggested_end": (now + timedelta(hours=1)).isoformat(),
+                "note": "<b>Check this</b>",
+            }
+        )
         assert ser.is_valid()
         assert "<b>" not in ser.validated_data["note"]
 
@@ -985,10 +1079,12 @@ class TestTimeSuggestionSerializer:
 class TestCalendarPreferencesSerializer:
 
     def test_valid(self):
-        ser = CalendarPreferencesSerializer(data={
-            "buffer_minutes": 15,
-            "min_event_duration": 30,
-        })
+        ser = CalendarPreferencesSerializer(
+            data={
+                "buffer_minutes": 15,
+                "min_event_duration": 30,
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_defaults(self):
@@ -1011,27 +1107,33 @@ class TestCheckConflictsSerializer:
 
     def test_valid(self):
         now = timezone.now()
-        ser = CheckConflictsSerializer(data={
-            "start_time": now.isoformat(),
-            "end_time": (now + timedelta(hours=1)).isoformat(),
-        })
+        ser = CheckConflictsSerializer(
+            data={
+                "start_time": now.isoformat(),
+                "end_time": (now + timedelta(hours=1)).isoformat(),
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_end_before_start(self):
         now = timezone.now()
-        ser = CheckConflictsSerializer(data={
-            "start_time": (now + timedelta(hours=2)).isoformat(),
-            "end_time": now.isoformat(),
-        })
+        ser = CheckConflictsSerializer(
+            data={
+                "start_time": (now + timedelta(hours=2)).isoformat(),
+                "end_time": now.isoformat(),
+            }
+        )
         assert not ser.is_valid()
 
     def test_with_exclude_event(self):
         now = timezone.now()
-        ser = CheckConflictsSerializer(data={
-            "start_time": now.isoformat(),
-            "end_time": (now + timedelta(hours=1)).isoformat(),
-            "exclude_event_id": str(uuid.uuid4()),
-        })
+        ser = CheckConflictsSerializer(
+            data={
+                "start_time": now.isoformat(),
+                "end_time": (now + timedelta(hours=1)).isoformat(),
+                "exclude_event_id": str(uuid.uuid4()),
+            }
+        )
         assert ser.is_valid()
 
 
@@ -1043,9 +1145,11 @@ class TestCheckConflictsSerializer:
 class TestSmartScheduleRequestSerializer:
 
     def test_valid(self):
-        ser = SmartScheduleRequestSerializer(data={
-            "task_ids": [str(uuid.uuid4())],
-        })
+        ser = SmartScheduleRequestSerializer(
+            data={
+                "task_ids": [str(uuid.uuid4())],
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_empty_list(self):
@@ -1053,24 +1157,28 @@ class TestSmartScheduleRequestSerializer:
         assert not ser.is_valid()
 
     def test_too_many(self):
-        ser = SmartScheduleRequestSerializer(data={
-            "task_ids": [str(uuid.uuid4()) for _ in range(21)],
-        })
+        ser = SmartScheduleRequestSerializer(
+            data={
+                "task_ids": [str(uuid.uuid4()) for _ in range(21)],
+            }
+        )
         assert not ser.is_valid()
 
 
 class TestAcceptScheduleSerializer:
 
     def test_valid(self):
-        ser = AcceptScheduleSerializer(data={
-            "suggestions": [
-                {
-                    "task_id": str(uuid.uuid4()),
-                    "suggested_date": "2026-04-01",
-                    "suggested_time": "10:00",
-                }
-            ],
-        })
+        ser = AcceptScheduleSerializer(
+            data={
+                "suggestions": [
+                    {
+                        "task_id": str(uuid.uuid4()),
+                        "suggested_date": "2026-04-01",
+                        "suggested_time": "10:00",
+                    }
+                ],
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_empty(self):
@@ -1086,12 +1194,18 @@ class TestAcceptScheduleSerializer:
 class TestBatchScheduleSerializer:
 
     def test_valid(self):
-        ser = BatchScheduleSerializer(data={
-            "tasks": [
-                {"task_id": str(uuid.uuid4()), "date": "2026-04-01", "time": "09:00"},
-            ],
-            "create_events": True,
-        })
+        ser = BatchScheduleSerializer(
+            data={
+                "tasks": [
+                    {
+                        "task_id": str(uuid.uuid4()),
+                        "date": "2026-04-01",
+                        "time": "09:00",
+                    },
+                ],
+                "create_events": True,
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_empty_tasks(self):
@@ -1107,16 +1221,20 @@ class TestBatchScheduleSerializer:
 class TestSaveCurrentTemplateSerializer:
 
     def test_valid(self):
-        ser = SaveCurrentTemplateSerializer(data={
-            "name": "My Template",
-            "description": "A nice template",
-        })
+        ser = SaveCurrentTemplateSerializer(
+            data={
+                "name": "My Template",
+                "description": "A nice template",
+            }
+        )
         assert ser.is_valid(), ser.errors
 
     def test_sanitizes_name(self):
-        ser = SaveCurrentTemplateSerializer(data={
-            "name": "<script>x</script>Template",
-        })
+        ser = SaveCurrentTemplateSerializer(
+            data={
+                "name": "<script>x</script>Template",
+            }
+        )
         assert ser.is_valid()
         assert "<script>" not in ser.validated_data["name"]
 
@@ -1133,12 +1251,14 @@ class TestSaveCurrentTemplateSerializer:
 class TestHeatmapDaySerializer:
 
     def test_valid(self):
-        ser = HeatmapDaySerializer(data={
-            "date": "2026-04-01",
-            "tasks_completed": 5,
-            "tasks_total": 8,
-            "events_count": 3,
-            "focus_minutes": 120,
-            "productivity_score": 0.75,
-        })
+        ser = HeatmapDaySerializer(
+            data={
+                "date": "2026-04-01",
+                "tasks_completed": 5,
+                "tasks_total": 8,
+                "events_count": 3,
+                "focus_minutes": 120,
+                "productivity_score": 0.75,
+            }
+        )
         assert ser.is_valid(), ser.errors

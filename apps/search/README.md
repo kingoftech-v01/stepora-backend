@@ -78,6 +78,33 @@ Defined in `documents.py`. Each document maps encrypted Django model fields to s
 | CircleChallengeDocument | stepora_circle_challenges | CircleChallenge | title, description |
 | ActivityCommentDocument | stepora_activity_comments | ActivityComment | text |
 
+## Feature Flag
+
+Search requires Elasticsearch to be running. In production, search may be disabled via the `USE_SEARCH` feature flag.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_SEARCH` | `false` | Enable/disable search backend endpoints |
+| `VITE_USE_SEARCH` | `false` | Show/hide search UI in frontend |
+
+When disabled:
+- Backend: `GET /api/search/` returns `501 Not Implemented` with `{"error": "Search is not available.", "coming_soon": true}`
+- Frontend: Search icon hidden from Home screen headers, GlobalSearch overlay not rendered
+
+### To enable search
+
+1. Ensure Elasticsearch is running and configured (`ELASTICSEARCH_URL` env var)
+2. Set `USE_SEARCH=true` in backend `.env` (or AWS Secrets Manager for production)
+3. Set `VITE_USE_SEARCH=true` in frontend `.env` / `.env.production`
+4. Run `python manage.py ensure_search_index` to create ES indexes
+5. Rebuild and deploy both backend and frontend
+
+### Note on social user search
+
+The `/search` route and `SOCIAL.USER_SEARCH` endpoint (`/api/social/users/search`) are NOT gated by this flag. They use Django ORM queries, not Elasticsearch.
+
 ## DB Fallback
 
 When Elasticsearch is unavailable (`_ES_AVAILABLE = False` or connection errors), all searches fall back to PostgreSQL `icontains` queries. Note: encrypted fields (title, display_name, etc.) may not match with `icontains` when encrypted; the fallback is a best-effort mechanism.
@@ -127,6 +154,7 @@ DJANGO_SETTINGS_MODULE=config.settings.testing python -m pytest apps/search/test
 
 ### Test coverage
 
+- **test_feature_flag.py** (8 tests): USE_SEARCH feature flag — 501 when disabled, 200 when enabled, coming_soon payload, setting existence.
 - **test_search_complete.py** (81 tests): Auth, validation, type filtering, result hydration for all 7 response types, cross-user isolation, _es_search helper, all 9 SearchService methods, global_search, management commands, rate limiting/permissions.
 - **test_search_views.py** (17 tests): GlobalSearchView API tests.
 - **test_search_services.py** (26 tests): SearchService and _es_search tests.

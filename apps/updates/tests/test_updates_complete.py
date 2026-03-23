@@ -16,7 +16,6 @@ Target: 95%+ coverage for apps/updates/
 """
 
 import hashlib
-import io
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -29,7 +28,6 @@ from rest_framework.test import APIClient
 
 from apps.updates.models import AppBundle, _bundle_upload_path, _generate_bundle_id
 from apps.users.models import User
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

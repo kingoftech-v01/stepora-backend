@@ -18,12 +18,9 @@ Covers:
 """
 
 import uuid
-from datetime import timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -99,8 +96,14 @@ class TestIDORProtection:
     @patch("apps.ai.views.validate_ai_output_safety")
     @patch("apps.ai.views.AIUsageTracker")
     def test_cannot_send_message_to_other_user_conversation(
-        self, mock_tracker, mock_safety, mock_validate, mock_openai, mock_mod,
-        ai_client, ai_user2,
+        self,
+        mock_tracker,
+        mock_safety,
+        mock_validate,
+        mock_openai,
+        mock_mod,
+        ai_client,
+        ai_user2,
     ):
         """Cannot send a message to another user's conversation."""
         other_conv = AIConversation.objects.create(
@@ -131,11 +134,13 @@ class TestIDORProtection:
 
     def test_cannot_access_other_user_memories(self, ai_client, ai_user2):
         """ChatMemory list only shows own memories."""
-        ChatMemory.objects.create(
-            user=ai_user2, key="fact", content="Secret info"
-        )
+        ChatMemory.objects.create(user=ai_user2, key="fact", content="Secret info")
         response = ai_client.get("/api/ai/memories/")
-        results = response.data if isinstance(response.data, list) else response.data.get("results", [])
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
         for mem in results:
             # Should never see ai_user2's memories
             assert mem["content"] != "Secret info"
@@ -165,8 +170,14 @@ class TestQuotaEnforcement:
     @patch("apps.ai.views.validate_ai_output_safety")
     @patch("apps.ai.views.AIUsageTracker")
     def test_send_message_increments_quota(
-        self, mock_tracker_cls, mock_safety, mock_validate, mock_openai_cls,
-        mock_mod_cls, ai_client, ai_conversation,
+        self,
+        mock_tracker_cls,
+        mock_safety,
+        mock_validate,
+        mock_openai_cls,
+        mock_mod_cls,
+        ai_client,
+        ai_conversation,
     ):
         """Successful send_message increments the ai_chat quota."""
         mock_mod_cls.return_value.moderate_text.return_value = Mock(is_flagged=False)
@@ -200,7 +211,11 @@ class TestChatMemoryCRUD:
         """List active memories for the user."""
         response = ai_client.get("/api/ai/memories/")
         assert response.status_code == status.HTTP_200_OK
-        results = response.data if isinstance(response.data, list) else response.data.get("results", [])
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
         assert len(results) >= 1
         assert any(m["id"] == str(ai_memory.id) for m in results)
 
@@ -213,7 +228,11 @@ class TestChatMemoryCRUD:
             user=ai_user, key="fact", content="Inactive memory", is_active=False
         )
         response = ai_client.get("/api/ai/memories/")
-        results = response.data if isinstance(response.data, list) else response.data.get("results", [])
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
         ids = [m["id"] for m in results]
         assert str(active.id) in ids
         assert str(inactive.id) not in ids
@@ -243,7 +262,9 @@ class TestChatMemoryCRUD:
         active_count = ChatMemory.objects.filter(user=ai_user, is_active=True).count()
         assert active_count == 0
 
-    def test_clear_all_memories_does_not_affect_other_user(self, ai_client, ai_user, ai_user2):
+    def test_clear_all_memories_does_not_affect_other_user(
+        self, ai_client, ai_user, ai_user2
+    ):
         """Clearing memories does not affect other users."""
         ChatMemory.objects.create(user=ai_user, key="fact", content="My memory")
         other_mem = ChatMemory.objects.create(
@@ -339,8 +360,14 @@ class TestAIOutputSafety:
     @patch("apps.ai.views.validate_ai_output_safety")
     @patch("apps.ai.views.AIUsageTracker")
     def test_unsafe_output_replaced(
-        self, mock_tracker, mock_safety, mock_validate, mock_openai_cls,
-        mock_mod_cls, ai_client, ai_conversation,
+        self,
+        mock_tracker,
+        mock_safety,
+        mock_validate,
+        mock_openai_cls,
+        mock_mod_cls,
+        ai_client,
+        ai_conversation,
     ):
         """Unsafe AI output triggers safety fallback response."""
         mock_mod_cls.return_value.moderate_text.return_value = Mock(is_flagged=False)
@@ -407,7 +434,9 @@ class TestGetMessagesForAPI:
         assert len(memory_ctx) >= 1
 
     @patch("integrations.openai_service.OpenAIService.build_memory_context")
-    def test_messages_with_summary_context(self, mock_memory, ai_conversation, ai_message, ai_assistant_message):
+    def test_messages_with_summary_context(
+        self, mock_memory, ai_conversation, ai_message, ai_assistant_message
+    ):
         """Summary is prepended to API context when available."""
         mock_memory.return_value = ""
         ConversationSummary.objects.create(
@@ -420,7 +449,11 @@ class TestGetMessagesForAPI:
 
         messages = ai_conversation.get_messages_for_api(limit=10)
         system_messages = [m for m in messages if m["role"] == "system"]
-        summary_ctx = [m for m in system_messages if "Previous conversation summary" in m["content"]]
+        summary_ctx = [
+            m
+            for m in system_messages
+            if "Previous conversation summary" in m["content"]
+        ]
         assert len(summary_ctx) >= 1
 
     @patch("integrations.openai_service.OpenAIService.build_memory_context")
@@ -600,8 +633,16 @@ class TestSerializerEdgeCases:
         """ChatMemory serializer includes expected fields."""
         serializer = ChatMemorySerializer(ai_memory)
         data = serializer.data
-        expected = {"id", "key", "content", "importance", "source_conversation",
-                    "is_active", "created_at", "updated_at"}
+        expected = {
+            "id",
+            "key",
+            "content",
+            "importance",
+            "source_conversation",
+            "is_active",
+            "created_at",
+            "updated_at",
+        }
         assert set(data.keys()) == expected
 
     def test_template_serializer_fields(self, ai_template):
@@ -613,7 +654,9 @@ class TestSerializerEdgeCases:
         assert "conversation_type" in data
         assert "starter_messages" in data
 
-    def test_summary_serializer_fields(self, ai_conversation, ai_message, ai_assistant_message):
+    def test_summary_serializer_fields(
+        self, ai_conversation, ai_message, ai_assistant_message
+    ):
         """ConversationSummary serializer includes expected fields."""
         summary = ConversationSummary.objects.create(
             conversation=ai_conversation,
@@ -655,10 +698,16 @@ class TestTranscribeVoiceMessageTask:
         mock_ai.transcribe_audio.return_value = {"text": "Hello world"}
         mock_ai.summarize_voice_note.return_value = {"summary": "Greeting"}
 
-        with patch("core.validators.validate_url_no_ssrf", return_value=("https://example.com/audio.mp3", "93.184.216.34")), \
-             patch("integrations.openai_service.OpenAIService", return_value=mock_ai), \
-             patch("requests.get", return_value=fake_response):
+        with patch(
+            "core.validators.validate_url_no_ssrf",
+            return_value=("https://example.com/audio.mp3", "93.184.216.34"),
+        ), patch(
+            "integrations.openai_service.OpenAIService", return_value=mock_ai
+        ), patch(
+            "requests.get", return_value=fake_response
+        ):
             from apps.ai.tasks import transcribe_voice_message
+
             transcribe_voice_message(str(msg.id))
 
         msg.refresh_from_db()
@@ -706,7 +755,9 @@ class TestSummarizeConversationTask:
 
     @patch("integrations.openai_service.OpenAIService")
     @patch("core.ai_usage.AIUsageTracker")
-    def test_summarize_success(self, mock_tracker_cls, mock_openai_cls, ai_conversation, ai_user):
+    def test_summarize_success(
+        self, mock_tracker_cls, mock_openai_cls, ai_conversation, ai_user
+    ):
         """Conversation with enough messages gets summarized."""
         # Create 20 messages to exceed threshold
         for i in range(20):
@@ -744,7 +795,9 @@ class TestSummarizeConversationTask:
 
         summarize_conversation(str(ai_conversation.id))
 
-        assert not ConversationSummary.objects.filter(conversation=ai_conversation).exists()
+        assert not ConversationSummary.objects.filter(
+            conversation=ai_conversation
+        ).exists()
 
     @patch("core.ai_usage.AIUsageTracker")
     def test_summarize_quota_exceeded(self, mock_tracker_cls, ai_conversation):
@@ -762,7 +815,9 @@ class TestSummarizeConversationTask:
 
         summarize_conversation(str(ai_conversation.id))
 
-        assert not ConversationSummary.objects.filter(conversation=ai_conversation).exists()
+        assert not ConversationSummary.objects.filter(
+            conversation=ai_conversation
+        ).exists()
 
     def test_summarize_nonexistent_conversation(self):
         """Non-existent conversation ID is handled gracefully."""
@@ -792,17 +847,24 @@ class TestExtractChatMemoriesTask:
             {"key": "fact", "content": "User likes morning walks", "importance": 3},
         ]
 
-        with patch("core.ai_usage.AIUsageTracker", return_value=mock_tracker), \
-             patch("integrations.openai_service.OpenAIService", return_value=mock_ai):
+        with patch("core.ai_usage.AIUsageTracker", return_value=mock_tracker), patch(
+            "integrations.openai_service.OpenAIService", return_value=mock_ai
+        ):
             from apps.ai.tasks import extract_chat_memories
+
             extract_chat_memories(str(ai_conversation.id))
 
-        assert ChatMemory.objects.filter(user=ai_user).exclude(
-            source_conversation__isnull=True
-        ).count() > 0
+        assert (
+            ChatMemory.objects.filter(user=ai_user)
+            .exclude(source_conversation__isnull=True)
+            .count()
+            > 0
+        )
 
     @patch("core.ai_usage.AIUsageTracker")
-    def test_extract_memories_not_enough_messages(self, mock_tracker_cls, ai_conversation):
+    def test_extract_memories_not_enough_messages(
+        self, mock_tracker_cls, ai_conversation
+    ):
         """Too few messages means no extraction."""
         AIMessage.objects.create(
             conversation=ai_conversation,
@@ -816,7 +878,10 @@ class TestExtractChatMemoriesTask:
 
         initial_count = ChatMemory.objects.filter(user=ai_conversation.user).count()
         extract_chat_memories(str(ai_conversation.id))
-        assert ChatMemory.objects.filter(user=ai_conversation.user).count() == initial_count
+        assert (
+            ChatMemory.objects.filter(user=ai_conversation.user).count()
+            == initial_count
+        )
 
     @patch("core.ai_usage.AIUsageTracker")
     def test_extract_memories_quota_exceeded(self, mock_tracker_cls, ai_conversation):
@@ -834,7 +899,10 @@ class TestExtractChatMemoriesTask:
 
         initial_count = ChatMemory.objects.filter(user=ai_conversation.user).count()
         extract_chat_memories(str(ai_conversation.id))
-        assert ChatMemory.objects.filter(user=ai_conversation.user).count() == initial_count
+        assert (
+            ChatMemory.objects.filter(user=ai_conversation.user).count()
+            == initial_count
+        )
 
     def test_extract_memories_caps_at_50(self, ai_conversation, ai_user):
         """Memory extraction deactivates old memories when cap of 50 reached."""
@@ -863,9 +931,11 @@ class TestExtractChatMemoriesTask:
             {"key": "fact", "content": "New memory 2", "importance": 4},
         ]
 
-        with patch("core.ai_usage.AIUsageTracker", return_value=mock_tracker), \
-             patch("integrations.openai_service.OpenAIService", return_value=mock_ai):
+        with patch("core.ai_usage.AIUsageTracker", return_value=mock_tracker), patch(
+            "integrations.openai_service.OpenAIService", return_value=mock_ai
+        ):
             from apps.ai.tasks import extract_chat_memories
+
             extract_chat_memories(str(ai_conversation.id))
 
         active_count = ChatMemory.objects.filter(user=ai_user, is_active=True).count()
@@ -916,9 +986,7 @@ class TestConversationExportEdge:
 
     def test_export_empty_conversation(self, ai_client, ai_conversation):
         """Export with no messages returns empty messages list."""
-        response = ai_client.get(
-            f"/api/ai/conversations/{ai_conversation.id}/export/"
-        )
+        response = ai_client.get(f"/api/ai/conversations/{ai_conversation.id}/export/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["messages"] == []
 
@@ -951,9 +1019,7 @@ class TestConversationSearchEdge:
 
     def test_search_without_q_param(self, ai_client, ai_conversation):
         """Missing q parameter returns empty results."""
-        response = ai_client.get(
-            f"/api/ai/conversations/{ai_conversation.id}/search/"
-        )
+        response = ai_client.get(f"/api/ai/conversations/{ai_conversation.id}/search/")
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 0
 
@@ -968,8 +1034,15 @@ class TestSummarizationTrigger:
     @patch("apps.ai.views.AIUsageTracker")
     @patch("apps.ai.views.summarize_conversation")
     def test_summarization_triggered_at_20_messages(
-        self, mock_summarize, mock_tracker, mock_safety, mock_validate,
-        mock_openai_cls, mock_mod_cls, ai_client, ai_user,
+        self,
+        mock_summarize,
+        mock_tracker,
+        mock_safety,
+        mock_validate,
+        mock_openai_cls,
+        mock_mod_cls,
+        ai_client,
+        ai_user,
     ):
         """Summarization task is triggered when total_messages hits a multiple of 20."""
         conv = AIConversation.objects.create(

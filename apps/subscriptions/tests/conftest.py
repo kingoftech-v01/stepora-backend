@@ -10,13 +10,6 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-
-@pytest.fixture(scope="session")
-def django_db_modify_db_settings():
-    """Use a unique test database name to avoid collisions with parallel sessions."""
-    test_cfg = settings.DATABASES["default"].setdefault("TEST", {})
-    test_cfg["NAME"] = "test_stepora_subscriptions"
-
 from apps.subscriptions.models import (
     Promotion,
     PromotionPlanDiscount,
@@ -25,6 +18,13 @@ from apps.subscriptions.models import (
     SubscriptionPlan,
 )
 from apps.users.models import User
+
+
+@pytest.fixture(scope="session")
+def django_db_modify_db_settings():
+    """Use a unique test database name to avoid collisions with parallel sessions."""
+    test_cfg = settings.DATABASES["default"].setdefault("TEST", {})
+    test_cfg["NAME"] = "test_stepora_subscriptions"
 
 
 @pytest.fixture

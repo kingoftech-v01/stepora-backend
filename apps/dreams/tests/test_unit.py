@@ -173,12 +173,8 @@ class TestGoalModel:
 
     def test_update_progress_with_tasks(self, test_goal):
         """Progress reflects completed tasks ratio."""
-        Task.objects.create(
-            goal=test_goal, title="T1", order=1, status="completed"
-        )
-        Task.objects.create(
-            goal=test_goal, title="T2", order=2, status="pending"
-        )
+        Task.objects.create(goal=test_goal, title="T1", order=1, status="completed")
+        Task.objects.create(goal=test_goal, title="T2", order=2, status="pending")
         test_goal.update_progress()
         test_goal.refresh_from_db()
         assert test_goal.progress_percentage == 50.0
@@ -291,12 +287,8 @@ class TestDreamMilestoneModel:
 
     def test_milestone_ordering(self, test_dream):
         """Milestones are ordered by dream and order."""
-        m1 = DreamMilestone.objects.create(
-            dream=test_dream, title="M1", order=1
-        )
-        m2 = DreamMilestone.objects.create(
-            dream=test_dream, title="M2", order=2
-        )
+        m1 = DreamMilestone.objects.create(dream=test_dream, title="M1", order=1)
+        m2 = DreamMilestone.objects.create(dream=test_dream, title="M2", order=2)
         milestones = list(DreamMilestone.objects.filter(dream=test_dream))
         assert milestones[0].order == 1
         assert milestones[1].order == 2
@@ -309,9 +301,7 @@ class TestDreamProgressSnapshotModel:
         """record_snapshot creates a snapshot for today."""
         DreamProgressSnapshot.record_snapshot(test_dream)
         today = timezone.now().date()
-        snapshot = DreamProgressSnapshot.objects.get(
-            dream=test_dream, date=today
-        )
+        snapshot = DreamProgressSnapshot.objects.get(dream=test_dream, date=today)
         assert snapshot.progress_percentage == test_dream.progress_percentage
 
     def test_record_snapshot_updates_existing(self, test_dream):
@@ -321,18 +311,14 @@ class TestDreamProgressSnapshotModel:
         test_dream.save()
         DreamProgressSnapshot.record_snapshot(test_dream)
         today = timezone.now().date()
-        snapshot = DreamProgressSnapshot.objects.get(
-            dream=test_dream, date=today
-        )
+        snapshot = DreamProgressSnapshot.objects.get(dream=test_dream, date=today)
         assert snapshot.progress_percentage == 50.0
 
     def test_snapshot_str(self, test_dream):
         """String representation includes dream title and percentage."""
         DreamProgressSnapshot.record_snapshot(test_dream)
         today = timezone.now().date()
-        snapshot = DreamProgressSnapshot.objects.get(
-            dream=test_dream, date=today
-        )
+        snapshot = DreamProgressSnapshot.objects.get(dream=test_dream, date=today)
         result = str(snapshot)
         assert "Learn Spanish" in result
         assert "0.0%" in result
@@ -413,7 +399,9 @@ class TestDreamComplete:
     def test_complete_sets_status(self, test_dream):
         from unittest.mock import patch
 
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             test_dream.complete()
         test_dream.refresh_from_db()
         assert test_dream.status == "completed"
@@ -431,7 +419,9 @@ class TestDreamComplete:
         from unittest.mock import patch
 
         old_xp = dream_user.xp
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             test_dream.complete()
         dream_user.refresh_from_db()
         assert dream_user.xp > old_xp
@@ -452,10 +442,10 @@ class TestDreamMilestoneComplete:
     def test_milestone_complete(self, test_dream):
         from unittest.mock import patch
 
-        m = DreamMilestone.objects.create(
-            dream=test_dream, title="M Complete", order=1
-        )
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        m = DreamMilestone.objects.create(dream=test_dream, title="M Complete", order=1)
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             m.complete()
         m.refresh_from_db()
         assert m.status == "completed"
@@ -471,9 +461,7 @@ class TestDreamMilestoneComplete:
         assert m.status == "completed"
 
     def test_milestone_update_progress_no_goals(self, test_dream):
-        m = DreamMilestone.objects.create(
-            dream=test_dream, title="M No Goals", order=1
-        )
+        m = DreamMilestone.objects.create(dream=test_dream, title="M No Goals", order=1)
         m.update_progress()
         m.refresh_from_db()
         assert m.progress_percentage == 0.0
@@ -499,10 +487,10 @@ class TestGoalComplete:
     def test_goal_complete(self, test_dream, dream_user):
         from unittest.mock import patch
 
-        goal = Goal.objects.create(
-            dream=test_dream, title="Goal To Complete", order=1
-        )
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        goal = Goal.objects.create(dream=test_dream, title="Goal To Complete", order=1)
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             goal.complete()
         goal.refresh_from_db()
         assert goal.status == "completed"
@@ -524,7 +512,9 @@ class TestGoalComplete:
             title="G with M",
             order=1,
         )
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             goal.complete()
         goal.refresh_from_db()
         assert goal.status == "completed"
@@ -540,9 +530,7 @@ class TestGoalComplete:
         assert goal.progress_percentage == 50.0
 
     def test_goal_update_progress_no_milestone(self, test_dream):
-        goal = Goal.objects.create(
-            dream=test_dream, title="G No M", order=1
-        )
+        goal = Goal.objects.create(dream=test_dream, title="G No M", order=1)
         Task.objects.create(goal=goal, title="T1", order=1, status="completed")
         goal.update_progress()
         goal.refresh_from_db()
@@ -558,7 +546,9 @@ class TestTaskComplete:
         task = Task.objects.create(
             goal=test_goal, title="Task Complete", order=1, duration_mins=30
         )
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             task.complete()
         task.refresh_from_db()
         assert task.status == "completed"
@@ -578,7 +568,9 @@ class TestTaskComplete:
             goal=test_goal, title="XP Task", order=1, duration_mins=60
         )
         old_xp = dream_user.xp
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             task.complete()
         dream_user.refresh_from_db()
         expected_xp = max(10, 60 // 3)  # = 20
@@ -592,7 +584,9 @@ class TestTaskComplete:
             goal=test_goal, title="Min XP Task", order=1, duration_mins=None
         )
         old_xp = dream_user.xp
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             task.complete()
         dream_user.refresh_from_db()
         assert dream_user.xp >= old_xp + 10
@@ -815,9 +809,7 @@ class TestVisionBoardImageModel:
     def test_vision_image_str(self, test_dream):
         from apps.dreams.models import VisionBoardImage
 
-        img = VisionBoardImage.objects.create(
-            dream=test_dream, order=2
-        )
+        img = VisionBoardImage.objects.create(dream=test_dream, order=2)
         result = str(img)
         assert "Learn Spanish" in result
         assert "#2" in result
@@ -883,7 +875,9 @@ class TestDreamAPI:
     """Tests for Dreams API endpoints."""
 
     def test_list_dreams(self, dream_client):
-        resp = dream_client.get("/api/dreams/dreams/", HTTP_ORIGIN="https://stepora.app")
+        resp = dream_client.get(
+            "/api/dreams/dreams/", HTTP_ORIGIN="https://stepora.app"
+        )
         assert resp.status_code == 200
 
     def test_create_dream(self, dream_client):
@@ -1207,7 +1201,9 @@ class TestDreamActionsAPI:
         assert resp.status_code in (200, 403, 404)
 
     def test_dream_complete(self, dream_client, test_dream):
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = dream_client.post(
                 f"/api/dreams/dreams/{test_dream.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",
@@ -1288,14 +1284,23 @@ class TestDreamActionsWithPremiumUser:
             },
         )
         dream = Dream.objects.create(
-            user=user, title="Premium Dream", description="A premium dream",
-            category="career", status="active",
+            user=user,
+            title="Premium Dream",
+            description="A premium dream",
+            category="career",
+            status="active",
         )
         goal = Goal.objects.create(dream=dream, title="PG1", order=1)
         task = Task.objects.create(goal=goal, title="PT1", order=1, duration_mins=30)
         client = APIClient()
         client.force_authenticate(user=user)
-        return {"user": user, "dream": dream, "goal": goal, "task": task, "client": client}
+        return {
+            "user": user,
+            "dream": dream,
+            "goal": goal,
+            "task": task,
+            "client": client,
+        }
 
     def test_create_dream(self, premium_dream_setup):
         client = premium_dream_setup["client"]
@@ -1345,7 +1350,9 @@ class TestDreamActionsWithPremiumUser:
     def test_dream_complete(self, premium_dream_setup):
         client = premium_dream_setup["client"]
         dream = premium_dream_setup["dream"]
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = client.post(
                 f"/api/dreams/dreams/{dream.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",
@@ -1355,7 +1362,9 @@ class TestDreamActionsWithPremiumUser:
     def test_goal_complete(self, premium_dream_setup):
         client = premium_dream_setup["client"]
         goal = premium_dream_setup["goal"]
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = client.post(
                 f"/api/dreams/goals/{goal.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",
@@ -1365,7 +1374,9 @@ class TestDreamActionsWithPremiumUser:
     def test_task_complete(self, premium_dream_setup):
         client = premium_dream_setup["client"]
         task = premium_dream_setup["task"]
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = client.post(
                 f"/api/dreams/tasks/{task.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",
@@ -1388,7 +1399,12 @@ class TestDreamActionsWithPremiumUser:
         goal = premium_dream_setup["goal"]
         resp = client.post(
             "/api/dreams/tasks/",
-            {"goal": str(goal.id), "title": "New Task", "order": 2, "duration_mins": 15},
+            {
+                "goal": str(goal.id),
+                "title": "New Task",
+                "order": 2,
+                "duration_mins": 15,
+            },
             format="json",
             HTTP_ORIGIN="https://stepora.app",
         )
@@ -1453,7 +1469,9 @@ class TestGoalActionsAPI:
     """Tests for GoalViewSet custom actions."""
 
     def test_goal_complete(self, dream_client, test_goal):
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = dream_client.post(
                 f"/api/dreams/goals/{test_goal.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",
@@ -1475,7 +1493,9 @@ class TestTaskActionsAPI:
     """Tests for TaskViewSet custom actions."""
 
     def test_task_complete(self, dream_client, test_task):
-        with patch("apps.users.services.AchievementService.check_achievements", return_value=[]):
+        with patch(
+            "apps.users.services.AchievementService.check_achievements", return_value=[]
+        ):
             resp = dream_client.post(
                 f"/api/dreams/tasks/{test_task.id}/complete/",
                 HTTP_ORIGIN="https://stepora.app",

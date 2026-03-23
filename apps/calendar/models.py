@@ -14,7 +14,9 @@ class CalendarEvent(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="calendar_events"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="calendar_events",
     )
     task = models.ForeignKey(
         "plans.Task",
@@ -169,7 +171,9 @@ class TimeBlock(models.Model):
     """User-defined time blocks for scheduling preferences."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_blocks")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_blocks"
+    )
 
     title = models.CharField(
         max_length=200,
@@ -185,7 +189,9 @@ class TimeBlock(models.Model):
         ("exercise", "Exercise"),
         ("blocked", "Blocked"),
     ]
-    block_type = models.CharField(max_length=20, choices=BLOCK_TYPE_CHOICES, default="personal")
+    block_type = models.CharField(
+        max_length=20, choices=BLOCK_TYPE_CHOICES, default="personal"
+    )
 
     # Recurring schedule
     day_of_week = models.IntegerField(help_text="0=Monday, 6=Sunday")
@@ -237,7 +243,9 @@ class TimeBlockTemplate(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="timeblock_templates"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="timeblock_templates",
     )
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
@@ -263,7 +271,9 @@ class GoogleCalendarIntegration(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="google_calendar"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="google_calendar",
     )
     access_token = EncryptedTextField()
     refresh_token = EncryptedTextField()
@@ -463,7 +473,9 @@ class Habit(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="habits")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="habits"
+    )
     name = EncryptedCharField(max_length=100)
     description = EncryptedTextField(blank=True, default="")
     frequency = models.CharField(

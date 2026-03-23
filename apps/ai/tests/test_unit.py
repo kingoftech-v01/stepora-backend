@@ -55,8 +55,13 @@ class TestAIConversationModel:
     def test_conversation_type_choices(self, ai_user):
         """All conversation type choices are valid."""
         valid_types = [
-            "dream_creation", "planning", "check_in",
-            "adjustment", "general", "motivation", "rescue",
+            "dream_creation",
+            "planning",
+            "check_in",
+            "adjustment",
+            "general",
+            "motivation",
+            "rescue",
         ]
         for conv_type in valid_types:
             conv = AIConversation.objects.create(
@@ -73,7 +78,9 @@ class TestAIConversationModel:
     def test_conversation_ordering(self, ai_user):
         """Conversations are ordered by -updated_at."""
         conv1 = AIConversation.objects.create(user=ai_user, conversation_type="general")
-        conv2 = AIConversation.objects.create(user=ai_user, conversation_type="planning")
+        conv2 = AIConversation.objects.create(
+            user=ai_user, conversation_type="planning"
+        )
         conversations = list(AIConversation.objects.filter(user=ai_user))
         # conv2 was created later, so it should be first
         assert conversations[0].id == conv2.id
@@ -94,9 +101,7 @@ class TestAIConversationModel:
 
     def test_add_message_with_tokens(self, ai_conversation):
         """add_message() with tokens_used metadata increments total_tokens_used."""
-        ai_conversation.add_message(
-            "assistant", "Hi!", metadata={"tokens_used": 50}
-        )
+        ai_conversation.add_message("assistant", "Hi!", metadata={"tokens_used": 50})
         ai_conversation.refresh_from_db()
         assert ai_conversation.total_tokens_used == 50
         assert ai_conversation.total_messages == 1
@@ -269,9 +274,19 @@ class TestAIConversationSerializer:
         serializer = AIConversationSerializer(ai_conversation)
         data = serializer.data
         expected_fields = {
-            "id", "user", "dream", "dream_title", "title", "is_pinned",
-            "conversation_type", "total_messages", "total_tokens_used",
-            "is_active", "last_message", "created_at", "updated_at",
+            "id",
+            "user",
+            "dream",
+            "dream_title",
+            "title",
+            "is_pinned",
+            "conversation_type",
+            "total_messages",
+            "total_tokens_used",
+            "is_active",
+            "last_message",
+            "created_at",
+            "updated_at",
         }
         assert set(data.keys()) == expected_fields
 
@@ -357,7 +372,6 @@ class TestAIMessageCreateSerializer:
 # ══════════════════════════════════════════════════════════════════════
 #  API ENDPOINT TESTS — AI
 # ══════════════════════════════════════════════════════════════════════
-
 
 
 @pytest.mark.django_db

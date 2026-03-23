@@ -99,7 +99,10 @@ class TestCalendarEventModel:
             end_time=now + timedelta(hours=2),
         )
         events = list(CalendarEvent.objects.filter(user=cal_user))
-        assert events[0].title == "Earlier" or events[0].start_time <= events[-1].start_time
+        assert (
+            events[0].title == "Earlier"
+            or events[0].start_time <= events[-1].start_time
+        )
 
     def test_reminders_json_field(self, cal_user):
         """Multiple reminders can be stored as JSON."""
@@ -192,9 +195,7 @@ class TestTimeBlockModel:
             start_time=time(10, 0),
             end_time=time(11, 0),
         )
-        blocks = list(
-            TimeBlock.objects.filter(user=cal_user, day_of_week=2)
-        )
+        blocks = list(TimeBlock.objects.filter(user=cal_user, day_of_week=2))
         assert blocks[0].start_time <= blocks[-1].start_time
 
     def test_is_active_default(self, time_block):
@@ -212,7 +213,6 @@ class TestTimeBlockModel:
 # ══════════════════════════════════════════════════════════════════════
 #  API ENDPOINT TESTS — Calendar
 # ══════════════════════════════════════════════════════════════════════
-
 
 
 @pytest.mark.django_db

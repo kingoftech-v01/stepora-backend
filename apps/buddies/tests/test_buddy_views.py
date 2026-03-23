@@ -26,6 +26,7 @@ from apps.users.models import User
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+
 def _make_premium_user(email, display_name="PremiumUser"):
     """Create a user with an active premium subscription."""
     user = User.objects.create_user(
@@ -53,6 +54,7 @@ def _make_client(user):
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def user1(db):
@@ -107,6 +109,7 @@ def pending_pairing(db, user1, user3):
 
 # ── Current buddy ───────────────────────────────────────────────────
 
+
 class TestCurrentBuddy:
     def test_current_no_buddy(self, client1):
         resp = client1.get("/api/v1/buddies/current/")
@@ -127,6 +130,7 @@ class TestCurrentBuddy:
 
 # ── Find match ───────────────────────────────────────────────────────
 
+
 class TestFindMatch:
     def test_find_match_success(self, client1, user2):
         resp = client1.post("/api/v1/buddies/find-match/")
@@ -141,6 +145,7 @@ class TestFindMatch:
 
 
 # ── AI matches ───────────────────────────────────────────────────────
+
 
 class TestAIMatches:
     def test_ai_matches_already_paired(self, client1, active_pairing):
@@ -159,6 +164,7 @@ class TestAIMatches:
 
 # ── Pair ─────────────────────────────────────────────────────────────
 
+
 class TestPair:
     def test_pair_success(self, client1, user2):
         resp = client1.post("/api/v1/buddies/pair/", {"partner_id": str(user2.id)})
@@ -175,6 +181,7 @@ class TestPair:
 
     def test_pair_partner_not_found(self, client1):
         import uuid
+
         resp = client1.post("/api/v1/buddies/pair/", {"partner_id": str(uuid.uuid4())})
         assert resp.status_code == 404
 
@@ -185,6 +192,7 @@ class TestPair:
 
 
 # ── Accept / Reject ──────────────────────────────────────────────────
+
 
 class TestAcceptReject:
     def test_accept(self, client3, pending_pairing):
@@ -211,6 +219,7 @@ class TestAcceptReject:
 
 # ── Progress ─────────────────────────────────────────────────────────
 
+
 class TestProgress:
     def test_progress_success(self, client1, active_pairing):
         resp = client1.get(f"/api/v1/buddies/{active_pairing.id}/progress/")
@@ -225,11 +234,13 @@ class TestProgress:
 
     def test_progress_not_found(self, client1):
         import uuid
+
         resp = client1.get(f"/api/v1/buddies/{uuid.uuid4()}/progress/")
         assert resp.status_code == 404
 
 
 # ── Encourage ────────────────────────────────────────────────────────
+
 
 class TestEncourage:
     def test_encourage_success(self, client1, active_pairing):
@@ -257,6 +268,7 @@ class TestEncourage:
 
     def test_encourage_not_found(self, client1):
         import uuid
+
         resp = client1.post(
             f"/api/v1/buddies/{uuid.uuid4()}/encourage/",
             {"message": "Hey"},
@@ -275,6 +287,7 @@ class TestEncourage:
 
 # ── Destroy (end pairing) ───────────────────────────────────────────
 
+
 class TestDestroyPairing:
     def test_destroy_success(self, client1, active_pairing):
         resp = client1.delete(f"/api/v1/buddies/{active_pairing.id}/")
@@ -289,6 +302,7 @@ class TestDestroyPairing:
 
 # ── History ──────────────────────────────────────────────────────────
 
+
 class TestHistory:
     def test_history_empty(self, client1):
         resp = client1.get("/api/v1/buddies/history/")
@@ -302,6 +316,7 @@ class TestHistory:
 
 
 # ── Contracts ────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def contract_data(active_pairing):
@@ -338,13 +353,17 @@ class TestContractCreate:
 class TestContractAccept:
     def test_accept_success(self, client2, client1, contract_data):
         # user1 creates, user2 accepts
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         resp = client2.post(f"/api/v1/buddies/contracts/{contract_id}/accept/")
         assert resp.status_code == 200
 
     def test_accept_by_creator_fails(self, client1, contract_data):
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         resp = client1.post(f"/api/v1/buddies/contracts/{contract_id}/accept/")
         assert resp.status_code == 400
@@ -352,7 +371,9 @@ class TestContractAccept:
 
 class TestContractCheckIn:
     def test_checkin_success(self, client1, contract_data):
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         resp = client1.post(
             f"/api/v1/buddies/contracts/{contract_id}/check-in/",
@@ -362,7 +383,9 @@ class TestContractCheckIn:
         assert resp.status_code == 201
 
     def test_checkin_not_in_pairing(self, client3, client1, contract_data):
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         resp = client3.post(
             f"/api/v1/buddies/contracts/{contract_id}/check-in/",
@@ -374,7 +397,9 @@ class TestContractCheckIn:
 
 class TestContractProgress:
     def test_progress_success(self, client1, contract_data):
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         # Submit a check-in first
         client1.post(
@@ -388,13 +413,16 @@ class TestContractProgress:
         assert "user_check_ins" in resp.data
 
     def test_progress_not_in_pairing(self, client3, client1, contract_data):
-        create_resp = client1.post("/api/v1/buddies/contracts/", contract_data, format="json")
+        create_resp = client1.post(
+            "/api/v1/buddies/contracts/", contract_data, format="json"
+        )
         contract_id = create_resp.data["contract"]["id"]
         resp = client3.get(f"/api/v1/buddies/contracts/{contract_id}/progress/")
         assert resp.status_code == 403
 
 
 # ── Permission check ─────────────────────────────────────────────────
+
 
 class TestBuddyPermissions:
     def test_unauthenticated(self, db):

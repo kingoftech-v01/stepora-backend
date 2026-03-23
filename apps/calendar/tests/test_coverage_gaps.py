@@ -11,7 +11,7 @@ template apply/save/presets, and Celery task edge cases.
 
 import io
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from datetime import timezone as dt_tz
 from unittest.mock import MagicMock, patch
 
@@ -45,7 +45,6 @@ from apps.calendar.views import (
 from apps.dreams.models import Dream, FocusSession
 from apps.plans.models import Goal, Task
 from apps.users.models import User
-
 
 # ─── Fixtures ───────────────────────────────────────────────────
 
@@ -607,9 +606,7 @@ class TestHelperFunctions:
         task_mock.deadline_date = None
         task_mock.expected_date = None
         now = datetime(2026, 3, 22, 8, 0, tzinfo=dt_tz.utc)
-        reason = _build_reason(
-            9, productivity, 3, task_mock, now.date(), now
-        )
+        reason = _build_reason(9, productivity, 3, task_mock, now.date(), now)
         assert isinstance(reason, str)
         assert len(reason) > 0
 
@@ -751,9 +748,7 @@ class TestIDOR:
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_idor_template_delete(self, client2, template):
-        resp = client2.delete(
-            f"/api/calendar/timeblock-templates/{template.id}/"
-        )
+        resp = client2.delete(f"/api/calendar/timeblock-templates/{template.id}/")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_idor_share_revoke_not_owner(self, client2, user, user2):
@@ -784,9 +779,7 @@ class TestIDOR:
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_idor_list_exceptions(self, client2, recurring_event):
-        resp = client2.get(
-            f"/api/calendar/events/{recurring_event.id}/exceptions/"
-        )
+        resp = client2.get(f"/api/calendar/events/{recurring_event.id}/exceptions/")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -831,9 +824,7 @@ class TestEventConflicts:
             "start_time": event1.start_time.isoformat(),
             "end_time": event1.end_time.isoformat(),
         }
-        resp = client.put(
-            f"/api/calendar/events/{event2.id}/", data, format="json"
-        )
+        resp = client.put(f"/api/calendar/events/{event2.id}/", data, format="json")
         assert resp.status_code == status.HTTP_409_CONFLICT
 
     def test_reschedule_event_conflict_returns_409(self, client, user):
@@ -900,12 +891,8 @@ class TestEventConflicts:
         resp = client.post(
             "/api/calendar/events/check-conflicts/",
             {
-                "start_time": monday.replace(
-                    hour=12, minute=0, second=0
-                ).isoformat(),
-                "end_time": monday.replace(
-                    hour=13, minute=0, second=0
-                ).isoformat(),
+                "start_time": monday.replace(hour=12, minute=0, second=0).isoformat(),
+                "end_time": monday.replace(hour=13, minute=0, second=0).isoformat(),
             },
             format="json",
         )
@@ -953,9 +940,7 @@ class TestRecurringEventActions:
             original_date=timezone.now().date(),
             skip_occurrence=True,
         )
-        resp = client.get(
-            f"/api/calendar/events/{recurring_event.id}/exceptions/"
-        )
+        resp = client.get(f"/api/calendar/events/{recurring_event.id}/exceptions/")
         assert resp.status_code == status.HTTP_200_OK
         assert len(resp.data) >= 1
 
@@ -1150,9 +1135,7 @@ class TestHabitTracker:
         completed = 0
         while completed < 5:
             if check.weekday() < 5:  # weekday
-                HabitCompletion.objects.create(
-                    habit=habit, date=check, count=1
-                )
+                HabitCompletion.objects.create(habit=habit, date=check, count=1)
                 completed += 1
             check -= timedelta(days=1)
 
@@ -1675,9 +1658,7 @@ class TestCalendarViewEndpoints:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_calendar_view_invalid_date(self, client):
-        resp = client.get(
-            "/api/calendar/view/", {"start": "invalid", "end": "invalid"}
-        )
+        resp = client.get("/api/calendar/view/", {"start": "invalid", "end": "invalid"})
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_calendar_today(self, client):
@@ -1733,9 +1714,7 @@ class TestCalendarViewEndpoints:
         assert resp.status_code == status.HTTP_200_OK
 
     def test_schedule_score_invalid_week(self, client):
-        resp = client.get(
-            "/api/calendar/schedule-score/", {"week": "invalid"}
-        )
+        resp = client.get("/api/calendar/schedule-score/", {"week": "invalid"})
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_daily_summary(self, client):
@@ -1867,9 +1846,7 @@ class TestCalendarViewEndpoints:
         assert resp.status_code == status.HTTP_200_OK
 
     def test_reschedule_task_missing_params(self, client):
-        resp = client.post(
-            "/api/calendar/reschedule/", {}, format="json"
-        )
+        resp = client.post("/api/calendar/reschedule/", {}, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_reschedule_task_not_found(self, client):
@@ -2021,9 +1998,7 @@ class TestBatchAndExport:
         )
 
     def test_export_invalid_date(self, client):
-        resp = client.get(
-            "/api/calendar/export/?start_date=invalid&end_date=invalid"
-        )
+        resp = client.get("/api/calendar/export/?start_date=invalid&end_date=invalid")
         assert resp.status_code in (
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_404_NOT_FOUND,
@@ -2094,9 +2069,7 @@ class TestTemplateOperations:
     """Test template apply, save-current, presets."""
 
     def test_apply_template(self, client, template):
-        resp = client.post(
-            f"/api/calendar/timeblock-templates/{template.id}/apply/"
-        )
+        resp = client.post(f"/api/calendar/timeblock-templates/{template.id}/apply/")
         assert resp.status_code == status.HTTP_200_OK
         assert "blocks" in resp.data
         assert resp.data["count"] == 2
@@ -2175,9 +2148,7 @@ class TestEventSearch:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_search_no_results(self, client, event):
-        resp = client.get(
-            "/api/calendar/events/search/", {"q": "nonexistent_xyz"}
-        )
+        resp = client.get("/api/calendar/events/search/", {"q": "nonexistent_xyz"})
         assert resp.status_code == status.HTTP_200_OK
         assert len(resp.data) == 0
 
@@ -2353,9 +2324,7 @@ class TestModelEdgeCases:
 
     def test_habit_completion_str(self, habit):
         today = timezone.now().date()
-        comp = HabitCompletion.objects.create(
-            habit=habit, date=today, count=1
-        )
+        comp = HabitCompletion.objects.create(habit=habit, date=today, count=1)
         assert "Gap Habit" in str(comp)
 
     def test_calendar_share_str(self, user, user2):

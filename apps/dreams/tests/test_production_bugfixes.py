@@ -52,9 +52,7 @@ class TestCreatedAtFieldInSubscriptionsTasks:
         from apps.subscriptions.tasks import send_free_user_upgrade_reminders
 
         # Patch to avoid actual notification sending
-        with patch(
-            "apps.subscriptions.tasks._send_upgrade_push"
-        ) as mock_push:
+        with patch("apps.subscriptions.tasks._send_upgrade_push") as mock_push:
             mock_push.delay = Mock()
             # This should NOT raise FieldError about date_joined
             send_free_user_upgrade_reminders()

@@ -24,7 +24,10 @@ from rest_framework.test import APIClient
 from apps.dreams.models import CalibrationResponse, Dream
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
-from core.ai_validators import CalibrationQuestionSchema, CalibrationQuestionsResponseSchema
+from core.ai_validators import (
+    CalibrationQuestionSchema,
+    CalibrationQuestionsResponseSchema,
+)
 
 # ───────────────────────────────────────────────────────────────────
 # Fixtures
@@ -147,17 +150,24 @@ class TestCalibrationResume:
 
         # Create existing unanswered questions
         CalibrationResponse.objects.create(
-            dream=cal_dream, question="Existing Q1", question_number=1, category="motivation"
+            dream=cal_dream,
+            question="Existing Q1",
+            question_number=1,
+            category="motivation",
         )
 
         # Mock in case the view falls through to AI (EncryptedField filter quirk)
         mock_gen.return_value = {
             "questions": [{"question": "Fallback Q", "category": "test"}],
-            "sufficient": False, "confidence_score": 0.2,
+            "sufficient": False,
+            "confidence_score": 0.2,
         }
         result = CalibrationQuestionsResponseSchema(
-            questions=[CalibrationQuestionSchema(question="Fallback Q", category="test")],
-            sufficient=False, confidence_score=0.2,
+            questions=[
+                CalibrationQuestionSchema(question="Fallback Q", category="test")
+            ],
+            sufficient=False,
+            confidence_score=0.2,
         )
         mock_validate.return_value = result
 
@@ -224,7 +234,11 @@ class TestCalibrationStatusGuard:
 
         response = cal_client.post(
             f"/api/dreams/dreams/{cal_dream.id}/answer_calibration/",
-            {"question": "test q", "answer": "This is a valid answer", "questionNumber": 1},
+            {
+                "question": "test q",
+                "answer": "This is a valid answer",
+                "questionNumber": 1,
+            },
             format="json",
         )
         # Should not be 400 (guard should not block in_progress)
@@ -282,7 +296,9 @@ class TestCalibrationRefusal:
         }
         result = CalibrationQuestionsResponseSchema(
             questions=[
-                CalibrationQuestionSchema(question="What is your timeline?", category="timeline"),
+                CalibrationQuestionSchema(
+                    question="What is your timeline?", category="timeline"
+                ),
             ],
             sufficient=False,
             confidence_score=0.2,
@@ -329,7 +345,11 @@ class TestCalibrationMinLength:
 
         response = cal_client.post(
             f"/api/dreams/dreams/{cal_dream.id}/answer_calibration/",
-            {"question": "test q", "answer": "This is a valid answer that is long enough", "questionNumber": 1},
+            {
+                "question": "test q",
+                "answer": "This is a valid answer that is long enough",
+                "questionNumber": 1,
+            },
             format="json",
         )
         # Should not be rejected for length
@@ -398,7 +418,11 @@ class TestCalibrationDoubleAnswer:
 
         response = cal_client.post(
             f"/api/dreams/dreams/{cal_dream.id}/answer_calibration/",
-            {"question": "test q", "answer": "Second answer attempt", "questionNumber": 1},
+            {
+                "question": "test q",
+                "answer": "Second answer attempt",
+                "questionNumber": 1,
+            },
             format="json",
         )
         assert response.status_code == 400
@@ -473,15 +497,27 @@ class TestCalibrationConcurrencyLock:
         # Ensure no stale lock
         cache.delete(lock_key)
 
-        with patch("apps.dreams.views.validate_calibration_questions") as mock_validate, \
-             patch("integrations.openai_service.OpenAIService.generate_calibration_questions") as mock_gen:
+        with patch(
+            "apps.dreams.views.validate_calibration_questions"
+        ) as mock_validate, patch(
+            "integrations.openai_service.OpenAIService.generate_calibration_questions"
+        ) as mock_gen:
             mock_gen.return_value = {
-                "questions": [{"question": "What is your main motivation?", "category": "motivation"}],
+                "questions": [
+                    {
+                        "question": "What is your main motivation?",
+                        "category": "motivation",
+                    }
+                ],
                 "sufficient": False,
                 "confidence_score": 0.2,
             }
             mock_validate.return_value = CalibrationQuestionsResponseSchema(
-                questions=[CalibrationQuestionSchema(question="What is your main motivation?", category="motivation")],
+                questions=[
+                    CalibrationQuestionSchema(
+                        question="What is your main motivation?", category="motivation"
+                    )
+                ],
                 sufficient=False,
                 confidence_score=0.2,
             )
@@ -540,12 +576,18 @@ class TestStartCalibrationGuards:
         )
 
         mock_gen.return_value = {
-            "questions": [{"question": "Fallback question here", "category": "motivation"}],
+            "questions": [
+                {"question": "Fallback question here", "category": "motivation"}
+            ],
             "sufficient": False,
             "confidence_score": 0.2,
         }
         mock_validate.return_value = CalibrationQuestionsResponseSchema(
-            questions=[CalibrationQuestionSchema(question="Fallback question here", category="motivation")],
+            questions=[
+                CalibrationQuestionSchema(
+                    question="Fallback question here", category="motivation"
+                )
+            ],
             sufficient=False,
             confidence_score=0.2,
         )

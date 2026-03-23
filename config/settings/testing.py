@@ -55,6 +55,10 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Enable search feature flag in tests (so existing search tests pass).
+# Individual tests use @override_settings(USE_SEARCH=False) to test the disabled path.
+USE_SEARCH = True
+
 # Disable Elasticsearch auto-sync in tests (no ES server available)
 ELASTICSEARCH_DSL_AUTOSYNC = False
 ELASTICSEARCH_DSL_SIGNAL_PROCESSOR = (

@@ -88,7 +88,16 @@ class TestJoinCircle:
         user2 = User.objects.create_user(
             email="joiner@example.com", password="testpass123"
         )
-        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="pro",
+            defaults={
+                "name": "Pro",
+                "price_monthly": 29.99,
+                "is_active": True,
+                "has_circles": True,
+                "has_circle_create": True,
+            },
+        )
         Subscription.objects.update_or_create(
             user=user2,
             defaults={
@@ -105,9 +114,7 @@ class TestJoinCircle:
             f"/api/circles/circles/{test_circle.id}/join/",
         )
         assert response.status_code == status.HTTP_200_OK
-        assert CircleMembership.objects.filter(
-            circle=test_circle, user=user2
-        ).exists()
+        assert CircleMembership.objects.filter(circle=test_circle, user=user2).exists()
 
     def test_join_circle_already_member(
         self, circle_pro_client, test_circle, circle_pro_user
@@ -224,7 +231,16 @@ class TestLeaveCircle:
         user = User.objects.create_user(
             email="leaver@example.com", password="testpass123"
         )
-        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="pro",
+            defaults={
+                "name": "Pro",
+                "price_monthly": 29.99,
+                "is_active": True,
+                "has_circles": True,
+                "has_circle_create": True,
+            },
+        )
         Subscription.objects.update_or_create(
             user=user,
             defaults={
@@ -234,14 +250,10 @@ class TestLeaveCircle:
                 "current_period_end": timezone.now() + timedelta(days=30),
             },
         )
-        CircleMembership.objects.create(
-            circle=test_circle, user=user, role="member"
-        )
+        CircleMembership.objects.create(circle=test_circle, user=user, role="member")
         client = APIClient()
         client.force_authenticate(user=user)
-        response = client.post(
-            f"/api/circles/circles/{test_circle.id}/leave/"
-        )
+        response = client.post(f"/api/circles/circles/{test_circle.id}/leave/")
         assert response.status_code == status.HTTP_200_OK
         assert not CircleMembership.objects.filter(
             circle=test_circle, user=user
@@ -256,7 +268,16 @@ class TestLeaveCircle:
         user = User.objects.create_user(
             email="notmember@example.com", password="testpass123"
         )
-        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="pro",
+            defaults={
+                "name": "Pro",
+                "price_monthly": 29.99,
+                "is_active": True,
+                "has_circles": True,
+                "has_circle_create": True,
+            },
+        )
         Subscription.objects.update_or_create(
             user=user,
             defaults={
@@ -268,9 +289,7 @@ class TestLeaveCircle:
         )
         client = APIClient()
         client.force_authenticate(user=user)
-        response = client.post(
-            f"/api/circles/circles/{test_circle.id}/leave/"
-        )
+        response = client.post(f"/api/circles/circles/{test_circle.id}/leave/")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_leave_circle_as_sole_admin_auto_transfers(
@@ -283,7 +302,16 @@ class TestLeaveCircle:
         user2 = User.objects.create_user(
             email="leaver_member@example.com", password="testpass123"
         )
-        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="pro",
+            defaults={
+                "name": "Pro",
+                "price_monthly": 29.99,
+                "is_active": True,
+                "has_circles": True,
+                "has_circle_create": True,
+            },
+        )
         Subscription.objects.update_or_create(
             user=user2,
             defaults={
@@ -293,9 +321,7 @@ class TestLeaveCircle:
                 "current_period_end": timezone.now() + timedelta(days=30),
             },
         )
-        CircleMembership.objects.create(
-            circle=test_circle, user=user2, role="member"
-        )
+        CircleMembership.objects.create(circle=test_circle, user=user2, role="member")
         response = circle_pro_client.post(
             f"/api/circles/circles/{test_circle.id}/leave/"
         )
@@ -337,7 +363,9 @@ class TestCircleChallenges:
         )
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_create_challenge_as_non_admin(self, circle_client, test_circle, circle_user):
+    def test_create_challenge_as_non_admin(
+        self, circle_client, test_circle, circle_user
+    ):
         """Non-admin member cannot create a challenge."""
         CircleMembership.objects.create(
             circle=test_circle, user=circle_user, role="member"
@@ -371,9 +399,7 @@ class TestCircleFeedNonMember:
 
     def test_feed_non_member(self, circle_client, test_circle):
         """Non-member cannot view circle feed."""
-        response = circle_client.get(
-            f"/api/circles/circles/{test_circle.id}/feed/"
-        )
+        response = circle_client.get(f"/api/circles/circles/{test_circle.id}/feed/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -385,25 +411,19 @@ class TestCircleRetrieve:
 
     def test_retrieve_public_circle(self, circle_pro_client, test_circle):
         """Retrieve details of a public circle."""
-        response = circle_pro_client.get(
-            f"/api/circles/circles/{test_circle.id}/"
-        )
+        response = circle_pro_client.get(f"/api/circles/circles/{test_circle.id}/")
         assert response.status_code == status.HTTP_200_OK
         assert "circle" in response.data
 
     def test_retrieve_private_circle_non_member(self, circle_client, private_circle):
         """Non-member cannot retrieve private circle details."""
-        response = circle_client.get(
-            f"/api/circles/circles/{private_circle.id}/"
-        )
+        response = circle_client.get(f"/api/circles/circles/{private_circle.id}/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_retrieve_nonexistent_circle(self, circle_pro_client):
         """Retrieve nonexistent circle returns 404."""
 
-        response = circle_pro_client.get(
-            f"/api/circles/circles/{uuid.uuid4()}/"
-        )
+        response = circle_pro_client.get(f"/api/circles/circles/{uuid.uuid4()}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -425,16 +445,12 @@ class TestCircleDelete:
         CircleMembership.objects.create(
             circle=circle, user=circle_pro_user, role="admin"
         )
-        response = circle_pro_client.delete(
-            f"/api/circles/circles/{circle.id}/"
-        )
+        response = circle_pro_client.delete(f"/api/circles/circles/{circle.id}/")
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_delete_circle_non_admin(self, circle_client, test_circle):
         """Non-admin cannot delete circle."""
-        response = circle_client.delete(
-            f"/api/circles/circles/{test_circle.id}/"
-        )
+        response = circle_client.delete(f"/api/circles/circles/{test_circle.id}/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -446,23 +462,17 @@ class TestCircleListFilters:
 
     def test_list_my_circles(self, circle_pro_client, test_circle):
         """List user's circles with 'my' filter."""
-        response = circle_pro_client.get(
-            "/api/circles/circles/?filter=my"
-        )
+        response = circle_pro_client.get("/api/circles/circles/?filter=my")
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_public_circles(self, circle_pro_client, test_circle):
         """List public circles."""
-        response = circle_pro_client.get(
-            "/api/circles/circles/?filter=public"
-        )
+        response = circle_pro_client.get("/api/circles/circles/?filter=public")
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_recommended_circles(self, circle_pro_client, test_circle):
         """List recommended circles."""
-        response = circle_pro_client.get(
-            "/api/circles/circles/?filter=recommended"
-        )
+        response = circle_pro_client.get("/api/circles/circles/?filter=recommended")
         assert response.status_code == status.HTTP_200_OK
 
     def test_join_private_circle(self, test_circle, circle_user):
@@ -474,7 +484,16 @@ class TestCircleListFilters:
         test_circle.save()
 
         # Need pro plan to access circles
-        plan, _ = SubscriptionPlan.objects.get_or_create(slug="pro", defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True, "has_circles": True, "has_circle_create": True})
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            slug="pro",
+            defaults={
+                "name": "Pro",
+                "price_monthly": 29.99,
+                "is_active": True,
+                "has_circles": True,
+                "has_circle_create": True,
+            },
+        )
         Subscription.objects.update_or_create(
             user=circle_user,
             defaults={
@@ -487,9 +506,7 @@ class TestCircleListFilters:
 
         client = APIClient()
         client.force_authenticate(user=circle_user)
-        response = client.post(
-            f"/api/circles/circles/{test_circle.id}/join/"
-        )
+        response = client.post(f"/api/circles/circles/{test_circle.id}/join/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -566,8 +583,11 @@ class TestCircleMemberManagement:
     def test_promote_member(self, circle_pro_client, test_circle, circle_user):
         """Promote a member to moderator."""
         from apps.circles.models import CircleMembership
+
         membership = CircleMembership.objects.create(
-            circle=test_circle, user=circle_user, role="member",
+            circle=test_circle,
+            user=circle_user,
+            role="member",
         )
         response = circle_pro_client.post(
             f"/api/circles/circles/{test_circle.id}/members/{membership.id}/promote/"
@@ -580,8 +600,11 @@ class TestCircleMemberManagement:
     def test_demote_member(self, circle_pro_client, test_circle, circle_user):
         """Demote a moderator to member."""
         from apps.circles.models import CircleMembership
+
         membership = CircleMembership.objects.create(
-            circle=test_circle, user=circle_user, role="moderator",
+            circle=test_circle,
+            user=circle_user,
+            role="moderator",
         )
         response = circle_pro_client.post(
             f"/api/circles/circles/{test_circle.id}/members/{membership.id}/demote/"
@@ -594,8 +617,11 @@ class TestCircleMemberManagement:
     def test_remove_member(self, circle_pro_client, test_circle, circle_user):
         """Remove a member from circle."""
         from apps.circles.models import CircleMembership
+
         membership = CircleMembership.objects.create(
-            circle=test_circle, user=circle_user, role="member",
+            circle=test_circle,
+            user=circle_user,
+            role="member",
         )
         response = circle_pro_client.delete(
             f"/api/circles/circles/{test_circle.id}/members/{membership.id}/remove/"
@@ -663,9 +689,7 @@ class TestCircleChat:
 
     def test_chat_history(self, circle_pro_client, test_circle):
         """Get circle chat history."""
-        response = circle_pro_client.get(
-            f"/api/circles/circles/{test_circle.id}/chat/"
-        )
+        response = circle_pro_client.get(f"/api/circles/circles/{test_circle.id}/chat/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_chat_send(self, circle_pro_client, test_circle):
@@ -748,7 +772,9 @@ class TestChallengeEndpoints:
             status.HTTP_400_BAD_REQUEST,
         )
 
-    def test_challenge_leaderboard(self, circle_pro_client, test_circle, test_challenge):
+    def test_challenge_leaderboard(
+        self, circle_pro_client, test_circle, test_challenge
+    ):
         """Get challenge leaderboard."""
         response = circle_pro_client.get(
             f"/api/circles/circles/{test_circle.id}/challenges/{test_challenge.id}/leaderboard/"
@@ -767,7 +793,5 @@ class TestJoinByInviteCode:
 
     def test_join_invalid_code(self, circle_pro_client):
         """Join with invalid invite code returns 404."""
-        response = circle_pro_client.post(
-            "/api/circles/circles/join/INVALIDCODE/"
-        )
+        response = circle_pro_client.post("/api/circles/circles/join/INVALIDCODE/")
         assert response.status_code == status.HTTP_404_NOT_FOUND

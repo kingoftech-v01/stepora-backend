@@ -40,6 +40,7 @@ def _mock_stripe_signal():
     with patch("apps.subscriptions.services.StripeService.create_customer"):
         yield
 
+
 # ── Fixtures ────────────────────────────────────────────────────────
 
 
@@ -136,7 +137,9 @@ def extra_milestone(extra_dream):
 class TestDreamSerializerClassUpdateBranch:
     """Cover line 246: DreamUpdateSerializer for update/partial_update."""
 
-    def test_partial_update_uses_update_serializer(self, prem_client_extra, extra_dream):
+    def test_partial_update_uses_update_serializer(
+        self, prem_client_extra, extra_dream
+    ):
         """PATCH should use DreamUpdateSerializer (line 246)."""
         url = f"/api/dreams/dreams/{extra_dream.id}/"
         resp = prem_client_extra.patch(url, {"title": "Updated title"}, format="json")
@@ -304,7 +307,9 @@ class TestPDFExportImportErrorBranch:
 class TestGoalViewSetQuerysetFilter:
     """Cover line 2943: dream_id filter on goals."""
 
-    def test_goal_list_filtered_by_dream(self, prem_client_extra, extra_dream, extra_goal):
+    def test_goal_list_filtered_by_dream(
+        self, prem_client_extra, extra_dream, extra_goal
+    ):
         """Goals list with ?dream=<id> applies filter (line 2943)."""
         url = f"/api/dreams/goals/?dream={extra_dream.id}"
         resp = prem_client_extra.get(url)

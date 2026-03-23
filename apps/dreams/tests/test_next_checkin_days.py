@@ -59,7 +59,9 @@ def serialize_dream(dream, user):
 class TestAwaitingUser:
     def test_cannot_checkin_when_awaiting_user(self, dream, user):
         PlanCheckIn.objects.create(
-            dream=dream, status="awaiting_user", triggered_by="auto",
+            dream=dream,
+            status="awaiting_user",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -71,7 +73,9 @@ class TestAwaitingUser:
         dream.last_checkin_at = timezone.now() - timedelta(days=30)
         dream.save(update_fields=["last_checkin_at"])
         PlanCheckIn.objects.create(
-            dream=dream, status="awaiting_user", triggered_by="auto",
+            dream=dream,
+            status="awaiting_user",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -86,7 +90,9 @@ class TestAwaitingUser:
 class TestInProgressCheckin:
     def test_cannot_checkin_when_pending(self, dream, user):
         PlanCheckIn.objects.create(
-            dream=dream, status="pending", triggered_by="auto",
+            dream=dream,
+            status="pending",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -94,7 +100,9 @@ class TestInProgressCheckin:
 
     def test_cannot_checkin_when_questionnaire_generating(self, dream, user):
         PlanCheckIn.objects.create(
-            dream=dream, status="questionnaire_generating", triggered_by="auto",
+            dream=dream,
+            status="questionnaire_generating",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -102,7 +110,9 @@ class TestInProgressCheckin:
 
     def test_cannot_checkin_when_ai_processing(self, dream, user):
         PlanCheckIn.objects.create(
-            dream=dream, status="ai_processing", triggered_by="auto",
+            dream=dream,
+            status="ai_processing",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -122,7 +132,9 @@ class TestNeverCheckedIn:
     def test_can_checkin_with_only_failed_checkin(self, dream, user):
         """A failed check-in doesn't block; last_checkin_at stays None."""
         PlanCheckIn.objects.create(
-            dream=dream, status="failed", triggered_by="auto",
+            dream=dream,
+            status="failed",
+            triggered_by="auto",
             scheduled_for=timezone.now(),
         )
         can, days = serialize_dream(dream, user)
@@ -216,10 +228,18 @@ class TestCheckin6DaysAgo:
 class TestMultipleDreamsIndependent:
     def test_each_dream_has_own_cooldown(self, user):
         dream1 = Dream.objects.create(
-            user=user, title="Dream 1", description="D1", category="career", plan_phase="partial"
+            user=user,
+            title="Dream 1",
+            description="D1",
+            category="career",
+            plan_phase="partial",
         )
         dream2 = Dream.objects.create(
-            user=user, title="Dream 2", description="D2", category="health", plan_phase="partial"
+            user=user,
+            title="Dream 2",
+            description="D2",
+            category="health",
+            plan_phase="partial",
         )
 
         # Check-in on dream1 today
@@ -242,8 +262,11 @@ class TestMultipleDreamsIndependent:
 class TestNoPlan:
     def test_cannot_checkin_without_plan(self, user):
         dream = Dream.objects.create(
-            user=user, title="No Plan Dream", description="NP",
-            category="career", plan_phase="none",
+            user=user,
+            title="No Plan Dream",
+            description="NP",
+            category="career",
+            plan_phase="none",
         )
         can, days = serialize_dream(dream, user)
         assert can is False

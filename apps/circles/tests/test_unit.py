@@ -270,7 +270,6 @@ class TestPostReactionModel:
 # ══════════════════════════════════════════════════════════════════════
 
 
-
 @pytest.mark.django_db
 class TestCircleAPI:
     """Tests for Circle API endpoints."""

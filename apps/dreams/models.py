@@ -219,7 +219,6 @@ class DreamTag(models.Model):
         return self.name
 
 
-
 class DreamTagging(models.Model):
     """M2M through model for Dream-Tag relationship."""
 
@@ -237,7 +236,6 @@ class DreamTagging(models.Model):
 
     def __str__(self):
         return f"{self.dream.title} - {self.tag.name}"
-
 
 
 class DreamTemplate(models.Model):
@@ -316,7 +314,6 @@ class DreamTemplate(models.Model):
         return f"Template: {self.title} ({self.category})"
 
 
-
 class DreamCollaborator(models.Model):
     """
     Tracks users who collaborate on a dream.
@@ -359,7 +356,6 @@ class DreamCollaborator(models.Model):
 
     def __str__(self):
         return f"{self.user.display_name or self.user.email} - {self.dream.title} ({self.role})"
-
 
 
 class SharedDream(models.Model):
@@ -408,7 +404,6 @@ class SharedDream(models.Model):
         return f"{self.dream.title} shared with {self.shared_with.display_name or self.shared_with.email}"
 
 
-
 class DreamJournal(models.Model):
     """Journal/notes entry associated with a dream."""
 
@@ -446,7 +441,6 @@ class DreamJournal(models.Model):
         return f"Journal: {label} ({self.dream.title})"
 
 
-
 class ProgressPhoto(models.Model):
     """Progress photo for visual tracking of dream progress via AI analysis."""
 
@@ -474,7 +468,6 @@ class ProgressPhoto(models.Model):
         return f"Progress photo for {self.dream.title} ({self.taken_at.strftime('%Y-%m-%d')})"
 
 
-
 class VisionBoardImage(models.Model):
     """Image in a dream's vision board gallery."""
 
@@ -500,4 +493,3 @@ class VisionBoardImage(models.Model):
 
     def __str__(self):
         return f"Vision: {self.dream.title} #{self.order}"
-

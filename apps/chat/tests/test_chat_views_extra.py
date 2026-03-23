@@ -83,9 +83,7 @@ def cc3(cu3):
 @pytest.fixture
 def conv(db, cu1, cu2):
     """Existing conversation between cu1 and cu2."""
-    return ChatConversation.objects.create(
-        user=cu1, target_user=cu2, title="Test Conv"
-    )
+    return ChatConversation.objects.create(user=cu1, target_user=cu2, title="Test Conv")
 
 
 @pytest.fixture
@@ -180,9 +178,7 @@ class TestSendMessageWebSocket:
         """Messages in a buddy conversation use buddy room name."""
         from apps.buddies.models import BuddyPairing
 
-        pairing = BuddyPairing.objects.create(
-            user1=cu1, user2=cu2, status="active"
-        )
+        pairing = BuddyPairing.objects.create(user1=cu1, user2=cu2, status="active")
         conv = ChatConversation.objects.create(
             user=cu1, target_user=cu2, buddy_pairing=pairing
         )
@@ -209,9 +205,7 @@ class TestCallInitiateWithBuddy:
         """Call with active buddy pairing broadcasts to buddy_chat room."""
         from apps.buddies.models import BuddyPairing
 
-        pairing = BuddyPairing.objects.create(
-            user1=cu1, user2=cu2, status="active"
-        )
+        pairing = BuddyPairing.objects.create(user1=cu1, user2=cu2, status="active")
         with patch("channels.layers.get_channel_layer") as mock_layer:
             mock_layer.return_value = None
             response = cc1.post(
@@ -263,7 +257,9 @@ class TestCallEndDuration:
         assert response.status_code == status.HTTP_200_OK
         ringing_call.refresh_from_db()
         # Without started_at, duration is not calculated
-        assert ringing_call.duration_seconds is None or ringing_call.duration_seconds == 0
+        assert (
+            ringing_call.duration_seconds is None or ringing_call.duration_seconds == 0
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -375,8 +371,9 @@ class TestAgoraEndpoints:
 
     def test_agora_rtm_token_not_configured(self, cc1):
         """Returns 503 when Agora is not configured."""
-        with patch("django.conf.settings.AGORA_APP_ID", ""), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", ""):
+        with patch("django.conf.settings.AGORA_APP_ID", ""), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", ""
+        ):
             response = cc1.post("/api/chat/agora/rtm-token/")
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -391,26 +388,32 @@ class TestAgoraEndpoints:
         mock_rtm_module.RtmTokenBuilder = mock_builder
         mock_rtm_module.Role_Rtm_User = 1
 
-        with patch.dict(sys.modules, {
-            "agora_token_builder": types.ModuleType("agora_token_builder"),
-            "agora_token_builder.RtmTokenBuilder": mock_rtm_module,
-        }), patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch.dict(
+            sys.modules,
+            {
+                "agora_token_builder": types.ModuleType("agora_token_builder"),
+                "agora_token_builder.RtmTokenBuilder": mock_rtm_module,
+            },
+        ), patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             response = cc1.post("/api/chat/agora/rtm-token/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["token"] == "fake-rtm-token"
 
     def test_agora_rtc_token_no_channel(self, cc1):
         """RTC token without channelName returns 400."""
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             response = cc1.post("/api/chat/agora/rtc-token/", {}, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_agora_rtc_token_invalid_channel(self, cc1):
         """RTC token with special chars returns 400."""
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             response = cc1.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": "invalid channel!@#"},
@@ -420,8 +423,9 @@ class TestAgoraEndpoints:
 
     def test_agora_rtc_token_not_authorized(self, cc1, cu1, cu2):
         """RTC token for unrelated channel returns 403."""
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             response = cc1.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": str(uuid.uuid4())},
@@ -443,11 +447,15 @@ class TestAgoraEndpoints:
         call = Call.objects.create(
             caller=cu1, callee=cu2, call_type="voice", status="ringing"
         )
-        with patch.dict(sys.modules, {
-            "agora_token_builder": types.ModuleType("agora_token_builder"),
-            "agora_token_builder.RtcTokenBuilder": mock_rtc_module,
-        }), patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch.dict(
+            sys.modules,
+            {
+                "agora_token_builder": types.ModuleType("agora_token_builder"),
+                "agora_token_builder.RtcTokenBuilder": mock_rtc_module,
+            },
+        ), patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             response = cc1.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": str(call.id)},
@@ -458,8 +466,9 @@ class TestAgoraEndpoints:
 
     def test_agora_rtc_token_not_configured(self, cc1):
         """Returns 503 when Agora is not configured."""
-        with patch("django.conf.settings.AGORA_APP_ID", ""), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", ""):
+        with patch("django.conf.settings.AGORA_APP_ID", ""), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", ""
+        ):
             response = cc1.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": "test-channel"},
@@ -547,9 +556,7 @@ class TestNotifyCallee:
         call = Call.objects.create(
             caller=cu1, callee=cu2, call_type="voice", status="ringing"
         )
-        viewset = __import__(
-            "apps.chat.views", fromlist=["CallViewSet"]
-        ).CallViewSet()
+        viewset = __import__("apps.chat.views", fromlist=["CallViewSet"]).CallViewSet()
         # Should not raise
         viewset._notify_callee(call, cu1)
 
@@ -570,9 +577,7 @@ class TestNotifyCallee:
         call = Call.objects.create(
             caller=cu1, callee=cu2, call_type="voice", status="ringing"
         )
-        viewset = __import__(
-            "apps.chat.views", fromlist=["CallViewSet"]
-        ).CallViewSet()
+        viewset = __import__("apps.chat.views", fromlist=["CallViewSet"]).CallViewSet()
         viewset._notify_callee(call, cu1)
         mock_fcm_instance.send_to_token.assert_called_once()
 

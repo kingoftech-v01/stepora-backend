@@ -24,7 +24,6 @@ from apps.subscriptions.models import (
 )
 from apps.users.models import User
 
-
 # ── sync_user_subscription_field ─────────────────────────────────────
 
 

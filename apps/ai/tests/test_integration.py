@@ -207,9 +207,7 @@ class TestAIConversationDelete:
 
     def test_delete_conversation(self, ai_client, ai_user):
         """Owner can delete their conversation."""
-        conv = AIConversation.objects.create(
-            user=ai_user, conversation_type="general"
-        )
+        conv = AIConversation.objects.create(user=ai_user, conversation_type="general")
         response = ai_client.delete(f"/api/ai/conversations/{conv.id}/")
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not AIConversation.objects.filter(id=conv.id).exists()
@@ -383,7 +381,9 @@ class TestAISendVoice:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.skip(reason="Cannot reliably mock file size in multipart upload without generating 25MB+ of data")
+    @pytest.mark.skip(
+        reason="Cannot reliably mock file size in multipart upload without generating 25MB+ of data"
+    )
     def test_send_voice_too_large(self, ai_client, ai_conversation):
         """Audio file exceeding 25MB is rejected."""
         pass
@@ -420,7 +420,10 @@ class TestAISendImage:
             "content": "This is an image of a cat",
             "tokens_used": 100,
         }
-        mock_ssrf.return_value = ("http://localhost/media/chat_images/test.png", "127.0.0.1")
+        mock_ssrf.return_value = (
+            "http://localhost/media/chat_images/test.png",
+            "127.0.0.1",
+        )
 
         # Create a minimal PNG file
         png_header = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -445,7 +448,9 @@ class TestAISendImage:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.skip(reason="Cannot reliably mock file size in multipart upload without generating 20MB+ of data")
+    @pytest.mark.skip(
+        reason="Cannot reliably mock file size in multipart upload without generating 20MB+ of data"
+    )
     def test_send_image_too_large(self, ai_client, ai_conversation):
         """Image file exceeding 20MB is rejected."""
         pass
@@ -571,7 +576,11 @@ class TestAIBranches:
             f"/api/ai/conversations/{ai_conversation.id}/branches/"
         )
         assert response.status_code == status.HTTP_200_OK
-        results = response.data if isinstance(response.data, list) else response.data.get("results", [])
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
         assert len(results) >= 1
 
     @patch("apps.ai.views.ContentModerationService")
@@ -710,9 +719,7 @@ class TestAIExport:
 
     def test_export_default_json(self, ai_client, ai_conversation, ai_message):
         """Default export format is JSON."""
-        response = ai_client.get(
-            f"/api/ai/conversations/{ai_conversation.id}/export/"
-        )
+        response = ai_client.get(f"/api/ai/conversations/{ai_conversation.id}/export/")
         assert response.status_code == status.HTTP_200_OK
         assert "conversation" in response.data
 
@@ -741,15 +748,11 @@ class TestAIPinLikeReact:
 
     def test_pin_conversation_toggle(self, ai_client, ai_conversation):
         """Toggle pin on conversation."""
-        response = ai_client.post(
-            f"/api/ai/conversations/{ai_conversation.id}/pin/"
-        )
+        response = ai_client.post(f"/api/ai/conversations/{ai_conversation.id}/pin/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_pinned"] is True
         # Toggle back
-        response = ai_client.post(
-            f"/api/ai/conversations/{ai_conversation.id}/pin/"
-        )
+        response = ai_client.post(f"/api/ai/conversations/{ai_conversation.id}/pin/")
         assert response.data["is_pinned"] is False
 
     def test_pin_message(self, ai_client, ai_conversation, ai_message):

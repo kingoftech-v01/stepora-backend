@@ -36,7 +36,10 @@ def premium_buddy_user1(buddy_user1):
     """Make buddy_user1 premium."""
     from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-    plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        slug="premium",
+        defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+    )
     Subscription.objects.update_or_create(
         user=buddy_user1,
         defaults={
@@ -62,7 +65,10 @@ def premium_buddy_user2(buddy_user2):
     """Make buddy_user2 premium."""
     from apps.subscriptions.models import Subscription, SubscriptionPlan
 
-    plan, _ = SubscriptionPlan.objects.get_or_create(slug="premium", defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True})
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        slug="premium",
+        defaults={"name": "Premium", "price_monthly": 9.99, "is_active": True},
+    )
     Subscription.objects.update_or_create(
         user=buddy_user2,
         defaults={
@@ -119,7 +125,9 @@ class TestGetCurrentBuddy:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["buddy"] is None
 
-    def test_current_with_active_buddy(self, premium_buddy_client, active_pairing, buddy_user2):
+    def test_current_with_active_buddy(
+        self, premium_buddy_client, active_pairing, buddy_user2
+    ):
         """Get current buddy with active pairing."""
         response = premium_buddy_client.get("/api/buddies/current/")
         assert response.status_code == status.HTTP_200_OK
@@ -151,9 +159,7 @@ class TestFindBuddy:
             status.HTTP_404_NOT_FOUND,
         )
 
-    def test_find_buddy_already_has_active(
-        self, premium_buddy_client, active_pairing
-    ):
+    def test_find_buddy_already_has_active(self, premium_buddy_client, active_pairing):
         """Find buddy when already has an active pairing."""
         response = premium_buddy_client.post("/api/buddies/find-match/")
         assert response.status_code in (
@@ -330,16 +336,12 @@ class TestBuddyAcceptReject:
 
     def test_accept_nonexistent(self, premium_buddy_client):
         """Accept nonexistent pairing returns 404."""
-        response = premium_buddy_client.post(
-            f"/api/buddies/{uuid.uuid4()}/accept/"
-        )
+        response = premium_buddy_client.post(f"/api/buddies/{uuid.uuid4()}/accept/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_reject_nonexistent(self, premium_buddy_client):
         """Reject nonexistent pairing returns 404."""
-        response = premium_buddy_client.post(
-            f"/api/buddies/{uuid.uuid4()}/reject/"
-        )
+        response = premium_buddy_client.post(f"/api/buddies/{uuid.uuid4()}/reject/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -385,9 +387,7 @@ class TestBuddyEnd:
 
     def test_end_pairing(self, premium_buddy_client, active_pairing):
         """End an active buddy pairing."""
-        response = premium_buddy_client.delete(
-            f"/api/buddies/{active_pairing.id}/"
-        )
+        response = premium_buddy_client.delete(f"/api/buddies/{active_pairing.id}/")
         assert response.status_code in (
             status.HTTP_200_OK,
             status.HTTP_204_NO_CONTENT,
@@ -395,9 +395,7 @@ class TestBuddyEnd:
 
     def test_end_nonexistent(self, premium_buddy_client):
         """End nonexistent pairing returns 404."""
-        response = premium_buddy_client.delete(
-            f"/api/buddies/{uuid.uuid4()}/"
-        )
+        response = premium_buddy_client.delete(f"/api/buddies/{uuid.uuid4()}/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 

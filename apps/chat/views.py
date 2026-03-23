@@ -99,7 +99,9 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"], url_path="start")
     def start(self, request):
         """Get or create a chat conversation with another user."""
-        target_user_id = request.data.get("target_user_id") or request.data.get("user_id")
+        target_user_id = request.data.get("target_user_id") or request.data.get(
+            "user_id"
+        )
         if not target_user_id:
             return Response(
                 {"error": _("target_user_id is required.")},
@@ -132,13 +134,10 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         # Get or create conversation (check both directions)
-        conv = (
-            ChatConversation.objects.filter(
-                Q(user=request.user, target_user=target)
-                | Q(user=target, target_user=request.user)
-            )
-            .first()
-        )
+        conv = ChatConversation.objects.filter(
+            Q(user=request.user, target_user=target)
+            | Q(user=target, target_user=request.user)
+        ).first()
 
         if conv:
             serializer = ChatConversationSerializer(conv, context={"request": request})
@@ -193,7 +192,11 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
             from channels.layers import get_channel_layer
 
             channel_layer = get_channel_layer()
-            room = f"buddy_chat_{conversation.buddy_pairing_id}" if conversation.buddy_pairing_id else f"chat_{conversation.id}"
+            room = (
+                f"buddy_chat_{conversation.buddy_pairing_id}"
+                if conversation.buddy_pairing_id
+                else f"chat_{conversation.id}"
+            )
             async_to_sync(channel_layer.group_send)(
                 room,
                 {
@@ -328,10 +331,7 @@ class CallViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"])
     def initiate(self, request):
         """Initiate a voice or video call."""
-        callee_id = (
-            request.data.get("callee_id")
-            or request.data.get("user_id")
-        )
+        callee_id = request.data.get("callee_id") or request.data.get("user_id")
         call_type = request.data.get("call_type", "voice")
 
         if not callee_id:

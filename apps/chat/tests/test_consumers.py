@@ -5,7 +5,6 @@ Uses channels.testing.WebsocketCommunicator to test connect/disconnect
 and message handling with mocked dependencies.
 """
 
-
 import pytest
 
 from apps.users.models import User

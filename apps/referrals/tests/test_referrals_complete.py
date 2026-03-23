@@ -20,13 +20,12 @@ from rest_framework.test import APIClient
 
 from apps.referrals.models import Referral, ReferralCode, ReferralReward
 from apps.referrals.services import (
-    REFERRER_XP_REWARD,
     REFERRED_XP_REWARD,
+    REFERRER_XP_REWARD,
     ReferralService,
 )
 from apps.referrals.views import REFERRALS_PER_REWARD
 from apps.users.models import User
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

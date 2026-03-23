@@ -1492,24 +1492,29 @@ def run_biweekly_checkins(self):
         now = timezone.now()
 
         # Find dreams eligible for check-in (7-day cooldown passed or never checked in)
-        eligible_dreams = Dream.objects.filter(
-            status="active",
-            plan_phase__in=["partial", "full"],
-        ).exclude(
-            # Exclude dreams with active check-ins
-            id__in=PlanCheckIn.objects.filter(
-                status__in=[
-                    "pending",
-                    "questionnaire_generating",
-                    "awaiting_user",
-                    "ai_processing",
-                ]
-            ).values("dream_id")
-        ).filter(
-            # Either never checked in, or last check-in was 7+ days ago
-            models.Q(last_checkin_at__isnull=True)
-            | models.Q(last_checkin_at__lte=now - timedelta(days=7))
-        ).select_related("user")
+        eligible_dreams = (
+            Dream.objects.filter(
+                status="active",
+                plan_phase__in=["partial", "full"],
+            )
+            .exclude(
+                # Exclude dreams with active check-ins
+                id__in=PlanCheckIn.objects.filter(
+                    status__in=[
+                        "pending",
+                        "questionnaire_generating",
+                        "awaiting_user",
+                        "ai_processing",
+                    ]
+                ).values("dream_id")
+            )
+            .filter(
+                # Either never checked in, or last check-in was 7+ days ago
+                models.Q(last_checkin_at__isnull=True)
+                | models.Q(last_checkin_at__lte=now - timedelta(days=7))
+            )
+            .select_related("user")
+        )
 
         reminder_count = 0
         for dream in eligible_dreams:
@@ -1529,15 +1534,13 @@ def run_biweekly_checkins(self):
                 user=dream.user,
                 notification_type="checkin_reminder",
                 title="Check-in available",
-                body=f"Your dream \"{dream.title}\" is ready for a check-in!",
+                body=f'Your dream "{dream.title}" is ready for a check-in!',
                 data={"dream_id": str(dream.id)},
                 action_url=f"/dream/{dream.id}",
             )
             reminder_count += 1
 
-        logger.info(
-            f"run_biweekly_checkins: sent {reminder_count} check-in reminders"
-        )
+        logger.info(f"run_biweekly_checkins: sent {reminder_count} check-in reminders")
         return {"reminders_sent": reminder_count}
 
     except Exception as e:

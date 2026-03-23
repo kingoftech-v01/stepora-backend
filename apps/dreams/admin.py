@@ -82,8 +82,13 @@ class DreamTemplateAdmin(admin.ModelAdmin):
     """Admin interface for DreamTemplate model."""
 
     list_display = [
-        "title", "category", "difficulty", "is_featured", "is_active",
-        "usage_count", "created_at",
+        "title",
+        "category",
+        "difficulty",
+        "is_featured",
+        "is_active",
+        "usage_count",
+        "created_at",
     ]
     list_filter = ["category", "difficulty", "is_featured", "is_active"]
     search_fields = ["title", "description"]

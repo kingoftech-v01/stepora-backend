@@ -49,12 +49,8 @@ class TestChatConversationModel:
 
     def test_conversation_ordering(self, chat_user, chat_user2):
         """Conversations are ordered by -updated_at."""
-        conv1 = ChatConversation.objects.create(
-            user=chat_user, target_user=chat_user2
-        )
-        conv2 = ChatConversation.objects.create(
-            user=chat_user, target_user=chat_user2
-        )
+        conv1 = ChatConversation.objects.create(user=chat_user, target_user=chat_user2)
+        conv2 = ChatConversation.objects.create(user=chat_user, target_user=chat_user2)
         conversations = list(ChatConversation.objects.filter(user=chat_user))
         # conv2 created later, should be first
         assert conversations[0].id == conv2.id
@@ -149,7 +145,9 @@ class TestMessageReadStatusModel:
         assert read_status.conversation == chat_conversation
         assert read_status.last_read_message == chat_message
 
-    def test_read_status_unique_constraint(self, chat_user, chat_conversation, chat_message):
+    def test_read_status_unique_constraint(
+        self, chat_user, chat_conversation, chat_message
+    ):
         """Only one read status per user per conversation."""
         MessageReadStatus.objects.create(
             user=chat_user,
@@ -215,8 +213,13 @@ class TestCallModel:
     def test_call_status_choices(self, chat_user, chat_user2):
         """All call status choices are valid."""
         valid_statuses = [
-            "ringing", "accepted", "in_progress",
-            "completed", "rejected", "missed", "cancelled",
+            "ringing",
+            "accepted",
+            "in_progress",
+            "completed",
+            "rejected",
+            "missed",
+            "cancelled",
         ]
         for call_status in valid_statuses:
             call = Call.objects.create(
@@ -236,12 +239,10 @@ class TestCallModel:
     def test_call_ordering(self, chat_user, chat_user2):
         """Calls are ordered by -created_at."""
         call1 = Call.objects.create(
-            caller=chat_user, callee=chat_user2,
-            call_type="voice", status="completed"
+            caller=chat_user, callee=chat_user2, call_type="voice", status="completed"
         )
         call2 = Call.objects.create(
-            caller=chat_user, callee=chat_user2,
-            call_type="video", status="ringing"
+            caller=chat_user, callee=chat_user2, call_type="video", status="ringing"
         )
         calls = list(Call.objects.all())
         assert calls[0].id == call2.id  # More recent first
@@ -277,9 +278,16 @@ class TestChatConversationSerializerTargetUser:
         )
         data = serializer.data
         expected_fields = {
-            "id", "user", "title", "total_messages", "is_active",
-            "last_message", "unread_count", "target_user",
-            "created_at", "updated_at",
+            "id",
+            "user",
+            "title",
+            "total_messages",
+            "is_active",
+            "last_message",
+            "unread_count",
+            "target_user",
+            "created_at",
+            "updated_at",
         }
         assert set(data.keys()) == expected_fields
 
@@ -326,7 +334,6 @@ class TestChatMessageCreateSerializer:
 # ══════════════════════════════════════════════════════════════════════
 #  API ENDPOINT TESTS — Chat
 # ══════════════════════════════════════════════════════════════════════
-
 
 
 @pytest.mark.django_db

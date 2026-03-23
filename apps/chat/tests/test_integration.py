@@ -31,7 +31,9 @@ class TestListChatConversations:
         response = client.get("/api/chat/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_list_includes_conversations_as_target(self, chat_client2, chat_conversation):
+    def test_list_includes_conversations_as_target(
+        self, chat_client2, chat_conversation
+    ):
         """User sees conversations where they are the target_user."""
         response = chat_client2.get("/api/chat/")
         assert response.status_code == status.HTTP_200_OK
@@ -57,7 +59,9 @@ class TestSendFriendMessage:
         assert response.data["role"] == "user"
 
     @patch("channels.layers.get_channel_layer")
-    def test_send_message_increments_total(self, mock_channel_layer, chat_client, chat_conversation):
+    def test_send_message_increments_total(
+        self, mock_channel_layer, chat_client, chat_conversation
+    ):
         """Sending a message increments total_messages."""
         mock_channel_layer.return_value = None
         chat_client.post(
@@ -95,9 +99,7 @@ class TestGetMessages:
 
     def test_get_messages(self, chat_client, chat_conversation, chat_message):
         """Get messages for a conversation."""
-        response = chat_client.get(
-            f"/api/chat/{chat_conversation.id}/messages/"
-        )
+        response = chat_client.get(f"/api/chat/{chat_conversation.id}/messages/")
         assert response.status_code == status.HTTP_200_OK
         data = response.data
         results = data.get("results", data)
@@ -105,9 +107,7 @@ class TestGetMessages:
 
     def test_get_messages_empty(self, chat_client, chat_user, chat_user2):
         """Get messages for a conversation with no messages."""
-        conv = ChatConversation.objects.create(
-            user=chat_user, target_user=chat_user2
-        )
+        conv = ChatConversation.objects.create(user=chat_user, target_user=chat_user2)
         response = chat_client.get(f"/api/chat/{conv.id}/messages/")
         assert response.status_code == status.HTTP_200_OK
 
@@ -167,21 +167,23 @@ class TestMarkRead:
 
     def test_mark_read(self, chat_client, chat_conversation, chat_message):
         """Mark a conversation as read."""
-        response = chat_client.post(
-            f"/api/chat/{chat_conversation.id}/mark-read/"
-        )
+        response = chat_client.post(f"/api/chat/{chat_conversation.id}/mark-read/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "ok"
         assert response.data["last_read_message_id"] == str(chat_message.id)
 
-    def test_mark_read_creates_status(self, chat_client, chat_user, chat_conversation, chat_message):
+    def test_mark_read_creates_status(
+        self, chat_client, chat_user, chat_conversation, chat_message
+    ):
         """mark-read creates a MessageReadStatus record."""
         chat_client.post(f"/api/chat/{chat_conversation.id}/mark-read/")
         assert MessageReadStatus.objects.filter(
             user=chat_user, conversation=chat_conversation
         ).exists()
 
-    def test_mark_read_updates_existing(self, chat_client, chat_user, chat_conversation, chat_message):
+    def test_mark_read_updates_existing(
+        self, chat_client, chat_user, chat_conversation, chat_message
+    ):
         """mark-read updates existing read status."""
         chat_client.post(f"/api/chat/{chat_conversation.id}/mark-read/")
         # Add another message
@@ -264,51 +266,39 @@ class TestAcceptRejectCall:
 
     def test_accept_call(self, chat_client2, chat_call):
         """Callee can accept a ringing call."""
-        response = chat_client2.post(
-            f"/api/chat/calls/{chat_call.id}/accept/"
-        )
+        response = chat_client2.post(f"/api/chat/calls/{chat_call.id}/accept/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "accepted"
         assert "started_at" in response.data
 
     def test_accept_call_not_callee(self, chat_client, chat_call):
         """Non-callee cannot accept the call."""
-        response = chat_client.post(
-            f"/api/chat/calls/{chat_call.id}/accept/"
-        )
+        response = chat_client.post(f"/api/chat/calls/{chat_call.id}/accept/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_accept_non_ringing_call(self, chat_client2, chat_call):
         """Cannot accept a call that is not ringing."""
         chat_call.status = "completed"
         chat_call.save()
-        response = chat_client2.post(
-            f"/api/chat/calls/{chat_call.id}/accept/"
-        )
+        response = chat_client2.post(f"/api/chat/calls/{chat_call.id}/accept/")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     @patch("apps.chat.views.CallViewSet._notify_callee")
     def test_reject_call(self, mock_notify, chat_client2, chat_call):
         """Callee can reject a call."""
         with patch("apps.notifications.services.NotificationService.create"):
-            response = chat_client2.post(
-                f"/api/chat/calls/{chat_call.id}/reject/"
-            )
+            response = chat_client2.post(f"/api/chat/calls/{chat_call.id}/reject/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "rejected"
 
     def test_reject_call_not_callee(self, chat_client, chat_call):
         """Non-callee cannot reject the call."""
-        response = chat_client.post(
-            f"/api/chat/calls/{chat_call.id}/reject/"
-        )
+        response = chat_client.post(f"/api/chat/calls/{chat_call.id}/reject/")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_accept_nonexistent_call(self, chat_client):
         """Accepting a non-existent call returns 404."""
-        response = chat_client.post(
-            f"/api/chat/calls/{uuid.uuid4()}/accept/"
-        )
+        response = chat_client.post(f"/api/chat/calls/{uuid.uuid4()}/accept/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -354,11 +344,15 @@ class TestIncomingCalls:
         assert len(response.data) >= 1
         assert response.data[0]["call_type"] == "voice"
 
-    def test_incoming_calls_excludes_completed(self, chat_client2, chat_user, chat_user2):
+    def test_incoming_calls_excludes_completed(
+        self, chat_client2, chat_user, chat_user2
+    ):
         """Completed calls are not shown in incoming."""
         Call.objects.create(
-            caller=chat_user, callee=chat_user2,
-            call_type="voice", status="completed",
+            caller=chat_user,
+            callee=chat_user2,
+            call_type="voice",
+            status="completed",
         )
         response = chat_client2.get("/api/chat/calls/incoming/")
         assert response.status_code == status.HTTP_200_OK
@@ -395,7 +389,9 @@ class TestStartConversation:
             user=chat_user, target_user=chat_user3
         ).exists()
 
-    def test_start_returns_existing_conversation(self, chat_client, chat_conversation, chat_user2):
+    def test_start_returns_existing_conversation(
+        self, chat_client, chat_conversation, chat_user2
+    ):
         """Starting a conversation with a user who already has one returns existing."""
         response = chat_client.post(
             "/api/chat/start/",
@@ -454,7 +450,9 @@ class TestSendVoiceMessage:
     """Tests for POST /api/chat/{id}/send-message/ with voice-like content."""
 
     @patch("channels.layers.get_channel_layer")
-    def test_send_long_message(self, mock_channel_layer, chat_client, chat_conversation):
+    def test_send_long_message(
+        self, mock_channel_layer, chat_client, chat_conversation
+    ):
         """Send a long text message."""
         mock_channel_layer.return_value = None
         long_content = "A" * 500

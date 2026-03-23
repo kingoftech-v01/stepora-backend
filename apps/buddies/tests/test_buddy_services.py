@@ -149,13 +149,25 @@ class TestCategoryMatching:
     def test_get_user_categories_with_db(self, buddy_user1):
         """_get_user_categories returns set of category strings from active dreams."""
         Dream.objects.create(
-            user=buddy_user1, title="D1", description="d", category="health", status="active"
+            user=buddy_user1,
+            title="D1",
+            description="d",
+            category="health",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user1, title="D2", description="d", category="career", status="active"
+            user=buddy_user1,
+            title="D2",
+            description="d",
+            category="career",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user1, title="D3", description="d", category="health", status="completed"
+            user=buddy_user1,
+            title="D3",
+            description="d",
+            category="health",
+            status="completed",
         )
         svc = BuddyMatchingService()
         cats = svc._get_user_categories(buddy_user1)
@@ -189,10 +201,18 @@ class TestCategoryMatching:
     def test_category_score_no_overlap(self, buddy_user1, buddy_user2):
         """Users with no overlapping categories get category_score = 0."""
         Dream.objects.create(
-            user=buddy_user1, title="D", description="d", category="health", status="active"
+            user=buddy_user1,
+            title="D",
+            description="d",
+            category="health",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user2, title="D", description="d", category="career", status="active"
+            user=buddy_user2,
+            title="D",
+            description="d",
+            category="career",
+            status="active",
         )
         for u in (buddy_user1, buddy_user2):
             u.last_activity = timezone.now()
@@ -208,16 +228,32 @@ class TestCategoryMatching:
     def test_category_score_partial_overlap(self, buddy_user1, buddy_user2):
         """Partial category overlap yields intermediate score."""
         Dream.objects.create(
-            user=buddy_user1, title="D1", description="d", category="health", status="active"
+            user=buddy_user1,
+            title="D1",
+            description="d",
+            category="health",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user1, title="D2", description="d", category="career", status="active"
+            user=buddy_user1,
+            title="D2",
+            description="d",
+            category="career",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user2, title="D3", description="d", category="health", status="active"
+            user=buddy_user2,
+            title="D3",
+            description="d",
+            category="health",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user2, title="D4", description="d", category="education", status="active"
+            user=buddy_user2,
+            title="D4",
+            description="d",
+            category="education",
+            status="active",
         )
         for u in (buddy_user1, buddy_user2):
             u.last_activity = timezone.now()
@@ -306,14 +342,14 @@ class TestEligibleCandidates:
     def test_excludes_inactive_users(self, buddy_user1):
         """Users with last_activity > 30 days ago are excluded."""
         old_user = User.objects.create_user(
-            email="old@example.com", password="testpass",
-            display_name="Old", timezone="Europe/Paris",
+            email="old@example.com",
+            password="testpass",
+            display_name="Old",
+            timezone="Europe/Paris",
         )
         old_user.last_activity = timezone.now() - timedelta(days=60)
         old_user.save(update_fields=["last_activity"])
-        Dream.objects.create(
-            user=old_user, title="D", description="d", status="active"
-        )
+        Dream.objects.create(user=old_user, title="D", description="d", status="active")
         svc = BuddyMatchingService()
         candidates = svc._get_eligible_candidates(buddy_user1)
         assert old_user not in candidates
@@ -321,8 +357,10 @@ class TestEligibleCandidates:
     def test_excludes_users_without_active_dreams(self, buddy_user1):
         """Users with no active dreams are excluded."""
         no_dream_user = User.objects.create_user(
-            email="nodream@example.com", password="testpass",
-            display_name="NoDream", timezone="Europe/Paris",
+            email="nodream@example.com",
+            password="testpass",
+            display_name="NoDream",
+            timezone="Europe/Paris",
         )
         no_dream_user.last_activity = timezone.now()
         no_dream_user.save(update_fields=["last_activity"])
@@ -419,14 +457,26 @@ class TestFindCompatibleBuddy:
 
         # buddy_user2 shares timezone with user1 (Europe/Paris)
         Dream.objects.create(
-            user=buddy_user1, title="D", description="d", category="health", status="active"
+            user=buddy_user1,
+            title="D",
+            description="d",
+            category="health",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user2, title="D", description="d", category="health", status="active"
+            user=buddy_user2,
+            title="D",
+            description="d",
+            category="health",
+            status="active",
         )
         # buddy_user3 has different timezone (America/New_York) and different category
         Dream.objects.create(
-            user=buddy_user3, title="D", description="d", category="career", status="active"
+            user=buddy_user3,
+            title="D",
+            description="d",
+            category="career",
+            status="active",
         )
 
         svc = BuddyMatchingService()
@@ -442,18 +492,28 @@ class TestFindCompatibleBuddy:
         svc = BuddyMatchingService()
         # Create a candidate with maximally different attributes
         far_user = User.objects.create_user(
-            email="far@example.com", password="testpass",
-            display_name="Far", timezone="Pacific/Auckland",
+            email="far@example.com",
+            password="testpass",
+            display_name="Far",
+            timezone="Pacific/Auckland",
         )
         far_user.last_activity = timezone.now()
         far_user.streak_days = 100
         far_user.level = 50
         far_user.save()
         Dream.objects.create(
-            user=far_user, title="D", description="d", category="finance", status="active"
+            user=far_user,
+            title="D",
+            description="d",
+            category="finance",
+            status="active",
         )
         Dream.objects.create(
-            user=buddy_user1, title="D", description="d", category="health", status="active"
+            user=buddy_user1,
+            title="D",
+            description="d",
+            category="health",
+            status="active",
         )
         buddy_user1.streak_days = 0
         buddy_user1.level = 1
@@ -491,13 +551,9 @@ class TestCreateBuddyRequest:
     def test_sends_notification(self, buddy_user1, buddy_user3):
         """create_buddy_request sends a notification to the target user."""
         svc = BuddyMatchingService()
-        with patch.object(
-            svc, "_send_buddy_request_notification"
-        ) as mock_notify:
+        with patch.object(svc, "_send_buddy_request_notification") as mock_notify:
             svc.create_buddy_request(buddy_user1, buddy_user3, 0.7, ["education"])
-            mock_notify.assert_called_once_with(
-                buddy_user1, buddy_user3, ["education"]
-            )
+            mock_notify.assert_called_once_with(buddy_user1, buddy_user3, ["education"])
 
     def test_notification_content(self, buddy_user1, buddy_user3):
         """_send_buddy_request_notification creates a notification with correct content."""

@@ -6,16 +6,13 @@ PDF export, calibration, check-ins, focus sessions, and IDOR guards.
 Target: 95%+ coverage on apps/dreams/views.py.
 """
 
-import io
-import json
 import uuid
-from datetime import date, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from datetime import timedelta
+from unittest.mock import Mock, patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
-from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.dreams.models import (
@@ -235,14 +232,10 @@ class TestDreamCRUD:
         assert str(dream.id) in ids
 
     def test_list_excludes_other_users(self, api, other):
-        Dream.objects.create(
-            user=other, title="X", description="Y", category="career"
-        )
+        Dream.objects.create(user=other, title="X", description="Y", category="career")
         ids = [
             d["id"]
-            for d in api.get(DREAMS_URL).data.get(
-                "results", api.get(DREAMS_URL).data
-            )
+            for d in api.get(DREAMS_URL).data.get("results", api.get(DREAMS_URL).data)
         ]
         # other's dream should not appear
         assert all(
@@ -256,7 +249,11 @@ class TestDreamCRUD:
         mock_mod.return_value = Mock(is_flagged=False)
         resp = api.post(
             DREAMS_URL,
-            {"title": "New Dream", "description": "A fresh start with new goals", "category": "career"},
+            {
+                "title": "New Dream",
+                "description": "A fresh start with new goals",
+                "category": "career",
+            },
             format="json",
         )
         assert resp.status_code == 201
@@ -267,7 +264,10 @@ class TestDreamCRUD:
         mock_mod.return_value = Mock(is_flagged=True, user_message="Blocked")
         resp = api.post(
             DREAMS_URL,
-            {"title": "Bad", "description": "Inappropriate content for testing purposes"},
+            {
+                "title": "Bad",
+                "description": "Inappropriate content for testing purposes",
+            },
             format="json",
         )
         assert resp.status_code == 400
@@ -377,7 +377,10 @@ class TestRefine:
         mock_ai.return_value = {"title": "Refined", "description": "Better desc"}
         resp = api.post(
             f"{DREAMS_URL}refine/",
-            {"title": "My dream title", "description": "A description that is long enough to pass validation"},
+            {
+                "title": "My dream title",
+                "description": "A description that is long enough to pass validation",
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -417,7 +420,10 @@ class TestRefine:
         mock_mod.return_value = Mock(is_flagged=True, user_message="Blocked")
         resp = api.post(
             f"{DREAMS_URL}refine/",
-            {"title": "Bad dream title", "description": "Inappropriate content for testing moderation blocking"},
+            {
+                "title": "Bad dream title",
+                "description": "Inappropriate content for testing moderation blocking",
+            },
             format="json",
         )
         assert resp.status_code == 400
@@ -431,7 +437,10 @@ class TestRefine:
         mock_ai.side_effect = OpenAIError("Fail")
         resp = api.post(
             f"{DREAMS_URL}refine/",
-            {"title": "Good title for dream", "description": "A description that is long enough for refine"},
+            {
+                "title": "Good title for dream",
+                "description": "A description that is long enough for refine",
+            },
             format="json",
         )
         assert resp.status_code == 500
@@ -452,9 +461,7 @@ class TestDuplicate:
 
     def test_duplicate_with_goals_and_tasks(self, api, dream_with_plan):
         original_goals = Goal.objects.filter(dream=dream_with_plan).count()
-        original_tasks = Task.objects.filter(
-            goal__dream=dream_with_plan
-        ).count()
+        original_tasks = Task.objects.filter(goal__dream=dream_with_plan).count()
         resp = api.post(_dream_url(dream_with_plan.id, "duplicate"))
         assert resp.status_code == 201
         new_id = resp.data["id"]
@@ -487,9 +494,7 @@ class TestShare:
             format="json",
         )
         assert resp.status_code == 201
-        assert SharedDream.objects.filter(
-            dream=dream, shared_with=other
-        ).exists()
+        assert SharedDream.objects.filter(dream=dream, shared_with=other).exists()
 
     def test_share_with_self_fails(self, api, dream, owner):
         resp = api.post(
@@ -500,9 +505,7 @@ class TestShare:
         assert resp.status_code == 400
 
     def test_share_duplicate_fails(self, api, dream, other):
-        SharedDream.objects.create(
-            dream=dream, shared_by=dream.user, shared_with=other
-        )
+        SharedDream.objects.create(dream=dream, shared_by=dream.user, shared_with=other)
         resp = api.post(
             _dream_url(dream.id, "share"),
             {"shared_with_id": str(other.id)},
@@ -519,24 +522,16 @@ class TestShare:
         assert resp.status_code == 404
 
     def test_unshare(self, api, dream, other):
-        SharedDream.objects.create(
-            dream=dream, shared_by=dream.user, shared_with=other
-        )
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/unshare/{other.id}/"
-        )
+        SharedDream.objects.create(dream=dream, shared_by=dream.user, shared_with=other)
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/unshare/{other.id}/")
         assert resp.status_code == 200
 
     def test_unshare_nonexistent(self, api, dream):
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/unshare/{uuid.uuid4()}/"
-        )
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/unshare/{uuid.uuid4()}/")
         assert resp.status_code == 404
 
     def test_shared_with_me(self, api_other, dream, other):
-        SharedDream.objects.create(
-            dream=dream, shared_by=dream.user, shared_with=other
-        )
+        SharedDream.objects.create(dream=dream, shared_by=dream.user, shared_with=other)
         resp = api_other.get("/api/dreams/dreams/shared-with-me/")
         assert resp.status_code == 200
         assert len(resp.data.get("shared_dreams", [])) >= 1
@@ -580,23 +575,17 @@ class TestCollaborators:
 
     def test_list_collaborators(self, api, dream, other):
         DreamCollaborator.objects.create(dream=dream, user=other, role="viewer")
-        resp = api.get(
-            f"{DREAMS_URL}{dream.id}/collaborators/list/"
-        )
+        resp = api.get(f"{DREAMS_URL}{dream.id}/collaborators/list/")
         assert resp.status_code == 200
         assert len(resp.data.get("collaborators", [])) == 1
 
     def test_remove_collaborator(self, api, dream, other):
         DreamCollaborator.objects.create(dream=dream, user=other, role="viewer")
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/collaborators/{other.id}/"
-        )
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/collaborators/{other.id}/")
         assert resp.status_code == 200
 
     def test_remove_nonexistent_collaborator(self, api, dream):
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/collaborators/{uuid.uuid4()}/"
-        )
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/collaborators/{uuid.uuid4()}/")
         assert resp.status_code == 404
 
     def test_non_owner_cannot_add_collaborator(self, api_other, dream, other):
@@ -636,12 +625,8 @@ class TestTags:
         assert DreamTag.objects.filter(name="brandnew").exists()
 
     def test_add_duplicate_tag_idempotent(self, api, dream):
-        api.post(
-            _dream_url(dream.id, "tags"), {"tag_name": "dup"}, format="json"
-        )
-        api.post(
-            _dream_url(dream.id, "tags"), {"tag_name": "dup"}, format="json"
-        )
+        api.post(_dream_url(dream.id, "tags"), {"tag_name": "dup"}, format="json")
+        api.post(_dream_url(dream.id, "tags"), {"tag_name": "dup"}, format="json")
         assert DreamTagging.objects.filter(dream=dream, tag__name="dup").count() == 1
 
     def test_remove_tag(self, api, dream):
@@ -737,7 +722,9 @@ class TestVisionBoard:
         assert resp.status_code == 201
 
     def test_add_via_file(self, api, dream):
-        png = SimpleUploadedFile("test.png", _make_png_bytes(), content_type="image/png")
+        png = SimpleUploadedFile(
+            "test.png", _make_png_bytes(), content_type="image/png"
+        )
         resp = api.post(
             _dream_url(dream.id, "vision-board/add"),
             {"image": png, "caption": "Upload"},
@@ -762,7 +749,9 @@ class TestVisionBoard:
         assert resp.status_code == 400
 
     def test_add_invalid_magic_bytes(self, api, dream):
-        bad = SimpleUploadedFile("test.png", b"\x00\x00\x00\x00" * 10, content_type="image/png")
+        bad = SimpleUploadedFile(
+            "test.png", b"\x00\x00\x00\x00" * 10, content_type="image/png"
+        )
         resp = api.post(
             _dream_url(dream.id, "vision-board/add"),
             {"image": bad},
@@ -787,15 +776,11 @@ class TestVisionBoard:
         vbi = VisionBoardImage.objects.create(
             dream=dream, image_url="https://example.com/x.png", order=0
         )
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/vision-board/{vbi.id}/"
-        )
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/vision-board/{vbi.id}/")
         assert resp.status_code == 200
 
     def test_remove_nonexistent(self, api, dream):
-        resp = api.delete(
-            f"{DREAMS_URL}{dream.id}/vision-board/{uuid.uuid4()}/"
-        )
+        resp = api.delete(f"{DREAMS_URL}{dream.id}/vision-board/{uuid.uuid4()}/")
         assert resp.status_code == 404
 
     @patch("integrations.openai_service.OpenAIService.generate_vision_image")
@@ -843,9 +828,7 @@ class TestJournal:
         assert resp.status_code == 201
 
     def test_list_entries(self, api, dream):
-        DreamJournal.objects.create(
-            dream=dream, title="J1", content="Entry 1"
-        )
+        DreamJournal.objects.create(dream=dream, title="J1", content="Entry 1")
         resp = api.get(f"{JOURNAL_URL}?dream={dream.id}")
         assert resp.status_code == 200
 
@@ -890,7 +873,9 @@ class TestProgressPhotos:
         assert resp.status_code == 200
 
     def test_upload_photo(self, api, dream):
-        png = SimpleUploadedFile("photo.png", _make_png_bytes(), content_type="image/png")
+        png = SimpleUploadedFile(
+            "photo.png", _make_png_bytes(), content_type="image/png"
+        )
         resp = api.post(
             _dream_url(dream.id, "progress-photos/upload"),
             {"image": png, "caption": "Day 1"},
@@ -1241,9 +1226,7 @@ class TestTasks:
 
     @pytest.fixture
     def goal(self, dream):
-        return Goal.objects.create(
-            dream=dream, title="G1", description="D1", order=1
-        )
+        return Goal.objects.create(dream=dream, title="G1", description="D1", order=1)
 
     @pytest.fixture
     def task(self, goal):
@@ -1328,9 +1311,7 @@ class TestTasks:
         assert resp.status_code == 400
 
     def test_task_chain(self, api, goal):
-        parent = Task.objects.create(
-            goal=goal, title="Parent", order=1, is_chain=True
-        )
+        parent = Task.objects.create(goal=goal, title="Parent", order=1, is_chain=True)
         child = Task.objects.create(
             goal=goal,
             title="Child",
@@ -1395,9 +1376,7 @@ class TestObstacles:
         assert resp.status_code == 201
 
     def test_list_obstacles(self, api, dream):
-        Obstacle.objects.create(
-            dream=dream, title="O1", description="D1"
-        )
+        Obstacle.objects.create(dream=dream, title="O1", description="D1")
         resp = api.get(f"{OBSTACLES_URL}?dream={dream.id}")
         assert resp.status_code == 200
 
@@ -1644,7 +1623,10 @@ class TestAIEndpoints:
         mock_ai.return_value = {"category": "health", "tags": ["fitness"]}
         resp = api.post(
             f"{DREAMS_URL}auto-categorize/",
-            {"title": "Run marathon", "description": "Train for and complete a marathon running event"},
+            {
+                "title": "Run marathon",
+                "description": "Train for and complete a marathon running event",
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -1835,9 +1817,7 @@ class TestTaskAI:
     @patch("core.ai_usage.AIUsageTracker.increment")
     def test_parse_natural(self, _inc, mock_ai, api, dream):
         mock_ai.return_value = {
-            "tasks": [
-                {"title": "Do X", "matched_dream_id": str(dream.id)}
-            ]
+            "tasks": [{"title": "Do X", "matched_dream_id": str(dream.id)}]
         }
         resp = api.post(
             f"{TASKS_URL}parse-natural/",
@@ -1947,7 +1927,10 @@ class TestSubscriptionGuards:
     def test_free_user_blocked_from_refine(self, api_free):
         resp = api_free.post(
             f"{DREAMS_URL}refine/",
-            {"title": "My title here", "description": "Long enough desc for validation"},
+            {
+                "title": "My title here",
+                "description": "Long enough desc for validation",
+            },
             format="json",
         )
         assert resp.status_code == 403
@@ -1959,7 +1942,11 @@ class TestSubscriptionGuards:
         ):
             resp = api_free.post(
                 DREAMS_URL,
-                {"title": "Free dream", "description": "A dream anyone can create", "category": "personal"},
+                {
+                    "title": "Free dream",
+                    "description": "A dream anyone can create",
+                    "category": "personal",
+                },
                 format="json",
             )
         assert resp.status_code == 201
@@ -1994,6 +1981,7 @@ class TestCalibrationExtended:
         )
         # Simulate the lock being active
         from django.core.cache import cache
+
         lock_key = f"calibration:generating:{dream.id}"
         cache.set(lock_key, "1", timeout=60)
         try:
@@ -2103,7 +2091,14 @@ class TestCalibrationExtended:
         cr = CalibrationResponse.objects.get(dream=dream, question_number=25)
         resp = api.post(
             _dream_url(dream.id, "answer_calibration"),
-            {"answers": [{"question_id": str(cr.id), "answer": "Final answer for question 25"}]},
+            {
+                "answers": [
+                    {
+                        "question_id": str(cr.id),
+                        "answer": "Final answer for question 25",
+                    }
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -2113,7 +2108,9 @@ class TestCalibrationExtended:
     @patch("apps.dreams.views.validate_calibration_questions")
     @patch("core.moderation.ContentModerationService.moderate_text")
     @patch("core.ai_usage.AIUsageTracker.increment")
-    def test_answer_gets_followups(self, _inc, mock_mod, mock_validate, mock_ai, api, dream):
+    def test_answer_gets_followups(
+        self, _inc, mock_mod, mock_validate, mock_ai, api, dream
+    ):
         """AI returns follow-up questions."""
         mock_mod.return_value = Mock(is_flagged=False)
         dream.calibration_status = "in_progress"
@@ -2141,7 +2138,11 @@ class TestCalibrationExtended:
 
         resp = api.post(
             _dream_url(dream.id, "answer_calibration"),
-            {"answers": [{"question_id": str(cr.id), "answer": "My answer to this question"}]},
+            {
+                "answers": [
+                    {"question_id": str(cr.id), "answer": "My answer to this question"}
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -2159,9 +2160,13 @@ class TestPDFExportExtended:
     def test_export_pdf_real(self, api, dream):
         """Try real PDF export."""
         g = Goal.objects.create(dream=dream, title="G1", description="D1", order=1)
-        Task.objects.create(goal=g, title="T1", order=1, duration_mins=30, status="completed")
+        Task.objects.create(
+            goal=g, title="T1", order=1, duration_mins=30, status="completed"
+        )
         Task.objects.create(goal=g, title="T2", order=2, duration_mins=15)
-        Obstacle.objects.create(dream=dream, title="O1", description="D1", solution="S1")
+        Obstacle.objects.create(
+            dream=dream, title="O1", description="D1", solution="S1"
+        )
         resp = api.get(f"/api/dreams/dreams/{dream.id}/export-pdf/")
         # Either 200 (reportlab installed) or 501 (not installed)
         assert resp.status_code in (200, 501)
@@ -2184,7 +2189,10 @@ class TestProgressPhotoAnalysis:
 
     @patch("integrations.openai_service.OpenAIService.analyze_progress_image")
     @patch("core.ai_usage.AIUsageTracker.increment")
-    @patch("core.ai_usage.AIUsageTracker.check_quota", return_value=(True, {"limit": 10, "used": 0}))
+    @patch(
+        "core.ai_usage.AIUsageTracker.check_quota",
+        return_value=(True, {"limit": 10, "used": 0}),
+    )
     def test_analyze_photo(self, _quota, _inc, mock_ai, pro_user):
         """Analyze requires AI image quota (pro plan)."""
         pro_dream = Dream.objects.create(
@@ -2193,7 +2201,9 @@ class TestProgressPhotoAnalysis:
         mock_ai.return_value = {"analysis": "Good progress visible"}
         photo = ProgressPhoto.objects.create(
             dream=pro_dream,
-            image=SimpleUploadedFile("p.png", _make_png_bytes(), content_type="image/png"),
+            image=SimpleUploadedFile(
+                "p.png", _make_png_bytes(), content_type="image/png"
+            ),
             taken_at=timezone.now(),
         )
         pro_client = APIClient()
@@ -2204,7 +2214,10 @@ class TestProgressPhotoAnalysis:
         assert resp.status_code == 200
 
     def test_analyze_nonexistent_photo(self, api, dream):
-        with patch("core.ai_usage.AIUsageTracker.check_quota", return_value=(True, {"limit": 10, "used": 0})):
+        with patch(
+            "core.ai_usage.AIUsageTracker.check_quota",
+            return_value=(True, {"limit": 10, "used": 0}),
+        ):
             resp = api.post(
                 f"{DREAMS_URL}{dream.id}/progress-photos/{uuid.uuid4()}/analyze/"
             )
@@ -2222,7 +2235,12 @@ class TestMilestoneCreateGuard:
     def test_cannot_create_milestone_for_other_dream(self, api_other, dream):
         resp = api_other.post(
             MILESTONES_URL,
-            {"dream": str(dream.id), "title": "Hack", "description": "IDOR", "order": 1},
+            {
+                "dream": str(dream.id),
+                "title": "Hack",
+                "description": "IDOR",
+                "order": 1,
+            },
             format="json",
         )
         assert resp.status_code == 403
@@ -2238,24 +2256,36 @@ class TestEdgeCases:
 
     def test_explore_with_category_filter(self, api, other):
         Dream.objects.create(
-            user=other, title="P", description="Public", category="health",
-            is_public=True, status="active",
+            user=other,
+            title="P",
+            description="Public",
+            category="health",
+            is_public=True,
+            status="active",
         )
         resp = api.get(f"{DREAMS_URL}explore/?category=health")
         assert resp.status_code == 200
 
     def test_explore_with_ordering(self, api, other):
         Dream.objects.create(
-            user=other, title="P", description="Public", category="health",
-            is_public=True, status="active",
+            user=other,
+            title="P",
+            description="Public",
+            category="health",
+            is_public=True,
+            status="active",
         )
         resp = api.get(f"{DREAMS_URL}explore/?ordering=-progress_percentage")
         assert resp.status_code == 200
 
     def test_explore_invalid_ordering(self, api, other):
         Dream.objects.create(
-            user=other, title="P", description="Public", category="health",
-            is_public=True, status="active",
+            user=other,
+            title="P",
+            description="Public",
+            category="health",
+            is_public=True,
+            status="active",
         )
         resp = api.get(f"{DREAMS_URL}explore/?ordering=hacked")
         assert resp.status_code == 200  # Falls back to -created_at
@@ -2393,8 +2423,11 @@ class TestEdgeCases:
 
     def test_template_filter_by_category(self, api):
         DreamTemplate.objects.create(
-            title="T1", description="D1", category="health",
-            template_goals=[], is_active=True,
+            title="T1",
+            description="D1",
+            category="health",
+            template_goals=[],
+            is_active=True,
         )
         resp = api.get("/api/dreams/dreams/templates/?category=health")
         assert resp.status_code == 200

@@ -167,12 +167,8 @@ class CircleChallengeCreateSerializer(serializers.Serializer):
         min_value=1,
         help_text="Target value to complete the challenge.",
     )
-    start_date = serializers.DateTimeField(
-        help_text="When the challenge starts."
-    )
-    end_date = serializers.DateTimeField(
-        help_text="When the challenge ends."
-    )
+    start_date = serializers.DateTimeField(help_text="When the challenge starts.")
+    end_date = serializers.DateTimeField(help_text="When the challenge ends.")
 
     def validate_title(self, value):
         return sanitize_text(value)
@@ -229,9 +225,7 @@ class CirclePollSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Whether multiple selections are allowed.",
     )
-    ends_at = serializers.DateTimeField(
-        read_only=True, help_text="Poll end time."
-    )
+    ends_at = serializers.DateTimeField(read_only=True, help_text="Poll end time.")
     is_ended = serializers.BooleanField(
         read_only=True, help_text="Whether the poll has ended."
     )
@@ -377,11 +371,7 @@ class CircleListSerializer(serializers.ModelSerializer):
     def get_member_avatars(self, obj) -> list:
         """Return avatar URLs of the first 5 members for preview display."""
         memberships = obj.memberships.select_related("user").order_by("joined_at")[:5]
-        return [
-            url
-            for m in memberships
-            if (url := m.user.get_effective_avatar_url())
-        ]
+        return [url for m in memberships if (url := m.user.get_effective_avatar_url())]
 
     def get_is_member(self, obj) -> bool:
         """Check if the requesting user is a member of this circle."""

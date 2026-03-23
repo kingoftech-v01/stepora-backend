@@ -29,7 +29,6 @@ Covers:
 - Verify-email-change token flow
 """
 
-import io
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -43,7 +42,6 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.users.models import EmailChangeRequest, User
-
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Auto-mock Stripe for ALL tests in this module
@@ -1429,7 +1427,7 @@ class TestStreakDetails:
         assert resp.data["current_streak"] == 5
 
     def test_streak_frozen_detection(self, client_a, user_a):
-        from apps.gamification.models import DailyActivity, GamificationProfile
+        from apps.gamification.models import GamificationProfile
 
         user_a.streak_days = 10
         user_a.save(update_fields=["streak_days"])

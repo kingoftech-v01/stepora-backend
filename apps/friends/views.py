@@ -254,9 +254,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        UserFollow.objects.get_or_create(
-            follower=request.user, following_id=target_id
-        )
+        UserFollow.objects.get_or_create(follower=request.user, following_id=target_id)
         return Response({"message": "Followed."}, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -267,9 +265,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["delete"], url_path="unfollow/(?P<user_id>[^/.]+)")
     def unfollow(self, request, user_id=None):
         """Unfollow a user."""
-        UserFollow.objects.filter(
-            follower=request.user, following_id=user_id
-        ).delete()
+        UserFollow.objects.filter(follower=request.user, following_id=user_id).delete()
         return Response({"message": "Unfollowed."})
 
     @extend_schema(
@@ -311,9 +307,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["delete"], url_path="unblock/(?P<user_id>[^/.]+)")
     def unblock(self, request, user_id=None):
         """Unblock a user."""
-        BlockedUser.objects.filter(
-            blocker=request.user, blocked_id=user_id
-        ).delete()
+        BlockedUser.objects.filter(blocker=request.user, blocked_id=user_id).delete()
         return Response({"message": "User unblocked."})
 
     @extend_schema(
@@ -324,9 +318,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["get"], url_path="blocked")
     def blocked_list(self, request):
         """List blocked users."""
-        blocked = BlockedUser.objects.filter(
-            blocker=request.user
-        ).select_related("blocked")
+        blocked = BlockedUser.objects.filter(blocker=request.user).select_related(
+            "blocked"
+        )
         return Response(BlockedUserSerializer(blocked, many=True).data)
 
     @extend_schema(
@@ -347,7 +341,9 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             reason=serializer.validated_data["reason"],
             category=serializer.validated_data.get("category", "other"),
         )
-        return Response({"message": "Report submitted."}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"message": "Report submitted."}, status=status.HTTP_201_CREATED
+        )
 
     @extend_schema(
         summary="Social counts",

@@ -46,7 +46,6 @@ from apps.plans.serializers import (
 from apps.plans.services import PlanService
 from apps.users.models import User
 
-
 # ──────────────────────────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────────────────────────
@@ -431,16 +430,16 @@ class TestTaskModel:
         assert next_t.title == "My Task"
 
     def test_streak_same_day_no_change(self, goal_a, user_a):
-        """Streak does NOT change when completing tasks on the same day
-        because update_activity() sets last_activity=now() before _update_streak()."""
-        user_a.last_activity = timezone.now() - timedelta(days=1)
+        """Streak does NOT change when completing multiple tasks on the same day.
+        _update_streak() runs before update_activity(), but on the second
+        completion, last_activity is already today so _update_streak returns early."""
+        user_a.last_activity = timezone.now()  # already today
         user_a.streak_days = 5
         user_a.save()
         t = Task.objects.create(goal=goal_a, title="Streak", order=99, duration_mins=10)
         t.complete()
         user_a.refresh_from_db()
-        # update_activity() sets last_activity=today BEFORE _update_streak() runs,
-        # so _update_streak sees last_activity_date == today and returns early.
+        # _update_streak sees last_activity_date == today and returns early.
         assert user_a.streak_days == 5
 
     def test_streak_update_via_direct_call(self, goal_a, user_a):

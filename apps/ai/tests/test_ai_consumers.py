@@ -35,14 +35,17 @@ from core.consumers import MAX_MSG_CONTENT_LEN, MAX_MSG_SIZE
 @database_sync_to_async
 def _create_user(email, display_name="AI Test User"):
     return User.objects.create_user(
-        email=email, password="testpassword123", display_name=display_name,
+        email=email,
+        password="testpassword123",
+        display_name=display_name,
     )
 
 
 @database_sync_to_async
 def _create_ai_conversation(user, conversation_type="general"):
     return AIConversation.objects.create(
-        user=user, conversation_type=conversation_type,
+        user=user,
+        conversation_type=conversation_type,
     )
 
 
@@ -58,7 +61,9 @@ def _make_communicator(user, conversation_id):
         f"/ws/ai-chat/{conversation_id}/",
     )
     communicator.scope["user"] = user
-    communicator.scope["url_route"] = {"kwargs": {"conversation_id": str(conversation_id)}}
+    communicator.scope["url_route"] = {
+        "kwargs": {"conversation_id": str(conversation_id)}
+    }
     communicator.scope["_allow_post_auth"] = False
     return communicator
 
@@ -70,7 +75,9 @@ def _make_anon_communicator(conversation_id):
         f"/ws/ai-chat/{conversation_id}/",
     )
     communicator.scope["user"] = AnonymousUser()
-    communicator.scope["url_route"] = {"kwargs": {"conversation_id": str(conversation_id)}}
+    communicator.scope["url_route"] = {
+        "kwargs": {"conversation_id": str(conversation_id)}
+    }
     communicator.scope["_allow_post_auth"] = True
     return communicator
 
@@ -324,7 +331,10 @@ class TestAIChatStreaming:
                     resp = await communicator.receive_json_from(timeout=2)
                     responses.append(resp)
                     # After stream_end and the final message, we're done
-                    if resp.get("type") == "message" and resp.get("message", {}).get("role") == "assistant":
+                    if (
+                        resp.get("type") == "message"
+                        and resp.get("message", {}).get("role") == "assistant"
+                    ):
                         break
                 except Exception:
                     break
@@ -416,9 +426,7 @@ class TestAIChatErrors:
             connected, _ = await communicator.connect()
             await communicator.receive_json_from()
 
-            await communicator.send_json_to(
-                {"type": "message", "message": "Hit quota"}
-            )
+            await communicator.send_json_to({"type": "message", "message": "Hit quota"})
             response = await communicator.receive_json_from()
             assert response["type"] == "quota_exceeded"
             assert "limit reached" in response["message"].lower()
@@ -451,9 +459,7 @@ class TestAIChatErrors:
             connected, _ = await communicator.connect()
             await communicator.receive_json_from()
 
-            await communicator.send_json_to(
-                {"type": "message", "message": "Will fail"}
-            )
+            await communicator.send_json_to({"type": "message", "message": "Will fail"})
 
             # Collect responses - should include the user message echo and then the error
             responses = []
@@ -528,9 +534,7 @@ class TestAIChatModeration:
             connected, _ = await communicator.connect()
             await communicator.receive_json_from()
 
-            await communicator.send_json_to(
-                {"type": "message", "message": "bad stuff"}
-            )
+            await communicator.send_json_to({"type": "message", "message": "bad stuff"})
             response = await communicator.receive_json_from()
             assert response["type"] == "moderation"
             assert "Inappropriate content" in response["message"]

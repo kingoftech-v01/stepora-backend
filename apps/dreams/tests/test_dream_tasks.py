@@ -131,27 +131,45 @@ class TestGenerateDreamPlanTask:
         )
 
         mock_task = Mock(
-            title="Task 1", description="desc", order=1,
-            duration_mins=30, day_number=1,
-            expected_date=None, deadline_date=None,
+            title="Task 1",
+            description="desc",
+            order=1,
+            duration_mins=30,
+            day_number=1,
+            expected_date=None,
+            deadline_date=None,
         )
         mock_goal = Mock(
-            title="Goal 1", description="desc", order=1,
-            estimated_minutes=60, expected_date=None, deadline_date=None,
+            title="Goal 1",
+            description="desc",
+            order=1,
+            estimated_minutes=60,
+            expected_date=None,
+            deadline_date=None,
             tasks=[mock_task],
         )
         mock_obstacle = Mock(
-            title="Obstacle 1", description="desc",
-            solution="solution", goal_order=None,
+            title="Obstacle 1",
+            description="desc",
+            solution="solution",
+            goal_order=None,
         )
         mock_milestone = Mock(
-            title="Milestone 1", description="desc", order=1,
-            target_day=7, expected_date=None, deadline_date=None,
-            goals=[mock_goal], obstacles=[mock_obstacle],
+            title="Milestone 1",
+            description="desc",
+            order=1,
+            target_day=7,
+            expected_date=None,
+            deadline_date=None,
+            goals=[mock_goal],
+            obstacles=[mock_obstacle],
         )
         mock_plan_obstacle = Mock(
-            title="Global Obstacle", description="desc",
-            solution="sol", milestone_order=None, goal_order=None,
+            title="Global Obstacle",
+            description="desc",
+            solution="sol",
+            milestone_order=None,
+            goal_order=None,
         )
         mock_plan = Mock(
             milestones=[mock_milestone],
@@ -204,22 +222,36 @@ class TestGenerateDreamPlanTask:
     ):
         """generate_dream_plan_task handles legacy plans with goals only."""
         dream = Dream.objects.create(
-            user=dream_user, title="Legacy", description="d", status="active",
+            user=dream_user,
+            title="Legacy",
+            description="d",
+            status="active",
         )
 
         mock_task = Mock(
-            title="T", description="d", order=1,
-            duration_mins=15, day_number=None,
-            expected_date=None, deadline_date=None,
+            title="T",
+            description="d",
+            order=1,
+            duration_mins=15,
+            day_number=None,
+            expected_date=None,
+            deadline_date=None,
         )
         mock_goal = Mock(
-            title="G", description="d", order=1,
-            estimated_minutes=30, tasks=[mock_task],
-            expected_date=None, deadline_date=None,
+            title="G",
+            description="d",
+            order=1,
+            estimated_minutes=30,
+            tasks=[mock_task],
+            expected_date=None,
+            deadline_date=None,
         )
         mock_plan_obs = Mock(
-            title="Obs", description="d", solution="s",
-            milestone_order=None, goal_order=None,
+            title="Obs",
+            description="d",
+            solution="s",
+            milestone_order=None,
+            goal_order=None,
         )
         mock_plan = Mock(
             milestones=[],  # No milestones
@@ -266,22 +298,37 @@ class TestGenerateDreamSkeletonTask:
     ):
         """Skeleton task creates milestones and goals, then chains to task generation."""
         dream = Dream.objects.create(
-            user=dream_user, title="Skeleton", description="test",
+            user=dream_user,
+            title="Skeleton",
+            description="test",
             status="active",
         )
 
         mock_goal_data = Mock(
-            title="G1", description="d", order=1,
+            title="G1",
+            description="d",
+            order=1,
             estimated_minutes=60,
-            expected_date=None, deadline_date=None,
+            expected_date=None,
+            deadline_date=None,
         )
         mock_obs = Mock(title="Obs1", description="d", solution="s")
-        mock_top_obs = Mock(title="TopObs", description="d", solution="s",
-                            milestone_order=None, goal_order=None)
+        mock_top_obs = Mock(
+            title="TopObs",
+            description="d",
+            solution="s",
+            milestone_order=None,
+            goal_order=None,
+        )
         mock_milestone = Mock(
-            title="M1", description="d", order=1,
-            target_day=7, expected_date=None, deadline_date=None,
-            goals=[mock_goal_data], obstacles=[mock_obs],
+            title="M1",
+            description="d",
+            order=1,
+            target_day=7,
+            expected_date=None,
+            deadline_date=None,
+            goals=[mock_goal_data],
+            obstacles=[mock_obs],
         )
         mock_skeleton = Mock(
             milestones=[mock_milestone],
@@ -329,28 +376,45 @@ class TestGenerateInitialTasksTask:
     @patch("core.ai_validators.validate_task_patches")
     @patch("apps.dreams.tasks.OpenAIService")
     def test_creates_tasks_for_existing_skeleton(
-        self, mock_ai_cls, mock_validate, dream_user,
+        self,
+        mock_ai_cls,
+        mock_validate,
+        dream_user,
     ):
         """Phase 2 creates tasks for the skeleton's milestones and goals."""
         dream = Dream.objects.create(
-            user=dream_user, title="Tasks", description="test",
-            status="active", plan_phase="skeleton",
+            user=dream_user,
+            title="Tasks",
+            description="test",
+            status="active",
+            plan_phase="skeleton",
             plan_skeleton={"milestones": [{"order": 1}]},
         )
         ms = DreamMilestone.objects.create(
-            dream=dream, title="M1", order=1, has_tasks=False,
+            dream=dream,
+            title="M1",
+            order=1,
+            has_tasks=False,
         )
         goal = Goal.objects.create(
-            dream=dream, milestone=ms, title="G1", order=1,
+            dream=dream,
+            milestone=ms,
+            title="G1",
+            order=1,
         )
 
         mock_task_data = Mock(
-            title="T1", description="d", order=1,
-            duration_mins=30, day_number=None,
-            expected_date=None, deadline_date=None,
+            title="T1",
+            description="d",
+            order=1,
+            duration_mins=30,
+            day_number=None,
+            expected_date=None,
+            deadline_date=None,
         )
         mock_patch = Mock(
-            milestone_order=1, goal_order=1,
+            milestone_order=1,
+            goal_order=1,
             tasks=[mock_task_data],
         )
         mock_validate.return_value = [mock_patch]
@@ -375,8 +439,11 @@ class TestGenerateInitialTasksTask:
     def test_skips_wrong_phase(self, dream_user):
         """Phase 2 skips dreams not in skeleton/partial phase."""
         dream = Dream.objects.create(
-            user=dream_user, title="Wrong", description="d",
-            status="active", plan_phase="full",
+            user=dream_user,
+            title="Wrong",
+            description="d",
+            status="active",
+            plan_phase="full",
             plan_skeleton={"milestones": []},
         )
 
@@ -404,8 +471,11 @@ class TestGenerateTwoMinuteStart:
     @patch("apps.dreams.tasks.OpenAIService")
     def test_creates_micro_action(self, mock_ai_cls, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Guitar", description="Beginner",
-            status="active", has_two_minute_start=False,
+            user=dream_user,
+            title="Guitar",
+            description="Beginner",
+            status="active",
+            has_two_minute_start=False,
         )
 
         mock_ai = Mock()
@@ -424,8 +494,11 @@ class TestGenerateTwoMinuteStart:
     @patch("apps.dreams.tasks.OpenAIService")
     def test_skips_if_already_has_two_minute_start(self, mock_ai_cls, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="G", description="d",
-            status="active", has_two_minute_start=True,
+            user=dream_user,
+            title="G",
+            description="d",
+            status="active",
+            has_two_minute_start=True,
         )
 
         from apps.dreams.tasks import generate_two_minute_start
@@ -454,12 +527,16 @@ class TestGenerateVisionBoard:
     @patch("apps.dreams.tasks.OpenAIService")
     def test_generates_vision_image(self, mock_ai_cls, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Beach House", description="Own a beach house",
+            user=dream_user,
+            title="Beach House",
+            description="Own a beach house",
             status="active",
         )
 
         mock_ai = Mock()
-        mock_ai.generate_vision_image.return_value = "https://img.example.com/vision.png"
+        mock_ai.generate_vision_image.return_value = (
+            "https://img.example.com/vision.png"
+        )
         mock_ai_cls.return_value = mock_ai
 
         from apps.dreams.tasks import generate_vision_board
@@ -479,8 +556,11 @@ class TestGenerateVisionBoard:
     @patch("apps.dreams.tasks.OpenAIService")
     def test_skips_if_vision_exists(self, mock_ai_cls, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="D", description="d",
-            status="active", vision_image_url="https://existing.com/img.png",
+            user=dream_user,
+            title="D",
+            description="d",
+            status="active",
+            vision_image_url="https://existing.com/img.png",
         )
 
         from apps.dreams.tasks import generate_vision_board
@@ -508,7 +588,9 @@ class TestCleanupAbandonedDreams:
 
     def test_archives_inactive_dreams(self, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Old Dream", description="d",
+            user=dream_user,
+            title="Old Dream",
+            description="d",
             status="active",
         )
         # Set updated_at to 100 days ago
@@ -530,7 +612,9 @@ class TestCleanupAbandonedDreams:
 
     def test_keeps_recent_dreams(self, dream_user):
         Dream.objects.create(
-            user=dream_user, title="Recent", description="d",
+            user=dream_user,
+            title="Recent",
+            description="d",
             status="active",
         )
 
@@ -541,7 +625,9 @@ class TestCleanupAbandonedDreams:
 
     def test_ignores_non_active_dreams(self, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Completed", description="d",
+            user=dream_user,
+            title="Completed",
+            description="d",
             status="completed",
         )
         Dream.objects.filter(id=dream.id).update(
@@ -565,7 +651,9 @@ class TestSmartArchiveDreams:
 
     def test_pauses_inactive_dreams(self, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Inactive", description="d",
+            user=dream_user,
+            title="Inactive",
+            description="d",
             status="active",
         )
         Dream.objects.filter(id=dream.id).update(
@@ -586,7 +674,9 @@ class TestSmartArchiveDreams:
 
     def test_skips_dreams_with_recent_task_activity(self, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Active Tasks", description="d",
+            user=dream_user,
+            title="Active Tasks",
+            description="d",
             status="active",
         )
         Dream.objects.filter(id=dream.id).update(
@@ -594,7 +684,10 @@ class TestSmartArchiveDreams:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T", order=1, status="completed",
+            goal=goal,
+            title="T",
+            order=1,
+            status="completed",
             completed_at=timezone.now() - timedelta(days=5),
         )
 
@@ -605,7 +698,9 @@ class TestSmartArchiveDreams:
 
     def test_keeps_recently_updated_dreams(self, dream_user):
         Dream.objects.create(
-            user=dream_user, title="Recent", description="d",
+            user=dream_user,
+            title="Recent",
+            description="d",
             status="active",
         )
 
@@ -630,7 +725,10 @@ class TestUpdateDreamProgress:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
         Task.objects.create(goal=goal, title="T2", order=2, status="pending")
@@ -649,7 +747,10 @@ class TestUpdateDreamProgress:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
 
@@ -675,14 +776,20 @@ class TestUpdateDreamProgress:
     def test_milestone_notification_at_50_percent(self, dream_user):
         """Crossing 50% sends a progress milestone notification."""
         dream = Dream.objects.create(
-            user=dream_user, title="Half", description="d", status="active",
+            user=dream_user,
+            title="Half",
+            description="d",
+            status="active",
             progress_percentage=40.0,
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         # 3 of 4 tasks completed = 75% (crosses 50%)
         for i in range(3):
             Task.objects.create(
-                goal=goal, title=f"T{i}", order=i, status="completed",
+                goal=goal,
+                title=f"T{i}",
+                order=i,
+                status="completed",
                 completed_at=timezone.now(),
             )
         Task.objects.create(goal=goal, title="T3", order=3, status="pending")
@@ -746,8 +853,12 @@ class TestAutoScheduleTasks:
             user=dream_user, title="D", description="d", status="active"
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
-        Task.objects.create(goal=goal, title="T1", order=1, status="pending", duration_mins=30)
-        Task.objects.create(goal=goal, title="T2", order=2, status="pending", duration_mins=30)
+        Task.objects.create(
+            goal=goal, title="T1", order=1, status="pending", duration_mins=30
+        )
+        Task.objects.create(
+            goal=goal, title="T2", order=2, status="pending", duration_mins=30
+        )
 
         from apps.dreams.tasks import auto_schedule_tasks
 
@@ -787,7 +898,10 @@ class TestCheckOverdueTasks:
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         yesterday = timezone.now() - timedelta(days=1)
         Task.objects.create(
-            goal=goal, title="Overdue", order=1, status="pending",
+            goal=goal,
+            title="Overdue",
+            order=1,
+            status="pending",
             scheduled_date=yesterday,
         )
 
@@ -824,7 +938,9 @@ class TestSuggestTaskAdjustments:
 
         for i in range(10):
             Task.objects.create(
-                goal=goal, title=f"T{i}", order=i,
+                goal=goal,
+                title=f"T{i}",
+                order=i,
                 status="completed" if i < 2 else "pending",
                 completed_at=timezone.now() if i < 2 else None,
             )
@@ -848,7 +964,10 @@ class TestSuggestTaskAdjustments:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
 
@@ -878,8 +997,11 @@ class TestRunBiweeklyCheckins:
     @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
     def test_dispatches_checkins_for_due_dreams(self, mock_task, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Due", description="d",
-            status="active", plan_phase="partial",
+            user=dream_user,
+            title="Due",
+            description="d",
+            status="active",
+            plan_phase="partial",
             next_checkin_at=timezone.now() - timedelta(hours=1),
         )
 
@@ -893,12 +1015,17 @@ class TestRunBiweeklyCheckins:
     @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
     def test_skips_dreams_with_active_checkin(self, mock_task, dream_user):
         dream = Dream.objects.create(
-            user=dream_user, title="Active", description="d",
-            status="active", plan_phase="partial",
+            user=dream_user,
+            title="Active",
+            description="d",
+            status="active",
+            plan_phase="partial",
             next_checkin_at=timezone.now() - timedelta(hours=1),
         )
         PlanCheckIn.objects.create(
-            dream=dream, status="pending", scheduled_for=timezone.now(),
+            dream=dream,
+            status="pending",
+            scheduled_for=timezone.now(),
         )
 
         from apps.dreams.tasks import run_biweekly_checkins
@@ -909,8 +1036,11 @@ class TestRunBiweeklyCheckins:
     @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
     def test_skips_dreams_not_due(self, mock_task, dream_user):
         Dream.objects.create(
-            user=dream_user, title="Future", description="d",
-            status="active", plan_phase="partial",
+            user=dream_user,
+            title="Future",
+            description="d",
+            status="active",
+            plan_phase="partial",
             next_checkin_at=timezone.now() + timedelta(days=7),
         )
 
@@ -933,7 +1063,10 @@ class TestCheckMilestoneHelper:
         from apps.dreams.tasks import _check_milestone
 
         dream = Dream.objects.create(
-            user=dream_user, title="D", description="d", status="active",
+            user=dream_user,
+            title="D",
+            description="d",
+            status="active",
         )
 
         _check_milestone(dream, 20.0, 30.0)
@@ -946,7 +1079,10 @@ class TestCheckMilestoneHelper:
         from apps.dreams.tasks import _check_milestone
 
         dream = Dream.objects.create(
-            user=dream_user, title="D", description="d", status="active",
+            user=dream_user,
+            title="D",
+            description="d",
+            status="active",
         )
 
         _check_milestone(dream, 30.0, 40.0)

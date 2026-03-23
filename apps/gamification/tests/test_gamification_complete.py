@@ -7,11 +7,10 @@ Target: 95%+ coverage of apps/gamification/.
 
 import uuid
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.db import IntegrityError
-from django.test.utils import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -31,7 +30,6 @@ from apps.gamification.serializers import (
 )
 from apps.gamification.services import AchievementService, StreakService, XPService
 from apps.users.models import User
-
 
 # ═══════════════════════════════════════════════════════════════════
 # Fixtures

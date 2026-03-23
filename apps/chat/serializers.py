@@ -181,7 +181,7 @@ class ChatConversationSerializer(serializers.ModelSerializer):
             return {
                 "id": str(u.id),
                 "display_name": u.display_name or u.email,
-                "avatar": u.avatar.url if getattr(u, 'avatar', None) else "",
+                "avatar": u.avatar.url if getattr(u, "avatar", None) else "",
             }
 
         # Use the target_user FK if set

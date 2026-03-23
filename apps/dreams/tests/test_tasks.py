@@ -382,7 +382,10 @@ class TestUpdateDreamProgress:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
         Task.objects.create(goal=goal, title="T2", order=2, status="pending")
@@ -402,7 +405,10 @@ class TestUpdateDreamProgress:
         )
         goal = Goal.objects.create(dream=dream, title="G", order=1)
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
 
@@ -480,9 +486,7 @@ class TestSuggestTaskAdjustments:
     """Tests for suggest_task_adjustments task."""
 
     @patch("apps.dreams.tasks.OpenAIService")
-    def test_sends_suggestions_for_low_completion_rate(
-        self, mock_ai_cls, dream_user
-    ):
+    def test_sends_suggestions_for_low_completion_rate(self, mock_ai_cls, dream_user):
         """suggest_task_adjustments sends suggestions when completion rate < 50%."""
         dream = Dream.objects.create(
             user=dream_user, title="D", description="d", status="active"
@@ -521,7 +525,10 @@ class TestSuggestTaskAdjustments:
 
         # All tasks completed
         Task.objects.create(
-            goal=goal, title="T1", order=1, status="completed",
+            goal=goal,
+            title="T1",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
 

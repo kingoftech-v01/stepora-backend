@@ -16,7 +16,7 @@ Covers:
 import io
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -32,7 +32,6 @@ from apps.social.models import (
     DreamEncouragement,
     DreamPost,
     DreamPostComment,
-    DreamPostLike,
     Friendship,
     PostReaction,
     RecentSearch,
@@ -46,7 +45,6 @@ from apps.social.models import (
 from apps.social.validators import (
     _check_ftyp_box,
     _check_riff_format,
-    _validate_magic_bytes,
     validate_audio_upload,
     validate_event_cover_upload,
     validate_image_upload,

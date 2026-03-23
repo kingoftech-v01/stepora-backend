@@ -239,7 +239,6 @@ class TestBuddyEncouragementModel:
 # ══════════════════════════════════════════════════════════════════════
 
 
-
 @pytest.mark.django_db
 class TestBuddyAPI:
     """Tests for Buddy API endpoints."""

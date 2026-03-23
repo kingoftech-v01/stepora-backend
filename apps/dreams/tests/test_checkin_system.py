@@ -232,7 +232,11 @@ class TestCheckinCeleryTask:
     @patch("apps.dreams.tasks.OpenAIService")
     @patch("core.ai_validators.validate_checkin_questionnaire")
     def test_task_sends_notification_on_success(
-        self, mock_validate, mock_ai_cls, mock_notif_cls, mock_delivery_cls,
+        self,
+        mock_validate,
+        mock_ai_cls,
+        mock_notif_cls,
+        mock_delivery_cls,
         checkin_dream,
     ):
         """Celery task creates notification when check-in becomes awaiting_user."""
@@ -318,9 +322,7 @@ class TestCanCheckinSerializerField:
         data = serialize_dream(dream, checkin_user)
         assert data["can_checkin"] is False
 
-    def test_can_checkin_false_when_checked_in_today(
-        self, checkin_dream, checkin_user
-    ):
+    def test_can_checkin_false_when_checked_in_today(self, checkin_dream, checkin_user):
         checkin_dream.last_checkin_at = timezone.now()
         checkin_dream.save(update_fields=["last_checkin_at"])
         data = serialize_dream(checkin_dream, checkin_user)
@@ -334,9 +336,7 @@ class TestCanCheckinSerializerField:
         data = serialize_dream(checkin_dream, checkin_user)
         assert data["can_checkin"] is True
 
-    def test_can_checkin_false_when_awaiting_user(
-        self, checkin_dream, checkin_user
-    ):
+    def test_can_checkin_false_when_awaiting_user(self, checkin_dream, checkin_user):
         PlanCheckIn.objects.create(
             dream=checkin_dream,
             status="awaiting_user",
@@ -345,9 +345,7 @@ class TestCanCheckinSerializerField:
         data = serialize_dream(checkin_dream, checkin_user)
         assert data["can_checkin"] is False
 
-    def test_can_checkin_false_when_pending(
-        self, checkin_dream, checkin_user
-    ):
+    def test_can_checkin_false_when_pending(self, checkin_dream, checkin_user):
         PlanCheckIn.objects.create(
             dream=checkin_dream,
             status="pending",
@@ -435,19 +433,13 @@ class TestDreamDetailSerializerCheckinFields:
     """Verify DreamDetailSerializer also exposes check-in fields."""
 
     def test_detail_has_can_checkin(self, checkin_dream, checkin_user):
-        data = serialize_dream(
-            checkin_dream, checkin_user, DreamDetailSerializer
-        )
+        data = serialize_dream(checkin_dream, checkin_user, DreamDetailSerializer)
         assert "can_checkin" in data
 
     def test_detail_has_days_until_checkin(self, checkin_dream, checkin_user):
-        data = serialize_dream(
-            checkin_dream, checkin_user, DreamDetailSerializer
-        )
+        data = serialize_dream(checkin_dream, checkin_user, DreamDetailSerializer)
         assert "days_until_checkin" in data
 
     def test_detail_has_has_pending_checkin(self, checkin_dream, checkin_user):
-        data = serialize_dream(
-            checkin_dream, checkin_user, DreamDetailSerializer
-        )
+        data = serialize_dream(checkin_dream, checkin_user, DreamDetailSerializer)
         assert "has_pending_checkin" in data

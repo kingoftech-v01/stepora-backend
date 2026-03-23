@@ -526,9 +526,7 @@ class DreamSerializer(serializers.ModelSerializer):
         """Return True if this dream has a check-in awaiting user response."""
         from apps.plans.models import PlanCheckIn
 
-        return PlanCheckIn.objects.filter(
-            dream=obj, status="awaiting_user"
-        ).exists()
+        return PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists()
 
 
 class CalibrationResponseSerializer(serializers.ModelSerializer):
@@ -1137,7 +1135,10 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             "goal": {"help_text": "The goal this task belongs to."},
             "title": {"help_text": "Short title for the new task."},
             "description": {"help_text": "Detailed description of the task."},
-            "order": {"help_text": "Display order of the task within its goal.", "required": False},
+            "order": {
+                "help_text": "Display order of the task within its goal.",
+                "required": False,
+            },
             "scheduled_date": {"help_text": "Date when the task is scheduled."},
             "scheduled_time": {"help_text": "Time when the task is scheduled."},
             "duration_mins": {"help_text": "Estimated duration in minutes."},
@@ -1437,7 +1438,13 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "ai_analysis", "created_at", "updated_at", "signed_image_url"]
+        read_only_fields = [
+            "id",
+            "ai_analysis",
+            "created_at",
+            "updated_at",
+            "signed_image_url",
+        ]
         extra_kwargs = {
             "id": {"help_text": "Unique identifier for the progress photo."},
             "dream": {"help_text": "The dream this progress photo belongs to."},
@@ -1493,7 +1500,10 @@ class GoalCreateSerializer(serializers.ModelSerializer):
             },
             "title": {"help_text": "Short title for the new goal."},
             "description": {"help_text": "Detailed description of the goal."},
-            "order": {"help_text": "Display order of the goal within its milestone.", "required": False},
+            "order": {
+                "help_text": "Display order of the goal within its milestone.",
+                "required": False,
+            },
             "estimated_minutes": {
                 "help_text": "Estimated time to complete in minutes."
             },

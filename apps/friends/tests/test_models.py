@@ -24,13 +24,9 @@ class TestFriendship:
         assert f.status == "accepted"
 
     def test_unique_constraint(self, friend_user_a, friend_user_b):
-        Friendship.objects.create(
-            user1=friend_user_a, user2=friend_user_b
-        )
+        Friendship.objects.create(user1=friend_user_a, user2=friend_user_b)
         with pytest.raises(Exception):
-            Friendship.objects.create(
-                user1=friend_user_a, user2=friend_user_b
-            )
+            Friendship.objects.create(user1=friend_user_a, user2=friend_user_b)
 
 
 @pytest.mark.django_db
@@ -46,9 +42,7 @@ class TestUserFollow:
 @pytest.mark.django_db
 class TestBlockedUser:
     def test_block(self, friend_user_a, friend_user_b):
-        block = BlockedUser.objects.create(
-            blocker=friend_user_a, blocked=friend_user_b
-        )
+        block = BlockedUser.objects.create(blocker=friend_user_a, blocked=friend_user_b)
         assert BlockedUser.is_blocked(friend_user_a, friend_user_b)
         assert BlockedUser.is_blocked(friend_user_b, friend_user_a)
 

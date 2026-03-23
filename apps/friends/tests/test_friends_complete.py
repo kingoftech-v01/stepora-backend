@@ -108,27 +108,21 @@ class TestFriendshipModel:
     """Tests for the Friendship model."""
 
     def test_create_pending(self, user_a, user_b):
-        f = Friendship.objects.create(
-            user1=user_a, user2=user_b, status="pending"
-        )
+        f = Friendship.objects.create(user1=user_a, user2=user_b, status="pending")
         assert f.status == "pending"
         assert f.user1 == user_a
         assert f.user2 == user_b
         assert f.id is not None
 
     def test_accept_friendship(self, user_a, user_b):
-        f = Friendship.objects.create(
-            user1=user_a, user2=user_b, status="pending"
-        )
+        f = Friendship.objects.create(user1=user_a, user2=user_b, status="pending")
         f.status = "accepted"
         f.save(update_fields=["status", "updated_at"])
         f.refresh_from_db()
         assert f.status == "accepted"
 
     def test_reject_friendship(self, user_a, user_b):
-        f = Friendship.objects.create(
-            user1=user_a, user2=user_b, status="pending"
-        )
+        f = Friendship.objects.create(user1=user_a, user2=user_b, status="pending")
         f.status = "rejected"
         f.save(update_fields=["status", "updated_at"])
         f.refresh_from_db()
@@ -140,9 +134,7 @@ class TestFriendshipModel:
             Friendship.objects.create(user1=user_a, user2=user_b)
 
     def test_str_representation(self, user_a, user_b):
-        f = Friendship.objects.create(
-            user1=user_a, user2=user_b, status="pending"
-        )
+        f = Friendship.objects.create(user1=user_a, user2=user_b, status="pending")
         s = str(f)
         assert "Alice" in s
         assert "Bob" in s
@@ -346,12 +338,8 @@ class TestReportedUserModel:
 
     def test_multiple_reports_same_user(self, user_a, user_b, user_c):
         """Multiple users can report the same user."""
-        ReportedUser.objects.create(
-            reporter=user_a, reported=user_c, reason="Report 1"
-        )
-        ReportedUser.objects.create(
-            reporter=user_b, reported=user_c, reason="Report 2"
-        )
+        ReportedUser.objects.create(reporter=user_a, reported=user_c, reason="Report 1")
+        ReportedUser.objects.create(reporter=user_b, reported=user_c, reason="Report 2")
         assert ReportedUser.objects.filter(reported=user_c).count() == 2
 
 
@@ -364,22 +352,16 @@ class TestFriendshipService:
     """Tests for FriendshipService business logic."""
 
     def test_is_friend_accepted(self, user_a, user_b):
-        Friendship.objects.create(
-            user1=user_a, user2=user_b, status="accepted"
-        )
+        Friendship.objects.create(user1=user_a, user2=user_b, status="accepted")
         assert FriendshipService.is_friend(user_a.id, user_b.id) is True
         assert FriendshipService.is_friend(user_b.id, user_a.id) is True
 
     def test_is_friend_pending_not_friend(self, user_a, user_b):
-        Friendship.objects.create(
-            user1=user_a, user2=user_b, status="pending"
-        )
+        Friendship.objects.create(user1=user_a, user2=user_b, status="pending")
         assert FriendshipService.is_friend(user_a.id, user_b.id) is False
 
     def test_is_friend_rejected_not_friend(self, user_a, user_b):
-        Friendship.objects.create(
-            user1=user_a, user2=user_b, status="rejected"
-        )
+        Friendship.objects.create(user1=user_a, user2=user_b, status="rejected")
         assert FriendshipService.is_friend(user_a.id, user_b.id) is False
 
     def test_is_friend_no_relationship(self, user_a, user_b):
@@ -872,7 +854,9 @@ class TestEdgeCases:
         )
         assert resp.status_code == 400
 
-    def test_friend_list_both_directions(self, client_a, client_b, user_a, user_b, user_c):
+    def test_friend_list_both_directions(
+        self, client_a, client_b, user_a, user_b, user_c
+    ):
         """Friends list shows friends regardless of who sent the request."""
         Friendship.objects.create(user1=user_a, user2=user_b, status="accepted")
         Friendship.objects.create(user1=user_c, user2=user_a, status="accepted")

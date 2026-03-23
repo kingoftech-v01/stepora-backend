@@ -77,9 +77,9 @@ class FriendshipService:
         from .models import BlockedUser, Friendship
 
         # Get already-connected user IDs
-        existing = Friendship.objects.filter(
-            Q(user1=user) | Q(user2=user)
-        ).values_list("user1_id", "user2_id")
+        existing = Friendship.objects.filter(Q(user1=user) | Q(user2=user)).values_list(
+            "user1_id", "user2_id"
+        )
 
         excluded_ids = {str(user.id)}
         for u1, u2 in existing:

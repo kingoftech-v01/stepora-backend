@@ -51,7 +51,10 @@ class ChatConversationAdmin(admin.ModelAdmin):
     inlines = [ChatMessageInline]
 
     fieldsets = (
-        ("Basic Info", {"fields": ("user", "target_user", "buddy_pairing", "is_active")}),
+        (
+            "Basic Info",
+            {"fields": ("user", "target_user", "buddy_pairing", "is_active")},
+        ),
         ("Statistics", {"fields": ("total_messages",)}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )

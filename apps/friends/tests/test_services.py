@@ -27,9 +27,7 @@ def svc_user_c(db):
 @pytest.mark.django_db
 class TestFriendshipService:
     def test_is_friend(self, svc_user_a, svc_user_b):
-        Friendship.objects.create(
-            user1=svc_user_a, user2=svc_user_b, status="accepted"
-        )
+        Friendship.objects.create(user1=svc_user_a, user2=svc_user_b, status="accepted")
         assert FriendshipService.is_friend(svc_user_a.id, svc_user_b.id)
         assert FriendshipService.is_friend(svc_user_b.id, svc_user_a.id)
 
@@ -42,12 +40,8 @@ class TestFriendshipService:
 
     def test_mutual_friends(self, svc_user_a, svc_user_b, svc_user_c):
         # A-C friends, B-C friends
-        Friendship.objects.create(
-            user1=svc_user_a, user2=svc_user_c, status="accepted"
-        )
-        Friendship.objects.create(
-            user1=svc_user_b, user2=svc_user_c, status="accepted"
-        )
+        Friendship.objects.create(user1=svc_user_a, user2=svc_user_c, status="accepted")
+        Friendship.objects.create(user1=svc_user_b, user2=svc_user_c, status="accepted")
         mutual = FriendshipService.mutual_friends(svc_user_a.id, svc_user_b.id)
         assert len(mutual) == 1
         assert mutual[0]["id"] == str(svc_user_c.id)

@@ -37,7 +37,6 @@ from apps.dreams.models import Dream
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.users.models import User
 
-
 # ════════════════════════════════════════════════════════════════════
 #  Helpers
 # ════════════════════════════════════════════════════════════════════
@@ -180,9 +179,7 @@ class TestBuddyPairingLifecycle:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_pair_nonexistent_user(self, c1):
-        resp = c1.post(
-            "/api/v1/buddies/pair/", {"partner_id": str(uuid.uuid4())}
-        )
+        resp = c1.post("/api/v1/buddies/pair/", {"partner_id": str(uuid.uuid4())})
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
     def test_pair_already_active_blocked(self, c1, u3, active_pair):
@@ -376,17 +373,13 @@ class TestAccountabilityContractCreate:
     """Tests for creating accountability contracts."""
 
     def test_create_success(self, c1, contract_payload):
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", contract_payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", contract_payload, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
         assert "contract" in resp.data
         assert resp.data["contract"]["title"] == "30-Day Fitness"
 
     def test_create_not_in_pairing(self, c3, contract_payload):
-        resp = c3.post(
-            "/api/v1/buddies/contracts/", contract_payload, format="json"
-        )
+        resp = c3.post("/api/v1/buddies/contracts/", contract_payload, format="json")
         assert resp.status_code in (
             status.HTTP_403_FORBIDDEN,
             status.HTTP_404_NOT_FOUND,
@@ -402,9 +395,7 @@ class TestAccountabilityContractCreate:
             "start_date": str(today),
             "end_date": str(today - timedelta(days=1)),  # end before start
         }
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", payload, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_create_no_goals(self, c1, active_pair):
@@ -417,9 +408,7 @@ class TestAccountabilityContractCreate:
             "start_date": str(today),
             "end_date": str(today + timedelta(days=30)),
         }
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", payload, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_create_too_many_goals(self, c1, active_pair):
@@ -428,16 +417,13 @@ class TestAccountabilityContractCreate:
             "pairing_id": str(active_pair.id),
             "title": "Many goals",
             "goals": [
-                {"title": f"G{i}", "target": i + 1, "unit": "tasks"}
-                for i in range(11)
+                {"title": f"G{i}", "target": i + 1, "unit": "tasks"} for i in range(11)
             ],
             "check_in_frequency": "weekly",
             "start_date": str(today),
             "end_date": str(today + timedelta(days=30)),
         }
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", payload, format="json")
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_create_with_nonexistent_pairing(self, c1):
@@ -450,9 +436,7 @@ class TestAccountabilityContractCreate:
             "start_date": str(today),
             "end_date": str(today + timedelta(days=30)),
         }
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", payload, format="json")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
@@ -505,9 +489,7 @@ class TestAccountabilityContractCheckIn:
     """Tests for contract check-ins."""
 
     def _create_contract(self, c1, contract_payload):
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", contract_payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", contract_payload, format="json")
         return resp.data["contract"]["id"]
 
     def test_checkin_success(self, c1, contract_payload):
@@ -575,9 +557,7 @@ class TestAccountabilityContractProgress:
     """Tests for viewing contract progress."""
 
     def _create_contract(self, c1, contract_payload):
-        resp = c1.post(
-            "/api/v1/buddies/contracts/", contract_payload, format="json"
-        )
+        resp = c1.post("/api/v1/buddies/contracts/", contract_payload, format="json")
         return resp.data["contract"]["id"]
 
     def test_progress_with_checkins(self, c1, c2, contract_payload):
@@ -685,83 +665,119 @@ class TestBuddyMatchingServiceScoring:
     # -- Activity similarity --
 
     def test_activity_same_streak(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=10), MagicMock(streak_days=10)
-        ) == 1.0
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=10), MagicMock(streak_days=10)
+            )
+            == 1.0
+        )
 
     def test_activity_diff_2(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=5), MagicMock(streak_days=7)
-        ) == 0.8
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=5), MagicMock(streak_days=7)
+            )
+            == 0.8
+        )
 
     def test_activity_diff_6(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=1), MagicMock(streak_days=7)
-        ) == 0.6
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=1), MagicMock(streak_days=7)
+            )
+            == 0.6
+        )
 
     def test_activity_diff_12(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=0), MagicMock(streak_days=12)
-        ) == 0.4
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=0), MagicMock(streak_days=12)
+            )
+            == 0.4
+        )
 
     def test_activity_diff_25(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=0), MagicMock(streak_days=25)
-        ) == 0.2
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=0), MagicMock(streak_days=25)
+            )
+            == 0.2
+        )
 
     def test_activity_diff_large(self, svc):
-        assert svc._calculate_activity_similarity(
-            MagicMock(streak_days=0), MagicMock(streak_days=100)
-        ) == 0.1
+        assert (
+            svc._calculate_activity_similarity(
+                MagicMock(streak_days=0), MagicMock(streak_days=100)
+            )
+            == 0.1
+        )
 
     # -- Timezone proximity --
 
     def test_tz_same(self, svc):
-        assert svc._calculate_timezone_proximity(
-            MagicMock(timezone="Europe/Paris"), MagicMock(timezone="Europe/Paris")
-        ) == 1.0
+        assert (
+            svc._calculate_timezone_proximity(
+                MagicMock(timezone="Europe/Paris"), MagicMock(timezone="Europe/Paris")
+            )
+            == 1.0
+        )
 
     def test_tz_same_region(self, svc):
-        assert svc._calculate_timezone_proximity(
-            MagicMock(timezone="Europe/Paris"), MagicMock(timezone="Europe/London")
-        ) == 0.7
+        assert (
+            svc._calculate_timezone_proximity(
+                MagicMock(timezone="Europe/Paris"), MagicMock(timezone="Europe/London")
+            )
+            == 0.7
+        )
 
     def test_tz_different_region(self, svc):
-        assert svc._calculate_timezone_proximity(
-            MagicMock(timezone="Europe/Paris"), MagicMock(timezone="America/New_York")
-        ) == 0.3
+        assert (
+            svc._calculate_timezone_proximity(
+                MagicMock(timezone="Europe/Paris"),
+                MagicMock(timezone="America/New_York"),
+            )
+            == 0.3
+        )
 
     def test_tz_null(self, svc):
-        assert svc._calculate_timezone_proximity(
-            MagicMock(timezone=None), MagicMock(timezone=None)
-        ) == 1.0
+        assert (
+            svc._calculate_timezone_proximity(
+                MagicMock(timezone=None), MagicMock(timezone=None)
+            )
+            == 1.0
+        )
 
     # -- Level similarity --
 
     def test_level_same(self, svc):
-        assert svc._calculate_level_similarity(
-            MagicMock(level=5), MagicMock(level=5)
-        ) == 1.0
+        assert (
+            svc._calculate_level_similarity(MagicMock(level=5), MagicMock(level=5))
+            == 1.0
+        )
 
     def test_level_diff_2(self, svc):
-        assert svc._calculate_level_similarity(
-            MagicMock(level=5), MagicMock(level=7)
-        ) == 0.8
+        assert (
+            svc._calculate_level_similarity(MagicMock(level=5), MagicMock(level=7))
+            == 0.8
+        )
 
     def test_level_diff_4(self, svc):
-        assert svc._calculate_level_similarity(
-            MagicMock(level=5), MagicMock(level=9)
-        ) == 0.6
+        assert (
+            svc._calculate_level_similarity(MagicMock(level=5), MagicMock(level=9))
+            == 0.6
+        )
 
     def test_level_diff_8(self, svc):
-        assert svc._calculate_level_similarity(
-            MagicMock(level=2), MagicMock(level=10)
-        ) == 0.4
+        assert (
+            svc._calculate_level_similarity(MagicMock(level=2), MagicMock(level=10))
+            == 0.4
+        )
 
     def test_level_diff_20(self, svc):
-        assert svc._calculate_level_similarity(
-            MagicMock(level=1), MagicMock(level=21)
-        ) == 0.2
+        assert (
+            svc._calculate_level_similarity(MagicMock(level=1), MagicMock(level=21))
+            == 0.2
+        )
 
     # -- Category matching --
 
@@ -839,9 +855,7 @@ class TestBuddyMatchingServiceExclusions:
         )
         u2.last_activity = timezone.now()
         u2.save(update_fields=["last_activity"])
-        Dream.objects.create(
-            user=u2, title="D", description="d", status="active"
-        )
+        Dream.objects.create(user=u2, title="D", description="d", status="active")
         svc = BuddyMatchingService()
         candidates = svc._get_eligible_candidates(u1)
         assert u2 in candidates
@@ -921,9 +935,7 @@ class TestBuddyMatchingServiceExclusions:
 
     def test_create_buddy_request_sends_notification(self, u1, u3):
         svc = BuddyMatchingService()
-        with patch.object(
-            svc, "_send_buddy_request_notification"
-        ) as mock_notify:
+        with patch.object(svc, "_send_buddy_request_notification") as mock_notify:
             svc.create_buddy_request(u1, u3, 0.7, ["education"])
             mock_notify.assert_called_once()
 

@@ -17,7 +17,9 @@ class ChatConversation(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_conversations"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="chat_conversations",
     )
     target_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -75,7 +77,9 @@ class ChatMessage(models.Model):
         ("user", "User"),
         ("system", "System"),
     ]
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="user", db_index=True)
+    role = models.CharField(
+        max_length=10, choices=ROLE_CHOICES, default="user", db_index=True
+    )
     content = EncryptedTextField(help_text="Message content (encrypted at rest).")
 
     # Voice message support
@@ -167,10 +171,14 @@ class Call(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     caller = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="outgoing_calls"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="outgoing_calls",
     )
     callee = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="incoming_calls"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="incoming_calls",
     )
     buddy_pairing = models.ForeignKey(
         "buddies.BuddyPairing",

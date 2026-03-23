@@ -36,7 +36,9 @@ from core.consumers import MAX_MSG_CONTENT_LEN, MAX_MSG_SIZE
 @database_sync_to_async
 def _create_user(email, display_name="Circle Test User"):
     return User.objects.create_user(
-        email=email, password="testpassword123", display_name=display_name,
+        email=email,
+        password="testpassword123",
+        display_name=display_name,
     )
 
 
@@ -55,7 +57,9 @@ def _create_circle(creator, name="Test Circle"):
 @database_sync_to_async
 def _add_member(circle, user, role="member"):
     return CircleMembership.objects.create(
-        circle=circle, user=user, role=role,
+        circle=circle,
+        user=user,
+        role=role,
     )
 
 
@@ -326,7 +330,9 @@ class TestCircleChatSendReceive:
             await communicator.receive_json_from()
 
             long_content = "a" * (MAX_MSG_CONTENT_LEN + 1)
-            await communicator.send_json_to({"type": "message", "message": long_content})
+            await communicator.send_json_to(
+                {"type": "message", "message": long_content}
+            )
             response = await communicator.receive_json_from()
             assert response["type"] == "error"
             assert "character limit" in response["error"].lower()

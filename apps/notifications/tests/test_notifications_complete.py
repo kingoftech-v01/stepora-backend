@@ -13,9 +13,8 @@ Covers:
 - Edge cases in should_send()
 """
 
-import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -36,7 +35,6 @@ from apps.notifications.serializers import (
 )
 from apps.notifications.services import NotificationService
 from apps.users.models import User
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

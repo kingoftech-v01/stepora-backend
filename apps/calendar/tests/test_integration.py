@@ -280,9 +280,7 @@ class TestTimeBlockCRUD:
 
     def test_delete_time_block(self, cal_client, time_block):
         """Delete a time block."""
-        response = cal_client.delete(
-            f"/api/calendar/timeblocks/{time_block.id}/"
-        )
+        response = cal_client.delete(f"/api/calendar/timeblocks/{time_block.id}/")
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_list_time_blocks_unauthenticated(self):
@@ -451,9 +449,7 @@ class TestRecurringEvents:
             is_recurring=True,
             recurrence_rule={"frequency": "daily", "interval": 1},
         )
-        response = cal_client.get(
-            f"/api/calendar/events/{event.id}/exceptions/"
-        )
+        response = cal_client.get(f"/api/calendar/events/{event.id}/exceptions/")
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -474,9 +470,7 @@ class TestCalendarOverview:
         today = date.today()
         start = (today - td(days=27)).isoformat()
         end = today.isoformat()
-        response = cal_client.get(
-            f"/api/calendar/heatmap/?start={start}&end={end}"
-        )
+        response = cal_client.get(f"/api/calendar/heatmap/?start={start}&end={end}")
         assert response.status_code == status.HTTP_200_OK
 
     def test_heatmap_missing_params(self, cal_client):
@@ -660,9 +654,7 @@ class TestEventSnoozeDismiss:
 
     def test_dismiss_event(self, cal_client, cal_event):
         """Dismiss an event alert."""
-        response = cal_client.post(
-            f"/api/calendar/events/{cal_event.id}/dismiss/"
-        )
+        response = cal_client.post(f"/api/calendar/events/{cal_event.id}/dismiss/")
         assert response.status_code == status.HTTP_200_OK
 
 
@@ -710,6 +702,7 @@ class TestCalendarView:
     def test_calendar_view_default(self, cal_client):
         """Get calendar view with date range."""
         from datetime import datetime, timedelta
+
         start = (datetime.now() - timedelta(days=7)).isoformat()
         end = (datetime.now() + timedelta(days=7)).isoformat()
         response = cal_client.get(f"/api/calendar/view/?start={start}&end={end}")
@@ -748,6 +741,7 @@ class TestScheduleScore:
     def test_schedule_score_with_date(self, cal_client):
         """Get schedule score for specific date."""
         from datetime import date
+
         today = date.today().isoformat()
         response = cal_client.get(f"/api/calendar/schedule-score/?date={today}")
         assert response.status_code == status.HTTP_200_OK
@@ -779,9 +773,7 @@ class TestSuggestTimeSlots:
 
     def test_suggest_time_slots(self, cal_client):
         """Suggest time slots for a task."""
-        response = cal_client.get(
-            "/api/calendar/suggest-time-slots/?duration=30"
-        )
+        response = cal_client.get("/api/calendar/suggest-time-slots/?duration=30")
         assert response.status_code in (
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
@@ -866,9 +858,8 @@ class TestDismissEvent:
     def test_dismiss_nonexistent(self, cal_client):
         """Dismiss nonexistent event returns 404."""
         import uuid
-        response = cal_client.post(
-            f"/api/calendar/events/{uuid.uuid4()}/dismiss/"
-        )
+
+        response = cal_client.post(f"/api/calendar/events/{uuid.uuid4()}/dismiss/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 

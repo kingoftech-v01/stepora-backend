@@ -75,9 +75,7 @@ class AchievementService:
         try:
             from apps.circles.models import CircleMembership
 
-            stats["circles_joined"] = CircleMembership.objects.filter(
-                user=user
-            ).count()
+            stats["circles_joined"] = CircleMembership.objects.filter(user=user).count()
         except Exception:
             stats["circles_joined"] = 0
 
@@ -241,9 +239,7 @@ class StreakService:
             streak_updated_at=today,
             streak_freeze_used_at=today,
         )
-        user.refresh_from_db(
-            fields=["streak_updated_at", "streak_freeze_used_at"]
-        )
+        user.refresh_from_db(fields=["streak_updated_at", "streak_freeze_used_at"])
 
         # Decrement jokers
         GamificationProfile.objects.filter(id=profile.id).update(
@@ -298,20 +294,16 @@ class StreakService:
         today = timezone.now().date()
         start = today - timedelta(days=days - 1)
 
-        activities = DailyActivity.objects.filter(
-            user=user, date__gte=start
-        ).order_by("date")
+        activities = DailyActivity.objects.filter(user=user, date__gte=start).order_by(
+            "date"
+        )
         act_map = {a.date: a.tasks_completed for a in activities}
 
         result = []
         for i in range(days):
             d = start + timedelta(days=i)
             count = act_map.get(d, 0)
-            level = (
-                0
-                if count == 0
-                else (1 if count <= 1 else (2 if count <= 3 else 3))
-            )
+            level = 0 if count == 0 else (1 if count <= 1 else (2 if count <= 3 else 3))
             result.append(
                 {
                     "date": d.isoformat(),

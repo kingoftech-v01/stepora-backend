@@ -17,7 +17,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 from django.utils import timezone
-from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus
@@ -26,11 +25,9 @@ from apps.chat.serializers import (
     ChatConversationDetailSerializer,
     ChatConversationSerializer,
     ChatMessageCreateSerializer,
-    ChatMessageSerializer,
 )
 from apps.friends.models import BlockedUser
 from apps.users.models import User
-
 
 # ──────────────────────────────────────────────────────────────────────
 #  Fixtures
@@ -201,9 +198,7 @@ class TestConversationStart:
             format="json",
         )
         assert resp.status_code == 201
-        assert ChatConversation.objects.filter(
-            user=user_a, target_user=user_c
-        ).exists()
+        assert ChatConversation.objects.filter(user=user_a, target_user=user_c).exists()
 
     def test_start_returns_existing(self, client_a, conversation_ab, user_b):
         resp = client_a.post(
@@ -320,7 +315,9 @@ class TestSendMessage:
         assert conversation_ab.total_messages == 1
 
     @patch("channels.layers.get_channel_layer")
-    def test_send_message_includes_sender_metadata(self, mock_layer, client_a, user_a, conversation_ab):
+    def test_send_message_includes_sender_metadata(
+        self, mock_layer, client_a, user_a, conversation_ab
+    ):
         mock_layer.return_value = None
         resp = client_a.post(
             f"/api/chat/{conversation_ab.id}/send-message/",
@@ -381,7 +378,9 @@ class TestSendMessage:
         assert resp.status_code == 404
 
     @patch("channels.layers.get_channel_layer")
-    def test_ws_failure_does_not_block_send(self, mock_layer, client_a, conversation_ab):
+    def test_ws_failure_does_not_block_send(
+        self, mock_layer, client_a, conversation_ab
+    ):
         """WebSocket broadcast failure is non-blocking."""
         mock_layer.side_effect = Exception("Channel layer down")
         resp = client_a.post(
@@ -471,13 +470,17 @@ class TestMarkRead:
         assert resp.data["status"] == "ok"
         assert resp.data["last_read_message_id"] == str(message_in_ab.id)
 
-    def test_mark_read_creates_status(self, client_a, user_a, conversation_ab, message_in_ab):
+    def test_mark_read_creates_status(
+        self, client_a, user_a, conversation_ab, message_in_ab
+    ):
         client_a.post(f"/api/chat/{conversation_ab.id}/mark-read/")
         assert MessageReadStatus.objects.filter(
             user=user_a, conversation=conversation_ab
         ).exists()
 
-    def test_mark_read_updates_existing(self, client_a, user_a, conversation_ab, message_in_ab):
+    def test_mark_read_updates_existing(
+        self, client_a, user_a, conversation_ab, message_in_ab
+    ):
         client_a.post(f"/api/chat/{conversation_ab.id}/mark-read/")
         msg2 = ChatMessage.objects.create(
             conversation=conversation_ab, role="user", content="New msg"
@@ -752,8 +755,10 @@ class TestIncomingCalls:
 
     def test_incoming_excludes_completed(self, client_b, user_a, user_b):
         Call.objects.create(
-            caller=user_a, callee=user_b,
-            call_type="voice", status="completed",
+            caller=user_a,
+            callee=user_b,
+            call_type="voice",
+            status="completed",
         )
         resp = client_b.get("/api/chat/calls/incoming/")
         for c in resp.data:
@@ -770,7 +775,9 @@ class TestBlockingPreventsCall:
     """Blocked users cannot call each other."""
 
     @patch("apps.chat.views.CallViewSet._notify_callee")
-    def test_blocked_user_cannot_initiate_call(self, mock_notify, client_a, user_a, user_b):
+    def test_blocked_user_cannot_initiate_call(
+        self, mock_notify, client_a, user_a, user_b
+    ):
         BlockedUser.objects.create(blocker=user_b, blocked=user_a, reason="spam")
         resp = client_a.post(
             "/api/chat/calls/initiate/",
@@ -843,24 +850,30 @@ class TestAgoraRtmToken:
     """POST /api/chat/agora/rtm-token/"""
 
     def test_rtm_not_configured(self, client_a):
-        with patch("django.conf.settings.AGORA_APP_ID", ""), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", ""):
+        with patch("django.conf.settings.AGORA_APP_ID", ""), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", ""
+        ):
             resp = client_a.post("/api/chat/agora/rtm-token/")
         assert resp.status_code == 503
 
     def test_rtm_success(self, client_a):
         import sys
         import types
+
         mock_rtm = types.ModuleType("agora_token_builder.RtmTokenBuilder")
         mock_builder = Mock()
         mock_builder.buildToken.return_value = "fake-rtm-token"
         mock_rtm.RtmTokenBuilder = mock_builder
         mock_rtm.Role_Rtm_User = 1
-        with patch.dict(sys.modules, {
-            "agora_token_builder": types.ModuleType("agora_token_builder"),
-            "agora_token_builder.RtmTokenBuilder": mock_rtm,
-        }), patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch.dict(
+            sys.modules,
+            {
+                "agora_token_builder": types.ModuleType("agora_token_builder"),
+                "agora_token_builder.RtmTokenBuilder": mock_rtm,
+            },
+        ), patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post("/api/chat/agora/rtm-token/")
         assert resp.status_code == 200
         assert resp.data["token"] == "fake-rtm-token"
@@ -873,8 +886,9 @@ class TestAgoraRtcToken:
     """POST /api/chat/agora/rtc-token/"""
 
     def test_rtc_not_configured(self, client_a):
-        with patch("django.conf.settings.AGORA_APP_ID", ""), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", ""):
+        with patch("django.conf.settings.AGORA_APP_ID", ""), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", ""
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": "test"},
@@ -883,14 +897,16 @@ class TestAgoraRtcToken:
         assert resp.status_code == 503
 
     def test_rtc_missing_channel(self, client_a):
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post("/api/chat/agora/rtc-token/", {}, format="json")
         assert resp.status_code == 400
 
     def test_rtc_invalid_channel_name(self, client_a):
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": "invalid name!@#"},
@@ -899,8 +915,9 @@ class TestAgoraRtcToken:
         assert resp.status_code == 400
 
     def test_rtc_channel_too_long(self, client_a):
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": "a" * 65},
@@ -910,8 +927,9 @@ class TestAgoraRtcToken:
 
     def test_rtc_not_authorized(self, client_a):
         """Channel name that doesn't match any active call or circle."""
-        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": str(uuid.uuid4())},
@@ -923,6 +941,7 @@ class TestAgoraRtcToken:
         """RTC token for an active call the user is part of."""
         import sys
         import types
+
         mock_rtc = types.ModuleType("agora_token_builder.RtcTokenBuilder")
         mock_builder = Mock()
         mock_builder.buildTokenWithAccount.return_value = "fake-rtc-token"
@@ -932,11 +951,15 @@ class TestAgoraRtcToken:
         call = Call.objects.create(
             caller=user_a, callee=user_b, call_type="voice", status="ringing"
         )
-        with patch.dict(sys.modules, {
-            "agora_token_builder": types.ModuleType("agora_token_builder"),
-            "agora_token_builder.RtcTokenBuilder": mock_rtc,
-        }), patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch.dict(
+            sys.modules,
+            {
+                "agora_token_builder": types.ModuleType("agora_token_builder"),
+                "agora_token_builder.RtcTokenBuilder": mock_rtc,
+            },
+        ), patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channelName": str(call.id)},
@@ -950,6 +973,7 @@ class TestAgoraRtcToken:
         """channel_name (snake_case) also accepted."""
         import sys
         import types
+
         mock_rtc = types.ModuleType("agora_token_builder.RtcTokenBuilder")
         mock_builder = Mock()
         mock_builder.buildTokenWithAccount.return_value = "fake-rtc-token"
@@ -959,11 +983,15 @@ class TestAgoraRtcToken:
         call = Call.objects.create(
             caller=user_a, callee=user_b, call_type="voice", status="ringing"
         )
-        with patch.dict(sys.modules, {
-            "agora_token_builder": types.ModuleType("agora_token_builder"),
-            "agora_token_builder.RtcTokenBuilder": mock_rtc,
-        }), patch("django.conf.settings.AGORA_APP_ID", "test-id"), \
-             patch("django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"):
+        with patch.dict(
+            sys.modules,
+            {
+                "agora_token_builder": types.ModuleType("agora_token_builder"),
+                "agora_token_builder.RtcTokenBuilder": mock_rtc,
+            },
+        ), patch("django.conf.settings.AGORA_APP_ID", "test-id"), patch(
+            "django.conf.settings.AGORA_APP_CERTIFICATE", "test-cert"
+        ):
             resp = client_a.post(
                 "/api/chat/agora/rtc-token/",
                 {"channel_name": str(call.id)},
@@ -989,9 +1017,16 @@ class TestChatConversationSerializerComplete:
             conversation_ab, context={"request": request}
         ).data
         expected = {
-            "id", "user", "title", "total_messages", "is_active",
-            "last_message", "unread_count", "target_user",
-            "created_at", "updated_at",
+            "id",
+            "user",
+            "title",
+            "total_messages",
+            "is_active",
+            "last_message",
+            "unread_count",
+            "target_user",
+            "created_at",
+            "updated_at",
         }
         assert set(data.keys()) == expected
 
@@ -1031,7 +1066,9 @@ class TestChatConversationSerializerComplete:
     def test_unread_count_no_read_status(self, conversation_ab, user_b):
         """user_b has not read any messages — all from user_a are unread."""
         ChatMessage.objects.create(
-            conversation=conversation_ab, role="user", content="Msg from A",
+            conversation=conversation_ab,
+            role="user",
+            content="Msg from A",
             metadata={"sender_id": str(conversation_ab.user_id)},
         )
         factory = APIRequestFactory()
@@ -1042,7 +1079,9 @@ class TestChatConversationSerializerComplete:
         ).data
         assert data["unread_count"] >= 1
 
-    def test_unread_count_with_read_status(self, conversation_ab, user_b, message_in_ab):
+    def test_unread_count_with_read_status(
+        self, conversation_ab, user_b, message_in_ab
+    ):
         """After mark-read, unread_count should be 0 for user_b."""
         MessageReadStatus.objects.create(
             user=user_b,
@@ -1109,9 +1148,17 @@ class TestCallHistorySerializerComplete:
     def test_fields(self, ringing_call_ab):
         data = CallHistorySerializer(ringing_call_ab).data
         expected = {
-            "id", "caller_id", "callee_id", "caller_name", "callee_name",
-            "call_type", "status", "started_at", "ended_at",
-            "duration_seconds", "created_at",
+            "id",
+            "caller_id",
+            "callee_id",
+            "caller_name",
+            "callee_name",
+            "call_type",
+            "status",
+            "started_at",
+            "ended_at",
+            "duration_seconds",
+            "created_at",
         }
         assert set(data.keys()) == expected
 
@@ -1143,7 +1190,9 @@ class TestChatConversationModelComplete:
 class TestChatMessageModelComplete:
     def test_create(self, conversation_ab, user_a):
         msg = ChatMessage.objects.create(
-            conversation=conversation_ab, role="user", content="Hi",
+            conversation=conversation_ab,
+            role="user",
+            content="Hi",
             metadata={"sender_id": str(user_a.id)},
         )
         assert isinstance(msg.id, uuid.UUID)
@@ -1211,7 +1260,8 @@ class TestChatMessageModelComplete:
 class TestMessageReadStatusModelComplete:
     def test_create(self, user_a, conversation_ab, message_in_ab):
         rs = MessageReadStatus.objects.create(
-            user=user_a, conversation=conversation_ab,
+            user=user_a,
+            conversation=conversation_ab,
             last_read_message=message_in_ab,
         )
         assert rs.pk is not None
@@ -1219,13 +1269,16 @@ class TestMessageReadStatusModelComplete:
 
     def test_unique_constraint(self, user_a, conversation_ab, message_in_ab):
         from django.db import IntegrityError
+
         MessageReadStatus.objects.create(
-            user=user_a, conversation=conversation_ab,
+            user=user_a,
+            conversation=conversation_ab,
             last_read_message=message_in_ab,
         )
         with pytest.raises(IntegrityError):
             MessageReadStatus.objects.create(
-                user=user_a, conversation=conversation_ab,
+                user=user_a,
+                conversation=conversation_ab,
                 last_read_message=message_in_ab,
             )
 
@@ -1234,8 +1287,10 @@ class TestMessageReadStatusModelComplete:
 class TestCallModelComplete:
     def test_create(self, user_a, user_b):
         call = Call.objects.create(
-            caller=user_a, callee=user_b,
-            call_type="voice", status="ringing",
+            caller=user_a,
+            callee=user_b,
+            call_type="voice",
+            status="ringing",
         )
         assert isinstance(call.id, uuid.UUID)
         assert call.duration_seconds == 0
@@ -1247,21 +1302,35 @@ class TestCallModelComplete:
         assert "ringing" in s
 
     def test_all_status_choices(self, user_a, user_b):
-        for st in ["ringing", "accepted", "in_progress", "completed", "rejected", "missed", "cancelled"]:
+        for st in [
+            "ringing",
+            "accepted",
+            "in_progress",
+            "completed",
+            "rejected",
+            "missed",
+            "cancelled",
+        ]:
             call = Call.objects.create(
-                caller=user_a, callee=user_b,
-                call_type="voice", status=st,
+                caller=user_a,
+                callee=user_b,
+                call_type="voice",
+                status=st,
             )
             assert call.status == st
 
     def test_ordering(self, user_a, user_b):
         c1 = Call.objects.create(
-            caller=user_a, callee=user_b,
-            call_type="voice", status="completed",
+            caller=user_a,
+            callee=user_b,
+            call_type="voice",
+            status="completed",
         )
         c2 = Call.objects.create(
-            caller=user_a, callee=user_b,
-            call_type="video", status="ringing",
+            caller=user_a,
+            callee=user_b,
+            call_type="video",
+            status="ringing",
         )
         calls = list(Call.objects.all())
         assert calls[0].id == c2.id
@@ -1279,9 +1348,8 @@ class TestCallWithBuddyPairing:
     @patch("apps.chat.views.CallViewSet._notify_callee")
     def test_initiate_with_buddy_pairing(self, mock_notify, client_a, user_a, user_b):
         from apps.buddies.models import BuddyPairing
-        BuddyPairing.objects.create(
-            user1=user_a, user2=user_b, status="active"
-        )
+
+        BuddyPairing.objects.create(user1=user_a, user2=user_b, status="active")
         with patch("channels.layers.get_channel_layer") as mock_layer:
             mock_layer.return_value = None
             resp = client_a.post(
@@ -1299,6 +1367,7 @@ class TestSendMessageBuddyConversation:
     @patch("channels.layers.get_channel_layer")
     def test_send_in_buddy_conv(self, mock_layer, client_a, user_a, user_b):
         from apps.buddies.models import BuddyPairing
+
         pairing = BuddyPairing.objects.create(
             user1=user_a, user2=user_b, status="active"
         )
@@ -1328,6 +1397,7 @@ class TestNotifyCallee:
             caller=user_a, callee=user_b, call_type="voice", status="ringing"
         )
         from apps.chat.views import CallViewSet
+
         viewset = CallViewSet()
         # Should not raise
         viewset._notify_callee(call, user_a)
@@ -1335,8 +1405,12 @@ class TestNotifyCallee:
     @patch("apps.notifications.fcm_service.FCMService")
     def test_with_device(self, mock_fcm_cls, user_a, user_b):
         from apps.notifications.models import UserDevice
+
         UserDevice.objects.create(
-            user=user_b, fcm_token="test-token", platform="android", is_active=True,
+            user=user_b,
+            fcm_token="test-token",
+            platform="android",
+            is_active=True,
         )
         mock_fcm_instance = Mock()
         mock_fcm_cls.return_value = mock_fcm_instance
@@ -1345,6 +1419,7 @@ class TestNotifyCallee:
             caller=user_a, callee=user_b, call_type="voice", status="ringing"
         )
         from apps.chat.views import CallViewSet
+
         CallViewSet()._notify_callee(call, user_a)
         mock_fcm_instance.send_to_token.assert_called_once()
 
@@ -1360,7 +1435,14 @@ class TestChatAdmin:
 
     def test_admin_registered(self):
         from django.contrib.admin.sites import site
-        from apps.chat.models import Call, ChatConversation, ChatMessage, MessageReadStatus
+
+        from apps.chat.models import (
+            Call,
+            ChatConversation,
+            ChatMessage,
+            MessageReadStatus,
+        )
+
         assert ChatConversation in site._registry
         assert ChatMessage in site._registry
         assert Call in site._registry
@@ -1368,6 +1450,7 @@ class TestChatAdmin:
 
     def test_conversation_admin_content_preview(self, conversation_ab, message_in_ab):
         from apps.chat.admin import ChatMessageAdmin
+
         admin_instance = ChatMessageAdmin(ChatMessage, None)
         preview = admin_instance.content_preview(message_in_ab)
         assert preview == "Hello from A!"
@@ -1383,15 +1466,18 @@ class TestChatRouting:
 
     def test_routing_patterns_exist(self):
         from apps.chat.routing import websocket_urlpatterns
+
         assert len(websocket_urlpatterns) >= 1
 
     def test_buddy_chat_pattern(self):
         from apps.chat.routing import websocket_urlpatterns
+
         patterns = [p.pattern.regex.pattern for p in websocket_urlpatterns]
         assert any("buddy-chat" in p for p in patterns)
 
     def test_pairing_id_captured(self):
         from apps.chat.routing import websocket_urlpatterns
+
         pattern = websocket_urlpatterns[0]
         assert "pairing_id" in pattern.pattern.regex.pattern
 
@@ -1404,5 +1490,6 @@ class TestChatRouting:
 class TestChatAppConfig:
     def test_app_name(self):
         from apps.chat.apps import ChatConfig
+
         assert ChatConfig.name == "apps.chat"
         assert ChatConfig.verbose_name == "Chat"

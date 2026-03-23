@@ -33,10 +33,13 @@ from apps.users.models import User
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+
 def _make_pro_user(email, display_name="ProUser"):
     """Create a pro user (can create circles + all circle access)."""
     user = User.objects.create_user(
-        email=email, password="testpass123", display_name=display_name,
+        email=email,
+        password="testpass123",
+        display_name=display_name,
     )
     plan = SubscriptionPlan.objects.get(slug="pro")
     Subscription.objects.update_or_create(
@@ -54,7 +57,9 @@ def _make_pro_user(email, display_name="ProUser"):
 def _make_premium_user(email, display_name="PremiumUser"):
     """Create a premium user (circle join access but NOT create)."""
     user = User.objects.create_user(
-        email=email, password="testpass123", display_name=display_name,
+        email=email,
+        password="testpass123",
+        display_name=display_name,
     )
     plan = SubscriptionPlan.objects.get(slug="premium")
     Subscription.objects.update_or_create(
@@ -76,6 +81,7 @@ def _client(user):
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def admin_user(db):
@@ -110,8 +116,12 @@ def outsider_client(outsider_user):
 @pytest.fixture
 def circle(db, admin_user):
     c = Circle.objects.create(
-        name="Test Circle", description="Desc", category="career",
-        is_public=True, creator=admin_user, max_members=20,
+        name="Test Circle",
+        description="Desc",
+        category="career",
+        is_public=True,
+        creator=admin_user,
+        max_members=20,
     )
     CircleMembership.objects.create(circle=c, user=admin_user, role="admin")
     return c
@@ -120,8 +130,12 @@ def circle(db, admin_user):
 @pytest.fixture
 def private_circle(db, admin_user):
     c = Circle.objects.create(
-        name="Private Circle", description="Private desc", category="education",
-        is_public=False, creator=admin_user, max_members=10,
+        name="Private Circle",
+        description="Private desc",
+        category="education",
+        is_public=False,
+        creator=admin_user,
+        max_members=10,
     )
     CircleMembership.objects.create(circle=c, user=admin_user, role="admin")
     return c
@@ -129,22 +143,29 @@ def private_circle(db, admin_user):
 
 @pytest.fixture
 def member_membership(db, circle, member_user):
-    return CircleMembership.objects.create(circle=circle, user=member_user, role="member")
+    return CircleMembership.objects.create(
+        circle=circle, user=member_user, role="member"
+    )
 
 
 @pytest.fixture
 def post(db, circle, admin_user):
     return CirclePost.objects.create(
-        circle=circle, author=admin_user, content="Hello world",
+        circle=circle,
+        author=admin_user,
+        content="Hello world",
     )
 
 
 @pytest.fixture
 def challenge(db, circle, admin_user):
     ch = CircleChallenge.objects.create(
-        circle=circle, creator=admin_user,
-        title="Test Challenge", description="Desc",
-        challenge_type="tasks_completed", target_value=10,
+        circle=circle,
+        creator=admin_user,
+        title="Test Challenge",
+        description="Desc",
+        challenge_type="tasks_completed",
+        target_value=10,
         start_date=timezone.now() - timedelta(hours=1),
         end_date=timezone.now() + timedelta(days=7),
         status="active",
@@ -154,19 +175,29 @@ def challenge(db, circle, admin_user):
 
 # ── Circle CRUD ──────────────────────────────────────────────────────
 
+
 class TestCircleCreate:
     def test_create_success(self, admin_client, admin_user):
-        resp = admin_client.post("/api/v1/circles/circles/", {
-            "name": "New Circle", "description": "A new circle",
-            "category": "health", "is_public": True,
-        })
+        resp = admin_client.post(
+            "/api/v1/circles/circles/",
+            {
+                "name": "New Circle",
+                "description": "A new circle",
+                "category": "health",
+                "is_public": True,
+            },
+        )
         assert resp.status_code == 201
         assert Circle.objects.filter(name="New Circle").exists()
 
     def test_create_auto_admin_membership(self, admin_client, admin_user):
-        resp = admin_client.post("/api/v1/circles/circles/", {
-            "name": "Auto Admin", "category": "fitness",
-        })
+        resp = admin_client.post(
+            "/api/v1/circles/circles/",
+            {
+                "name": "Auto Admin",
+                "category": "fitness",
+            },
+        )
         assert resp.status_code == 201
         circle = Circle.objects.get(name="Auto Admin")
         assert CircleMembership.objects.filter(
@@ -228,13 +259,16 @@ class TestCircleDelete:
 
 # ── Join / Leave ─────────────────────────────────────────────────────
 
+
 class TestJoinLeave:
     def test_join_public(self, outsider_client, circle):
         resp = outsider_client.post(f"/api/v1/circles/circles/{circle.id}/join/")
         assert resp.status_code == 200
 
     def test_join_private_denied(self, outsider_client, private_circle):
-        resp = outsider_client.post(f"/api/v1/circles/circles/{private_circle.id}/join/")
+        resp = outsider_client.post(
+            f"/api/v1/circles/circles/{private_circle.id}/join/"
+        )
         assert resp.status_code == 403
 
     def test_join_already_member(self, admin_client, circle):
@@ -243,8 +277,12 @@ class TestJoinLeave:
 
     def test_join_full_circle(self, outsider_client, db, admin_user):
         c = Circle.objects.create(
-            name="Full", description="Full", category="other",
-            is_public=True, creator=admin_user, max_members=1,
+            name="Full",
+            description="Full",
+            category="other",
+            is_public=True,
+            creator=admin_user,
+            max_members=1,
         )
         CircleMembership.objects.create(circle=c, user=admin_user, role="admin")
         resp = outsider_client.post(f"/api/v1/circles/circles/{c.id}/join/")
@@ -258,7 +296,9 @@ class TestJoinLeave:
         resp = outsider_client.post(f"/api/v1/circles/circles/{circle.id}/leave/")
         assert resp.status_code == 400
 
-    def test_leave_last_admin_auto_transfer(self, admin_client, circle, member_membership):
+    def test_leave_last_admin_auto_transfer(
+        self, admin_client, circle, member_membership
+    ):
         # Admin leaves, member should become admin
         resp = admin_client.post(f"/api/v1/circles/circles/{circle.id}/leave/")
         assert resp.status_code == 200
@@ -267,6 +307,7 @@ class TestJoinLeave:
 
 
 # ── Feed & Posts ─────────────────────────────────────────────────────
+
 
 class TestFeedPosts:
     def test_feed(self, admin_client, circle, post):
@@ -306,7 +347,9 @@ class TestFeedPosts:
         )
         assert resp.status_code == 204
 
-    def test_edit_post_non_author_non_mod(self, member_client, circle, post, member_membership):
+    def test_edit_post_non_author_non_mod(
+        self, member_client, circle, post, member_membership
+    ):
         # member_membership is role=member, post author is admin
         resp = member_client.put(
             f"/api/v1/circles/circles/{circle.id}/posts/{post.id}/edit/",
@@ -336,6 +379,7 @@ class TestFeedPosts:
 
 
 # ── Reactions ────────────────────────────────────────────────────────
+
 
 class TestReactions:
     def test_react(self, admin_client, circle, post):
@@ -382,11 +426,16 @@ class TestReactions:
 
 # ── Polls / Votes ────────────────────────────────────────────────────
 
+
 class TestPollVote:
     @pytest.fixture
     def poll_post(self, db, circle, admin_user):
-        p = CirclePost.objects.create(circle=circle, author=admin_user, content="Poll post")
-        poll = CirclePoll.objects.create(post=p, question="Choice?", allows_multiple=False)
+        p = CirclePost.objects.create(
+            circle=circle, author=admin_user, content="Poll post"
+        )
+        poll = CirclePoll.objects.create(
+            post=p, question="Choice?", allows_multiple=False
+        )
         opt1 = PollOption.objects.create(poll=poll, text="A", order=0)
         opt2 = PollOption.objects.create(poll=poll, text="B", order=1)
         return p, poll, opt1, opt2
@@ -400,7 +449,9 @@ class TestPollVote:
         )
         assert resp.status_code == 200
 
-    def test_vote_multiple_on_single_choice_denied(self, admin_client, circle, poll_post):
+    def test_vote_multiple_on_single_choice_denied(
+        self, admin_client, circle, poll_post
+    ):
         p, poll, opt1, opt2 = poll_post
         resp = admin_client.post(
             f"/api/v1/circles/circles/{circle.id}/posts/{p.id}/vote/",
@@ -420,6 +471,7 @@ class TestPollVote:
 
 
 # ── Challenges ───────────────────────────────────────────────────────
+
 
 class TestChallenges:
     def test_list_challenges(self, admin_client, circle, challenge):
@@ -445,7 +497,9 @@ class TestChallenges:
         )
         assert resp.status_code == 201
 
-    def test_create_challenge_member_denied(self, member_client, circle, member_membership):
+    def test_create_challenge_member_denied(
+        self, member_client, circle, member_membership
+    ):
         resp = member_client.post(
             f"/api/v1/circles/circles/{circle.id}/challenges/create/",
             {
@@ -496,6 +550,7 @@ class TestChallenges:
 
 
 # ── Members management ───────────────────────────────────────────────
+
 
 class TestMembersManagement:
     def test_promote(self, admin_client, circle, member_membership):
@@ -549,6 +604,7 @@ class TestMembersManagement:
 
 # ── Invitations ──────────────────────────────────────────────────────
 
+
 class TestInvitations:
     def test_invite_user(self, admin_client, circle, outsider_user):
         resp = admin_client.post(
@@ -557,7 +613,9 @@ class TestInvitations:
         )
         assert resp.status_code == 201
 
-    def test_invite_already_member(self, admin_client, circle, member_user, member_membership):
+    def test_invite_already_member(
+        self, admin_client, circle, member_user, member_membership
+    ):
         resp = admin_client.post(
             f"/api/v1/circles/circles/{circle.id}/invite/",
             {"user_id": str(member_user.id)},
@@ -578,9 +636,13 @@ class TestInvitations:
         resp = admin_client.get(f"/api/v1/circles/circles/{circle.id}/invitations/")
         assert resp.status_code == 200
 
-    def test_join_by_invite_code(self, admin_client, outsider_client, circle, outsider_user):
+    def test_join_by_invite_code(
+        self, admin_client, outsider_client, circle, outsider_user
+    ):
         # Generate invite link
-        invite_resp = admin_client.post(f"/api/v1/circles/circles/{circle.id}/invite-link/")
+        invite_resp = admin_client.post(
+            f"/api/v1/circles/circles/{circle.id}/invite-link/"
+        )
         code = invite_resp.data["invite_code"]
         resp = outsider_client.post(f"/api/v1/circles/circles/join/{code}/")
         assert resp.status_code == 200
@@ -595,6 +657,7 @@ class TestInvitations:
 
 
 # ── Chat ─────────────────────────────────────────────────────────────
+
 
 class TestCircleChat:
     def test_chat_history(self, admin_client, circle):
@@ -621,6 +684,7 @@ class TestCircleChat:
 
 
 # ── Calls ────────────────────────────────────────────────────────────
+
 
 class TestCircleCalls:
     def test_start_call(self, admin_client, circle):
@@ -684,7 +748,9 @@ class TestCircleCalls:
         resp = member_client.post(f"/api/v1/circles/circles/{circle.id}/call/join/")
         assert resp.status_code == 404
 
-    def test_end_call_non_initiator_non_admin(self, member_client, admin_client, circle, member_membership):
+    def test_end_call_non_initiator_non_admin(
+        self, member_client, admin_client, circle, member_membership
+    ):
         admin_client.post(
             f"/api/v1/circles/circles/{circle.id}/call/start/",
             {"call_type": "voice"},
@@ -695,6 +761,7 @@ class TestCircleCalls:
 
 # ── Permission checks ────────────────────────────────────────────────
 
+
 class TestCirclePermissions:
     def test_unauthenticated(self, db):
         client = APIClient()
@@ -703,14 +770,21 @@ class TestCirclePermissions:
 
     def test_free_user_denied(self, db):
         user = User.objects.create_user(
-            email="freecircle@test.com", password="testpass123", display_name="FreeCircle",
+            email="freecircle@test.com",
+            password="testpass123",
+            display_name="FreeCircle",
         )
         plan, _ = SubscriptionPlan.objects.get_or_create(
             slug="free",
-            defaults={"name": "Free", "price_monthly": Decimal("0.00"), "has_circles": False},
+            defaults={
+                "name": "Free",
+                "price_monthly": Decimal("0.00"),
+                "has_circles": False,
+            },
         )
         Subscription.objects.update_or_create(
-            user=user, defaults={"plan": plan, "status": "active"},
+            user=user,
+            defaults={"plan": plan, "status": "active"},
         )
         c = _client(user)
         resp = c.get("/api/v1/circles/circles/")

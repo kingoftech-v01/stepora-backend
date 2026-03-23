@@ -308,10 +308,14 @@ def extract_chat_memories(self, conversation_id):
         # Increment background usage counter
         tracker.increment(user, "ai_background")
 
-        logger.info(f"Extracted {created} memories from AI conversation {conversation_id}")
+        logger.info(
+            f"Extracted {created} memories from AI conversation {conversation_id}"
+        )
 
     except AIConversation.DoesNotExist:
-        logger.error(f"AIConversation {conversation_id} not found for memory extraction.")
+        logger.error(
+            f"AIConversation {conversation_id} not found for memory extraction."
+        )
     except OpenAIError as e:
         logger.error(f"Memory extraction error for {conversation_id}: {e}")
         raise self.retry(exc=e, countdown=60)

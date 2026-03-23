@@ -5,10 +5,14 @@ Handles OAuth2 authentication, event creation, update, deletion,
 and incremental sync from Google Calendar.
 """
 
+import base64
+import hashlib
+import hmac
 import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -19,18 +23,47 @@ class GoogleCalendarService:
 
     SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-    def __init__(self, integration=None):
+    def __init__(self, user=None, integration=None):
         """
-        Initialize with optional GoogleCalendarIntegration instance.
+        Initialize with optional user and/or GoogleCalendarIntegration instance.
 
         Args:
+            user: Django User instance (required for PKCE auth flow).
             integration: GoogleCalendarIntegration model instance.
         """
+        self.user = user
         self.integration = integration
+
+    def _generate_code_verifier(self):
+        """
+        Generate a deterministic PKCE code_verifier from user identity.
+
+        Uses HMAC-SHA256 with the Django secret key and the user's ID
+        combined with the Google client ID to produce a consistent
+        code_verifier. This serves as a fallback if the Redis-cached
+        verifier is lost (e.g., cache eviction between auth and callback).
+
+        Returns:
+            Base64url-encoded string (43-128 chars per PKCE spec).
+        """
+        if not self.user:
+            raise ValueError("User required for PKCE code_verifier generation")
+        data = f"{self.user.id}:{settings.GOOGLE_CALENDAR_CLIENT_ID}".encode()
+        key = settings.SECRET_KEY.encode()
+        digest = hmac.new(key, data, hashlib.sha256).digest()
+        # Base64url encode, trim padding, limit to 128 chars (PKCE spec: 43-128)
+        return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:128]
+
+    def _cache_key(self):
+        """Redis cache key for storing the PKCE code_verifier."""
+        return f"google_oauth_verifier:{self.user.id}"
 
     def get_auth_url(self, redirect_uri):
         """
-        Generate the OAuth2 authorization URL.
+        Generate the OAuth2 authorization URL with PKCE code_verifier.
+
+        The code_verifier is cached in Redis (15 min TTL) and also
+        recoverable deterministically via _generate_code_verifier().
 
         Args:
             redirect_uri: The callback URL after Google auth.
@@ -39,6 +72,10 @@ class GoogleCalendarService:
             Authorization URL string.
         """
         from google_auth_oauthlib.flow import Flow
+
+        code_verifier = self._generate_code_verifier()
+        # Cache for 15 minutes (OAuth flow should complete well within this)
+        cache.set(self._cache_key(), code_verifier, timeout=900)
 
         flow = Flow.from_client_config(
             {
@@ -51,9 +88,11 @@ class GoogleCalendarService:
             },
             scopes=self.SCOPES,
             redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
+            autogenerate_code_verifier=False,
         )
 
-        auth_url, _ = flow.authorization_url(
+        auth_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
@@ -64,6 +103,9 @@ class GoogleCalendarService:
         """
         Exchange authorization code for access/refresh tokens.
 
+        Retrieves the PKCE code_verifier from Redis cache, falling back
+        to deterministic generation if the cache entry was evicted.
+
         Args:
             code: Authorization code from Google callback.
             redirect_uri: Same redirect_uri used in get_auth_url.
@@ -72,6 +114,9 @@ class GoogleCalendarService:
             Dict with access_token, refresh_token, token_expiry.
         """
         from google_auth_oauthlib.flow import Flow
+
+        # Try cache first, fall back to deterministic verifier
+        code_verifier = cache.get(self._cache_key()) or self._generate_code_verifier()
 
         flow = Flow.from_client_config(
             {
@@ -84,10 +129,15 @@ class GoogleCalendarService:
             },
             scopes=self.SCOPES,
             redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
+            autogenerate_code_verifier=False,
         )
 
         flow.fetch_token(code=code)
         credentials = flow.credentials
+
+        # Clear cache after successful exchange
+        cache.delete(self._cache_key())
 
         return {
             "access_token": credentials.token,

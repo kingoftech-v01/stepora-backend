@@ -48,6 +48,7 @@ def _mock_stripe_signal():
     with patch("apps.subscriptions.services.StripeService.create_customer"):
         yield
 
+
 # ── Fixtures ────────────────────────────────────────────────────────
 
 
@@ -61,13 +62,20 @@ def free_user(db):
     )
     plan, _ = SubscriptionPlan.objects.get_or_create(
         slug="free",
-        defaults={"name": "Free", "price_monthly": 0, "is_active": True,
-                  "dream_limit": 3, "has_ai": False, "has_vision_board": False},
+        defaults={
+            "name": "Free",
+            "price_monthly": 0,
+            "is_active": True,
+            "dream_limit": 3,
+            "has_ai": False,
+            "has_vision_board": False,
+        },
     )
     Subscription.objects.update_or_create(
         user=user,
         defaults={
-            "plan": plan, "status": "active",
+            "plan": plan,
+            "status": "active",
             "current_period_start": timezone.now(),
             "current_period_end": timezone.now() + timedelta(days=30),
         },
@@ -92,13 +100,20 @@ def prem_user(db):
     )
     plan, _ = SubscriptionPlan.objects.get_or_create(
         slug="premium",
-        defaults={"name": "Premium", "price_monthly": 19.99, "is_active": True,
-                  "dream_limit": 10, "has_ai": True, "has_vision_board": False},
+        defaults={
+            "name": "Premium",
+            "price_monthly": 19.99,
+            "is_active": True,
+            "dream_limit": 10,
+            "has_ai": True,
+            "has_vision_board": False,
+        },
     )
     Subscription.objects.update_or_create(
         user=user,
         defaults={
-            "plan": plan, "status": "active",
+            "plan": plan,
+            "status": "active",
             "current_period_start": timezone.now(),
             "current_period_end": timezone.now() + timedelta(days=30),
         },
@@ -123,13 +138,20 @@ def pro_user_cov(db):
     )
     plan, _ = SubscriptionPlan.objects.get_or_create(
         slug="pro",
-        defaults={"name": "Pro", "price_monthly": 29.99, "is_active": True,
-                  "dream_limit": -1, "has_ai": True, "has_vision_board": True},
+        defaults={
+            "name": "Pro",
+            "price_monthly": 29.99,
+            "is_active": True,
+            "dream_limit": -1,
+            "has_ai": True,
+            "has_vision_board": True,
+        },
     )
     Subscription.objects.update_or_create(
         user=user,
         defaults={
-            "plan": plan, "status": "active",
+            "plan": plan,
+            "status": "active",
             "current_period_start": timezone.now(),
             "current_period_end": timezone.now() + timedelta(days=30),
         },
@@ -195,6 +217,7 @@ def cov_milestone(cov_dream):
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
+
 def _ach_patch():
     """Patch AchievementService.check_achievements to avoid BuddyPairing error."""
     return patch(
@@ -229,14 +252,14 @@ class TestDreamViewSetGetQueryset:
         d = Dream.objects.create(
             user=other_user, title="OtherDream", description="Other desc"
         )
-        SharedDream.objects.create(
-            dream=d, shared_by=other_user, shared_with=prem_user
-        )
+        SharedDream.objects.create(dream=d, shared_by=other_user, shared_with=prem_user)
         resp = prem_client.get("/api/dreams/dreams/")
         ids = [str(r["id"]) for r in resp.data.get("results", resp.data)]
         assert str(d.id) in ids
 
-    def test_queryset_includes_collaborator_dreams(self, prem_client, prem_user, other_user):
+    def test_queryset_includes_collaborator_dreams(
+        self, prem_client, prem_user, other_user
+    ):
         """Dreams user collaborates on appear in list."""
         d = Dream.objects.create(
             user=other_user, title="CollabDream", description="Collab desc"
@@ -249,7 +272,9 @@ class TestDreamViewSetGetQueryset:
     def test_retrieve_public_dream_from_other_user(self, prem_client, other_user):
         """Authenticated user can retrieve another user's public dream."""
         d = Dream.objects.create(
-            user=other_user, title="PublicDream", description="Public desc",
+            user=other_user,
+            title="PublicDream",
+            description="Public desc",
             is_public=True,
         )
         resp = prem_client.get(f"/api/dreams/dreams/{d.id}/")
@@ -271,9 +296,13 @@ class TestDreamViewSetSerializerSelection:
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/")
         assert resp.status_code == 200
 
-    def test_retrieve_other_public_dream_uses_public_serializer(self, prem_client, other_user):
+    def test_retrieve_other_public_dream_uses_public_serializer(
+        self, prem_client, other_user
+    ):
         d = Dream.objects.create(
-            user=other_user, title="PublicDream2", description="P desc",
+            user=other_user,
+            title="PublicDream2",
+            description="P desc",
             is_public=True,
         )
         resp = prem_client.get(f"/api/dreams/dreams/{d.id}/")
@@ -295,7 +324,11 @@ class TestDreamViewSetPermissions:
         """Free user can create dreams within limit."""
         resp = free_client.post(
             "/api/dreams/dreams/",
-            {"title": "Free Dream", "description": "A free dream for testing", "category": "education"},
+            {
+                "title": "Free Dream",
+                "description": "A free dream for testing",
+                "category": "education",
+            },
             format="json",
         )
         assert resp.status_code in (201, 400)
@@ -324,7 +357,10 @@ class TestAnalyze:
     def test_analyze_success(self, mock_validate, mock_analyze, prem_client, cov_dream):
         mock_analyze.return_value = {"category": "education", "detected_language": "en"}
         result_mock = Mock()
-        result_mock.model_dump.return_value = {"category": "education", "detected_language": "en"}
+        result_mock.model_dump.return_value = {
+            "category": "education",
+            "detected_language": "en",
+        }
         mock_validate.return_value = result_mock
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/analyze/")
         assert resp.status_code == 200
@@ -336,17 +372,24 @@ class TestAnalyze:
         """Analyze sets category and language when dream has none."""
         # Use a separate user to isolate from cov_dream fixture
         user = User.objects.create_user(
-            email="analyze_cat@example.com", password="testpassword123",
+            email="analyze_cat@example.com",
+            password="testpassword123",
         )
         plan, _ = SubscriptionPlan.objects.get_or_create(
             slug="premium",
-            defaults={"name": "Premium", "price_monthly": 19.99, "is_active": True,
-                      "dream_limit": 10, "has_ai": True},
+            defaults={
+                "name": "Premium",
+                "price_monthly": 19.99,
+                "is_active": True,
+                "dream_limit": 10,
+                "has_ai": True,
+            },
         )
         Subscription.objects.update_or_create(
             user=user,
             defaults={
-                "plan": plan, "status": "active",
+                "plan": plan,
+                "status": "active",
                 "current_period_start": timezone.now(),
                 "current_period_end": timezone.now() + timedelta(days=30),
             },
@@ -354,12 +397,18 @@ class TestAnalyze:
         client = APIClient()
         client.force_authenticate(user=user)
         d = Dream.objects.create(
-            user=user, title="NoCat", description="No category dream",
-            category="", language="",
+            user=user,
+            title="NoCat",
+            description="No category dream",
+            category="",
+            language="",
         )
         mock_analyze.return_value = {"category": "career", "detected_language": "fr"}
         result_mock = Mock()
-        result_mock.model_dump.return_value = {"category": "career", "detected_language": "fr"}
+        result_mock.model_dump.return_value = {
+            "category": "career",
+            "detected_language": "fr",
+        }
         mock_validate.return_value = result_mock
         resp = client.post(f"/api/dreams/dreams/{d.id}/analyze/")
         assert resp.status_code == 200
@@ -374,8 +423,11 @@ class TestAnalyze:
 
     @patch("integrations.openai_service.OpenAIService.analyze_dream")
     @patch("apps.dreams.views.validate_analysis_response")
-    def test_analyze_ai_validation_error(self, mock_validate, mock_analyze, prem_client, cov_dream):
+    def test_analyze_ai_validation_error(
+        self, mock_validate, mock_analyze, prem_client, cov_dream
+    ):
         from core.ai_validators import AIValidationError
+
         mock_analyze.return_value = {}
         mock_validate.side_effect = AIValidationError("bad output")
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/analyze/")
@@ -384,6 +436,7 @@ class TestAnalyze:
     @patch("integrations.openai_service.OpenAIService.analyze_dream")
     def test_analyze_openai_error(self, mock_analyze, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         mock_analyze.side_effect = OpenAIError("api fail")
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/analyze/")
         assert resp.status_code == 500
@@ -395,7 +448,9 @@ class TestAnalyze:
 @pytest.mark.django_db
 class TestPredictObstacles:
     @patch("integrations.openai_service.OpenAIService.predict_obstacles")
-    def test_predict_obstacles_success(self, mock_predict, prem_client, cov_dream, cov_goal, cov_task):
+    def test_predict_obstacles_success(
+        self, mock_predict, prem_client, cov_dream, cov_goal, cov_task
+    ):
         mock_predict.return_value = {"obstacles": [{"title": "Time"}]}
         Obstacle.objects.create(dream=cov_dream, title="Existing", status="active")
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/predict-obstacles/")
@@ -404,15 +459,20 @@ class TestPredictObstacles:
     @patch("integrations.openai_service.OpenAIService.predict_obstacles")
     def test_predict_obstacles_openai_error(self, mock_predict, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         mock_predict.side_effect = OpenAIError("fail")
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/predict-obstacles/")
         assert resp.status_code == 500
 
     @patch("integrations.openai_service.OpenAIService.predict_obstacles")
-    def test_predict_obstacles_with_past_patterns(self, mock_predict, prem_client, prem_user, cov_dream):
+    def test_predict_obstacles_with_past_patterns(
+        self, mock_predict, prem_client, prem_user, cov_dream
+    ):
         """Other dream obstacles feed into past_patterns."""
         other_dream = Dream.objects.create(
-            user=prem_user, title="Other", description="Other dream desc",
+            user=prem_user,
+            title="Other",
+            description="Other dream desc",
             category="health",
         )
         Obstacle.objects.create(dream=other_dream, title="Past Obs", status="resolved")
@@ -427,17 +487,26 @@ class TestPredictObstacles:
 @pytest.mark.django_db
 class TestConversationStarters:
     @patch("integrations.openai_service.OpenAIService.generate_starters")
-    def test_conversation_starters_success(self, mock_starters, prem_client, cov_dream, cov_goal, cov_task):
+    def test_conversation_starters_success(
+        self, mock_starters, prem_client, cov_dream, cov_goal, cov_task
+    ):
         mock_starters.return_value = {"starters": ["How are you?"]}
         Obstacle.objects.create(dream=cov_dream, title="Obs", status="active")
-        resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/conversation-starters/")
+        resp = prem_client.get(
+            f"/api/dreams/dreams/{cov_dream.id}/conversation-starters/"
+        )
         assert resp.status_code == 200
 
     @patch("integrations.openai_service.OpenAIService.generate_starters")
-    def test_conversation_starters_openai_error(self, mock_starters, prem_client, cov_dream):
+    def test_conversation_starters_openai_error(
+        self, mock_starters, prem_client, cov_dream
+    ):
         from core.exceptions import OpenAIError
+
         mock_starters.side_effect = OpenAIError("fail")
-        resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/conversation-starters/")
+        resp = prem_client.get(
+            f"/api/dreams/dreams/{cov_dream.id}/conversation-starters/"
+        )
         assert resp.status_code == 500
 
 
@@ -449,11 +518,18 @@ class TestSimilarDreams:
     @patch("integrations.openai_service.OpenAIService.find_similar_dreams")
     def test_similar_success(self, mock_similar, prem_client, cov_dream, other_user):
         Dream.objects.create(
-            user=other_user, title="Public", description="desc", is_public=True,
+            user=other_user,
+            title="Public",
+            description="desc",
+            is_public=True,
         )
         DreamTemplate.objects.create(
-            title="Template", description="tpl desc", category="education",
-            template_goals=[], is_active=True, is_featured=True,
+            title="Template",
+            description="tpl desc",
+            category="education",
+            template_goals=[],
+            is_active=True,
+            is_featured=True,
         )
         mock_similar.return_value = {"similar_dreams": [], "related_templates": []}
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/similar/")
@@ -462,6 +538,7 @@ class TestSimilarDreams:
     @patch("integrations.openai_service.OpenAIService.find_similar_dreams")
     def test_similar_openai_error(self, mock_similar, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         mock_similar.side_effect = OpenAIError("fail")
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/similar/")
         assert resp.status_code == 500
@@ -474,7 +551,9 @@ class TestSimilarDreams:
 class TestSmartAnalysis:
     @patch("integrations.openai_service.OpenAIService.smart_analysis")
     @patch("apps.dreams.views.validate_smart_analysis_response")
-    def test_smart_analysis_success(self, mock_validate, mock_ai, prem_client, cov_dream, cov_goal, cov_task):
+    def test_smart_analysis_success(
+        self, mock_validate, mock_ai, prem_client, cov_dream, cov_goal, cov_task
+    ):
         mock_ai.return_value = {"patterns": []}
         result_mock = Mock()
         result_mock.model_dump.return_value = {"patterns": []}
@@ -490,8 +569,11 @@ class TestSmartAnalysis:
 
     @patch("integrations.openai_service.OpenAIService.smart_analysis")
     @patch("apps.dreams.views.validate_smart_analysis_response")
-    def test_smart_analysis_validation_error(self, mock_validate, mock_ai, prem_client, cov_dream):
+    def test_smart_analysis_validation_error(
+        self, mock_validate, mock_ai, prem_client, cov_dream
+    ):
         from core.ai_validators import AIValidationError
+
         mock_ai.return_value = {}
         mock_validate.side_effect = AIValidationError("bad")
         resp = prem_client.get("/api/dreams/dreams/smart-analysis/")
@@ -500,6 +582,7 @@ class TestSmartAnalysis:
     @patch("integrations.openai_service.OpenAIService.smart_analysis")
     def test_smart_analysis_openai_error(self, mock_ai, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         mock_ai.side_effect = OpenAIError("fail")
         resp = prem_client.get("/api/dreams/dreams/smart-analysis/")
         assert resp.status_code == 500
@@ -515,7 +598,10 @@ class TestAutoCategorize:
         mock_cat.return_value = {"category": "career", "tags": ["work"]}
         resp = prem_client.post(
             "/api/dreams/dreams/auto-categorize/",
-            {"title": "Get Promoted", "description": "I want to get promoted at my current job"},
+            {
+                "title": "Get Promoted",
+                "description": "I want to get promoted at my current job",
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -539,10 +625,14 @@ class TestAutoCategorize:
     @patch("integrations.openai_service.OpenAIService.auto_categorize")
     def test_auto_categorize_openai_error(self, mock_cat, prem_client):
         from core.exceptions import OpenAIError
+
         mock_cat.side_effect = OpenAIError("fail")
         resp = prem_client.post(
             "/api/dreams/dreams/auto-categorize/",
-            {"title": "Test", "description": "Long enough description for testing purposes"},
+            {
+                "title": "Test",
+                "description": "Long enough description for testing purposes",
+            },
             format="json",
         )
         assert resp.status_code == 500
@@ -555,10 +645,14 @@ class TestAutoCategorize:
 class TestStartCalibration:
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     @patch("apps.dreams.views.validate_calibration_questions")
-    def test_start_calibration_success(self, mock_validate, mock_gen, prem_client, cov_dream):
+    def test_start_calibration_success(
+        self, mock_validate, mock_gen, prem_client, cov_dream
+    ):
         q1 = Mock(question="Q1?", category="specifics")
         q2 = Mock(question="Q2?", category="timeline")
-        result_mock = Mock(questions=[q1, q2], sufficient=False, confidence_score=0.3, missing_areas=[])
+        result_mock = Mock(
+            questions=[q1, q2], sufficient=False, confidence_score=0.3, missing_areas=[]
+        )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/start_calibration/")
@@ -567,7 +661,9 @@ class TestStartCalibration:
 
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     @patch("apps.dreams.views.validate_calibration_questions")
-    def test_start_calibration_already_completed(self, mock_validate, mock_gen, prem_client, cov_dream):
+    def test_start_calibration_already_completed(
+        self, mock_validate, mock_gen, prem_client, cov_dream
+    ):
         cov_dream.calibration_status = "completed"
         cov_dream.save(update_fields=["calibration_status"])
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/start_calibration/")
@@ -582,8 +678,11 @@ class TestStartCalibration:
     ):
         """When category is ambiguous, a disambiguation question is added."""
         d = Dream.objects.create(
-            user=prem_user, title="Ambig", description="Ambiguous dream",
-            category="", calibration_status="pending",
+            user=prem_user,
+            title="Ambig",
+            description="Ambiguous dream",
+            category="",
+            calibration_status="pending",
         )
         mock_detect.return_value = {
             "category": "other",
@@ -592,7 +691,9 @@ class TestStartCalibration:
         }
         mock_disamb.return_value = "Which area fits better?"
         q1 = Mock(question="Q1?", category="timeline")
-        result_mock = Mock(questions=[q1], sufficient=False, confidence_score=0.3, missing_areas=[])
+        result_mock = Mock(
+            questions=[q1], sufficient=False, confidence_score=0.3, missing_areas=[]
+        )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
         resp = prem_client.post(f"/api/dreams/dreams/{d.id}/start_calibration/")
@@ -602,15 +703,22 @@ class TestStartCalibration:
 
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     @patch("apps.dreams.views.validate_calibration_questions")
-    def test_start_calibration_with_ai_analysis_category(self, mock_validate, mock_gen, prem_client, prem_user):
+    def test_start_calibration_with_ai_analysis_category(
+        self, mock_validate, mock_gen, prem_client, prem_user
+    ):
         """Category fallback from ai_analysis when dream.category is empty."""
         d = Dream.objects.create(
-            user=prem_user, title="NoCategory", description="desc",
-            category="", ai_analysis={"category": "health"},
+            user=prem_user,
+            title="NoCategory",
+            description="desc",
+            category="",
+            ai_analysis={"category": "health"},
             calibration_status="pending",
         )
         q1 = Mock(question="Q?", category="resources")
-        result_mock = Mock(questions=[q1], sufficient=False, confidence_score=0.2, missing_areas=[])
+        result_mock = Mock(
+            questions=[q1], sufficient=False, confidence_score=0.2, missing_areas=[]
+        )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
         resp = prem_client.post(f"/api/dreams/dreams/{d.id}/start_calibration/")
@@ -618,8 +726,11 @@ class TestStartCalibration:
 
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     @patch("apps.dreams.views.validate_calibration_questions")
-    def test_start_calibration_validation_error(self, mock_validate, mock_gen, prem_client, cov_dream):
+    def test_start_calibration_validation_error(
+        self, mock_validate, mock_gen, prem_client, cov_dream
+    ):
         from core.ai_validators import AIValidationError
+
         cov_dream.calibration_status = "pending"
         cov_dream.save(update_fields=["calibration_status"])
         mock_gen.return_value = {}
@@ -630,6 +741,7 @@ class TestStartCalibration:
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     def test_start_calibration_openai_error(self, mock_gen, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         cov_dream.calibration_status = "pending"
         cov_dream.save(update_fields=["calibration_status"])
         mock_gen.side_effect = OpenAIError("fail")
@@ -650,12 +762,16 @@ class TestAnswerCalibration:
     ):
         """Submit answers, AI returns follow-up questions."""
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q1?", question_number=1,
+            dream=cov_dream,
+            question="Q1?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         q2 = Mock(question="Q2?", category="timeline")
         result_mock = Mock(
-            questions=[q2], sufficient=False, confidence_score=0.5,
+            questions=[q2],
+            sufficient=False,
+            confidence_score=0.5,
             missing_areas=["timeline"],
         )
         mock_validate.return_value = result_mock
@@ -672,14 +788,21 @@ class TestAnswerCalibration:
     @patch("core.moderation.ContentModerationService.moderate_text")
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
     @patch("apps.dreams.views.validate_calibration_questions")
-    def test_answer_calibration_sufficient(self, mock_validate, mock_gen, mock_mod, prem_client, cov_dream):
+    def test_answer_calibration_sufficient(
+        self, mock_validate, mock_gen, mock_mod, prem_client, cov_dream
+    ):
         """AI says sufficient -> status completed."""
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q?", question_number=1,
+            dream=cov_dream,
+            question="Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         result_mock = Mock(
-            questions=[], sufficient=True, confidence_score=0.9, missing_areas=[],
+            questions=[],
+            sufficient=True,
+            confidence_score=0.9,
+            missing_areas=[],
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -700,9 +823,13 @@ class TestAnswerCalibration:
         assert resp.status_code == 400
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_moderation_flagged(self, mock_mod, prem_client, cov_dream):
+    def test_answer_calibration_moderation_flagged(
+        self, mock_mod, prem_client, cov_dream
+    ):
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q?", question_number=1,
+            dream=cov_dream,
+            question="Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=True, user_message="Content flagged")
         resp = prem_client.post(
@@ -714,17 +841,23 @@ class TestAnswerCalibration:
         assert resp.data.get("moderation") is True
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_single_answer_format(self, mock_mod, prem_client, cov_dream):
+    def test_answer_calibration_single_answer_format(
+        self, mock_mod, prem_client, cov_dream
+    ):
         """Frontend sends single-answer format: { question, answer, question_number }."""
         CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q?", question_number=1,
+            dream=cov_dream,
+            question="Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # Uses single-answer format -- doesn't need AI follow-up since total < 10
         # But we need at least 10 answered to force completion via guard
         for i in range(9):
             CalibrationResponse.objects.create(
-                dream=cov_dream, question=f"Q{i+2}?", question_number=i+2,
+                dream=cov_dream,
+                question=f"Q{i+2}?",
+                question_number=i + 2,
                 answer=f"answer {i}",
             )
         resp = prem_client.post(
@@ -737,14 +870,20 @@ class TestAnswerCalibration:
         assert resp.data["status"] == "completed"
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_force_complete_at_25(self, mock_mod, prem_client, prem_user):
+    def test_answer_calibration_force_complete_at_25(
+        self, mock_mod, prem_client, prem_user
+    ):
         """Force completion when total questions >= 25."""
         d = Dream.objects.create(
-            user=prem_user, title="25Q Dream", description="desc",
+            user=prem_user,
+            title="25Q Dream",
+            description="desc",
         )
         for i in range(25):
             CalibrationResponse.objects.create(
-                dream=d, question=f"Q{i+1}?", question_number=i+1,
+                dream=d,
+                question=f"Q{i+1}?",
+                question_number=i + 1,
                 answer=f"Answer {i+1}" if i < 24 else "",
             )
         mock_mod.return_value = Mock(is_flagged=False)
@@ -757,16 +896,22 @@ class TestAnswerCalibration:
         assert resp.data["status"] == "completed"
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_finds_by_question_text(self, mock_mod, prem_client, cov_dream):
+    def test_answer_calibration_finds_by_question_text(
+        self, mock_mod, prem_client, cov_dream
+    ):
         """Fallback: find CalibrationResponse by question text."""
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Unique Q?", question_number=1,
+            dream=cov_dream,
+            question="Unique Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # 10 answered => force complete
         for i in range(9):
             CalibrationResponse.objects.create(
-                dream=cov_dream, question=f"Q{i+10}?", question_number=i+10,
+                dream=cov_dream,
+                question=f"Q{i+10}?",
+                question_number=i + 10,
                 answer=f"a{i}",
             )
         resp = prem_client.post(
@@ -777,16 +922,22 @@ class TestAnswerCalibration:
         assert resp.status_code == 200
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_creates_new_cr_when_not_found(self, mock_mod, prem_client, prem_user):
+    def test_answer_calibration_creates_new_cr_when_not_found(
+        self, mock_mod, prem_client, prem_user
+    ):
         """Creates new CalibrationResponse when none matches."""
         d = Dream.objects.create(
-            user=prem_user, title="NewCR", description="desc",
+            user=prem_user,
+            title="NewCR",
+            description="desc",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # Need 10 to force complete
         for i in range(9):
             CalibrationResponse.objects.create(
-                dream=d, question=f"Q{i}?", question_number=i+1,
+                dream=d,
+                question=f"Q{i}?",
+                question_number=i + 1,
                 answer=f"a{i}",
             )
         resp = prem_client.post(
@@ -797,10 +948,14 @@ class TestAnswerCalibration:
         assert resp.status_code == 200
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_empty_answer_skipped(self, mock_mod, prem_client, prem_user):
+    def test_answer_calibration_empty_answer_skipped(
+        self, mock_mod, prem_client, prem_user
+    ):
         """Empty answer text is skipped."""
         d = Dream.objects.create(
-            user=prem_user, title="EmptyAns", description="desc",
+            user=prem_user,
+            title="EmptyAns",
+            description="desc",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         resp = prem_client.post(
@@ -820,8 +975,11 @@ class TestAnswerCalibration:
         self, mock_validate, mock_gen, mock_mod, prem_client, cov_dream
     ):
         from core.ai_validators import AIValidationError
+
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q?", question_number=1,
+            dream=cov_dream,
+            question="Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         mock_gen.return_value = {}
@@ -835,10 +993,15 @@ class TestAnswerCalibration:
 
     @patch("core.moderation.ContentModerationService.moderate_text")
     @patch("integrations.openai_service.OpenAIService.generate_calibration_questions")
-    def test_answer_calibration_openai_error(self, mock_gen, mock_mod, prem_client, cov_dream):
+    def test_answer_calibration_openai_error(
+        self, mock_gen, mock_mod, prem_client, cov_dream
+    ):
         from core.exceptions import OpenAIError
+
         cr = CalibrationResponse.objects.create(
-            dream=cov_dream, question="Q?", question_number=1,
+            dream=cov_dream,
+            question="Q?",
+            question_number=1,
         )
         mock_mod.return_value = Mock(is_flagged=False)
         mock_gen.side_effect = OpenAIError("fail")
@@ -871,7 +1034,9 @@ class TestGeneratePlan:
     @patch("apps.dreams.tasks.generate_dream_skeleton_task")
     @patch("apps.dreams.tasks.set_plan_status")
     @patch("apps.dreams.tasks.get_plan_status")
-    def test_generate_plan_dispatched(self, mock_get_status, mock_set_status, mock_task, prem_client, cov_dream):
+    def test_generate_plan_dispatched(
+        self, mock_get_status, mock_set_status, mock_task, prem_client, cov_dream
+    ):
         mock_get_status.return_value = None
         mock_task.apply_async = Mock()
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/generate_plan/")
@@ -879,7 +1044,9 @@ class TestGeneratePlan:
         assert resp.data["status"] == "generating"
 
     @patch("apps.dreams.tasks.get_plan_status")
-    def test_generate_plan_already_generating(self, mock_get_status, prem_client, cov_dream):
+    def test_generate_plan_already_generating(
+        self, mock_get_status, prem_client, cov_dream
+    ):
         mock_get_status.return_value = {"status": "generating", "message": "Working..."}
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/generate_plan/")
         assert resp.status_code == 202
@@ -898,7 +1065,9 @@ class TestPlanStatus:
         assert resp.data["status"] == "idle"
 
     @patch("apps.dreams.tasks.get_plan_status")
-    def test_plan_status_completed_has_plan(self, mock_get_status, prem_client, cov_dream):
+    def test_plan_status_completed_has_plan(
+        self, mock_get_status, prem_client, cov_dream
+    ):
         mock_get_status.return_value = None
         Goal.objects.create(dream=cov_dream, title="G", order=1)
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/plan_status/")
@@ -929,16 +1098,22 @@ class TestGenerateTwoMinuteStart:
     @patch("integrations.openai_service.OpenAIService.generate_two_minute_start")
     def test_two_minute_start_success(self, mock_gen, prem_client, cov_dream):
         mock_gen.return_value = "Write one sentence about your dream"
-        resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/")
+        resp = prem_client.post(
+            f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/"
+        )
         assert resp.status_code == 200
         cov_dream.refresh_from_db()
         assert cov_dream.has_two_minute_start is True
 
     @patch("integrations.openai_service.OpenAIService.generate_two_minute_start")
-    def test_two_minute_start_creates_goal_when_none(self, mock_gen, prem_client, prem_user):
+    def test_two_minute_start_creates_goal_when_none(
+        self, mock_gen, prem_client, prem_user
+    ):
         """Creates a 'Getting Started' goal if dream has none."""
         d = Dream.objects.create(
-            user=prem_user, title="NoGoal", description="desc",
+            user=prem_user,
+            title="NoGoal",
+            description="desc",
         )
         mock_gen.return_value = "Start here"
         resp = prem_client.post(f"/api/dreams/dreams/{d.id}/generate_two_minute_start/")
@@ -948,14 +1123,19 @@ class TestGenerateTwoMinuteStart:
     def test_two_minute_start_already_generated(self, prem_client, cov_dream):
         cov_dream.has_two_minute_start = True
         cov_dream.save(update_fields=["has_two_minute_start"])
-        resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/")
+        resp = prem_client.post(
+            f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/"
+        )
         assert resp.status_code == 400
 
     @patch("integrations.openai_service.OpenAIService.generate_two_minute_start")
     def test_two_minute_start_openai_error(self, mock_gen, prem_client, cov_dream):
         from core.exceptions import OpenAIError
+
         mock_gen.side_effect = OpenAIError("fail")
-        resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/")
+        resp = prem_client.post(
+            f"/api/dreams/dreams/{cov_dream.id}/generate_two_minute_start/"
+        )
         assert resp.status_code == 500
 
 
@@ -966,10 +1146,15 @@ class TestGenerateTwoMinuteStart:
 class TestGenerateVision:
     @patch("requests.get")
     @patch("integrations.openai_service.OpenAIService.generate_vision_image")
-    def test_generate_vision_success(self, mock_gen, mock_requests_get, pro_client_cov, pro_user_cov):
+    def test_generate_vision_success(
+        self, mock_gen, mock_requests_get, pro_client_cov, pro_user_cov
+    ):
         d = Dream.objects.create(
-            user=pro_user_cov, title="VisionDream", description="desc",
-            category="health", ai_analysis={"calibration_summary": {"user_profile": "fit person"}},
+            user=pro_user_cov,
+            title="VisionDream",
+            description="desc",
+            category="health",
+            ai_analysis={"calibration_summary": {"user_profile": "fit person"}},
         )
         DreamMilestone.objects.create(dream=d, title="M1", order=1)
         mock_gen.return_value = "https://example.com/image.png"
@@ -983,10 +1168,14 @@ class TestGenerateVision:
 
     @patch("requests.get")
     @patch("integrations.openai_service.OpenAIService.generate_vision_image")
-    def test_generate_vision_download_fails(self, mock_gen, mock_requests_get, pro_client_cov, pro_user_cov):
+    def test_generate_vision_download_fails(
+        self, mock_gen, mock_requests_get, pro_client_cov, pro_user_cov
+    ):
         """Fallback to temporary URL when image download fails."""
         d = Dream.objects.create(
-            user=pro_user_cov, title="VisionFail", description="desc",
+            user=pro_user_cov,
+            title="VisionFail",
+            description="desc",
         )
         mock_gen.return_value = "https://example.com/temp.png"
         mock_requests_get.side_effect = Exception("download fail")
@@ -997,8 +1186,11 @@ class TestGenerateVision:
     @patch("integrations.openai_service.OpenAIService.generate_vision_image")
     def test_generate_vision_openai_error(self, mock_gen, pro_client_cov, pro_user_cov):
         from core.exceptions import OpenAIError
+
         d = Dream.objects.create(
-            user=pro_user_cov, title="VisionErr", description="desc",
+            user=pro_user_cov,
+            title="VisionErr",
+            description="desc",
         )
         mock_gen.side_effect = OpenAIError("fail")
         resp = pro_client_cov.post(f"/api/dreams/dreams/{d.id}/generate_vision/")
@@ -1011,7 +1203,9 @@ class TestGenerateVision:
 @pytest.mark.django_db
 class TestVisionBoard:
     def test_vision_board_list(self, prem_client, cov_dream):
-        VisionBoardImage.objects.create(dream=cov_dream, image_url="https://example.com/img.png")
+        VisionBoardImage.objects.create(
+            dream=cov_dream, image_url="https://example.com/img.png"
+        )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/vision-board/")
         assert resp.status_code == 200
         assert len(resp.data["images"]) == 1
@@ -1063,7 +1257,9 @@ class TestVisionBoard:
         assert resp.status_code == 400
 
     def test_vision_board_add_invalid_magic_bytes(self, prem_client, cov_dream):
-        img = SimpleUploadedFile("fake.png", b"\x00\x00\x00\x00" * 3, content_type="image/png")
+        img = SimpleUploadedFile(
+            "fake.png", b"\x00\x00\x00\x00" * 3, content_type="image/png"
+        )
         resp = prem_client.post(
             f"/api/dreams/dreams/{cov_dream.id}/vision-board/add/",
             {"image": img},
@@ -1083,7 +1279,9 @@ class TestVisionBoard:
     def test_vision_board_add_sets_dream_vision_url(self, prem_client, prem_user):
         """First vision board image sets dream.vision_image_url."""
         d = Dream.objects.create(
-            user=prem_user, title="VisionURL", description="desc",
+            user=prem_user,
+            title="VisionURL",
+            description="desc",
             vision_image_url="",
         )
         png = _make_png_bytes()
@@ -1098,10 +1296,14 @@ class TestVisionBoard:
         assert d.vision_image_url != ""
 
     @patch("core.validators.validate_url_no_ssrf")
-    def test_vision_board_add_url_sets_dream_vision_url(self, mock_ssrf, prem_client, prem_user):
+    def test_vision_board_add_url_sets_dream_vision_url(
+        self, mock_ssrf, prem_client, prem_user
+    ):
         """URL-based vision image sets dream.vision_image_url."""
         d = Dream.objects.create(
-            user=prem_user, title="VisionURL2", description="desc",
+            user=prem_user,
+            title="VisionURL2",
+            description="desc",
             vision_image_url="",
         )
         mock_ssrf.return_value = ("https://example.com/v.png", "1.2.3.4")
@@ -1114,13 +1316,19 @@ class TestVisionBoard:
         assert d.vision_image_url == "https://example.com/v.png"
 
     def test_vision_board_remove(self, prem_client, cov_dream):
-        vbi = VisionBoardImage.objects.create(dream=cov_dream, image_url="https://x.com/i.png")
-        resp = prem_client.delete(f"/api/dreams/dreams/{cov_dream.id}/vision-board/{vbi.id}/")
+        vbi = VisionBoardImage.objects.create(
+            dream=cov_dream, image_url="https://x.com/i.png"
+        )
+        resp = prem_client.delete(
+            f"/api/dreams/dreams/{cov_dream.id}/vision-board/{vbi.id}/"
+        )
         assert resp.status_code == 200
 
     def test_vision_board_remove_not_found(self, prem_client, cov_dream):
         fake_id = uuid.uuid4()
-        resp = prem_client.delete(f"/api/dreams/dreams/{cov_dream.id}/vision-board/{fake_id}/")
+        resp = prem_client.delete(
+            f"/api/dreams/dreams/{cov_dream.id}/vision-board/{fake_id}/"
+        )
         assert resp.status_code == 404
 
 
@@ -1181,12 +1389,16 @@ class TestProgressPhotos:
     @patch("integrations.openai_service.OpenAIService.analyze_progress_image")
     def test_progress_photos_analyze(self, mock_analyze, pro_client_cov, pro_user_cov):
         d = Dream.objects.create(
-            user=pro_user_cov, title="PhotoDream", description="desc",
+            user=pro_user_cov,
+            title="PhotoDream",
+            description="desc",
         )
         png = _make_png_bytes()
         img_file = SimpleUploadedFile("p.png", png, content_type="image/png")
         photo = ProgressPhoto.objects.create(
-            dream=d, image=img_file, caption="Test",
+            dream=d,
+            image=img_file,
+            caption="Test",
             taken_at=timezone.now(),
         )
         mock_analyze.return_value = {"analysis": "Looking good!"}
@@ -1197,7 +1409,9 @@ class TestProgressPhotos:
 
     def test_progress_photos_analyze_not_found(self, pro_client_cov, pro_user_cov):
         d = Dream.objects.create(
-            user=pro_user_cov, title="PhotoDream2", description="desc",
+            user=pro_user_cov,
+            title="PhotoDream2",
+            description="desc",
         )
         resp = pro_client_cov.post(
             f"/api/dreams/dreams/{d.id}/progress-photos/{uuid.uuid4()}/analyze/"
@@ -1205,13 +1419,19 @@ class TestProgressPhotos:
         assert resp.status_code == 404
 
     @patch("integrations.openai_service.OpenAIService.analyze_progress_image")
-    def test_progress_photos_analyze_no_image_file(self, mock_analyze, pro_client_cov, pro_user_cov):
+    def test_progress_photos_analyze_no_image_file(
+        self, mock_analyze, pro_client_cov, pro_user_cov
+    ):
         """Photo with no image file returns 400."""
         d = Dream.objects.create(
-            user=pro_user_cov, title="PhotoDream3", description="desc",
+            user=pro_user_cov,
+            title="PhotoDream3",
+            description="desc",
         )
         photo = ProgressPhoto.objects.create(
-            dream=d, caption="No image", taken_at=timezone.now(),
+            dream=d,
+            caption="No image",
+            taken_at=timezone.now(),
         )
         resp = pro_client_cov.post(
             f"/api/dreams/dreams/{d.id}/progress-photos/{photo.id}/analyze/"
@@ -1219,15 +1439,22 @@ class TestProgressPhotos:
         assert resp.status_code == 400
 
     @patch("integrations.openai_service.OpenAIService.analyze_progress_image")
-    def test_progress_photos_analyze_openai_error(self, mock_analyze, pro_client_cov, pro_user_cov):
+    def test_progress_photos_analyze_openai_error(
+        self, mock_analyze, pro_client_cov, pro_user_cov
+    ):
         from core.exceptions import OpenAIError
+
         d = Dream.objects.create(
-            user=pro_user_cov, title="PhotoDream4", description="desc",
+            user=pro_user_cov,
+            title="PhotoDream4",
+            description="desc",
         )
         png = _make_png_bytes()
         img_file = SimpleUploadedFile("p2.png", png, content_type="image/png")
         photo = ProgressPhoto.objects.create(
-            dream=d, image=img_file, taken_at=timezone.now(),
+            dream=d,
+            image=img_file,
+            taken_at=timezone.now(),
         )
         mock_analyze.side_effect = OpenAIError("fail")
         resp = pro_client_cov.post(
@@ -1236,10 +1463,14 @@ class TestProgressPhotos:
         assert resp.status_code == 500
 
     @patch("integrations.openai_service.OpenAIService.analyze_progress_image")
-    def test_progress_photos_analyze_with_previous(self, mock_analyze, pro_client_cov, pro_user_cov):
+    def test_progress_photos_analyze_with_previous(
+        self, mock_analyze, pro_client_cov, pro_user_cov
+    ):
         """Previous analyses are passed to AI for comparison."""
         d = Dream.objects.create(
-            user=pro_user_cov, title="PhotoDream5", description="desc",
+            user=pro_user_cov,
+            title="PhotoDream5",
+            description="desc",
         )
         png = _make_png_bytes()
         old_photo = ProgressPhoto.objects.create(
@@ -1267,14 +1498,18 @@ class TestProgressPhotos:
 class TestProgressHistory:
     def test_progress_history(self, prem_client, cov_dream):
         DreamProgressSnapshot.objects.create(
-            dream=cov_dream, date=date.today(), progress_percentage=50,
+            dream=cov_dream,
+            date=date.today(),
+            progress_percentage=50,
         )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/progress-history/")
         assert resp.status_code == 200
         assert len(resp.data["snapshots"]) == 1
 
     def test_progress_history_with_days_param(self, prem_client, cov_dream):
-        resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/progress-history/?days=7")
+        resp = prem_client.get(
+            f"/api/dreams/dreams/{cov_dream.id}/progress-history/?days=7"
+        )
         assert resp.status_code == 200
 
 
@@ -1285,7 +1520,9 @@ class TestProgressHistory:
 class TestAnalytics:
     def test_analytics_all_range(self, prem_client, cov_dream, cov_goal, cov_task):
         DreamProgressSnapshot.objects.create(
-            dream=cov_dream, date=date.today(), progress_percentage=30,
+            dream=cov_dream,
+            date=date.today(),
+            progress_percentage=30,
         )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/analytics/")
         assert resp.status_code == 200
@@ -1308,7 +1545,8 @@ class TestAnalytics:
         """Progress milestones (25%, 50%, etc.) are found from snapshots."""
         for pct in [25, 50, 75, 100]:
             DreamProgressSnapshot.objects.create(
-                dream=cov_dream, date=date.today() - timedelta(days=100-pct),
+                dream=cov_dream,
+                date=date.today() - timedelta(days=100 - pct),
                 progress_percentage=pct,
             )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/analytics/")
@@ -1318,7 +1556,10 @@ class TestAnalytics:
     def test_analytics_category_breakdown(self, prem_client, prem_user, cov_dream):
         """Category breakdown calculated from user's active/completed dreams."""
         Dream.objects.create(
-            user=prem_user, title="Health", description="d", category="health",
+            user=prem_user,
+            title="Health",
+            description="d",
+            category="health",
             status="active",
         )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/analytics/")
@@ -1328,7 +1569,10 @@ class TestAnalytics:
     def test_analytics_with_completed_tasks(self, prem_client, cov_dream, cov_goal):
         """Weekly activity counts completed tasks."""
         task = Task.objects.create(
-            goal=cov_goal, title="Done", order=1, status="completed",
+            goal=cov_goal,
+            title="Done",
+            order=1,
+            status="completed",
             completed_at=timezone.now(),
         )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/analytics/")
@@ -1413,7 +1657,9 @@ class TestShareDream:
 
     def test_share_already_shared(self, prem_client, cov_dream, prem_user, other_user):
         SharedDream.objects.create(
-            dream=cov_dream, shared_by=prem_user, shared_with=other_user,
+            dream=cov_dream,
+            shared_by=prem_user,
+            shared_with=other_user,
         )
         resp = prem_client.post(
             f"/api/dreams/dreams/{cov_dream.id}/share/",
@@ -1423,7 +1669,9 @@ class TestShareDream:
         assert resp.status_code == 400
 
     @patch("apps.notifications.services.NotificationService.create")
-    def test_share_notification_failure_doesnt_break(self, mock_notify, prem_client, cov_dream, other_user):
+    def test_share_notification_failure_doesnt_break(
+        self, mock_notify, prem_client, cov_dream, other_user
+    ):
         """Notification failure doesn't fail the share."""
         mock_notify.side_effect = Exception("Notification failed")
         resp = prem_client.post(
@@ -1435,13 +1683,19 @@ class TestShareDream:
 
     def test_unshare_success(self, prem_client, cov_dream, prem_user, other_user):
         SharedDream.objects.create(
-            dream=cov_dream, shared_by=prem_user, shared_with=other_user,
+            dream=cov_dream,
+            shared_by=prem_user,
+            shared_with=other_user,
         )
-        resp = prem_client.delete(f"/api/dreams/dreams/{cov_dream.id}/unshare/{other_user.id}/")
+        resp = prem_client.delete(
+            f"/api/dreams/dreams/{cov_dream.id}/unshare/{other_user.id}/"
+        )
         assert resp.status_code == 200
 
     def test_unshare_not_found(self, prem_client, cov_dream):
-        resp = prem_client.delete(f"/api/dreams/dreams/{cov_dream.id}/unshare/{uuid.uuid4()}/")
+        resp = prem_client.delete(
+            f"/api/dreams/dreams/{cov_dream.id}/unshare/{uuid.uuid4()}/"
+        )
         assert resp.status_code == 404
 
 
@@ -1465,7 +1719,9 @@ class TestDreamTags:
         assert resp.status_code == 200
 
     def test_remove_tag_not_found(self, prem_client, cov_dream):
-        resp = prem_client.delete(f"/api/dreams/dreams/{cov_dream.id}/tags/nonexistent/")
+        resp = prem_client.delete(
+            f"/api/dreams/dreams/{cov_dream.id}/tags/nonexistent/"
+        )
         assert resp.status_code == 404
 
 
@@ -1554,16 +1810,23 @@ class TestCollaborators:
 class TestExplore:
     def test_explore_public_dreams(self, prem_client, other_user):
         Dream.objects.create(
-            user=other_user, title="Public", description="desc",
-            is_public=True, status="active",
+            user=other_user,
+            title="Public",
+            description="desc",
+            is_public=True,
+            status="active",
         )
         resp = prem_client.get("/api/dreams/dreams/explore/")
         assert resp.status_code == 200
 
     def test_explore_filter_category(self, prem_client, other_user):
         Dream.objects.create(
-            user=other_user, title="Health Dream", description="desc",
-            is_public=True, status="active", category="health",
+            user=other_user,
+            title="Health Dream",
+            description="desc",
+            is_public=True,
+            status="active",
+            category="health",
         )
         resp = prem_client.get("/api/dreams/dreams/explore/?category=health")
         assert resp.status_code == 200
@@ -1573,7 +1836,9 @@ class TestExplore:
         assert resp.status_code == 200  # Falls back to -created_at
 
     def test_explore_valid_ordering(self, prem_client):
-        resp = prem_client.get("/api/dreams/dreams/explore/?ordering=-progress_percentage")
+        resp = prem_client.get(
+            "/api/dreams/dreams/explore/?ordering=-progress_percentage"
+        )
         assert resp.status_code == 200
 
 
@@ -1584,7 +1849,9 @@ class TestExplore:
 class TestDreamCheckIns:
     def test_list_checkins(self, prem_client, cov_dream):
         PlanCheckIn.objects.create(
-            dream=cov_dream, status="completed", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.get(f"/api/dreams/dreams/{cov_dream.id}/checkins/")
         assert resp.status_code == 200
@@ -1607,7 +1874,9 @@ class TestDreamCheckIns:
         cov_dream.plan_phase = "full"
         cov_dream.save(update_fields=["plan_phase"])
         PlanCheckIn.objects.create(
-            dream=cov_dream, status="awaiting_user", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/trigger-checkin/")
         assert resp.status_code == 202
@@ -1622,14 +1891,18 @@ class TestDreamCheckIns:
 class TestCheckInViewSet:
     def test_list_checkins(self, prem_client, cov_dream):
         PlanCheckIn.objects.create(
-            dream=cov_dream, status="completed", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.get("/api/dreams/checkins/")
         assert resp.status_code == 200
 
     def test_retrieve_checkin(self, prem_client, cov_dream):
         ci = PlanCheckIn.objects.create(
-            dream=cov_dream, status="completed", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.get(f"/api/dreams/checkins/{ci.id}/")
         assert resp.status_code == 200
@@ -1637,7 +1910,9 @@ class TestCheckInViewSet:
     @patch("apps.dreams.tasks.process_checkin_responses_task")
     def test_respond_success(self, mock_task, prem_client, cov_dream):
         ci = PlanCheckIn.objects.create(
-            dream=cov_dream, status="awaiting_user", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
             questionnaire=[{"id": "q1", "is_required": True, "type": "text"}],
         )
         mock_task.apply_async = Mock()
@@ -1650,7 +1925,9 @@ class TestCheckInViewSet:
 
     def test_respond_not_awaiting(self, prem_client, cov_dream):
         ci = PlanCheckIn.objects.create(
-            dream=cov_dream, status="completed", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="completed",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.post(
             f"/api/dreams/checkins/{ci.id}/respond/",
@@ -1662,7 +1939,9 @@ class TestCheckInViewSet:
     @patch("apps.dreams.tasks.process_checkin_responses_task")
     def test_respond_missing_required(self, mock_task, prem_client, cov_dream):
         ci = PlanCheckIn.objects.create(
-            dream=cov_dream, status="awaiting_user", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="awaiting_user",
+            scheduled_for=timezone.now(),
             questionnaire=[
                 {"id": "q1", "is_required": True, "type": "text"},
                 {"id": "q2", "is_required": True, "type": "text"},
@@ -1677,7 +1956,9 @@ class TestCheckInViewSet:
 
     def test_checkin_status(self, prem_client, cov_dream):
         ci = PlanCheckIn.objects.create(
-            dream=cov_dream, status="ai_processing", scheduled_for=timezone.now(),
+            dream=cov_dream,
+            status="ai_processing",
+            scheduled_for=timezone.now(),
         )
         resp = prem_client.get(f"/api/dreams/checkins/{ci.id}/status/")
         assert resp.status_code == 200
@@ -1692,10 +1973,14 @@ class TestCheckInViewSet:
 class TestSharedWithMe:
     def test_shared_with_me_list(self, prem_client, prem_user, other_user):
         d = Dream.objects.create(
-            user=other_user, title="SharedDream", description="desc",
+            user=other_user,
+            title="SharedDream",
+            description="desc",
         )
         SharedDream.objects.create(
-            dream=d, shared_by=other_user, shared_with=prem_user,
+            dream=d,
+            shared_by=other_user,
+            shared_with=prem_user,
         )
         resp = prem_client.get("/api/dreams/dreams/shared-with-me/")
         assert resp.status_code == 200
@@ -1724,37 +2009,57 @@ class TestDreamTagListView:
 class TestDreamTemplateViewSet:
     def test_list_templates(self, prem_client):
         DreamTemplate.objects.create(
-            title="T1", description="desc", category="education",
-            template_goals=[], is_active=True,
+            title="T1",
+            description="desc",
+            category="education",
+            template_goals=[],
+            is_active=True,
         )
         resp = prem_client.get("/api/dreams/dreams/templates/")
         assert resp.status_code == 200
 
     def test_list_templates_filter_category(self, prem_client):
         DreamTemplate.objects.create(
-            title="T2", description="desc", category="health",
-            template_goals=[], is_active=True,
+            title="T2",
+            description="desc",
+            category="health",
+            template_goals=[],
+            is_active=True,
         )
         resp = prem_client.get("/api/dreams/dreams/templates/?category=health")
         assert resp.status_code == 200
 
     def test_retrieve_template(self, prem_client):
         t = DreamTemplate.objects.create(
-            title="T3", description="desc", category="career",
-            template_goals=[], is_active=True,
+            title="T3",
+            description="desc",
+            category="career",
+            template_goals=[],
+            is_active=True,
         )
         resp = prem_client.get(f"/api/dreams/dreams/templates/{t.id}/")
         assert resp.status_code == 200
 
     def test_use_template(self, prem_client):
         t = DreamTemplate.objects.create(
-            title="T4", description="desc", category="career",
+            title="T4",
+            description="desc",
+            category="career",
             template_goals=[
-                {"title": "Goal 1", "description": "G desc", "order": 1,
-                 "estimated_minutes": 60,
-                 "tasks": [
-                     {"title": "Task 1", "description": "T desc", "order": 1, "duration_mins": 30},
-                 ]},
+                {
+                    "title": "Goal 1",
+                    "description": "G desc",
+                    "order": 1,
+                    "estimated_minutes": 60,
+                    "tasks": [
+                        {
+                            "title": "Task 1",
+                            "description": "T desc",
+                            "order": 1,
+                            "duration_mins": 30,
+                        },
+                    ],
+                },
             ],
             is_active=True,
         )
@@ -1763,8 +2068,12 @@ class TestDreamTemplateViewSet:
 
     def test_featured_templates(self, prem_client):
         DreamTemplate.objects.create(
-            title="Featured", description="desc", category="career",
-            template_goals=[], is_active=True, is_featured=True,
+            title="Featured",
+            description="desc",
+            category="career",
+            template_goals=[],
+            is_active=True,
+            is_featured=True,
         )
         resp = prem_client.get("/api/dreams/dreams/templates/featured/")
         assert resp.status_code == 200
@@ -1782,7 +2091,10 @@ class TestDreamPDFExport:
         cov_dream.target_date = timezone.now()
         cov_dream.save(update_fields=["target_date"])
         Obstacle.objects.create(
-            dream=cov_dream, title="Obs", description="d", solution="fix it",
+            dream=cov_dream,
+            title="Obs",
+            description="d",
+            solution="fix it",
         )
         cov_goal.status = "completed"
         cov_goal.save(update_fields=["status"])
@@ -1809,16 +2121,23 @@ class TestDreamPDFExport:
 
 @pytest.mark.django_db
 class TestGoalViewSetCoverage:
-    def test_list_goals_filter_by_milestone(self, prem_client, cov_dream, cov_milestone):
+    def test_list_goals_filter_by_milestone(
+        self, prem_client, cov_dream, cov_milestone
+    ):
         g = Goal.objects.create(
-            dream=cov_dream, milestone=cov_milestone, title="MG", order=1,
+            dream=cov_dream,
+            milestone=cov_milestone,
+            title="MG",
+            order=1,
         )
         resp = prem_client.get(f"/api/dreams/goals/?milestone={cov_milestone.id}")
         assert resp.status_code == 200
 
     def test_create_goal_for_other_user_dream(self, prem_client, other_user):
         d = Dream.objects.create(
-            user=other_user, title="OtherDream", description="desc",
+            user=other_user,
+            title="OtherDream",
+            description="desc",
         )
         resp = prem_client.post(
             "/api/dreams/goals/",
@@ -1840,7 +2159,9 @@ class TestGoalViewSetCoverage:
 
     @patch("integrations.openai_service.OpenAIService.refine_goal")
     @patch("core.ai_usage.AIUsageTracker.check_quota")
-    def test_refine_goal_success(self, mock_quota, mock_refine, prem_client, cov_dream, cov_goal):
+    def test_refine_goal_success(
+        self, mock_quota, mock_refine, prem_client, cov_dream, cov_goal
+    ):
         mock_quota.return_value = (True, {})
         mock_refine.return_value = {
             "message": "Here is a refined version",
@@ -1892,8 +2213,11 @@ class TestGoalViewSetCoverage:
 
     @patch("integrations.openai_service.OpenAIService.refine_goal")
     @patch("core.ai_usage.AIUsageTracker.check_quota")
-    def test_refine_goal_openai_error(self, mock_quota, mock_refine, prem_client, cov_goal):
+    def test_refine_goal_openai_error(
+        self, mock_quota, mock_refine, prem_client, cov_goal
+    ):
         from core.exceptions import OpenAIError
+
         mock_quota.return_value = (True, {})
         mock_refine.side_effect = OpenAIError("fail")
         resp = prem_client.post(
@@ -1925,7 +2249,9 @@ class TestMilestoneViewSetCoverage:
 
     def test_create_milestone_for_other_user(self, prem_client, other_user):
         d = Dream.objects.create(
-            user=other_user, title="OtherDream", description="desc",
+            user=other_user,
+            title="OtherDream",
+            description="desc",
         )
         resp = prem_client.post(
             "/api/dreams/milestones/",
@@ -1936,7 +2262,9 @@ class TestMilestoneViewSetCoverage:
 
     def test_complete_milestone(self, prem_client, cov_milestone):
         with _ach_patch():
-            resp = prem_client.post(f"/api/dreams/milestones/{cov_milestone.id}/complete/")
+            resp = prem_client.post(
+                f"/api/dreams/milestones/{cov_milestone.id}/complete/"
+            )
         assert resp.status_code == 200
 
     def test_complete_already_completed_milestone(self, prem_client, cov_milestone):
@@ -1981,8 +2309,11 @@ class TestTaskViewSetCoverage:
     def test_complete_task_with_chain(self, prem_client, cov_goal):
         """Completing a chained task creates a chain child."""
         task = Task.objects.create(
-            goal=cov_goal, title="Chain Parent", order=1,
-            chain_next_delay_days=7, chain_template_title="Follow up: {title}",
+            goal=cov_goal,
+            title="Chain Parent",
+            order=1,
+            chain_next_delay_days=7,
+            chain_template_title="Follow up: {title}",
             is_chain=True,
         )
         with _ach_patch():
@@ -1993,7 +2324,10 @@ class TestTaskViewSetCoverage:
         """Get chain of tasks."""
         parent = Task.objects.create(goal=cov_goal, title="Root", order=1)
         child = Task.objects.create(
-            goal=cov_goal, title="Child", order=2, chain_parent=parent,
+            goal=cov_goal,
+            title="Child",
+            order=2,
+            chain_parent=parent,
         )
         resp = prem_client.get(f"/api/dreams/tasks/{child.id}/chain/")
         assert resp.status_code == 200
@@ -2024,7 +2358,10 @@ class TestTaskViewSetCoverage:
     def test_quick_create_no_dream(self, prem_client, prem_user):
         """Quick create with no dream_id picks first active dream."""
         d = Dream.objects.create(
-            user=prem_user, title="AutoDream", description="desc", status="active",
+            user=prem_user,
+            title="AutoDream",
+            description="desc",
+            status="active",
         )
         g = Goal.objects.create(dream=d, title="AG", order=1)
         resp = prem_client.post(
@@ -2055,7 +2392,10 @@ class TestTaskViewSetCoverage:
     def test_quick_create_creates_goal_when_none(self, prem_client, prem_user):
         """Creates a 'Quick Tasks' goal when dream has no non-completed goals."""
         d = Dream.objects.create(
-            user=prem_user, title="NoGoalDream", description="desc", status="active",
+            user=prem_user,
+            title="NoGoalDream",
+            description="desc",
+            status="active",
         )
         resp = prem_client.post(
             "/api/dreams/tasks/quick_create/",
@@ -2090,7 +2430,9 @@ class TestTaskViewSetCoverage:
 @pytest.mark.django_db
 class TestDailyPriorities:
     @patch("integrations.openai_service.OpenAIService.prioritize_tasks")
-    def test_daily_priorities_success(self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task):
+    def test_daily_priorities_success(
+        self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task
+    ):
         mock_prioritize.return_value = {
             "prioritized_tasks": [{"task_id": str(cov_task.id), "priority_score": 8}],
             "focus_task": {"task_id": str(cov_task.id), "reason": "Most urgent"},
@@ -2107,14 +2449,19 @@ class TestDailyPriorities:
         assert resp.data["prioritized_tasks"] == []
 
     @patch("integrations.openai_service.OpenAIService.prioritize_tasks")
-    def test_daily_priorities_openai_error(self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task):
+    def test_daily_priorities_openai_error(
+        self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task
+    ):
         from core.exceptions import OpenAIError
+
         mock_prioritize.side_effect = OpenAIError("fail")
         resp = prem_client.get("/api/dreams/tasks/daily-priorities/")
         assert resp.status_code == 503
 
     @patch("integrations.openai_service.OpenAIService.prioritize_tasks")
-    def test_daily_priorities_focus_task_not_in_map(self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task):
+    def test_daily_priorities_focus_task_not_in_map(
+        self, mock_prioritize, prem_client, cov_dream, cov_goal, cov_task
+    ):
         """Focus task with unknown task_id doesn't crash."""
         mock_prioritize.return_value = {
             "prioritized_tasks": [],
@@ -2132,10 +2479,16 @@ class TestDailyPriorities:
 class TestEstimateDurations:
     @patch("integrations.openai_service.OpenAIService.estimate_durations")
     def test_estimate_durations_success(self, mock_est, prem_client, cov_task):
-        mock_est.return_value = {"estimates": [
-            {"task_id": str(cov_task.id), "optimistic_minutes": 10,
-             "realistic_minutes": 25, "pessimistic_minutes": 45},
-        ]}
+        mock_est.return_value = {
+            "estimates": [
+                {
+                    "task_id": str(cov_task.id),
+                    "optimistic_minutes": 10,
+                    "realistic_minutes": 25,
+                    "pessimistic_minutes": 45,
+                },
+            ]
+        }
         resp = prem_client.post(
             "/api/dreams/tasks/estimate-durations/",
             {"task_ids": [str(cov_task.id)]},
@@ -2147,10 +2500,16 @@ class TestEstimateDurations:
     @patch("integrations.openai_service.OpenAIService.estimate_durations")
     def test_estimate_durations_apply(self, mock_est, prem_client, cov_task):
         """Apply estimates updates task duration."""
-        mock_est.return_value = {"estimates": [
-            {"task_id": str(cov_task.id), "optimistic_minutes": 10,
-             "realistic_minutes": 45, "pessimistic_minutes": 60},
-        ]}
+        mock_est.return_value = {
+            "estimates": [
+                {
+                    "task_id": str(cov_task.id),
+                    "optimistic_minutes": 10,
+                    "realistic_minutes": 45,
+                    "pessimistic_minutes": 60,
+                },
+            ]
+        }
         resp = prem_client.post(
             "/api/dreams/tasks/estimate-durations/",
             {"task_ids": [str(cov_task.id)], "apply": True},
@@ -2188,6 +2547,7 @@ class TestEstimateDurations:
     @patch("integrations.openai_service.OpenAIService.estimate_durations")
     def test_estimate_durations_openai_error(self, mock_est, prem_client, cov_task):
         from core.exceptions import OpenAIError
+
         mock_est.side_effect = OpenAIError("fail")
         resp = prem_client.post(
             "/api/dreams/tasks/estimate-durations/",
@@ -2197,16 +2557,28 @@ class TestEstimateDurations:
         assert resp.status_code == 503
 
     @patch("integrations.openai_service.OpenAIService.estimate_durations")
-    def test_estimate_durations_with_historical_data(self, mock_est, prem_client, prem_user, cov_task):
+    def test_estimate_durations_with_historical_data(
+        self, mock_est, prem_client, prem_user, cov_task
+    ):
         """With focus session history, historical data is sent to AI."""
         FocusSession.objects.create(
-            user=prem_user, task=cov_task, duration_minutes=25,
-            actual_minutes=30, session_type="work", completed=True,
+            user=prem_user,
+            task=cov_task,
+            duration_minutes=25,
+            actual_minutes=30,
+            session_type="work",
+            completed=True,
         )
-        mock_est.return_value = {"estimates": [
-            {"task_id": str(cov_task.id), "optimistic_minutes": 20,
-             "realistic_minutes": 30, "pessimistic_minutes": 50},
-        ]}
+        mock_est.return_value = {
+            "estimates": [
+                {
+                    "task_id": str(cov_task.id),
+                    "optimistic_minutes": 20,
+                    "realistic_minutes": 30,
+                    "pessimistic_minutes": 50,
+                },
+            ]
+        }
         resp = prem_client.post(
             "/api/dreams/tasks/estimate-durations/",
             {"task_ids": [str(cov_task.id)], "skill_hints": "python"},
@@ -2222,10 +2594,15 @@ class TestEstimateDurations:
 class TestParseNatural:
     @patch("integrations.openai_service.OpenAIService.parse_natural_language_tasks")
     def test_parse_natural_success(self, mock_parse, prem_client, cov_dream, cov_goal):
-        mock_parse.return_value = {"tasks": [
-            {"title": "Parsed Task", "matched_dream_id": str(cov_dream.id),
-             "matched_goal_id": str(cov_goal.id)},
-        ]}
+        mock_parse.return_value = {
+            "tasks": [
+                {
+                    "title": "Parsed Task",
+                    "matched_dream_id": str(cov_dream.id),
+                    "matched_goal_id": str(cov_goal.id),
+                },
+            ]
+        }
         resp = prem_client.post(
             "/api/dreams/tasks/parse-natural/",
             {"text": "I need to buy groceries and study"},
@@ -2253,6 +2630,7 @@ class TestParseNatural:
     @patch("integrations.openai_service.OpenAIService.parse_natural_language_tasks")
     def test_parse_natural_openai_error(self, mock_parse, prem_client):
         from core.exceptions import OpenAIError
+
         mock_parse.side_effect = OpenAIError("fail")
         resp = prem_client.post(
             "/api/dreams/tasks/parse-natural/",
@@ -2262,12 +2640,19 @@ class TestParseNatural:
         assert resp.status_code == 503
 
     @patch("integrations.openai_service.OpenAIService.parse_natural_language_tasks")
-    def test_parse_natural_unmatched_ids(self, mock_parse, prem_client, cov_dream, cov_goal):
+    def test_parse_natural_unmatched_ids(
+        self, mock_parse, prem_client, cov_dream, cov_goal
+    ):
         """Unmatched dream/goal ids get set to None."""
-        mock_parse.return_value = {"tasks": [
-            {"title": "Unmatched", "matched_dream_id": str(uuid.uuid4()),
-             "matched_goal_id": str(uuid.uuid4())},
-        ]}
+        mock_parse.return_value = {
+            "tasks": [
+                {
+                    "title": "Unmatched",
+                    "matched_dream_id": str(uuid.uuid4()),
+                    "matched_goal_id": str(uuid.uuid4()),
+                },
+            ]
+        }
         resp = prem_client.post(
             "/api/dreams/tasks/parse-natural/",
             {"text": "some task text for parsing"},
@@ -2286,11 +2671,17 @@ class TestCreateFromParsed:
     def test_create_from_parsed_success(self, prem_client, cov_dream, cov_goal):
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
-            {"tasks": [
-                {"title": "Parsed1", "matched_goal_id": str(cov_goal.id),
-                 "description": "Desc", "duration_mins": 30,
-                 "deadline_hint": str(date.today() + timedelta(days=7))},
-            ]},
+            {
+                "tasks": [
+                    {
+                        "title": "Parsed1",
+                        "matched_goal_id": str(cov_goal.id),
+                        "description": "Desc",
+                        "duration_mins": 30,
+                        "deadline_hint": str(date.today() + timedelta(days=7)),
+                    },
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 201
@@ -2315,9 +2706,11 @@ class TestCreateFromParsed:
         """Falls back to first active dream when goal_id not matched."""
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
-            {"tasks": [
-                {"title": "Fallback", "matched_dream_id": str(cov_dream.id)},
-            ]},
+            {
+                "tasks": [
+                    {"title": "Fallback", "matched_dream_id": str(cov_dream.id)},
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 201
@@ -2325,7 +2718,10 @@ class TestCreateFromParsed:
     def test_create_from_parsed_auto_creates_goal(self, prem_client, prem_user):
         """Auto-creates goal when dream has no non-completed goals."""
         d = Dream.objects.create(
-            user=prem_user, title="NoGoalDream2", description="d", status="active",
+            user=prem_user,
+            title="NoGoalDream2",
+            description="d",
+            status="active",
         )
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
@@ -2334,14 +2730,21 @@ class TestCreateFromParsed:
         )
         assert resp.status_code == 201
 
-    def test_create_from_parsed_invalid_deadline(self, prem_client, cov_dream, cov_goal):
+    def test_create_from_parsed_invalid_deadline(
+        self, prem_client, cov_dream, cov_goal
+    ):
         """Invalid deadline_hint is ignored gracefully."""
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
-            {"tasks": [
-                {"title": "BadDeadline", "matched_goal_id": str(cov_goal.id),
-                 "deadline_hint": "not-a-date"},
-            ]},
+            {
+                "tasks": [
+                    {
+                        "title": "BadDeadline",
+                        "matched_goal_id": str(cov_goal.id),
+                        "deadline_hint": "not-a-date",
+                    },
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 201
@@ -2363,7 +2766,9 @@ class TestCreateFromParsed:
 @pytest.mark.django_db
 class TestCalibrateDifficulty:
     @patch("integrations.openai_service.OpenAIService.calibrate_difficulty")
-    def test_calibrate_difficulty_success(self, mock_cal, prem_client, cov_dream, cov_goal, cov_task):
+    def test_calibrate_difficulty_success(
+        self, mock_cal, prem_client, cov_dream, cov_goal, cov_task
+    ):
         mock_cal.return_value = {
             "difficulty_level": "moderate",
             "calibration_score": 0.7,
@@ -2382,8 +2787,11 @@ class TestCalibrateDifficulty:
         assert resp.data["difficulty_level"] == "moderate"
 
     @patch("integrations.openai_service.OpenAIService.calibrate_difficulty")
-    def test_calibrate_difficulty_openai_error(self, mock_cal, prem_client, cov_dream, cov_goal, cov_task):
+    def test_calibrate_difficulty_openai_error(
+        self, mock_cal, prem_client, cov_dream, cov_goal, cov_task
+    ):
         from core.exceptions import OpenAIError
+
         mock_cal.side_effect = OpenAIError("fail")
         resp = prem_client.get("/api/dreams/tasks/calibrate-difficulty/")
         assert resp.status_code == 503
@@ -2397,12 +2805,18 @@ class TestApplyCalibration:
     def test_apply_calibration_success(self, prem_client, cov_task):
         resp = prem_client.post(
             "/api/dreams/tasks/apply-calibration/",
-            {"suggestions": [
-                {"task_id": str(cov_task.id), "modified_task": {
-                    "title": "Modified Title", "description": "New desc",
-                    "duration_mins": 45,
-                }},
-            ]},
+            {
+                "suggestions": [
+                    {
+                        "task_id": str(cov_task.id),
+                        "modified_task": {
+                            "title": "Modified Title",
+                            "description": "New desc",
+                            "duration_mins": 45,
+                        },
+                    },
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -2421,9 +2835,11 @@ class TestApplyCalibration:
     def test_apply_calibration_task_not_found(self, prem_client):
         resp = prem_client.post(
             "/api/dreams/tasks/apply-calibration/",
-            {"suggestions": [
-                {"task_id": str(uuid.uuid4()), "modified_task": {"title": "X"}},
-            ]},
+            {
+                "suggestions": [
+                    {"task_id": str(uuid.uuid4()), "modified_task": {"title": "X"}},
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -2433,11 +2849,16 @@ class TestApplyCalibration:
         """Invalid duration_mins value doesn't crash."""
         resp = prem_client.post(
             "/api/dreams/tasks/apply-calibration/",
-            {"suggestions": [
-                {"task_id": str(cov_task.id), "modified_task": {
-                    "duration_mins": "not_a_number",
-                }},
-            ]},
+            {
+                "suggestions": [
+                    {
+                        "task_id": str(cov_task.id),
+                        "modified_task": {
+                            "duration_mins": "not_a_number",
+                        },
+                    },
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 200
@@ -2505,7 +2926,11 @@ class TestDreamJournalViewSetCoverage:
     def test_create_journal(self, prem_client, cov_dream):
         resp = prem_client.post(
             "/api/dreams/journal/",
-            {"dream": str(cov_dream.id), "content": "Today's entry", "mood": "motivated"},
+            {
+                "dream": str(cov_dream.id),
+                "content": "Today's entry",
+                "mood": "motivated",
+            },
             format="json",
         )
         assert resp.status_code == 201
@@ -2529,7 +2954,9 @@ class TestDreamJournalViewSetCoverage:
         assert resp.status_code == 200
 
     def test_delete_journal(self, prem_client, cov_dream):
-        j = DreamJournal.objects.create(dream=cov_dream, content="Delete me", mood="neutral")
+        j = DreamJournal.objects.create(
+            dream=cov_dream, content="Delete me", mood="neutral"
+        )
         resp = prem_client.delete(f"/api/dreams/journal/{j.id}/")
         assert resp.status_code == 204
 
@@ -2575,7 +3002,9 @@ class TestFocusSessionViewsCoverage:
 
     def test_complete_session(self, prem_client, prem_user, cov_task):
         session = FocusSession.objects.create(
-            user=prem_user, task=cov_task, duration_minutes=25,
+            user=prem_user,
+            task=cov_task,
+            duration_minutes=25,
             session_type="work",
         )
         resp = prem_client.post(
@@ -2588,7 +3017,9 @@ class TestFocusSessionViewsCoverage:
     def test_complete_session_awards_xp(self, prem_client, prem_user, cov_task):
         """Completing a full work session awards XP."""
         session = FocusSession.objects.create(
-            user=prem_user, task=cov_task, duration_minutes=25,
+            user=prem_user,
+            task=cov_task,
+            duration_minutes=25,
             session_type="work",
         )
         old_xp = prem_user.xp
@@ -2612,7 +3043,9 @@ class TestFocusSessionViewsCoverage:
     def test_complete_session_partial(self, prem_client, prem_user):
         """Partial completion (actual < planned) doesn't mark as completed."""
         session = FocusSession.objects.create(
-            user=prem_user, duration_minutes=25, session_type="work",
+            user=prem_user,
+            duration_minutes=25,
+            session_type="work",
         )
         resp = prem_client.post(
             "/api/dreams/focus/complete/",
@@ -2625,15 +3058,20 @@ class TestFocusSessionViewsCoverage:
 
     def test_history(self, prem_client, prem_user):
         FocusSession.objects.create(
-            user=prem_user, duration_minutes=25, session_type="work",
+            user=prem_user,
+            duration_minutes=25,
+            session_type="work",
         )
         resp = prem_client.get("/api/dreams/focus/history/")
         assert resp.status_code == 200
 
     def test_stats(self, prem_client, prem_user):
         FocusSession.objects.create(
-            user=prem_user, duration_minutes=25, actual_minutes=25,
-            session_type="work", completed=True,
+            user=prem_user,
+            duration_minutes=25,
+            actual_minutes=25,
+            session_type="work",
+            completed=True,
         )
         resp = prem_client.get("/api/dreams/focus/stats/")
         assert resp.status_code == 200
@@ -2651,7 +3089,9 @@ class TestRemainingCoverageLines:
     """Tests targeting specific uncovered lines in views.py."""
 
     @patch("core.moderation.ContentModerationService.moderate_text")
-    def test_answer_calibration_keyerror_continue(self, mock_mod, prem_client, prem_user):
+    def test_answer_calibration_keyerror_continue(
+        self, mock_mod, prem_client, prem_user
+    ):
         """Lines 997-998: except (KeyError, ValueError): continue.
 
         The except clause catches errors during answer processing.
@@ -2659,13 +3099,17 @@ class TestRemainingCoverageLines:
         when accessing .get() on non-dict items.
         """
         d = Dream.objects.create(
-            user=prem_user, title="KeyErrDream", description="desc",
+            user=prem_user,
+            title="KeyErrDream",
+            description="desc",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # Create enough answered questions to force completion
         for i in range(10):
             CalibrationResponse.objects.create(
-                dream=d, question=f"Q{i}?", question_number=i+1,
+                dream=d,
+                question=f"Q{i}?",
+                question_number=i + 1,
                 answer=f"a{i}",
             )
         # Submit a valid-looking answer that won't trigger KeyError since
@@ -2676,9 +3120,11 @@ class TestRemainingCoverageLines:
         # that exercises the loop and the force-complete guard.
         resp = prem_client.post(
             f"/api/dreams/dreams/{d.id}/answer_calibration/",
-            {"answers": [
-                {"question_number": 11, "answer": "additional answer"},
-            ]},
+            {
+                "answers": [
+                    {"question_number": 11, "answer": "additional answer"},
+                ]
+            },
             format="json",
         )
         # Should complete (>= 10 answered + 1 new = 11 >= 10)
@@ -2691,7 +3137,9 @@ class TestRemainingCoverageLines:
     ):
         """Lines 1681-1682: JSONDecodeError fallback for previous analysis."""
         d = Dream.objects.create(
-            user=pro_user_cov, title="MalformedJSON", description="desc",
+            user=pro_user_cov,
+            title="MalformedJSON",
+            description="desc",
         )
         png = _make_png_bytes()
         # Create old photo with non-JSON ai_analysis (will trigger JSONDecodeError)
@@ -2712,14 +3160,20 @@ class TestRemainingCoverageLines:
         )
         assert resp.status_code == 200
 
-    def test_add_collaborator_not_owner_direct(self, prem_client, prem_user, other_user):
+    def test_add_collaborator_not_owner_direct(
+        self, prem_client, prem_user, other_user
+    ):
         """Line 2141: dream.user != request.user for add_collaborator."""
         # Create a dream owned by other_user, shared with prem_user so they can access it
         d = Dream.objects.create(
-            user=other_user, title="NotMyDream", description="desc",
+            user=other_user,
+            title="NotMyDream",
+            description="desc",
         )
         SharedDream.objects.create(
-            dream=d, shared_by=other_user, shared_with=prem_user,
+            dream=d,
+            shared_by=other_user,
+            shared_with=prem_user,
         )
         resp = prem_client.post(
             f"/api/dreams/dreams/{d.id}/collaborators/",
@@ -2729,13 +3183,19 @@ class TestRemainingCoverageLines:
         # Should return 403 because prem_user is not the owner
         assert resp.status_code == 403
 
-    def test_remove_collaborator_not_owner_direct(self, prem_client, prem_user, other_user):
+    def test_remove_collaborator_not_owner_direct(
+        self, prem_client, prem_user, other_user
+    ):
         """Line 2225: dream.user != request.user for remove_collaborator."""
         d = Dream.objects.create(
-            user=other_user, title="NotMyDream2", description="desc",
+            user=other_user,
+            title="NotMyDream2",
+            description="desc",
         )
         SharedDream.objects.create(
-            dream=d, shared_by=other_user, shared_with=prem_user,
+            dream=d,
+            shared_by=other_user,
+            shared_with=prem_user,
         )
         DreamCollaborator.objects.create(dream=d, user=prem_user)
         resp = prem_client.delete(
@@ -2746,14 +3206,18 @@ class TestRemainingCoverageLines:
     def test_create_from_parsed_goal_not_found(self, prem_client, prem_user):
         """Lines 3869-3870: Goal.DoesNotExist in create_from_parsed."""
         d = Dream.objects.create(
-            user=prem_user, title="ParsedGoalFail", description="desc",
+            user=prem_user,
+            title="ParsedGoalFail",
+            description="desc",
             status="active",
         )
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
-            {"tasks": [
-                {"title": "BadGoal", "matched_goal_id": str(uuid.uuid4())},
-            ]},
+            {
+                "tasks": [
+                    {"title": "BadGoal", "matched_goal_id": str(uuid.uuid4())},
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 201  # Falls back to dream's first goal
@@ -2762,15 +3226,19 @@ class TestRemainingCoverageLines:
         """Lines 3880-3881: Dream.DoesNotExist in create_from_parsed."""
         # Need an active dream to fallback to
         d = Dream.objects.create(
-            user=prem_user, title="FallbackDream", description="desc",
+            user=prem_user,
+            title="FallbackDream",
+            description="desc",
             status="active",
         )
         Goal.objects.create(dream=d, title="FG", order=1)
         resp = prem_client.post(
             "/api/dreams/tasks/create-from-parsed/",
-            {"tasks": [
-                {"title": "BadDream", "matched_dream_id": str(uuid.uuid4())},
-            ]},
+            {
+                "tasks": [
+                    {"title": "BadDream", "matched_dream_id": str(uuid.uuid4())},
+                ]
+            },
             format="json",
         )
         assert resp.status_code == 201  # Falls back to first active dream
@@ -2778,32 +3246,50 @@ class TestRemainingCoverageLines:
     def test_export_pdf_with_reportlab(self, prem_client, prem_user):
         """Lines 2670-2775: Full PDF generation with reportlab installed."""
         d = Dream.objects.create(
-            user=prem_user, title="PDF Dream", description="PDF description",
-            target_date=timezone.now(), status="active",
+            user=prem_user,
+            title="PDF Dream",
+            description="PDF description",
+            target_date=timezone.now(),
+            status="active",
         )
         g = Goal.objects.create(
-            dream=d, title="PDF Goal", description="Goal desc", order=1,
+            dream=d,
+            title="PDF Goal",
+            description="Goal desc",
+            order=1,
             status="completed",
         )
         Task.objects.create(
-            goal=g, title="PDF Task", order=1, duration_mins=30,
+            goal=g,
+            title="PDF Task",
+            order=1,
+            duration_mins=30,
             status="completed",
         )
         Task.objects.create(
-            goal=g, title="PDF Task 2", order=2, status="pending",
+            goal=g,
+            title="PDF Task 2",
+            order=2,
+            status="pending",
         )
         # Goal without description
         g2 = Goal.objects.create(
-            dream=d, title="No Desc Goal", order=2,
+            dream=d,
+            title="No Desc Goal",
+            order=2,
         )
         # Obstacle with solution
         Obstacle.objects.create(
-            dream=d, title="PDF Obs", description="Obs desc",
+            dream=d,
+            title="PDF Obs",
+            description="Obs desc",
             solution="Fix it",
         )
         # Obstacle without solution
         Obstacle.objects.create(
-            dream=d, title="Obs2", description="Obs2 desc",
+            dream=d,
+            title="Obs2",
+            description="Obs2 desc",
         )
         resp = prem_client.get(f"/api/dreams/dreams/{d.id}/export-pdf/")
         assert resp.status_code == 200
@@ -2812,7 +3298,9 @@ class TestRemainingCoverageLines:
     def test_export_pdf_no_target_date(self, prem_client, prem_user):
         """PDF export without target_date (no target date paragraph)."""
         d = Dream.objects.create(
-            user=prem_user, title="PDF NoDate", description="desc",
+            user=prem_user,
+            title="PDF NoDate",
+            description="desc",
         )
         resp = prem_client.get(f"/api/dreams/dreams/{d.id}/export-pdf/")
         assert resp.status_code == 200
@@ -2829,8 +3317,11 @@ class TestRemainingCoverageLines:
         # through to the unpaginated path. This is hard to trigger since the
         # viewset inherits pagination. We test it for coverage.
         Dream.objects.create(
-            user=other_user, title="ExploreDream", description="desc",
-            is_public=True, status="active",
+            user=other_user,
+            title="ExploreDream",
+            description="desc",
+            is_public=True,
+            status="active",
         )
         # The paginator always returns a page, so these lines are only hit when
         # pagination_class is None. We can't easily test this without modifying
@@ -2850,6 +3341,7 @@ class TestSwaggerFakeView:
     def test_dream_queryset_swagger(self, dream_client):
         """Line 176: Dream.objects.none() for swagger."""
         from apps.dreams.views import DreamViewSet
+
         vs = DreamViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2861,6 +3353,7 @@ class TestSwaggerFakeView:
     def test_checkin_queryset_swagger(self):
         """Line 2407: PlanCheckIn.objects.none()."""
         from apps.dreams.views import CheckInViewSet
+
         vs = CheckInViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2871,6 +3364,7 @@ class TestSwaggerFakeView:
     def test_shared_dream_queryset_swagger(self):
         """Line 2501: SharedDream.objects.none()."""
         from apps.dreams.views import SharedWithMeView
+
         vs = SharedWithMeView()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2881,6 +3375,7 @@ class TestSwaggerFakeView:
     def test_template_queryset_swagger(self):
         """Line 2557: DreamTemplate.objects.none()."""
         from apps.dreams.views import DreamTemplateViewSet
+
         vs = DreamTemplateViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2891,6 +3386,7 @@ class TestSwaggerFakeView:
     def test_milestone_queryset_swagger(self):
         """Line 2879: DreamMilestone.objects.none()."""
         from apps.dreams.views import DreamMilestoneViewSet
+
         vs = DreamMilestoneViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2901,6 +3397,7 @@ class TestSwaggerFakeView:
     def test_goal_queryset_swagger(self):
         """Line 2935: Goal.objects.none()."""
         from apps.dreams.views import GoalViewSet
+
         vs = GoalViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2911,6 +3408,7 @@ class TestSwaggerFakeView:
     def test_task_queryset_swagger(self):
         """Line 3196: Task.objects.none()."""
         from apps.dreams.views import TaskViewSet
+
         vs = TaskViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2921,6 +3419,7 @@ class TestSwaggerFakeView:
     def test_obstacle_queryset_swagger(self):
         """Line 4216: Obstacle.objects.none()."""
         from apps.dreams.views import ObstacleViewSet
+
         vs = ObstacleViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2931,6 +3430,7 @@ class TestSwaggerFakeView:
     def test_journal_queryset_swagger(self):
         """Line 4306: DreamJournal.objects.none()."""
         from apps.dreams.views import DreamJournalViewSet
+
         vs = DreamJournalViewSet()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2941,6 +3441,7 @@ class TestSwaggerFakeView:
     def test_focus_session_queryset_swagger(self):
         """Line 4430: FocusSession.objects.none()."""
         from apps.dreams.views import FocusSessionHistoryView
+
         vs = FocusSessionHistoryView()
         vs.swagger_fake_view = True
         vs.request = None
@@ -2956,6 +3457,7 @@ class TestEdgeCoverage:
     def test_get_object_for_serializer_exception(self, dream_client, dream_user):
         """Lines 264-266: exception in get_object_for_serializer_check."""
         from apps.dreams.views import DreamViewSet
+
         vs = DreamViewSet()
         vs.kwargs = {"pk": "not-a-uuid"}
         vs.request = type("R", (), {"user": dream_user})()
@@ -2967,6 +3469,7 @@ class TestEdgeCoverage:
     def test_calibration_answer_malformed_data(self, pro_client_cov, cov_dream):
         """Lines 997-998: KeyError/ValueError in answer_calibration loop."""
         from apps.dreams.models import CalibrationResponse
+
         CalibrationResponse.objects.create(
             dream=cov_dream, question="Q1?", answer="", question_number=1
         )
@@ -2978,32 +3481,51 @@ class TestEdgeCoverage:
         # 404 if endpoint not found, 200/400 if found — any is OK as long as no crash
         assert response.status_code in (200, 400, 404)
 
-    def test_add_collaborator_not_owner(self, dream_user, dream_user2, dream_client2, test_dream):
+    def test_add_collaborator_not_owner(
+        self, dream_user, dream_user2, dream_client2, test_dream
+    ):
         """Line 2141: Only owner can add collaborators."""
         from apps.dreams.models import SharedDream
-        SharedDream.objects.create(dream=test_dream, shared_with=dream_user2, shared_by=dream_user)
+
+        SharedDream.objects.create(
+            dream=test_dream, shared_with=dream_user2, shared_by=dream_user
+        )
         response = dream_client2.post(
             f"/api/dreams/dreams/{test_dream.id}/collaborators/",
             {"user_id": str(dream_user.id)},
             format="json",
         )
-        assert response.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+        assert response.status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+        )
 
-    def test_remove_collaborator_not_owner(self, dream_user, dream_user2, dream_client2, test_dream):
+    def test_remove_collaborator_not_owner(
+        self, dream_user, dream_user2, dream_client2, test_dream
+    ):
         """Line 2225: Only owner can remove collaborators."""
         from apps.dreams.models import DreamCollaborator, SharedDream
-        SharedDream.objects.create(dream=test_dream, shared_with=dream_user2, shared_by=dream_user)
+
+        SharedDream.objects.create(
+            dream=test_dream, shared_with=dream_user2, shared_by=dream_user
+        )
         DreamCollaborator.objects.create(dream=test_dream, user=dream_user2)
         response = dream_client2.delete(
             f"/api/dreams/dreams/{test_dream.id}/collaborators/{dream_user2.id}/",
         )
-        assert response.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+        assert response.status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+        )
 
     def test_explore_no_pagination(self, dream_client, test_dream):
         """Lines 2314-2315: explore without pagination."""
         from unittest.mock import patch
+
         test_dream.is_public = True
         test_dream.save(update_fields=["is_public"])
-        with patch("apps.dreams.views.DreamViewSet.paginate_queryset", return_value=None):
+        with patch(
+            "apps.dreams.views.DreamViewSet.paginate_queryset", return_value=None
+        ):
             response = dream_client.get("/api/dreams/dreams/explore/")
             assert response.status_code == status.HTTP_200_OK

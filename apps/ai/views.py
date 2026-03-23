@@ -125,7 +125,11 @@ class AIConversationViewSet(viewsets.ModelViewSet):
     """CRUD operations for AI coaching conversations. All actions require premium+."""
 
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
     filterset_fields = ["conversation_type", "is_active"]
     search_fields = ["title"]
     ordering_fields = ["updated_at", "created_at"]
@@ -165,15 +169,12 @@ class AIConversationViewSet(viewsets.ModelViewSet):
         """Get AI conversations for current user."""
         if getattr(self, "swagger_fake_view", False):
             return AIConversation.objects.none()
-        return (
-            AIConversation.objects.filter(user=self.request.user)
-            .prefetch_related(
-                Prefetch(
-                    "messages",
-                    queryset=AIMessage.objects.order_by("-created_at")[:1],
-                    to_attr="_last_message_list",
-                ),
-            )
+        return AIConversation.objects.filter(user=self.request.user).prefetch_related(
+            Prefetch(
+                "messages",
+                queryset=AIMessage.objects.order_by("-created_at")[:1],
+                to_attr="_last_message_list",
+            ),
         )
 
     def get_serializer_class(self):
@@ -459,7 +460,9 @@ class AIConversationViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                "message": AIMessageSerializer(AIMessage.objects.get(id=message.id)).data,
+                "message": AIMessageSerializer(
+                    AIMessage.objects.get(id=message.id)
+                ).data,
                 "status": "transcription_queued",
             },
             status=status.HTTP_201_CREATED,
