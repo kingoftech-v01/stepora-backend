@@ -31,6 +31,9 @@ DEBUG = False
 
 ALLOWED_HOSTS = []
 
+# Maintenance mode — toggle via env var or `python manage.py maintenance on/off`
+MAINTENANCE_MODE = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
+
 # Application definition
 INSTALLED_APPS = [
     # Django apps
@@ -80,6 +83,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "core.maintenance.MaintenanceMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "core.middleware.OriginValidationMiddleware",
