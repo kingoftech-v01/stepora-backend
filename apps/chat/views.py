@@ -6,6 +6,7 @@ AI conversation features are in apps.ai.views.
 
 import logging
 
+from django.conf import settings as django_settings
 from django.db.models import Prefetch, Q
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
@@ -33,6 +34,25 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+class FeatureFlagMixin:
+    """Return 501 when a feature flag is disabled."""
+
+    feature_flag = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        flag_name = self.feature_flag
+        if flag_name and not getattr(django_settings, flag_name, False):
+            from rest_framework.exceptions import APIException
+
+            class FeatureComingSoon(APIException):
+                status_code = 501
+                default_detail = _("This feature is coming soon.")
+                default_code = "coming_soon"
+
+            raise FeatureComingSoon()
+
+
 @extend_schema_view(
     list=extend_schema(
         summary="List chat conversations",
@@ -50,9 +70,10 @@ logger = logging.getLogger(__name__)
         },
     ),
 )
-class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
+class ChatConversationViewSet(FeatureFlagMixin, viewsets.ReadOnlyModelViewSet):
     """List and retrieve friend/buddy chat conversations."""
 
+    feature_flag = "USE_MESSAGES"
     permission_classes = [IsAuthenticated]
     ordering = ["-updated_at"]
 
@@ -309,9 +330,10 @@ class ChatConversationViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class CallViewSet(viewsets.GenericViewSet):
+class CallViewSet(FeatureFlagMixin, viewsets.GenericViewSet):
     """Manage voice/video calls between buddies."""
 
+    feature_flag = "USE_MESSAGES"
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
