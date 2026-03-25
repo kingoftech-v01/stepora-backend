@@ -394,6 +394,7 @@ class PurchaseView(views.APIView):
     """API view for initiating store purchases via Stripe. Requires premium+."""
 
     permission_classes = [IsAuthenticated, CanUseStore]
+    throttle_scope = "store_purchase"  # SECURITY: rate limit purchase attempts (5/min)
 
     @extend_schema(
         summary="Initiate purchase",
@@ -452,6 +453,7 @@ class PurchaseConfirmView(views.APIView):
     """API view for confirming a purchase after Stripe payment completion. Requires premium+."""
 
     permission_classes = [IsAuthenticated, CanUseStore]
+    throttle_scope = "store_purchase"  # SECURITY: rate limit confirm attempts (5/min)
 
     @extend_schema(
         summary="Confirm purchase",

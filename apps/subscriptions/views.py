@@ -80,6 +80,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
     """Viewset for managing the authenticated user's subscription."""
 
     permission_classes = [IsAuthenticated]
+    throttle_scope = "subscription"  # SECURITY: rate limit checkout/change-plan (5/min)
     serializer_class = SubscriptionSerializer
 
     def get_queryset(self):

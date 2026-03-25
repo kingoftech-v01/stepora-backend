@@ -259,7 +259,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 data={"screen": "friends", "user_id": str(request.user.id)},
             )
         except Exception:
-            pass
+            logger.warning("Notification failed for friend request send", exc_info=True)
 
         return Response(
             {"message": _("Friend request sent.")}, status=status.HTTP_201_CREATED
@@ -312,7 +312,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 data={"screen": "friends", "user_id": str(request.user.id)},
             )
         except Exception:
-            pass
+            logger.warning("Notification failed for friend request accept", exc_info=True)
 
         return Response({"message": _("Friend request accepted.")})
 
