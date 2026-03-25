@@ -211,6 +211,20 @@ class StoreService:
                 "Payment verification failed: user mismatch."
             )
 
+        # SECURITY: Verify the payment intent was created for THIS specific item,
+        # preventing item substitution attacks where a user pays for a cheap item
+        # and claims a more expensive one.
+        if intent_metadata.get("item_id") != str(item.id):
+            logger.error(
+                "Payment intent %s item mismatch: expected %s, got %s",
+                payment_intent_id,
+                item.id,
+                intent_metadata.get("item_id"),
+            )
+            raise PaymentVerificationError(
+                "Payment was not for this item."
+            )
+
         # Create inventory entry
         inventory_entry = UserInventory.objects.create(
             user=user,
@@ -370,7 +384,9 @@ class StoreService:
         User = get_user_model()
         locked_user = User.objects.select_for_update().get(id=user.id)
 
-        if UserInventory.objects.filter(user=user, item=item).exists():
+        # SECURITY: Use select_for_update() to prevent race condition where
+        # concurrent XP purchases could bypass the "already owned" check.
+        if UserInventory.objects.select_for_update().filter(user=user, item=item).exists():
             raise ItemAlreadyOwnedError(f'You already own "{item.name}".')
 
         if locked_user.xp < item.xp_price:

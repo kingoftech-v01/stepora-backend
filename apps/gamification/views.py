@@ -319,22 +319,15 @@ class StreakFreezeView(APIView):
         },
     )
     def post(self, request):
-        profile, _ = GamificationProfile.objects.get_or_create(user=request.user)
-        if profile.streak_jokers <= 0:
-            return Response(
-                {"error": "No streak freezes available."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # SECURITY: Delegate to StreakService which enforces premium check,
+        # per-week limit, and active streak validation — instead of just
+        # decrementing streak_jokers without any business rule enforcement.
+        from apps.gamification.services import StreakService
 
-        profile.streak_jokers -= 1
-        profile.save(update_fields=["streak_jokers"])
-
-        return Response(
-            {
-                "message": "Streak freeze applied.",
-                "freeze_count": profile.streak_jokers,
-            }
-        )
+        result = StreakService.use_streak_freeze(request.user)
+        if not result.get("success"):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
 
 
 class LeaderboardStatsView(APIView):
@@ -355,7 +348,16 @@ class LeaderboardStatsView(APIView):
 
         # Rank by XP
         xp_rank = User.objects.filter(xp__gt=user.xp, is_active=True).count() + 1
-        total_users = User.objects.filter(is_active=True).count()
+
+        # SECURITY: Bucket the total user count to avoid disclosing exact
+        # platform size (information disclosure).
+        count = User.objects.filter(is_active=True).count()
+        if count < 100:
+            total_display = "50+"
+        elif count < 1000:
+            total_display = f"{(count // 100) * 100}+"
+        else:
+            total_display = f"{count // 1000}K+"
 
         # Rank by streak
         streak_rank = (
@@ -369,7 +371,7 @@ class LeaderboardStatsView(APIView):
             {
                 "xp_rank": xp_rank,
                 "streak_rank": streak_rank,
-                "total_users": total_users,
+                "total_users": total_display,
                 "xp": user.xp,
                 "level": user.level,
                 "streak_days": user.streak_days,

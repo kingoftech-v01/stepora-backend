@@ -191,6 +191,31 @@ class ChatConversationViewSet(FeatureFlagMixin, viewsets.ReadOnlyModelViewSet):
         """Send a message in a friend/buddy chat conversation (no AI)."""
         conversation = self.get_object()
 
+        # SECURITY: Prevent messaging in inactive conversations
+        if not conversation.is_active:
+            return Response(
+                {"error": "Conversation is not active."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # SECURITY: Prevent messaging between blocked users
+        other_user = (
+            conversation.target_user
+            if conversation.user == request.user
+            else conversation.user
+        )
+        if other_user:
+            from apps.social.models import BlockedUser
+
+            if BlockedUser.objects.filter(
+                Q(blocker=request.user, blocked=other_user)
+                | Q(blocker=other_user, blocked=request.user)
+            ).exists():
+                return Response(
+                    {"error": "Cannot send messages to this user."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = ChatMessageCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -268,7 +293,12 @@ class ChatConversationViewSet(FeatureFlagMixin, viewsets.ReadOnlyModelViewSet):
         url_path=r"pin-message/(?P<message_id>[0-9a-f-]+)",
     )
     def pin_message(self, request, pk=None, message_id=None):
-        """Toggle pin on a chat message."""
+        """Toggle pin on a chat message.
+
+        SECURITY NOTE: Both conversation participants can pin/like any message
+        in their shared conversation. This is intentional UX behavior — no
+        sender-only restriction is needed.
+        """
         conversation = self.get_object()
         try:
             message = conversation.messages.get(id=message_id)
@@ -292,7 +322,11 @@ class ChatConversationViewSet(FeatureFlagMixin, viewsets.ReadOnlyModelViewSet):
         url_path=r"like-message/(?P<message_id>[0-9a-f-]+)",
     )
     def like_message(self, request, pk=None, message_id=None):
-        """Toggle like on a chat message."""
+        """Toggle like on a chat message.
+
+        SECURITY NOTE: Both conversation participants can like any message
+        in their shared conversation. This is intentional UX behavior.
+        """
         conversation = self.get_object()
         try:
             message = conversation.messages.get(id=message_id)

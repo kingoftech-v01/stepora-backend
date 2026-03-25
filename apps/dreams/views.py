@@ -999,9 +999,6 @@ class DreamViewSet(viewsets.ModelViewSet):
             dream.calibration_status = "in_progress"
             dream.save(update_fields=["calibration_status"])
 
-            # Release generation lock
-            cache.delete(lock_key)
-
             return Response(
                 {
                     "status": "in_progress",
@@ -1014,7 +1011,6 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         except AIValidationError as e:
-            cache.delete(lock_key)
             return Response(
                 {
                     "error": _("AI produced invalid calibration questions: %(msg)s")
@@ -1023,10 +1019,12 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except OpenAIError as e:
-            cache.delete(lock_key)
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        finally:
+            # SECURITY: Always release calibration lock to prevent deadlocks
+            cache.delete(lock_key)
 
     @extend_schema(
         summary="Answer calibration",
@@ -1237,7 +1235,6 @@ class DreamViewSet(viewsets.ModelViewSet):
 
             # Check for AI refusal
             if result.refusal_reason:
-                cache.delete(lock_key)
                 return Response(
                     {"error": result.refusal_reason},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1251,7 +1248,6 @@ class DreamViewSet(viewsets.ModelViewSet):
                 dream.calibration_status = "completed"
                 dream.save(update_fields=["calibration_status"])
 
-                cache.delete(lock_key)
                 return Response(
                     {
                         "status": "completed",
@@ -1278,7 +1274,6 @@ class DreamViewSet(viewsets.ModelViewSet):
 
                 new_total = total_questions + len(new_questions)
 
-                cache.delete(lock_key)
                 return Response(
                     {
                         "status": "in_progress",
@@ -1293,7 +1288,6 @@ class DreamViewSet(viewsets.ModelViewSet):
                 )
 
         except AIValidationError as e:
-            cache.delete(lock_key)
             return Response(
                 {
                     "error": _("AI produced invalid follow-up questions: %(msg)s")
@@ -1302,10 +1296,12 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except OpenAIError as e:
-            cache.delete(lock_key)
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        finally:
+            # SECURITY: Always release calibration lock to prevent deadlocks
+            cache.delete(lock_key)
 
     @extend_schema(
         summary="Skip calibration",
@@ -3126,6 +3122,22 @@ class DreamMilestoneViewSet(viewsets.ModelViewSet):
             )
         serializer.save()
 
+    def perform_update(self, serializer):
+        """SECURITY: Validate ownership before updating a milestone."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if serializer.instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only modify your own resources."))
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """SECURITY: Validate ownership before deleting a milestone."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only delete your own resources."))
+        instance.delete()
+
     @extend_schema(
         summary="Complete dream milestone",
         description="Mark a dream milestone as completed",
@@ -3187,6 +3199,22 @@ class GoalViewSet(viewsets.ModelViewSet):
             serializer.save(order=count + 1)
         else:
             serializer.save()
+
+    def perform_update(self, serializer):
+        """SECURITY: Validate ownership before updating a goal."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if serializer.instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only modify your own resources."))
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """SECURITY: Validate ownership before deleting a goal."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only delete your own resources."))
+        instance.delete()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -3270,7 +3298,7 @@ class GoalViewSet(viewsets.ModelViewSet):
         """Refine a goal into a SMART goal through AI conversation."""
         goal_id = request.data.get("goal_id")
         message = request.data.get("message", "")
-        history = request.data.get("history", [])
+        raw_history = request.data.get("history", [])
 
         if not goal_id:
             return Response(
@@ -3283,6 +3311,21 @@ class GoalViewSet(viewsets.ModelViewSet):
                 {"error": _("message is required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # SECURITY: Validate and sanitize conversation history to prevent
+        # prompt injection via arbitrary roles or oversized content.
+        ALLOWED_ROLES = {"user", "assistant"}
+        MAX_HISTORY_ITEMS = 20
+        MAX_CONTENT_LEN = 2000
+        validated_history = []
+        for entry in (raw_history or [])[:MAX_HISTORY_ITEMS]:
+            if not isinstance(entry, dict):
+                continue
+            role = entry.get("role", "")
+            content = str(entry.get("content", ""))[:MAX_CONTENT_LEN]
+            if role not in ALLOWED_ROLES:
+                continue
+            validated_history.append({"role": role, "content": content})
 
         # Fetch the goal (must belong to current user)
         try:
@@ -3318,8 +3361,8 @@ class GoalViewSet(viewsets.ModelViewSet):
             "category": dream.category,
         }
 
-        # Append the new user message to history
-        full_history = list(history) + [{"role": "user", "content": message}]
+        # Append the new user message to validated history
+        full_history = validated_history + [{"role": "user", "content": message}]
 
         # Call AI service
         try:
@@ -3442,6 +3485,22 @@ class TaskViewSet(viewsets.ModelViewSet):
             serializer.save(order=count + 1)
         else:
             serializer.save()
+
+    def perform_update(self, serializer):
+        """SECURITY: Validate ownership before updating a task."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if serializer.instance.goal.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only modify your own resources."))
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """SECURITY: Validate ownership before deleting a task."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if instance.goal.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only delete your own resources."))
+        instance.delete()
 
     def get_serializer_class(self):
         """Return appropriate serializer."""
@@ -4460,6 +4519,22 @@ class ObstacleViewSet(viewsets.ModelViewSet):
                 _("You can only create obstacles for your own dreams.")
             )
         serializer.save()
+
+    def perform_update(self, serializer):
+        """SECURITY: Validate ownership before updating an obstacle."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if serializer.instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only modify your own resources."))
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """SECURITY: Validate ownership before deleting an obstacle."""
+        from rest_framework.exceptions import PermissionDenied
+
+        if instance.dream.user != self.request.user:
+            raise PermissionDenied(_("You can only delete your own resources."))
+        instance.delete()
 
     @extend_schema(
         summary="Resolve obstacle",

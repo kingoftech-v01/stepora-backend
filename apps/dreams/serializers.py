@@ -830,7 +830,10 @@ class PublicMilestoneSerializer(serializers.ModelSerializer):
 class PublicDreamDetailSerializer(serializers.ModelSerializer):
     """Read-only serializer for viewing another user's public dream.
     Exposes milestones and goals but NOT tasks, obstacles, AI analysis,
-    calibration data, or collaborators."""
+    calibration data, or collaborators.
+
+    SECURITY: ai_analysis is intentionally excluded from fields to prevent
+    leaking private AI-generated insights about a user's dream."""
 
     milestones = PublicMilestoneSerializer(many=True, read_only=True)
     goals = PublicGoalSerializer(many=True, read_only=True)

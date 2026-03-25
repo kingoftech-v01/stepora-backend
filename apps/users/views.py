@@ -3024,6 +3024,7 @@ class UserViewSet(viewsets.ModelViewSet):
         from datetime import timedelta as td
 
         from django.db.models import Avg, Count, Sum
+        from django.db.models.functions import ExtractWeekDay
 
         from apps.dreams.models import FocusSession, Task
         from core.exceptions import OpenAIError
@@ -3098,27 +3099,29 @@ class UserViewSet(viewsets.ModelViewSet):
         completed_by_dow = (
             tasks_in_period.filter(status="completed", completed_at__isnull=False)
             .filter(completed_at__date__gte=thirty_days_ago)
-            .extra(select={"dow": 'EXTRACT(DOW FROM "tasks"."completed_at")'})
+            # SECURITY: Use ORM function instead of raw SQL via .extra()
+            .annotate(dow=ExtractWeekDay("completed_at"))
             .values("dow")
             .annotate(completed=Count("id"))
             .order_by("dow")
         )
 
-        day_names = [
-            "Sunday",
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-        ]
+        # ExtractWeekDay returns 1=Sunday..7=Saturday (1-indexed)
+        day_names = {
+            1: "Sunday",
+            2: "Monday",
+            3: "Tuesday",
+            4: "Wednesday",
+            5: "Thursday",
+            6: "Friday",
+            7: "Saturday",
+        }
         dow_data = []
         for entry in completed_by_dow:
             dow_idx = int(entry["dow"])
             dow_data.append(
                 {
-                    "day": day_names[dow_idx] if 0 <= dow_idx < 7 else str(dow_idx),
+                    "day": day_names.get(dow_idx, str(dow_idx)),
                     "completed": entry["completed"],
                 }
             )

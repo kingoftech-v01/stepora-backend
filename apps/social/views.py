@@ -1048,6 +1048,9 @@ class UserSearchView(generics.ListAPIView):
             User.objects.filter(id__in=matching_user_ids, is_active=True)
             .exclude(id=request.user.id)
             .exclude(id__in=blocked_ids)
+            # SECURITY: Respect profile_visibility — private profiles should
+            # never appear in search results.
+            .exclude(profile_visibility="private")
         )
 
         # Paginate the queryset (respects ?limit= and ?offset=)

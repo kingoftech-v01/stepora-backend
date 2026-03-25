@@ -244,6 +244,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.ScopedRateThrottle",
     ],
+    # SECURITY: Trust only the last XFF entry (appended by ALB) to prevent
+    # throttle bypass via spoofed X-Forwarded-For headers.
+    "NUM_PROXIES": 1,
     "DEFAULT_THROTTLE_RATES": {
         "auth": "5/minute",
         "auth_login": "5/minute",

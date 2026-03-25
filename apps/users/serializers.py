@@ -499,7 +499,20 @@ class GamificationProfileSerializer(serializers.ModelSerializer):
             "achievements",
             "streak_jokers",
         ]
-        read_only_fields = ["id", "badges", "achievements"]
+        # SECURITY: All XP fields and game-state fields must be read-only
+        # to prevent clients from inflating their own scores.
+        read_only_fields = [
+            "id",
+            "health_xp",
+            "career_xp",
+            "relationships_xp",
+            "personal_growth_xp",
+            "finance_xp",
+            "hobbies_xp",
+            "streak_jokers",
+            "badges",
+            "achievements",
+        ]
         extra_kwargs = {
             "id": {"help_text": "Unique gamification profile identifier."},
             "health_xp": {"help_text": "Experience points in health category."},

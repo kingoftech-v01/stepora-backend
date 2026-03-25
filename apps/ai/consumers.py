@@ -323,6 +323,16 @@ class AIChatConsumer(
             "instruction",
             "Based on our conversation, please take the appropriate action.",
         )
+
+        # SECURITY: Moderate function_call instruction before sending to AI,
+        # same as regular messages, to prevent moderation bypass.
+        mod_result = await self._moderate_content(instruction)
+        if mod_result.is_flagged:
+            await self.send_error(
+                mod_result.user_message or "Content flagged by moderation."
+            )
+            return
+
         messages.append({"role": "user", "content": instruction})
 
         try:
