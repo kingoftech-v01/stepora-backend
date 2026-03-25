@@ -4577,6 +4577,7 @@ class SharedCalendarView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_scope = "public"  # SECURITY: rate limit public share token access (30/min)
 
     @extend_schema(
         summary="View shared calendar",
