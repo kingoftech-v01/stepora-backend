@@ -284,7 +284,7 @@ class AdminIPRestrictionMiddleware:
         """Allow localhost, 10.x.x.x (AWS VPC / ALB), and configured IPs."""
         if ip in ("127.0.0.1", "::1"):
             return True
-        if ip.startswith("10."):
+        if ip.startswith("10.0."):  # SECURITY: Restrict to VPC CIDR 10.0.0.0/16 only
             return True
         if ip in self._extra_ips:
             return True

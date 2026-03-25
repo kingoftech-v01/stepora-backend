@@ -254,7 +254,22 @@ class FriendshipViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        UserFollow.objects.get_or_create(follower=request.user, following_id=target_id)
+        # SECURITY: Verify target exists and is not blocked
+        from apps.users.models import User
+        try:
+            target_user = User.objects.get(id=target_id, is_active=True)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if BlockedUser.is_blocked(request.user, target_user):
+            return Response(
+                {"error": "Cannot follow this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        UserFollow.objects.get_or_create(follower=request.user, following=target_user)
         return Response({"message": "Followed."}, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -334,6 +349,13 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         """Report a user."""
         serializer = ReportUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # SECURITY: Prevent self-reporting
+        if str(serializer.validated_data["user_id"]) == str(request.user.id):
+            return Response(
+                {"error": "Cannot report yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         ReportedUser.objects.create(
             reporter=request.user,

@@ -501,7 +501,16 @@ class BuddyViewSet(viewsets.GenericViewSet):
             "audio/flac",
             "audio/aac",
         }
+        # SECURITY: Validate MIME type via magic bytes, not client-supplied header
         content_type = getattr(audio_file, "content_type", "")
+        try:
+            import magic
+            audio_file.seek(0)
+            detected = magic.from_buffer(audio_file.read(8192), mime=True)
+            audio_file.seek(0)
+            content_type = detected
+        except (ImportError, Exception):
+            pass  # Fall back to client-supplied content_type if python-magic unavailable
         if content_type not in ALLOWED_AUDIO_TYPES:
             return Response(
                 {

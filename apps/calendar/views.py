@@ -1649,7 +1649,13 @@ class CalendarViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=["get"], url_path="schedule-score")
     def schedule_score(self, request):
-        """Calculate weekly schedule adherence score."""
+        """Calculate weekly schedule adherence score. Results cached 1 hour per user."""
+        from django.core.cache import cache as django_cache
+        cache_key = f"schedule_score_{request.user.id}_{request.query_params.get('week', 'current')}"
+        cached = django_cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         week_param = request.query_params.get("week")
         today = timezone.now().date()
 
@@ -1926,8 +1932,7 @@ class CalendarViewSet(viewsets.ViewSet):
                     "Consistency is key \u2014 small daily wins add up to big results."
                 )
 
-        return Response(
-            {
+        result_data = {
                 "week_start": week_start.isoformat(),
                 "week_end": week_end.isoformat(),
                 "tasks_scheduled": tasks_scheduled,
@@ -1943,8 +1948,10 @@ class CalendarViewSet(viewsets.ViewSet):
                 "grade": grade,
                 "week_comparison": week_comparison,
                 "tips": tips,
-            }
-        )
+        }
+        # PERF: Cache result for 1 hour to avoid expensive streak loop
+        django_cache.set(cache_key, result_data, 3600)
+        return Response(result_data)
 
     @extend_schema(
         summary="Daily summary preview",
@@ -3418,6 +3425,7 @@ class ICalFeedView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_scope = "public"  # SECURITY: rate limit public feed access (30/min)
 
     @extend_schema(
         summary="iCal feed export",
