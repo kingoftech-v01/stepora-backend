@@ -95,6 +95,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "core.authentication.CsrfExemptAPIMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.idempotency.IdempotencyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.AdminIPRestrictionMiddleware",
@@ -268,6 +269,7 @@ REST_FRAMEWORK = {
         "ai_checkin": "10/day",
         "ai_notification_timing": "10/day",
         "public": "30/minute",
+        "sync": "10/minute",
     },
 }
 

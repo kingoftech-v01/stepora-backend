@@ -8,6 +8,7 @@ import logging
 from datetime import timedelta
 from typing import Optional
 
+from django.core.cache import cache
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -439,8 +440,24 @@ class XPService:
     """Service for XP management."""
 
     @staticmethod
-    def award_xp(user, amount, category=None):
-        """Award XP to a user and optionally to a category."""
+    def award_xp(user, amount, category=None, entity_id=None, reason=""):
+        """Award XP to a user and optionally to a category.
+
+        If ``entity_id`` is provided, a cache-based dedup key prevents
+        the same XP award from being granted twice within a 1-hour window.
+        This protects against offline queue replays that re-trigger the
+        same action (e.g. completing a task) multiple times.
+        """
+        if entity_id:
+            dedup_key = f"xp_dedup:{user.id}:{reason}:{entity_id}"
+            if cache.get(dedup_key):
+                logger.debug(
+                    "XP dedup hit: user=%s reason=%s entity=%s",
+                    user.id, reason, entity_id,
+                )
+                return False
+            cache.set(dedup_key, True, 3600)  # 1-hour window
+
         leveled_up = user.add_xp(amount)
 
         if category:

@@ -2088,11 +2088,9 @@ class DreamViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark dream as completed."""
         dream = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
         if dream.status == "completed":
-            return Response(
-                {"error": _("Dream is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(DreamSerializer(dream).data)
         dream.complete()
 
         return Response(DreamSerializer(dream).data)
@@ -3151,11 +3149,9 @@ class DreamMilestoneViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark dream milestone as completed."""
         milestone = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
         if milestone.status == "completed":
-            return Response(
-                {"error": _("Dream milestone is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(DreamMilestoneSerializer(milestone).data)
         milestone.complete()
         return Response(DreamMilestoneSerializer(milestone).data)
 
@@ -3235,11 +3231,9 @@ class GoalViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark goal as completed."""
         goal = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
         if goal.status == "completed":
-            return Response(
-                {"error": _("Goal is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(GoalSerializer(goal).data)
         goal.complete()
 
         return Response(GoalSerializer(goal).data)
@@ -3521,11 +3515,13 @@ class TaskViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark task as completed."""
         task = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
         if task.status == "completed":
-            return Response(
-                {"error": _("Task is already completed.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            data = TaskSerializer(task).data
+            chain_child = task.chain_children.first()
+            if chain_child:
+                data["chain_next_task"] = TaskSerializer(chain_child).data
+            return Response(data)
         task.complete()
 
         data = TaskSerializer(task).data
@@ -4610,6 +4606,35 @@ class DreamJournalViewSet(viewsets.ModelViewSet):
         return DreamJournal.objects.filter(
             dream__user=self.request.user
         ).select_related("dream")
+
+    def create(self, request, *args, **kwargs):
+        """Create journal entry with duplicate detection for offline replays."""
+        from datetime import timedelta
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        dream = serializer.validated_data.get("dream")
+        content = serializer.validated_data.get("content", "")
+
+        # Dedup: reject exact same content for same dream within 1 minute
+        recent_dup = DreamJournal.objects.filter(
+            dream=dream,
+            dream__user=request.user,
+            content=content,
+            created_at__gte=timezone.now() - timedelta(minutes=1),
+        ).first()
+        if recent_dup:
+            return Response(
+                self.get_serializer(recent_dup).data,
+                status=status.HTTP_200_OK,
+            )
+
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
     def perform_create(self, serializer):
         """Ensure the dream belongs to the current user before creating."""

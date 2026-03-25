@@ -17,6 +17,8 @@ from drf_spectacular.views import (
 )
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 
+from core.sync_views import BatchSyncView
+
 # Versioned API endpoints (v1)
 api_v1_patterns = [
     # Authentication (custom — replaces dj-rest-auth + allauth)
@@ -42,6 +44,8 @@ api_v1_patterns = [
     path("search/", include("apps.search.urls")),
     # App Updates (OTA live updates)
     path("updates/", include("apps.updates.urls")),
+    # Batch sync (offline queue replay)
+    path("sync/batch/", BatchSyncView.as_view(), name="batch-sync"),
 ]
 
 urlpatterns = [

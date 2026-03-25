@@ -107,6 +107,9 @@ class GoalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         goal = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
+        if goal.status == "completed":
+            return Response(GoalSerializer(goal).data)
         goal.complete()
         return Response(GoalSerializer(goal).data)
 
@@ -151,6 +154,9 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         task = self.get_object()
+        # Idempotency: if already completed, return current state without side effects
+        if task.status == "completed":
+            return Response(TaskSerializer(task).data)
         task.complete()
         return Response(TaskSerializer(task).data)
 
