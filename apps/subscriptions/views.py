@@ -47,9 +47,8 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     """Public read-only viewset for subscription plans."""
 
     permission_classes = [AllowAny]
-    # No custom throttle — uses global defaults (anon: 20/min, user: 100/min).
-    # Plans are a public read-only list; no need for per-user search throttle.
-    throttle_classes = []
+    # SECURITY: Removed empty throttle_classes=[] that disabled all throttling.
+    # Now inherits global defaults (anon: 20/min, user: 100/min).
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.filter(is_active=True)
     lookup_field = "slug"
@@ -615,9 +614,16 @@ class StripeWebhookView(views.APIView):
                 "processed",
             )
         except ValueError as e:
+            error_msg = str(e)
+            # SECURITY: Return 503 if webhook secret is not configured,
+            # 400 for invalid signatures. This signals Stripe to retry later.
+            if "not configured" in error_msg:
+                logger.error("Webhook secret not configured: %s", error_msg)
+                log_webhook_event("unknown", "unknown", "not_configured")
+                return HttpResponse(error_msg, status=503)
             logger.warning("Webhook signature verification failed: %s", e)
             log_webhook_event("unknown", "unknown", "signature_failed")
-            return HttpResponse(str(e), status=400)
+            return HttpResponse(error_msg, status=400)
         except Exception:
             logger.exception("Unexpected error processing webhook")
             log_webhook_event("unknown", "unknown", "error")

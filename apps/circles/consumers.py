@@ -5,6 +5,7 @@ Messages are persisted to CircleMessage model.
 Block filtering: messages from blocked senders are silently dropped.
 """
 
+import asyncio
 import json
 import logging
 
@@ -54,6 +55,10 @@ class CircleChatConsumer(
             await self._setup_authenticated()
         elif self.scope.get("_allow_post_auth"):
             await self.accept()
+            # Close the connection if not authenticated within 10 seconds
+            self._auth_timeout = asyncio.get_event_loop().call_later(
+                10, lambda: asyncio.ensure_future(self._timeout_unauth())
+            )
         else:
             await self.close(code=4003)
 

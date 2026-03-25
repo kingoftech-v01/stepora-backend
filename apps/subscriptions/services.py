@@ -942,8 +942,21 @@ class StripeService:
             ValueError: If the signature verification fails.
         """
         if not STRIPE_WEBHOOK_SECRET:
+            # SECURITY: In production, fail hard instead of attempting auto-setup.
+            # Auto-setup at runtime is dangerous because it can create duplicate
+            # webhooks and the secret is not reliably persisted.
+            if not settings.DEBUG:
+                logger.error(
+                    "STRIPE_WEBHOOK_SECRET not configured in production — "
+                    "rejecting webhook. Set this env var in Secrets Manager."
+                )
+                raise ValueError(
+                    "Webhook signature verification is not configured. "
+                    "Set STRIPE_WEBHOOK_SECRET in the environment."
+                )
+            # In development, allow auto-setup for convenience
             logger.warning(
-                "STRIPE_WEBHOOK_SECRET not configured — attempting auto-setup"
+                "STRIPE_WEBHOOK_SECRET not configured — attempting auto-setup (dev only)"
             )
             secret = StripeService.ensure_webhook()
             if not secret:

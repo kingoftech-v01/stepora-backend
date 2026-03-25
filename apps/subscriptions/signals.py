@@ -22,9 +22,15 @@ def sync_user_subscription_field(sender, instance, **kwargs):
     This fires whenever a Subscription row is saved (webhook, admin, code).
     The CharField is a denormalized cache used by permission classes for
     fast reads — the Subscription model remains the source of truth.
+    Also invalidates the Redis plan cache for this user.
     """
     try:
+        from django.core.cache import cache
+
         user = instance.user
+        # Invalidate the Redis plan cache
+        cache.delete(f"user_plan_{user.pk}")
+
         new_slug = instance.plan.slug if instance.plan else "free"
         if getattr(user, "subscription", None) != new_slug:
             type(user).objects.filter(pk=user.pk).update(subscription=new_slug)

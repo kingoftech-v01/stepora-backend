@@ -97,6 +97,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.AdminIPRestrictionMiddleware",
     "core.middleware.EmailVerificationMiddleware",
     "core.middleware.LastActivityMiddleware",
 ]
@@ -263,6 +264,7 @@ REST_FRAMEWORK = {
         "ai_motivation": "5/day",
         "ai_checkin": "10/day",
         "ai_notification_timing": "10/day",
+        "public": "30/minute",
     },
 }
 
@@ -397,6 +399,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_RESULT_EXPIRES = 3600  # 1 hour — prevents stale results from filling Redis
 
 # Redis Cache
 CACHES = {
@@ -587,7 +590,9 @@ SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-CSRF_COOKIE_HTTPONLY = True
+# CSRF_COOKIE_HTTPONLY must be False so the frontend JavaScript can read
+# the CSRF token from the cookie and include it in request headers.
+CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
 
 # Field-level encryption key for PII (required for encrypted model fields)

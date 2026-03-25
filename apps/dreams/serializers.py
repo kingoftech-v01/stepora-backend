@@ -2,11 +2,27 @@
 Serializers for Dreams app.
 """
 
+import boto3
+from botocore.config import Config as BotoConfig
 from django.conf import settings
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from core.sanitizers import sanitize_text
+
+# Singleton S3 client — avoids creating a new boto3 client per serializer call
+_s3_client = None
+
+
+def _get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client(
+            "s3",
+            region_name=getattr(settings, "AWS_S3_REGION_NAME", "eu-west-3"),
+            config=BotoConfig(signature_version="s3v4"),
+        )
+    return _s3_client
 
 from .models import (
     CalibrationResponse,
@@ -185,10 +201,14 @@ class GoalSerializer(serializers.ModelSerializer):
         }
 
     def get_tasks_count(self, obj) -> int:
+        if hasattr(obj, "_tasks_count"):
+            return obj._tasks_count
         # Use len() to leverage prefetched data instead of .count() which hits DB
         return len(obj.tasks.all())
 
     def get_completed_tasks_count(self, obj) -> int:
+        if hasattr(obj, "_completed_tasks_count"):
+            return obj._completed_tasks_count
         return len([t for t in obj.tasks.all() if t.status == "completed"])
 
 
@@ -446,17 +466,9 @@ class DreamSerializer(serializers.ModelSerializer):
         # If it's an S3 URL from our bucket, generate a signed URL from the key
         bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
         if bucket and bucket in (obj.vision_image_url or ""):
-            import boto3
-            from botocore.config import Config
-
             key = obj.vision_image_url.split(bucket + ".s3.amazonaws.com/")[-1]
             if "/" in key:
-                client = boto3.client(
-                    "s3",
-                    region_name=getattr(settings, "AWS_S3_REGION_NAME", "eu-west-3"),
-                    config=Config(signature_version="s3v4"),
-                )
-                return client.generate_presigned_url(
+                return _get_s3_client().generate_presigned_url(
                     "get_object",
                     Params={"Bucket": bucket, "Key": key},
                     ExpiresIn=3600,
@@ -475,22 +487,32 @@ class DreamSerializer(serializers.ModelSerializer):
         """
         from django.utils import timezone
 
-        from apps.plans.models import PlanCheckIn
-
         # Must have a plan
         if obj.plan_phase not in ("partial", "full"):
             return False
 
-        # If awaiting_user check-in exists -> can't trigger new one
-        if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
-            return False
+        # Use prefetched data if available
+        if hasattr(obj, "_active_checkins"):
+            # If any active check-in exists -> can't trigger new one
+            if obj._active_checkins:
+                return False
+        else:
+            from apps.plans.models import PlanCheckIn
 
-        # If any check-in in progress -> wait
-        if PlanCheckIn.objects.filter(
-            dream=obj,
-            status__in=["pending", "questionnaire_generating", "ai_processing"],
-        ).exists():
-            return False
+            # If awaiting_user check-in exists -> can't trigger new one
+            if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
+                return False
+
+            # If any check-in in progress -> wait
+            if PlanCheckIn.objects.filter(
+                dream=obj,
+                status__in=[
+                    "pending",
+                    "questionnaire_generating",
+                    "ai_processing",
+                ],
+            ).exists():
+                return False
 
         # Check cooldown
         if not obj.last_checkin_at:
@@ -507,14 +529,18 @@ class DreamSerializer(serializers.ModelSerializer):
         """
         from django.utils import timezone
 
-        from apps.plans.models import PlanCheckIn
-
         if self.get_can_checkin(obj):
             return 0
 
         # If pending check-in -> 0 (they need to finish it, not wait)
-        if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
-            return 0
+        if hasattr(obj, "_active_checkins"):
+            if any(c.status == "awaiting_user" for c in obj._active_checkins):
+                return 0
+        else:
+            from apps.plans.models import PlanCheckIn
+
+            if PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists():
+                return 0
 
         if not obj.last_checkin_at:
             return 0
@@ -524,6 +550,8 @@ class DreamSerializer(serializers.ModelSerializer):
 
     def get_has_pending_checkin(self, obj) -> bool:
         """Return True if this dream has a check-in awaiting user response."""
+        if hasattr(obj, "_active_checkins"):
+            return any(c.status == "awaiting_user" for c in obj._active_checkins)
         from apps.plans.models import PlanCheckIn
 
         return PlanCheckIn.objects.filter(dream=obj, status="awaiting_user").exists()

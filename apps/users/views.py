@@ -1659,7 +1659,13 @@ class UserViewSet(viewsets.ModelViewSet):
         responses={200: dict},
         tags=["Users"],
     )
-    @action(detail=False, methods=["post"], url_path="2fa/setup")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="2fa/setup",
+        # SECURITY: Rate-limit 2FA setup to prevent secret enumeration
+        throttle_classes=[TwoFactorRateThrottle],
+    )
     def setup_2fa(self, request):
         """Generate TOTP secret and return OTP auth URI."""
         import pyotp
@@ -1675,7 +1681,10 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save(update_fields=["totp_secret"])
         totp = pyotp.TOTP(secret)
         uri = totp.provisioning_uri(name=user.email, issuer_name="Stepora")
-        return Response({"secret": secret, "otpauth_url": uri})
+        # SECURITY: Do NOT return raw secret — the otpauth_url contains
+        # everything the authenticator app needs. Exposing the raw secret
+        # increases the attack surface if the response is logged or cached.
+        return Response({"otpauth_url": uri})
 
     @extend_schema(
         summary="Verify 2FA setup",

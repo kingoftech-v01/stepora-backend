@@ -35,14 +35,9 @@ class OriginValidationMiddleware:
     - Localhost origins (development)
     """
 
-    ALLOWED_ORIGINS = [
-        "https://stepora.app",
-        "https://api.stepora.app",
-        "https://dp.jhpetitfrere.com",
-        "https://dpapi.jhpetitfrere.com",
-        "http://localhost",
-        "http://127.0.0.1",
-    ]
+    # Derive allowed origins from CORS_ALLOWED_ORIGINS setting, plus localhost
+    # fallbacks for development. This avoids maintaining a hardcoded duplicate list.
+    ALLOWED_ORIGINS = None  # populated in __init__
 
     EXEMPT_PATHS = [
         "/health/",
@@ -54,6 +49,9 @@ class OriginValidationMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
+        self.ALLOWED_ORIGINS = list(
+            getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+        ) + ["http://localhost", "http://127.0.0.1"]
 
     def __call__(self, request):
         # 1. Safe methods never need origin validation
@@ -72,7 +70,8 @@ class OriginValidationMiddleware:
 
         # 4. Skip internal IPs (127.0.0.1, 10.x.x.x for ALB/ECS)
         remote_ip = self._get_remote_ip(request)
-        if remote_ip == "127.0.0.1" or remote_ip.startswith("10."):
+        # SECURITY: Only bypass for VPC CIDR 10.0.0.0/16, not all 10.x.x.x
+        if remote_ip == "127.0.0.1" or remote_ip.startswith("10.0."):
             return self.get_response(request)
 
         # 5. Check Origin header
@@ -252,6 +251,44 @@ class EmailVerificationMiddleware:
             )
 
         return self.get_response(request)
+
+
+class AdminIPRestrictionMiddleware:
+    """
+    Restricts access to /admin/ paths to localhost, internal IPs (10.x.x.x),
+    and any IPs listed in settings.ADMIN_ALLOWED_IPS.
+
+    Returns 403 for all other IPs attempting to access Django admin.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # Build the set of additionally allowed IPs from settings
+        self._extra_ips = set(getattr(settings, "ADMIN_ALLOWED_IPS", []))
+
+    def __call__(self, request):
+        if request.path.startswith("/admin/"):
+            remote_ip = request.META.get("REMOTE_ADDR", "")
+            if not self._is_allowed(remote_ip):
+                logger.warning(
+                    "Blocked admin access from IP %s (path=%s)",
+                    remote_ip,
+                    request.path,
+                )
+                return JsonResponse(
+                    {"error": "Forbidden"}, status=403
+                )
+        return self.get_response(request)
+
+    def _is_allowed(self, ip):
+        """Allow localhost, 10.x.x.x (AWS VPC / ALB), and configured IPs."""
+        if ip in ("127.0.0.1", "::1"):
+            return True
+        if ip.startswith("10."):
+            return True
+        if ip in self._extra_ips:
+            return True
+        return False
 
 
 class LastActivityMiddleware:

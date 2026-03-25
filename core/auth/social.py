@@ -137,6 +137,12 @@ def _verify_google_jwt_manual(id_token_str):
             raise serializers.ValidationError("Google signing key not found.")
 
     client_id = _DP_AUTH.get("GOOGLE_CLIENT_ID", "")
+    # SECURITY: Reject if client_id is empty — jwt.decode with audience=""
+    # would accept ANY audience claim, bypassing validation entirely.
+    if not client_id:
+        raise serializers.ValidationError(
+            "Authentication not configured (missing client ID)."
+        )
     public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
     return jwt.decode(
         id_token_str,
@@ -176,6 +182,12 @@ def verify_apple_token(id_token_str):
                 raise serializers.ValidationError("Apple signing key not found.")
 
         client_id = _DP_AUTH.get("APPLE_CLIENT_ID", "")
+        # SECURITY: Reject if client_id is empty — jwt.decode with audience=""
+        # would accept ANY audience claim, bypassing validation entirely.
+        if not client_id:
+            raise serializers.ValidationError(
+                "Authentication not configured (missing client ID)."
+            )
         public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
         claims = jwt.decode(
             id_token_str,

@@ -58,6 +58,7 @@ class AuthenticatedConsumerMixin:
         """Call from connect(). Sets up auth state."""
         self.user = self.scope["user"]
         self._authenticated = False
+        self._auth_timeout = None
 
     async def _handle_auth_connect(self):
         """Handle the auth flow on connect. Returns True if connected."""
@@ -66,13 +67,26 @@ class AuthenticatedConsumerMixin:
             return True
         elif self.scope.get("_allow_post_auth"):
             await self.accept()
+            # Close the connection if not authenticated within 10 seconds
+            self._auth_timeout = asyncio.get_event_loop().call_later(
+                10, lambda: asyncio.ensure_future(self._timeout_unauth())
+            )
             return True
         else:
             await self.close(code=4003)
             return False
 
+    async def _timeout_unauth(self):
+        """Close connection if still unauthenticated after timeout."""
+        if not self._authenticated:
+            await self.close(code=4003)
+
     async def _setup_authenticated(self):
         """Verify access and join room after authentication."""
+        # Cancel the auth timeout since authentication succeeded
+        if self._auth_timeout:
+            self._auth_timeout.cancel()
+            self._auth_timeout = None
         self._authenticated = True
 
         if self.scope.get("_allow_post_auth"):
@@ -99,6 +113,8 @@ class AuthenticatedConsumerMixin:
             logger.debug("Heartbeat error", exc_info=True)
 
     async def _cancel_heartbeat(self):
+        if hasattr(self, "_auth_timeout") and self._auth_timeout:
+            self._auth_timeout.cancel()
         if hasattr(self, "_heartbeat_task"):
             self._heartbeat_task.cancel()
 

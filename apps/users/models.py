@@ -244,14 +244,24 @@ class User(AbstractBaseUser, PermissionsMixin):
         Get the user's active SubscriptionPlan from the database.
 
         Returns the plan from the active/trialing Subscription, or None if
-        no subscription exists. Result is cached on the instance so multiple
-        permission checks in a single request only hit the DB once.
+        no subscription exists. Result is cached on the instance (per-request)
+        and in Redis (5 min TTL) to avoid repeated DB hits across requests.
         """
         if hasattr(self, "_cached_plan"):
             return self._cached_plan
         import logging
 
+        from django.core.cache import cache
+
         logger = logging.getLogger(__name__)
+
+        # Try Redis cache first
+        cache_key = f"user_plan_{self.id}"
+        plan = cache.get(cache_key)
+        if plan is not None:
+            self._cached_plan = plan
+            return self._cached_plan
+
         try:
             from apps.subscriptions.models import Subscription
 
@@ -279,6 +289,9 @@ class User(AbstractBaseUser, PermissionsMixin):
                 exc,
             )
             self._cached_plan = None
+
+        # Cache in Redis for 5 minutes
+        cache.set(cache_key, self._cached_plan, 300)
         return self._cached_plan
 
     def is_premium(self):

@@ -9,6 +9,7 @@ import time
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +27,33 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self._authenticated = False
         self._message_timestamps = []
 
+        self._auth_timeout = None
+
         if self.user.is_authenticated:
             # Authenticated via query string (deprecated) or middleware
             await self._setup_authenticated()
         elif self.scope.get("_allow_post_auth"):
             # Accept connection and wait for authenticate message
             await self.accept()
+            # Close the connection if not authenticated within 10 seconds
+            self._auth_timeout = asyncio.get_event_loop().call_later(
+                10, lambda: asyncio.ensure_future(self._timeout_unauth())
+            )
         else:
             await self.close(code=4003)
             return
 
+    async def _timeout_unauth(self):
+        """Close connection if still unauthenticated after timeout."""
+        if not self._authenticated:
+            await self.close(code=4003)
+
     async def _setup_authenticated(self):
         """Set up authenticated connection: join group, send unread count."""
+        # Cancel the auth timeout since authentication succeeded
+        if self._auth_timeout:
+            self._auth_timeout.cancel()
+            self._auth_timeout = None
         self._authenticated = True
         self.group_name = f"notifications_{self.user.id}"
 
@@ -78,6 +94,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
+        if hasattr(self, "_auth_timeout") and self._auth_timeout:
+            self._auth_timeout.cancel()
         if hasattr(self, "_heartbeat_task"):
             self._heartbeat_task.cancel()
         if hasattr(self, "group_name"):
@@ -240,9 +258,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def mark_all_read(self):
+        # Update unread notifications instead of deleting them so history is preserved
         from .models import Notification
 
-        deleted, _ = Notification.objects.filter(
+        updated = Notification.objects.filter(
             user=self.user,
-        ).delete()
-        return deleted
+            read_at__isnull=True,
+        ).update(read_at=timezone.now())
+        return updated

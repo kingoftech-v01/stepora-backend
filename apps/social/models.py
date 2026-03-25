@@ -92,6 +92,10 @@ class ActivityFeedItem(models.Model):
             models.Index(fields=["user", "-created_at"], name="idx_activity_user_date"),
             models.Index(fields=["activity_type"], name="idx_activity_type"),
             models.Index(fields=["-created_at"], name="idx_activity_created"),
+            models.Index(
+                fields=["user", "activity_type", "-created_at"],
+                name="idx_activity_user_type_date",
+            ),
         ]
 
     def __str__(self):

@@ -8,6 +8,7 @@ Native mobile apps send `X-Client-Platform: native` header to receive
 the refresh token in the response body instead of an httpOnly cookie.
 """
 
+import hashlib
 import html
 import json
 import logging
@@ -75,10 +76,15 @@ def _is_native_request(request):
 
 
 def _get_client_ip(request):
-    """Get the real client IP, respecting X-Forwarded-For behind a proxy."""
+    """Get the real client IP from X-Forwarded-For behind ALB.
+
+    SECURITY: ALB appends the real client IP as the LAST entry in
+    X-Forwarded-For. Using the first entry is user-controlled and
+    can be spoofed to bypass rate limiting.
+    """
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
     if xff:
-        return xff.split(",")[0].strip()
+        return xff.split(",")[-1].strip()
     return request.META.get("REMOTE_ADDR", "")
 
 
@@ -90,20 +96,40 @@ def _fail_count_key(identifier):
     return f"login_fails:{identifier}"
 
 
-def _create_challenge_token(user_id):
-    """Create a short-lived signed token for the 2FA challenge."""
+def _create_challenge_token(request, user_id):
+    """Create a short-lived signed token for the 2FA challenge.
+
+    SECURITY: Token is bound to the client IP hash so it cannot be
+    used from a different network (stolen challenge token attack).
+    """
+    ip_hash = hashlib.sha256(_get_client_ip(request).encode()).hexdigest()[:16]
     return signing.dumps(
-        {"uid": str(user_id), "t": int(time.time())},
+        {"uid": str(user_id), "ip": ip_hash, "t": int(time.time())},
         salt=_TFA_CHALLENGE_SALT,
     )
 
 
-def _verify_challenge_token(token):
-    """Verify and return user_id from a 2FA challenge token, or None."""
+def _verify_challenge_token(token, request):
+    """Verify and return user_id from a 2FA challenge token, or None.
+
+    SECURITY: Also verifies that the IP hash matches the current
+    request IP to prevent challenge token replay from another IP.
+    """
     try:
         data = signing.loads(
             token, salt=_TFA_CHALLENGE_SALT, max_age=_TFA_CHALLENGE_MAX_AGE
         )
+        # Verify IP binding
+        expected_ip_hash = hashlib.sha256(
+            _get_client_ip(request).encode()
+        ).hexdigest()[:16]
+        if data.get("ip") != expected_ip_hash:
+            logger.warning(
+                "2FA challenge token IP mismatch: expected=%s, got=%s",
+                expected_ip_hash,
+                data.get("ip"),
+            )
+            return None
         return data.get("uid")
     except (signing.BadSignature, signing.SignatureExpired):
         return None
@@ -227,7 +253,7 @@ class LoginView(APIView):
 
         # Check 2FA
         if getattr(user, "totp_enabled", False):
-            challenge_token = _create_challenge_token(user.id)
+            challenge_token = _create_challenge_token(request, user.id)
             return Response(
                 {
                     "tfa_required": True,
@@ -258,6 +284,11 @@ class TwoFactorChallengeView(APIView):
     throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
+        # SECURITY: Check lockout before processing 2FA challenge
+        identifiers, lockout_response = _check_lockout(request)
+        if lockout_response:
+            return lockout_response
+
         challenge_token = request.data.get("challenge_token", "").strip()
         code = request.data.get("code", "").strip()
 
@@ -267,7 +298,7 @@ class TwoFactorChallengeView(APIView):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        user_id = _verify_challenge_token(challenge_token)
+        user_id = _verify_challenge_token(challenge_token, request)
         if not user_id:
             return Response(
                 {"error": "Invalid or expired challenge. Please log in again."},
@@ -305,6 +336,8 @@ class TwoFactorChallengeView(APIView):
                 verified = True
 
         if not verified:
+            # SECURITY: Record failed 2FA attempt for lockout
+            _record_failed_login(identifiers)
             return Response(
                 {"error": "Invalid verification code."},
                 status=http_status.HTTP_400_BAD_REQUEST,
@@ -514,6 +547,8 @@ class TokenRefreshView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # SECURITY: Rate-limit token refresh to prevent brute-force/abuse
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         # Native clients send refresh token in body
@@ -806,6 +841,8 @@ class AppleRedirectView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    # SECURITY: Rate-limit Apple redirect to prevent brute-force attacks
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
         id_token_str = request.POST.get("id_token", "")
@@ -842,6 +879,8 @@ class AppleRedirectView(APIView):
                 deep_link = "com.stepora.app://auth/callback?error=no_token"
 
         except Exception:
+            # SECURITY: Log the error instead of silently swallowing it
+            logger.exception("Apple redirect authentication failed")
             deep_link = (
                 state + "?error=auth_failed"
                 if state

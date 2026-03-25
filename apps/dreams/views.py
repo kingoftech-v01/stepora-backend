@@ -198,6 +198,10 @@ class DreamViewSet(viewsets.ModelViewSet):
         if self.action == "retrieve":
             base_q = base_q | Q(is_public=True)
 
+        from django.db.models import Prefetch
+
+        from apps.plans.models import PlanCheckIn
+
         qs = (
             Dream.objects.filter(base_q)
             .prefetch_related(
@@ -205,6 +209,23 @@ class DreamViewSet(viewsets.ModelViewSet):
                 "milestones__obstacles",
                 "goals__tasks",
                 "taggings__tag",
+                Prefetch(
+                    "checkins",
+                    queryset=PlanCheckIn.objects.filter(
+                        status__in=[
+                            "awaiting_user",
+                            "pending",
+                            "questionnaire_generating",
+                            "ai_processing",
+                        ]
+                    ).order_by("-created_at"),
+                    to_attr="_active_checkins",
+                ),
+                Prefetch(
+                    "checkins",
+                    queryset=PlanCheckIn.objects.order_by("-created_at")[:1],
+                    to_attr="_latest_checkin",
+                ),
             )
             .annotate(
                 _milestones_count=Count("milestones", distinct=True),
@@ -2752,6 +2773,7 @@ class DreamTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated]
     serializer_class = DreamTemplateSerializer
+    throttle_scope = "public"
 
     @method_decorator(cache_page(300))  # Cache for 5 minutes
     def list(self, request, *args, **kwargs):

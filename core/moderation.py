@@ -33,6 +33,7 @@ class ModerationResult:
     detection_source: str = (
         ""  # 'openai_api', 'jailbreak_pattern', 'dream_content', 'roleplay'
     )
+    reason: str = ""  # machine-readable reason (e.g. 'moderation_service_unavailable')
 
 
 # ---------------------------------------------------------------------------
@@ -348,11 +349,16 @@ class ContentModerationService:
 
     def _check_openai_moderation(self, text: str) -> ModerationResult:
         """Call OpenAI Moderation API (language-agnostic)."""
+        # Skip OpenAI moderation if API key is missing — regex checks still apply
+        if not getattr(settings, "OPENAI_API_KEY", None):
+            logger.warning("OpenAI API key not configured; skipping API moderation (regex checks still apply)")
+            return ModerationResult()
+
         try:
             from openai import OpenAI
 
             client = OpenAI(
-                api_key=settings.OPENAI_API_KEY or "sk-placeholder",
+                api_key=settings.OPENAI_API_KEY,
                 organization=getattr(settings, "OPENAI_ORGANIZATION_ID", None),
             )
 
@@ -389,9 +395,16 @@ class ContentModerationService:
             return ModerationResult()
 
         except Exception as e:
-            # Fail OPEN: pattern checks already caught obvious attacks
+            # Fail CLOSED: flag content as suspicious when the moderation
+            # service is unavailable so nothing slips through unmoderated.
             logger.error("OpenAI Moderation API error: %s", e)
-            return ModerationResult()
+            return ModerationResult(
+                is_flagged=True,
+                reason="moderation_service_unavailable",
+                user_message=REJECTION_MESSAGES["generic_violation"],
+                detection_source="openai_api",
+                severity="medium",
+            )
 
     def _check_jailbreak_patterns(self, text: str) -> ModerationResult:
         """Check for jailbreak/prompt injection patterns."""
