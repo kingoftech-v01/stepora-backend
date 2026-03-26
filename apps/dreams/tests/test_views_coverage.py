@@ -651,7 +651,8 @@ class TestStartCalibration:
         q1 = Mock(question="Q1?", category="specifics")
         q2 = Mock(question="Q2?", category="timeline")
         result_mock = Mock(
-            questions=[q1, q2], sufficient=False, confidence_score=0.3, missing_areas=[]
+            questions=[q1, q2], sufficient=False, confidence_score=0.3,
+            missing_areas=[], refusal_reason=None,
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -692,7 +693,8 @@ class TestStartCalibration:
         mock_disamb.return_value = "Which area fits better?"
         q1 = Mock(question="Q1?", category="timeline")
         result_mock = Mock(
-            questions=[q1], sufficient=False, confidence_score=0.3, missing_areas=[]
+            questions=[q1], sufficient=False, confidence_score=0.3,
+            missing_areas=[], refusal_reason=None,
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -717,7 +719,8 @@ class TestStartCalibration:
         )
         q1 = Mock(question="Q?", category="resources")
         result_mock = Mock(
-            questions=[q1], sufficient=False, confidence_score=0.2, missing_areas=[]
+            questions=[q1], sufficient=False, confidence_score=0.2,
+            missing_areas=[], refusal_reason=None,
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -761,6 +764,8 @@ class TestAnswerCalibration:
         self, mock_validate, mock_gen, mock_mod, prem_client, cov_dream
     ):
         """Submit answers, AI returns follow-up questions."""
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q1?",
@@ -773,6 +778,7 @@ class TestAnswerCalibration:
             sufficient=False,
             confidence_score=0.5,
             missing_areas=["timeline"],
+            refusal_reason=None,
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -792,6 +798,8 @@ class TestAnswerCalibration:
         self, mock_validate, mock_gen, mock_mod, prem_client, cov_dream
     ):
         """AI says sufficient -> status completed."""
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q?",
@@ -803,6 +811,7 @@ class TestAnswerCalibration:
             sufficient=True,
             confidence_score=0.9,
             missing_areas=[],
+            refusal_reason=None,
         )
         mock_validate.return_value = result_mock
         mock_gen.return_value = {}
@@ -826,6 +835,8 @@ class TestAnswerCalibration:
     def test_answer_calibration_moderation_flagged(
         self, mock_mod, prem_client, cov_dream
     ):
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q?",
@@ -845,6 +856,8 @@ class TestAnswerCalibration:
         self, mock_mod, prem_client, cov_dream
     ):
         """Frontend sends single-answer format: { question, answer, question_number }."""
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q?",
@@ -878,6 +891,7 @@ class TestAnswerCalibration:
             user=prem_user,
             title="25Q Dream",
             description="desc",
+            calibration_status="in_progress",
         )
         for i in range(25):
             CalibrationResponse.objects.create(
@@ -900,6 +914,8 @@ class TestAnswerCalibration:
         self, mock_mod, prem_client, cov_dream
     ):
         """Fallback: find CalibrationResponse by question text."""
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Unique Q?",
@@ -930,6 +946,7 @@ class TestAnswerCalibration:
             user=prem_user,
             title="NewCR",
             description="desc",
+            calibration_status="in_progress",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # Need 10 to force complete
@@ -956,6 +973,7 @@ class TestAnswerCalibration:
             user=prem_user,
             title="EmptyAns",
             description="desc",
+            calibration_status="in_progress",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         resp = prem_client.post(
@@ -976,6 +994,8 @@ class TestAnswerCalibration:
     ):
         from core.ai_validators import AIValidationError
 
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q?",
@@ -998,6 +1018,8 @@ class TestAnswerCalibration:
     ):
         from core.exceptions import OpenAIError
 
+        cov_dream.calibration_status = "in_progress"
+        cov_dream.save(update_fields=["calibration_status"])
         cr = CalibrationResponse.objects.create(
             dream=cov_dream,
             question="Q?",
@@ -1593,7 +1615,8 @@ class TestCompleteDream:
         cov_dream.status = "completed"
         cov_dream.save(update_fields=["status"])
         resp = prem_client.post(f"/api/dreams/dreams/{cov_dream.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed dream returns 200
+        assert resp.status_code == 200
 
 
 # ── Like / Favorite Dream ─────────────────────────────────────────
@@ -2155,7 +2178,8 @@ class TestGoalViewSetCoverage:
         cov_goal.status = "completed"
         cov_goal.save(update_fields=["status"])
         resp = prem_client.post(f"/api/dreams/goals/{cov_goal.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed goal returns 200
+        assert resp.status_code == 200
 
     @patch("integrations.openai_service.OpenAIService.refine_goal")
     @patch("core.ai_usage.AIUsageTracker.check_quota")
@@ -2271,7 +2295,8 @@ class TestMilestoneViewSetCoverage:
         cov_milestone.status = "completed"
         cov_milestone.save(update_fields=["status"])
         resp = prem_client.post(f"/api/dreams/milestones/{cov_milestone.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed milestone returns 200
+        assert resp.status_code == 200
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -2304,7 +2329,8 @@ class TestTaskViewSetCoverage:
         cov_task.status = "completed"
         cov_task.save(update_fields=["status"])
         resp = prem_client.post(f"/api/dreams/tasks/{cov_task.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed task returns 200
+        assert resp.status_code == 200
 
     def test_complete_task_with_chain(self, prem_client, cov_goal):
         """Completing a chained task creates a chain child."""
@@ -3102,6 +3128,7 @@ class TestRemainingCoverageLines:
             user=prem_user,
             title="KeyErrDream",
             description="desc",
+            calibration_status="in_progress",
         )
         mock_mod.return_value = Mock(is_flagged=False)
         # Create enough answered questions to force completion
