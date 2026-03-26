@@ -107,7 +107,7 @@ class Migration(migrations.Migration):
     # Use run_before to ensure it runs after the relevant app migrations.
     dependencies = [
         ("dreams", "0002_initial"),
-        ("plans", "0001_initial"),
+        ("plans", "0002_initial"),
         ("ai", "0001_initial"),
     ]
 
