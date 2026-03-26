@@ -639,9 +639,9 @@ def detect_obstacles(self, dream_id):
         dream = Dream.objects.prefetch_related("goals__tasks").get(id=dream_id)
         ai_service = OpenAIService()
 
-        # Generate obstacle predictions with AI
+        # Generate obstacle predictions with AI (category-specific)
         obstacles_data = ai_service.predict_obstacles_simple(
-            dream.title, dream.description
+            dream.title, dream.description, category=dream.category
         )
 
         created_count = 0

@@ -87,6 +87,534 @@ _async_client = AsyncOpenAI(
 )
 
 
+
+CATEGORY_PROMPTS = {
+    'health': """
+    HEALTH & FITNESS SPECIFIC RULES:
+    - Include specific workout metrics (sets, reps, weight, duration, distance, pace)
+    - Progressive overload: each week should increase intensity by ~5-10%
+    - Include rest days (at minimum 2 per week)
+    - Add nutrition milestones alongside fitness milestones
+    - Include body measurements tracking tasks (weekly weigh-in, monthly measurements)
+    - Warm-up and cool-down must be part of every workout task
+    - Reference specific exercises by name (not "do some exercise")
+    - Include flexibility/mobility work at least 2x per week
+    - For weight loss: include calorie deficit calculations, meal prep tasks
+    - For muscle gain: include protein intake targets, progressive loading schedule
+    - For marathon/endurance: include proper periodization (base → build → peak → taper)
+    - Safety: always recommend medical check-up as first milestone for beginners
+    - Recovery: include sleep quality tasks and stress management
+    """,
+}
+
+CATEGORY_MILESTONE_PATTERNS = {
+    'health': """
+    HEALTH MILESTONE NAMING: Use fitness-specific progression names:
+    - Month 1: "Foundation & Assessment" (baseline measurements, habit formation)
+    - Month 2: "Building Consistency" (routine solidified, progressive overload begins)
+    - Month 3: "Breaking Through" (first visible results, adjust program)
+    - Month 6: "Transformation Phase" (major body composition changes)
+    - Month 12: "Lifestyle Integration" (fitness is automatic, maintain and optimize)
+    """,
+    'career': """
+    CAREER MILESTONE NAMING: Use career progression stages:
+    - Month 1: "Self-Assessment & Market Research"
+    - Month 2: "Skill Building & Portfolio Development"
+    - Month 3: "Network Activation"
+    - Month 4: "Application & Interview Sprint"
+    - Month 6: "Offer Negotiation & Transition"
+    """,
+    'education': """
+    EDUCATION MILESTONE NAMING: Use learning progression:
+    - Month 1: "Foundations & Vocabulary"
+    - Month 2: "Core Concepts"
+    - Month 3: "Application & Practice"
+    - Month 4: "Advanced Topics"
+    - Month 5: "Integration & Projects"
+    - Month 6: "Assessment & Certification"
+    """,
+    'finance': """
+    FINANCE MILESTONE NAMING: Use financial milestones:
+    - Month 1: "Financial Audit & Budget Setup"
+    - Month 2: "Emergency Fund Phase 1 ($1,000)"
+    - Month 3: "Debt Reduction Sprint"
+    - Month 6: "3-Month Emergency Fund Complete"
+    - Month 12: "Investment Portfolio Established"
+    """,
+    'creative': """
+    CREATIVE MILESTONE NAMING: Use artistic development stages:
+    - Month 1: "Fundamentals & Daily Practice"
+    - Month 2: "Technique Expansion"
+    - Month 3: "First Complete Project"
+    - Month 4: "Style Development"
+    - Month 6: "Portfolio Showcase"
+    - Month 12: "Exhibition/Publication/Release"
+    """,
+    'travel': """
+    TRAVEL MILESTONE NAMING: Use trip planning phases:
+    - Month 1: "Research & Budget Planning"
+    - Month 2: "Bookings & Documentation"
+    - Month 3: "Preparation & Packing"
+    - Final Month: "Pre-Departure Checklist"
+    """,
+}
+
+# ---------------------------------------------------------------------------
+# Category-specific TASK DETAIL requirements.
+# Injected into the user prompt during Phase 2 (generate_tasks_for_months)
+# to enforce highly specific, actionable task descriptions per category.
+# ---------------------------------------------------------------------------
+CATEGORY_TASK_DETAILS = {
+    'health': """
+    HEALTH TASK DETAIL REQUIREMENTS:
+    - Every workout task MUST include: exercise names, sets x reps OR duration, rest periods
+    - Example: "Day 15: Upper Body Strength — Bench Press 3x8 (60% 1RM), Bent-Over Rows 3x10, Overhead Press 3x8, Bicep Curls 3x12, Tricep Dips 3x12. Rest 60-90s between sets. Total: 45 min"
+    - Nutrition tasks MUST include: specific meal examples, calorie/macro targets if applicable
+    - Cardio tasks MUST include: type, duration, intensity (heart rate zone or RPE)
+    - Include warm-up (5-10 min) and cool-down (5 min stretch) in every workout task
+    """,
+    'career': """
+    CAREER TASK DETAIL REQUIREMENTS:
+    - Job search tasks MUST include: number of applications, specific platforms, tailoring instructions
+    - Networking tasks MUST include: specific outreach template, follow-up timeline
+    - Skill tasks MUST include: specific course/resource name, chapter/module, practice exercise
+    - Example: "Day 10: LinkedIn Optimization — Update headline to '[Role] | [Key Skill] | [Value Prop]', add 3 relevant skills, request 2 recommendations from [specific relationships]"
+    """,
+    'education': """
+    EDUCATION TASK DETAIL REQUIREMENTS:
+    - Study tasks MUST include: specific topic/chapter, learning method, time allocation
+    - Practice tasks MUST include: number of problems/exercises, difficulty level
+    - Review tasks MUST include: spaced repetition schedule, flashcard creation
+    - Example: "Day 8: Calculus Ch.3 — Read sections 3.1-3.3 (45 min), solve problems 1-15 odd (30 min), create Anki cards for 5 key formulas (15 min)"
+    """,
+    'finance': """
+    FINANCE TASK DETAIL REQUIREMENTS:
+    - Savings tasks MUST include: specific dollar amounts, account names, automation steps
+    - Budget tasks MUST include: specific categories to review, target percentages
+    - Investment tasks MUST include: specific asset types, allocation percentages, platform names
+    - Example: "Day 5: Set Up Automatic Savings — Transfer $200/month from checking to high-yield savings (currently 4.5% APY). Set up on bank app: Settings > Transfers > Recurring. Choose 1st of each month."
+    """,
+    'creative': """
+    CREATIVE TASK DETAIL REQUIREMENTS:
+    - Practice tasks MUST include: specific technique, duration, reference material
+    - Project tasks MUST include: specific deliverable, dimensions/word count, style reference
+    - Example: "Day 12: Watercolor Wet-on-Wet Technique — Practice gradient washes (3 attempts, A4 paper). Reference: YouTube 'Mind of Watercolor Ep.42'. Focus on water-to-paint ratio. Time: 40 min"
+    """,
+    'personal': """
+    PERSONAL GROWTH TASK DETAIL REQUIREMENTS:
+    - Journaling tasks MUST include: specific prompt/topic, target word count or duration
+    - Meditation tasks MUST include: technique name, duration, guidance source
+    - Reading tasks MUST include: specific book/chapter, number of pages, note-taking method
+    - Example: "Day 7: Gratitude Journaling — Write 3 things you're grateful for + why (5 min). Then free-write about today's biggest challenge and one lesson learned (10 min). Use 'The Five Minute Journal' format."
+    """,
+    'hobbies': """
+    HOBBIES & SKILLS TASK DETAIL REQUIREMENTS:
+    - Practice tasks MUST include: specific drill/exercise, duration, measurable target
+    - Equipment tasks MUST include: specific product recommendations, budget range, where to buy
+    - Community tasks MUST include: specific platform/group name, action to take, follow-up plan
+    - Example: "Day 20: Chess Tactics Training — Solve 20 puzzles on Lichess (rated 1200-1400). Focus on knight forks and pins. Track accuracy %. Time: 30 min"
+    """,
+    'relationships': """
+    RELATIONSHIPS TASK DETAIL REQUIREMENTS:
+    - Quality time tasks MUST include: specific activity, duration, conversation starter
+    - Communication tasks MUST include: specific technique name, practice scenario, reflection prompt
+    - Example: "Day 14: Active Listening Practice — During dinner, practice the RASA technique (Receive, Appreciate, Summarize, Ask). Let your partner speak for 5 min uninterrupted, then summarize what you heard. Time: 30 min"
+    """,
+    'social': """
+    SOCIAL & COMMUNITY TASK DETAIL REQUIREMENTS:
+    - Outreach tasks MUST include: number of people to contact, message template, platform
+    - Event tasks MUST include: specific type of event, preparation steps, follow-up actions
+    - Example: "Day 9: Networking Outreach — Send 3 personalized LinkedIn messages to professionals in [field]. Template: 'Hi [Name], I saw your work on [specific project]. I'm currently [your context]. Would love to connect and hear about [specific topic].' Follow up in 5 days if no response."
+    """,
+    'travel': """
+    TRAVEL TASK DETAIL REQUIREMENTS:
+    - Research tasks MUST include: specific websites/apps to use, number of options to compare
+    - Booking tasks MUST include: specific platforms, price comparison steps, cancellation policy check
+    - Preparation tasks MUST include: specific items, quantities, where to purchase
+    - Example: "Day 6: Flight Comparison — Compare prices on Google Flights, Skyscanner, and Kayak for [dates]. Check flexible dates (+/- 3 days). Set price alerts on all 3 platforms. Budget target: under $X. Time: 30 min"
+    """,
+    'language': """
+    LANGUAGE LEARNING TASK DETAIL REQUIREMENTS:
+    - Vocabulary tasks MUST include: number of words, topic/theme, review method (SRS)
+    - Grammar tasks MUST include: specific rule/concept, number of practice exercises
+    - Speaking tasks MUST include: specific scenario, duration, recording/partner instructions
+    - Example: "Day 11: Food Vocabulary + Restaurant Role-Play — Learn 15 food-related words on Anki (20 min). Practice ordering at a restaurant: write a dialogue, then record yourself speaking both roles (15 min). Review pronunciation with Forvo."
+    """,
+    'tech': """
+    TECH & PROGRAMMING TASK DETAIL REQUIREMENTS:
+    - Learning tasks MUST include: specific documentation/tutorial URL, section to cover, hands-on exercise
+    - Coding tasks MUST include: specific feature/function to build, expected inputs/outputs, test criteria
+    - Project tasks MUST include: specific deliverable, tech stack, acceptance criteria
+    - Example: "Day 18: React State Management — Read React docs 'Managing State' chapter (30 min). Build a todo app with useReducer: add, toggle, delete, filter (active/completed). Must pass: items persist on re-render, filter works correctly. Time: 45 min"
+    """,
+}
+
+
+
+# Category-specific common obstacles for smarter obstacle prediction.
+# Injected into skeleton generation and obstacle prediction prompts so the AI
+# can proactively incorporate preventive measures into the plan.
+CATEGORY_OBSTACLES = {
+    "health": [
+        "Injury risk from overtraining — include deload weeks",
+        "Plateau after initial progress — plan for periodization changes",
+        "Diet fatigue — include meal variety and cheat meal scheduling",
+        "Gym intimidation for beginners — include home workout alternatives",
+        "Weather affecting outdoor activities — include indoor backup plans",
+        "Social pressure around food — include social eating strategies",
+    ],
+    "career": [
+        "Rejection fatigue from job applications — include mental health tasks",
+        "Imposter syndrome — include confidence-building exercises",
+        "Skill gap larger than expected — adjust timeline, add learning sprints",
+        "Market conditions change — include pivot strategies",
+        "Burnout from working + studying — include rest milestones",
+    ],
+    "education": [
+        "Difficulty curve spikes — include review/catch-up weeks",
+        "Information overload — include consolidation tasks",
+        "Procrastination — include accountability mechanisms",
+        "Exam anxiety — include mock test practice and relaxation techniques",
+        "Resource overwhelm — curate top 3 resources only",
+    ],
+    "finance": [
+        "Unexpected expenses — include emergency fund as first milestone",
+        "Income reduction — include contingency budget plans",
+        "Lifestyle inflation — include spending audit tasks",
+        "Investment market downturns — include emotional management",
+        "Partner/family financial disagreements — include communication tasks",
+    ],
+    "creative": [
+        "Creative block — include alternative exercises and inspiration tasks",
+        "Perfectionism — include 'ship it imperfect' milestones",
+        "Comparison with others — include gratitude and progress review tasks",
+        "Equipment/tools cost — include budget-friendly alternatives",
+        "Lack of feedback — include community engagement milestones",
+    ],
+    "personal": [
+        "Motivation fade after 2-3 weeks — include habit anchoring",
+        "Resistance to change — include small wins celebration",
+        "Relapse into old habits — include recovery protocols",
+        "Isolation — include social support tasks",
+    ],
+    "travel": [
+        "Budget overruns — include 15% contingency buffer",
+        "Visa/document delays — start 3 months before departure",
+        "Health issues abroad — include vaccination and insurance tasks",
+        "Overpacking — include practice packing test runs",
+    ],
+    "hobbies": [
+        "Equipment cost spiral — set a clear budget cap early",
+        "Skill plateau after initial excitement — include deliberate practice milestones",
+        "Time conflict with other commitments — include scheduling strategies",
+        "Loss of motivation when progress slows — include fun/social sessions",
+        "Comparison with experienced practitioners — include progress journaling",
+    ],
+    "relationships": [
+        "Communication breakdowns — include active listening exercises",
+        "Unrealistic expectations — include perspective-taking tasks",
+        "Time management conflicts — include shared calendar setup",
+        "Emotional triggers — include self-awareness and de-escalation techniques",
+        "Boundary difficulties — include boundary-setting practice",
+    ],
+    "social": [
+        "Social anxiety setbacks — include gradual exposure and recovery tasks",
+        "Rejection or ghosting — include resilience-building exercises",
+        "Overcommitment to social events — include energy budgeting",
+        "Surface-level connections only — include deep conversation prompts",
+        "Networking fatigue — include quality-over-quantity milestones",
+    ],
+}
+
+
+# Category-specific hints injected into calibration question generation prompts.
+# These guide the AI to ask targeted, domain-relevant questions instead of generic ones.
+CATEGORY_CALIBRATION_HINTS = {
+    'health': (
+        "Ask about: current fitness level, injuries/limitations, available equipment, "
+        "workout history, dietary restrictions, sleep habits, health goals specificity "
+        "(weight target, race distance, etc.)"
+    ),
+    'career': (
+        "Ask about: current role/industry, years of experience, target role/company, "
+        "skills gaps, networking comfort level, timeline for career change, education background"
+    ),
+    'education': (
+        "Ask about: learning style preference, available study hours/week, prior knowledge level, "
+        "deadline/exam dates, preferred resources (books/video/interactive), budget for courses"
+    ),
+    'finance': (
+        "Ask about: current income range, existing debt, savings rate, financial knowledge level, "
+        "risk tolerance, specific financial goals (emergency fund amount, retirement age), "
+        "current investments"
+    ),
+    'creative': (
+        "Ask about: artistic medium, current skill level, tools/equipment available, "
+        "creative influences, portfolio size, whether for hobby or profession, "
+        "time available for practice"
+    ),
+    'personal': (
+        "Ask about: specific growth area, current habits, motivation level, support system, "
+        "past attempts, therapy/coaching history, biggest obstacle"
+    ),
+    'hobbies': (
+        "Ask about: experience level, equipment owned, time available weekly, budget, "
+        "social/solo preference, competitive interest, learning style"
+    ),
+    'social': (
+        "Ask about: current social circle size, comfort with strangers, introvert/extrovert, "
+        "specific social goals, past challenges, community interests"
+    ),
+    'relationships': (
+        "Ask about: relationship status, communication style, love language, "
+        "specific relationship goals, past patterns, willingness to seek professional help"
+    ),
+    'travel': (
+        "Ask about: budget range, travel experience level, solo/group preference, "
+        "adventure vs relaxation, physical fitness for activities, dietary needs, "
+        "passport/visa status"
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Category-specific professional referral rules.
+# Each category defines triggers (conditions that warrant a referral) and a
+# list of recommended professional types.  These are injected into
+# analyze_dream() and plan-generation prompts so the AI produces accurate
+# `requires_professional` output and includes early referral tasks.
+# ---------------------------------------------------------------------------
+CATEGORY_PROFESSIONAL_REFERRALS = {
+    'health': {
+        'triggers': [
+            "Any weight loss goal >30 lbs -> recommend consultation with nutritionist/dietitian",
+            "Any pre-existing medical condition mentioned -> recommend doctor clearance",
+            "Bodybuilding/powerlifting -> recommend certified personal trainer",
+            "Mental health goals -> recommend licensed therapist",
+            "Eating disorder patterns -> REQUIRE professional referral, do not generate meal plans",
+            "Chronic pain -> recommend physical therapist before exercise program",
+        ],
+        'professionals': [
+            "Personal Trainer (NASM/ACE)",
+            "Registered Dietitian",
+            "Sports Medicine Doctor",
+            "Physical Therapist",
+            "Licensed Therapist",
+        ],
+    },
+    'career': {
+        'triggers': [
+            "Career change requiring credentials -> recommend career counselor",
+            "Immigration/visa requirements -> recommend immigration lawyer",
+            "Salary negotiation >$20K increase -> recommend negotiation coach",
+            "Starting business with investment -> recommend business attorney + CPA",
+        ],
+        'professionals': [
+            "Career Coach",
+            "Resume Writer",
+            "Business Attorney",
+            "CPA/Tax Advisor",
+            "Immigration Lawyer",
+        ],
+    },
+    'finance': {
+        'triggers': [
+            "Debt >$50K -> recommend certified financial planner",
+            "Investment portfolio >$100K -> recommend fiduciary financial advisor",
+            "Tax situation complex -> recommend CPA",
+            "Real estate purchase -> recommend real estate agent + mortgage broker",
+            "Business finances -> recommend bookkeeper/CPA",
+        ],
+        'professionals': [
+            "CFP (Certified Financial Planner)",
+            "CPA",
+            "Real Estate Agent",
+            "Mortgage Broker",
+            "Estate Planning Attorney",
+        ],
+    },
+    'education': {
+        'triggers': [
+            "Learning disability mentioned -> recommend educational psychologist",
+            "Graduate school application -> recommend admissions consultant",
+            "Professional certification -> recommend official prep course",
+        ],
+        'professionals': [
+            "Academic Advisor",
+            "Admissions Consultant",
+            "Tutor",
+            "Educational Psychologist",
+        ],
+    },
+    'personal': {
+        'triggers': [
+            "Trauma or grief mentioned -> recommend licensed therapist",
+            "Addiction recovery -> recommend certified addiction counselor",
+            "Severe anxiety or depression -> recommend psychiatrist or psychologist",
+        ],
+        'professionals': [
+            "Licensed Therapist / Psychologist",
+            "Life Coach (ICF certified)",
+            "Certified Addiction Counselor",
+        ],
+    },
+    'hobbies': {
+        'triggers': [
+            "High-risk activity (skydiving, scuba, rock climbing) -> recommend certified instructor",
+            "Musical instrument at intermediate+ level -> recommend private teacher",
+            "Martial arts/combat sports -> recommend qualified coach/dojo",
+        ],
+        'professionals': [
+            "Certified Instructor (activity-specific)",
+            "Private Tutor / Teacher",
+            "Qualified Coach",
+        ],
+    },
+    'relationships': {
+        'triggers': [
+            "Relationship crisis or recurring conflict -> recommend couples therapist",
+            "Co-parenting challenges -> recommend family therapist / mediator",
+            "Domestic violence indicators -> REQUIRE professional referral immediately",
+        ],
+        'professionals': [
+            "Couples Therapist (LMFT)",
+            "Family Therapist",
+            "Relationship Coach",
+            "Mediator",
+        ],
+    },
+}
+
+
+def _build_referral_prompt_section(category: str) -> str:
+    """Return a prompt section with category-specific professional referral rules.
+
+    If the category has no specific rules, returns a generic reminder.
+    """
+    referral = CATEGORY_PROFESSIONAL_REFERRALS.get(category)
+    if not referral:
+        return ""
+
+    triggers_text = "\n".join(f"  - {t}" for t in referral['triggers'])
+    professionals_text = ", ".join(referral['professionals'])
+
+    return f"""
+CATEGORY-SPECIFIC PROFESSIONAL REFERRAL RULES ({category.upper()}):
+When analyzing or planning for this {category} goal, apply these trigger rules:
+{triggers_text}
+Recommended professionals for this category: {professionals_text}
+If ANY trigger matches, set "requires_professional" to true, specify the matching professional type from the list above, and explain why in "professional_note".
+For plan generation: include a referral task in the FIRST milestone (e.g., "Research and book a consultation with [professional type]") and recurring follow-up tasks throughout the plan.
+"""
+
+# ---------------------------------------------------------------------------
+# Category-specific scheduling intelligence for task date/time placement.
+# These rules tell the AI HOW to distribute tasks across the week for each
+# domain, producing realistic, expert-level schedules instead of naive
+# day-by-day filling.
+# ---------------------------------------------------------------------------
+CATEGORY_SCHEDULING_RULES = {
+    'health': """
+    HEALTH SCHEDULING RULES:
+    - Never schedule intense workouts on consecutive days for the same muscle group
+    - Rest days: Monday and Friday OR Wednesday and Sunday
+    - Morning workouts preferred (higher compliance rate)
+    - Meal prep tasks on Sundays
+    - Weigh-in tasks on same day/time each week (Monday morning recommended)
+    - Deload week every 4th week (reduce volume 40-50%)
+    """,
+    'career': """
+    CAREER SCHEDULING RULES:
+    - Networking events: Tuesday-Thursday evenings
+    - Job applications: batch on Monday and Wednesday mornings
+    - Interview prep: spread across the week, not crammed
+    - Skill learning: consistent daily slots (30-60 min before/after work)
+    - Resume updates: monthly, first Saturday of month
+    - LinkedIn engagement: 15 min daily during lunch
+    """,
+    'education': """
+    EDUCATION SCHEDULING RULES:
+    - Study sessions: max 2 hours continuous, then 15 min break
+    - Spaced repetition: review Day 1, 3, 7, 14, 30
+    - New material: morning sessions (better retention)
+    - Practice/exercises: afternoon/evening sessions
+    - Weekly review: Saturday morning
+    - Mock tests: every 2 weeks on weekends
+    """,
+    'finance': """
+    FINANCE SCHEDULING RULES:
+    - Budget review: last day of each month
+    - Bill payments: automate for 1st-5th of month
+    - Investment contributions: immediately after paycheck
+    - Expense tracking: daily 5-min review in evening
+    - Financial education: weekend mornings
+    - Net worth update: 1st of each month
+    """,
+    'creative': """
+    CREATIVE SCHEDULING RULES:
+    - Daily practice: same time each day for habit formation
+    - Longer project sessions: weekends (2-3 hour blocks)
+    - Inspiration gathering: Friday evenings (museum, gallery, reading)
+    - Critique/feedback: bi-weekly
+    - Portfolio update: monthly
+    - Social sharing: twice per week
+    """,
+    'personal': """
+    PERSONAL GROWTH SCHEDULING RULES:
+    - Journaling: same time daily (morning or evening, pick one)
+    - Meditation: morning immediately after waking (consistency > duration)
+    - Reading: evening wind-down sessions (20-30 min)
+    - Therapy/coaching: same day each week (Tuesday or Thursday preferred)
+    - Habit tracking review: Sunday evening
+    - Self-assessment: bi-weekly on Saturdays
+    """,
+    'hobbies': """
+    HOBBIES SCHEDULING RULES:
+    - Practice sessions: same time slots each week for habit formation
+    - Shorter daily practice (15-30 min) beats long weekend-only sessions
+    - Community/group activities: weekday evenings or Saturday mornings
+    - Equipment maintenance: first Sunday of each month
+    - Progress documentation: after each practice session
+    - Fun/exploration sessions: Fridays or weekends (no pressure)
+    """,
+    'social': """
+    SOCIAL SCHEDULING RULES:
+    - Networking events: Tuesday-Thursday evenings (highest attendance)
+    - Follow-up messages: within 24-48h of meeting someone (Mon/Tue morning)
+    - Volunteering: consistent weekly slot (Saturday morning recommended)
+    - Small group hangouts: mid-week evenings
+    - Large social events: weekends
+    - Social media engagement: 15 min daily, same time
+    """,
+    'relationships': """
+    RELATIONSHIPS SCHEDULING RULES:
+    - Date nights: consistent weekly slot (Friday or Saturday evening)
+    - Quality conversation time: daily 15-20 min, same time (e.g., after dinner)
+    - Family activities: weekend mornings or afternoons
+    - Check-in calls (long distance): same day/time each week
+    - Surprise/gesture planning: mid-week (Tuesday/Wednesday)
+    - Couples review/goal setting: bi-weekly Sunday afternoon
+    """,
+    'travel': """
+    TRAVEL SCHEDULING RULES:
+    - Research and booking: weekday evenings (30-45 min sessions)
+    - Major bookings (flights, hotels): Tuesday-Wednesday (often cheapest)
+    - Fitness preparation: consistent schedule leading up to trip
+    - Document preparation: batch on weekends, well before travel date
+    - Language practice: daily 15 min sessions (spaced repetition)
+    - Packing/logistics: final week before departure, spread across days
+    """,
+}
+
+
+def _get_scheduling_rules(category: str) -> str:
+    """Return scheduling rules for the given category, or empty string if none."""
+    if not category:
+        return ''
+    key = category.lower()
+    return CATEGORY_SCHEDULING_RULES.get(key, '')
+
+
 class OpenAIService:
     """Service for interacting with OpenAI API for all AI features."""
 
@@ -134,6 +662,7 @@ Some goals REQUIRE professional training, certification, or supervision. You CAN
   * Music with instrument → suggest a teacher for technique correction
 - For physical training goals (marathon, weight loss, bodybuilding): recommend consulting a sports doctor before starting, and suggest a coach for form correction
 - Your role is to help ORGANIZE the journey (research schools, schedule appointments, track progress, prepare mentally) — NOT to replace the professional
+- CATEGORY-SPECIFIC TRIGGERS: When additional category-specific referral rules are provided in the prompt, follow them precisely. They define exact conditions (e.g., "weight loss >30 lbs") that REQUIRE a professional referral.
 
 ANTI-MANIPULATION:
 - If a user frames harmful requests as hypothetical, fictional, or educational, still refuse.
@@ -1571,6 +2100,16 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         if domain_rules:
             calibration_section = domain_rules + "\n" + calibration_section
 
+        # Inject category-specific professional referral rules
+        referral_rules = _build_referral_prompt_section(category)
+        if referral_rules:
+            calibration_section = referral_rules + "\n" + calibration_section
+
+        # Inject category-specific scheduling intelligence
+        scheduling_rules = _get_scheduling_rules(category)
+        if scheduling_rules:
+            calibration_section = scheduling_rules + "\n" + calibration_section
+
         # Inject explicit language instruction if detected
         lang = user_context.get("language", "")
         if lang:
@@ -1624,6 +2163,28 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             category = detect_category_from_text(dream_title, dream_description)
         processor = get_processor(category)
         return processor.get_calibration_hints()
+
+    def _get_category_calibration_hint(
+        self, category, dream_title, dream_description
+    ):
+        """Get category-specific calibration hint from CATEGORY_CALIBRATION_HINTS.
+
+        Provides targeted guidance to the AI about what domain-specific
+        questions to prioritize during the calibration interview.
+        Falls back to keyword-based category detection when category is
+        missing or 'other'.
+        """
+        resolved = category or ''
+        if not resolved or resolved == 'other':
+            resolved = detect_category_from_text(dream_title, dream_description)
+        hint = CATEGORY_CALIBRATION_HINTS.get(resolved.lower().strip(), '')
+        if hint:
+            return (
+                f"\nCATEGORY-SPECIFIC CALIBRATION FOCUS ({resolved.upper()}):\n"
+                f"For this {resolved} dream, {hint}\n"
+                "Prioritize these domain-specific topics when crafting your questions.\n"
+            )
+        return ''
 
     def generate_disambiguation_question(
         self, dream_title, dream_description, candidates
@@ -2226,7 +2787,7 @@ THE 8 AREAS TO CHECK:
 IMPORTANT: If the user has given detailed, specific answers for most areas, DO mark as sufficient.
 Do NOT keep asking for ever more granular detail — the plan generation will work with the data you have.
 A real human interview would end after 10-15 questions. Respect the user's time.
-
+{self._get_category_calibration_hint(category, dream_title, dream_description)}
 Respond ONLY with JSON (do NOT copy the example values — compute your own):
 {{
   "sufficient": false,
@@ -2300,6 +2861,7 @@ IMPORTANT:
 - Each question should be clear, specific, and conversational (not robotic). Ask ONE thing per question.
 - Questions must FORCE specific answers — don't let them get away with "I don't know" or vague responses.
 - Frame questions to extract CONCRETE, MEASURABLE details.
+{self._get_category_calibration_hint(category, dream_title, dream_description)}
 {self._get_calibration_processor_hints(dream_title, dream_description, category)}
 Respond ONLY with JSON:
 {{
@@ -2431,9 +2993,19 @@ Create a structured JSON profile that captures everything needed for a highly pe
         """
         Analyze a dream and extract category, difficulty, and recommendations.
 
+        Uses category-specific professional referral rules from
+        ``CATEGORY_PROFESSIONAL_REFERRALS`` to produce precise
+        ``requires_professional`` output and a ``recommended_professionals``
+        list.
+
         Returns:
-            Dict with category, duration estimate, difficulty, challenges, approach
+            Dict with category, duration estimate, difficulty, challenges,
+            approach, and professional referral fields.
         """
+        # Pre-detect category so we can inject the right referral rules
+        pre_category = detect_category_from_text(dream_title, dream_description)
+        referral_section = _build_referral_prompt_section(pre_category)
+
         prompt = f"""Analyze this dream/goal and respond with JSON.
 
 TITLE: {dream_title}
@@ -2451,17 +3023,18 @@ Required JSON format:
   "recommended_approach": "A detailed, personalized 2-3 sentence approach that references the specific goal description, not generic advice",
   "requires_professional": false,
   "professional_type": null,
-  "professional_note": null
+  "professional_note": null,
+  "recommended_professionals": []
 }}
 
 LANGUAGE DETECTION: Analyze the title and description to detect the primary language. Set "detected_language" to the ISO 639-1 code (fr, en, es, de, pt, it, etc.).
 
 PROFESSIONAL REFERRAL CHECK:
 Determine if this goal REQUIRES professional supervision, certification, or formal training that an app cannot replace.
-- If YES: set "requires_professional" to true, "professional_type" to the type of professional needed (e.g., "flight instructor", "driving school", "sports doctor", "certified financial planner", "therapist"), and "professional_note" to a short explanation of why (in the user's language).
-- Examples: pilot license → flight school required. Marathon → sports doctor recommended. Learn piano → music teacher recommended for technique. Lose 30kg → nutritionist + doctor required. Invest in stocks → financial advisor recommended. Scuba diving → PADI instructor required.
-- If NO: set all three to false/null/null.
-
+- If YES: set "requires_professional" to true, "professional_type" to the PRIMARY professional needed (e.g., "flight instructor", "driving school", "sports doctor", "certified financial planner", "therapist"), "professional_note" to a short explanation of why (in the user's language), and "recommended_professionals" to a list of ALL relevant professional types for this goal.
+- Examples: pilot license -> flight school required. Marathon -> sports doctor recommended. Learn piano -> music teacher recommended for technique. Lose 30kg -> nutritionist + doctor required. Invest in stocks -> financial advisor recommended. Scuba diving -> PADI instructor required.
+- If NO: set requires_professional to false, professional_type and professional_note to null, and recommended_professionals to an empty list.
+{referral_section}
 IMPORTANT: Be SPECIFIC to the user's goal. Do NOT give generic advice like "start with tutorials".
 Reference the actual goal details. Provide at least 3 key_challenges."""
 
@@ -2476,7 +3049,7 @@ Reference the actual goal details. Provide at least 3 key_challenges."""
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=500,
+            max_tokens=700,
             response_format={"type": "json_object"},
             timeout=self.timeout,
         )
@@ -2729,14 +3302,46 @@ Rules:
         except json.JSONDecodeError as e:
             raise OpenAIError(f"Smart analysis failed: {str(e)}")
 
+    # Category-specific motivation styles for personalized messages
+    CATEGORY_MOTIVATION_STYLE = {
+        "health": "Use sports coaching energy. Reference specific metrics improvements. Celebrate body achievements, not just aesthetics. Include recovery reminders.",
+        "career": "Use professional mentoring tone. Reference industry-specific wins. Celebrate skills learned and connections made. Remind of long-term vision.",
+        "education": "Use encouraging teacher tone. Reference knowledge milestones. Celebrate understanding, not just grades. Include study technique tips.",
+        "finance": "Use financial advisor tone. Reference specific numbers/savings. Celebrate discipline and consistency. Include compound growth reminders.",
+        "creative": "Use artist mentor tone. Celebrate creative expression over perfection. Reference artistic growth. Include inspiration prompts.",
+        "personal": "Use life coach tone. Celebrate self-awareness moments. Reference personal breakthroughs. Include mindfulness prompts.",
+        "hobbies": "Use enthusiastic peer tone. Celebrate fun and enjoyment. Reference skill progression. Keep it light and encouraging.",
+        "social": "Use warm friend tone. Celebrate connections made. Reference social courage moments. Include appreciation prompts.",
+        "relationships": "Use supportive counselor tone. Celebrate communication wins. Reference emotional growth. Include gratitude prompts.",
+        "travel": "Use adventure guide tone. Build excitement. Reference preparation milestones. Include cultural discovery prompts.",
+    }
+
     def generate_motivational_message(
-        self, user_name, goal_title, progress_percentage, streak_days
+        self, user_name, goal_title, progress_percentage, streak_days, category=None
     ):
-        """Generate a short motivational message personalized for the user."""
+        """Generate a short motivational message personalized for the user.
+
+        Args:
+            user_name: Display name of the user.
+            goal_title: Title of the dream/goal.
+            progress_percentage: Overall progress (0-100).
+            streak_days: Consecutive active days.
+            category: Optional dream category (e.g. 'health', 'career') for
+                category-specific tone and style.
+        """
+        # Build category-aware system prompt
+        system_content = self.SYSTEM_PROMPTS["motivation"]
+        category_style = self.CATEGORY_MOTIVATION_STYLE.get(category or "")
+        if category_style:
+            system_content += (
+                f"\n\nCATEGORY-SPECIFIC STYLE ({category}):\n{category_style}"
+            )
+
         prompt = f"""User: {user_name}
 Goal: {goal_title}
 Progress: {progress_percentage}%
 Streak: {streak_days} days
+Category: {category or 'general'}
 
 Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
 
@@ -2744,7 +3349,7 @@ Generate a short motivational message (1-2 sentences, 1-2 emojis max)."""
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPTS["motivation"]},
+                    {"role": "system", "content": system_content},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.8,
@@ -2923,6 +3528,16 @@ Generate an empathetic message (2-3 sentences) that:
         if domain_rules:
             calibration_section = domain_rules + "\n" + calibration_section
 
+        # Inject category-specific professional referral rules
+        referral_rules = _build_referral_prompt_section(category)
+        if referral_rules:
+            calibration_section = referral_rules + "\n" + calibration_section
+
+        # Inject category-specific scheduling intelligence
+        scheduling_rules = _get_scheduling_rules(category)
+        if scheduling_rules:
+            calibration_section = scheduling_rules + "\n" + calibration_section
+
         lang = user_context.get("language", "")
         if lang:
             lang_names = {
@@ -3009,11 +3624,34 @@ Respond ONLY with JSON:
   "calibration_references": ["..."]
 }}"""
 
+        system_prompt = self.SYSTEM_PROMPTS["planning"]
+        category_key = category.lower() if category else ''
+        if category_key in CATEGORY_PROMPTS:
+            system_prompt += '\n\n' + CATEGORY_PROMPTS[category_key]
+        if category_key in CATEGORY_MILESTONE_PATTERNS:
+            system_prompt += '\n\n' + CATEGORY_MILESTONE_PATTERNS[category_key]
+
+        # Inject category-specific common obstacles for better obstacle prediction
+        if category_key in CATEGORY_OBSTACLES:
+            obstacles_hint = "\n".join(CATEGORY_OBSTACLES[category_key])
+            system_prompt += (
+                f"\n\nCOMMON OBSTACLES FOR {category_key.upper()} DREAMS:\n"
+                f"{obstacles_hint}\n"
+                "Incorporate preventive measures for these obstacles into the "
+                "milestone plan. Address them in the obstacles arrays and weave "
+                "mitigation tasks into the goals."
+            )
+
+        # Inject category-specific scheduling intelligence into system prompt
+        sched_rules = _get_scheduling_rules(category_key)
+        if sched_rules:
+            system_prompt += '\n\n' + sched_rules
+
         logger.info("generate_skeleton: sending skeleton request to OpenAI")
         response = _plan_client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
@@ -3101,6 +3739,32 @@ Respond ONLY with JSON:
             max(3, int(available_hours * 0.6)) if available_hours else 5
         )
 
+        category = user_context.get("category", "") or ""
+        system_prompt = self.SYSTEM_PROMPTS["planning"]
+        category_key = category.lower() if category else ''
+        if category_key in CATEGORY_PROMPTS:
+            system_prompt += '\n\n' + CATEGORY_PROMPTS[category_key]
+
+        # Inject category-specific common obstacles so tasks address them
+        if category_key in CATEGORY_OBSTACLES:
+            obstacles_hint = "\n".join(CATEGORY_OBSTACLES[category_key])
+            system_prompt += (
+                f"\n\nCOMMON OBSTACLES FOR {category_key.upper()} DREAMS:\n"
+                f"{obstacles_hint}\n"
+                "When generating tasks, include preventive measures and "
+                "mitigation strategies for these common obstacles."
+            )
+
+        # Inject category-specific scheduling intelligence into system prompt
+        scheduling_rules = _get_scheduling_rules(category_key)
+        if scheduling_rules:
+            system_prompt += '\n\n' + scheduling_rules
+
+        # Build category-specific task detail requirements for user prompt
+        task_detail_section = ""
+        if category_key in CATEGORY_TASK_DETAILS:
+            task_detail_section = CATEGORY_TASK_DETAILS[category_key]
+
         all_task_patches = []
 
         for ms in relevant_milestones:
@@ -3136,6 +3800,8 @@ EFFORT TARGET: {target_weekly_hours}h/week x ~4 weeks = {target_weekly_hours * 4
 - Spread tasks evenly across the month
 
 {calibration_section}
+
+{task_detail_section}
 
 For EACH goal, generate 4-6 detailed tasks with:
 - title: "Day N: Specific action"
@@ -3175,7 +3841,7 @@ Respond ONLY with JSON:
             response = _plan_client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPTS["planning"]},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
@@ -3793,18 +4459,29 @@ Write in {lang_name}. Be warm, specific, and encouraging. Reference their actual
             raise OpenAIError(f"Progress image analysis failed: {str(e)}")
 
     @openai_retry
-    def predict_obstacles_simple(self, dream_title, dream_description):
+    def predict_obstacles_simple(self, dream_title, dream_description, category=None):
         """
         Predict potential obstacles for a dream and suggest solutions.
 
         Args:
             dream_title: Title of the dream/goal
             dream_description: Description of the dream
+            category: Optional dream category for category-specific obstacle hints
 
         Returns:
             List of dicts with 'title', 'description', and 'solution' keys
         """
-        prompt = f"""For the goal "{dream_title}" ({dream_description}), predict 3-5 realistic obstacles the user might face.
+        # Build category-specific obstacle hints
+        category_hint = ""
+        cat_key = (category or "").lower()
+        if cat_key in CATEGORY_OBSTACLES:
+            obstacles_list = "\n".join(CATEGORY_OBSTACLES[cat_key])
+            category_hint = (
+                f"\n\nCOMMON OBSTACLES FOR {cat_key.upper()} GOALS "
+                f"(use as inspiration, adapt to THIS specific goal):\n{obstacles_list}"
+            )
+
+        prompt = f"""For the goal "{dream_title}" ({dream_description}), predict 3-5 realistic obstacles the user might face.{category_hint}
 
 Respond ONLY with a JSON array:
 [
@@ -3816,13 +4493,16 @@ Respond ONLY with a JSON array:
 ]"""
 
         try:
+            system_content = (
+                self.ETHICAL_PREAMBLE
+                + "You predict realistic obstacles for personal goals and suggest solutions. Respond only in JSON."
+            )
             response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": self.ETHICAL_PREAMBLE
-                        + "You predict realistic obstacles for personal goals and suggest solutions. Respond only in JSON.",
+                        "content": system_content,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -4225,6 +4905,17 @@ RULES:
             "Be specific and actionable — reference the user's actual dream, goals, and context. "
             "Respond ONLY with valid JSON in the exact format specified."
         )
+
+        # Inject category-specific common obstacles for smarter prediction
+        category = (dream_info.get("category") or "").lower()
+        if category in CATEGORY_OBSTACLES:
+            obstacles_hint = "\n".join(CATEGORY_OBSTACLES[category])
+            system_prompt += (
+                f"\n\nCOMMON OBSTACLES FOR {category.upper()} DREAMS:\n"
+                f"{obstacles_hint}\n"
+                "Use these as a starting point but adapt to THIS specific dream. "
+                "Prioritize obstacles most relevant to the user's situation."
+            )
 
         prompt = f"""Predict potential obstacles for this dream and suggest preventive measures.
 

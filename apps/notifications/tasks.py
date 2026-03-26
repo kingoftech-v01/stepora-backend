@@ -231,8 +231,28 @@ def generate_daily_motivation(self):
                     )
                     continue
 
+                # Pick the most relevant active dream for motivation context
+                active_dream = (
+                    user.dreams.filter(status="active")
+                    .order_by("-updated_at")
+                    .first()
+                )
+                dream_title = active_dream.title if active_dream else "your dream"
+                dream_category = (
+                    getattr(active_dream, "category", None) if active_dream else None
+                )
+                progress = (
+                    active_dream.progress_percentage if active_dream else 0
+                )
+
                 # Generate personalized motivation message and sanitize
-                raw_message = ai_service.generate_motivational_message(user)
+                raw_message = ai_service.generate_motivational_message(
+                    user_name=user.display_name or user.email.split("@")[0],
+                    goal_title=dream_title,
+                    progress_percentage=round(progress, 1),
+                    streak_days=getattr(user, "streak_days", 0),
+                    category=dream_category,
+                )
                 message = sanitize_text(raw_message)[:500]
 
                 # Increment usage counter
@@ -245,7 +265,12 @@ def generate_daily_motivation(self):
                     title=_("Daily motivation"),
                     body=message,
                     scheduled_for=timezone.now(),
-                    data={"action": "open_dreams", "screen": "DreamsDashboard"},
+                    data={
+                        "action": "open_dreams",
+                        "screen": "DreamsDashboard",
+                        "dream_id": str(active_dream.id) if active_dream else None,
+                        "category": dream_category,
+                    },
                 )
 
                 created_count += 1

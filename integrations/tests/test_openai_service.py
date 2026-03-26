@@ -691,6 +691,31 @@ class TestGenerateMotivationalMessage:
         result = service.generate_motivational_message("Alice", "Run 5K", 50, 7)
         assert result == "Keep going!"
 
+    def test_success_with_category(self, service, mock_client):
+        mock_client.chat.completions.create.return_value = _mock_response(
+            "Coach says: crushing it!"
+        )
+        result = service.generate_motivational_message(
+            "Alice", "Run 5K", 50, 7, category="health"
+        )
+        assert result == "Coach says: crushing it!"
+        # Verify category-specific style was injected into system prompt
+        call_args = mock_client.chat.completions.create.call_args
+        system_msg = call_args.kwargs["messages"][0]["content"]
+        assert "CATEGORY-SPECIFIC STYLE (health)" in system_msg
+        assert "sports coaching energy" in system_msg
+
+    def test_unknown_category_uses_generic(self, service, mock_client):
+        mock_client.chat.completions.create.return_value = _mock_response("Go go go!")
+        result = service.generate_motivational_message(
+            "Bob", "Learn piano", 30, 3, category="unknown_cat"
+        )
+        assert result == "Go go go!"
+        # No category style injected for unknown categories
+        call_args = mock_client.chat.completions.create.call_args
+        system_msg = call_args.kwargs["messages"][0]["content"]
+        assert "CATEGORY-SPECIFIC STYLE" not in system_msg
+
     def test_api_error_fallback(self, service, mock_client):
         mock_client.chat.completions.create.side_effect = openai.APIError(
             message="fail", request=Mock(), body=None

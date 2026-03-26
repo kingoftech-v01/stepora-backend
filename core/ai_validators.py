@@ -534,16 +534,28 @@ class AnalysisResponseSchema(BaseModel):
     """Response from analyze_dream."""
 
     category: str = Field(default="other", max_length=50)
+    detected_language: Optional[str] = Field(default=None, max_length=10)
     estimated_duration_weeks: int = Field(default=12, ge=1, le=520)
     difficulty: str = Field(default="medium", max_length=20)
     key_challenges: list[str] = Field(default_factory=list)
     recommended_approach: str = Field(default="", max_length=MAX_TEXT_LEN)
+    requires_professional: bool = Field(default=False)
+    professional_type: Optional[str] = Field(default=None, max_length=MAX_SHORT_TEXT_LEN)
+    professional_note: Optional[str] = Field(default=None, max_length=MAX_TEXT_LEN)
+    recommended_professionals: list[str] = Field(default_factory=list)
 
     @field_validator("category", mode="before")
     @classmethod
     def validate_category(cls, v):
         v = _sanitize_str(v, 50).lower().strip()
         return v if v in VALID_CATEGORIES else "other"
+
+    @field_validator("detected_language", mode="before")
+    @classmethod
+    def sanitize_detected_language(cls, v):
+        if v is None:
+            return None
+        return _sanitize_str(v, 10).lower().strip() or None
 
     @field_validator("difficulty", mode="before")
     @classmethod
@@ -570,6 +582,36 @@ class AnalysisResponseSchema(BaseModel):
     @classmethod
     def sanitize_approach(cls, v):
         return _sanitize_str(v, MAX_TEXT_LEN)
+
+    @field_validator("requires_professional", mode="before")
+    @classmethod
+    def coerce_requires_professional(cls, v):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes")
+        return bool(v) if v is not None else False
+
+    @field_validator("professional_type", mode="before")
+    @classmethod
+    def sanitize_professional_type(cls, v):
+        if v is None or v is False:
+            return None
+        return _sanitize_str(str(v), MAX_SHORT_TEXT_LEN) or None
+
+    @field_validator("professional_note", mode="before")
+    @classmethod
+    def sanitize_professional_note(cls, v):
+        if v is None or v is False:
+            return None
+        return _sanitize_str(str(v), MAX_TEXT_LEN) or None
+
+    @field_validator("recommended_professionals", mode="before")
+    @classmethod
+    def sanitize_recommended_professionals(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [_sanitize_str(p, MAX_SHORT_TEXT_LEN) for p in v if p]
 
 
 # ===================================================================
