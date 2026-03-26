@@ -281,9 +281,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.ScopedRateThrottle",
     ],
-    # SECURITY: Trust only the last XFF entry (appended by ALB) to prevent
-    # throttle bypass via spoofed X-Forwarded-For headers.
-    "NUM_PROXIES": 1,
+    # SECURITY: Number of trusted proxies in front of Django.
+    # AWS (ALB only): 1. VPS (Cloudflare + nginx + docker nginx): 3.
+    # Configurable via env var to avoid throttle bucket sharing.
+    "NUM_PROXIES": int(os.getenv("NUM_PROXIES", "1")),
     "DEFAULT_THROTTLE_RATES": {
         "auth": "5/minute",
         "auth_login": "5/minute",
@@ -550,8 +551,13 @@ GOOGLE_CALENDAR_REDIRECT_URI = os.getenv(
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    # ROTATE_REFRESH_TOKENS disabled to fix logout-on-refresh race condition:
+    # When rotation is ON, the old token is blacklisted immediately. If the browser
+    # refreshes (F5) before the Set-Cookie with the new token is applied, the user
+    # is permanently locked out (blacklisted token in cookie). With rotation OFF,
+    # the same refresh token stays valid for its full 7-day lifetime.
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
 }
