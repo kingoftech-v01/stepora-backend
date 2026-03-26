@@ -992,35 +992,34 @@ class TestSuggestTaskAdjustments:
 
 @pytest.mark.django_db
 class TestRunBiweeklyCheckins:
-    """Tests for run_biweekly_checkins task."""
+    """Tests for run_biweekly_checkins task (reminder-only, no PlanCheckIn creation)."""
 
-    @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
-    def test_dispatches_checkins_for_due_dreams(self, mock_task, dream_user):
-        dream = Dream.objects.create(
+    @patch("apps.dreams.tasks.NotificationService")
+    def test_sends_reminder_for_eligible_dreams(self, mock_notif_svc, dream_user):
+        Dream.objects.create(
             user=dream_user,
             title="Due",
             description="d",
             status="active",
             plan_phase="partial",
-            next_checkin_at=timezone.now() - timedelta(hours=1),
+            last_checkin_at=None,
         )
 
         from apps.dreams.tasks import run_biweekly_checkins
 
         result = run_biweekly_checkins()
-        assert result["dispatched"] >= 1
-        assert PlanCheckIn.objects.filter(dream=dream).exists()
-        mock_task.apply_async.assert_called()
+        assert result["reminders_sent"] >= 1
+        mock_notif_svc.create.assert_called()
 
-    @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
-    def test_skips_dreams_with_active_checkin(self, mock_task, dream_user):
+    @patch("apps.dreams.tasks.NotificationService")
+    def test_skips_dreams_with_active_checkin(self, mock_notif_svc, dream_user):
         dream = Dream.objects.create(
             user=dream_user,
             title="Active",
             description="d",
             status="active",
             plan_phase="partial",
-            next_checkin_at=timezone.now() - timedelta(hours=1),
+            last_checkin_at=None,
         )
         PlanCheckIn.objects.create(
             dream=dream,
@@ -1031,23 +1030,23 @@ class TestRunBiweeklyCheckins:
         from apps.dreams.tasks import run_biweekly_checkins
 
         result = run_biweekly_checkins()
-        assert result["dispatched"] == 0
+        assert result["reminders_sent"] == 0
 
-    @patch("apps.dreams.tasks.generate_checkin_questionnaire_task")
-    def test_skips_dreams_not_due(self, mock_task, dream_user):
+    @patch("apps.dreams.tasks.NotificationService")
+    def test_skips_dreams_checked_in_recently(self, mock_notif_svc, dream_user):
         Dream.objects.create(
             user=dream_user,
-            title="Future",
+            title="Recent",
             description="d",
             status="active",
             plan_phase="partial",
-            next_checkin_at=timezone.now() + timedelta(days=7),
+            last_checkin_at=timezone.now() - timedelta(days=2),
         )
 
         from apps.dreams.tasks import run_biweekly_checkins
 
         result = run_biweekly_checkins()
-        assert result["dispatched"] == 0
+        assert result["reminders_sent"] == 0
 
 
 # ──────────────────────────────────────────────────────────────────────

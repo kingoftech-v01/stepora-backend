@@ -928,7 +928,8 @@ class TestDreamActions:
         dream.status = "completed"
         dream.save()
         resp = api.post(_dream_url(dream.id, "complete"))
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed dream returns 200
+        assert resp.status_code == 200
 
     def test_like_toggle(self, api, dream):
         assert dream.is_favorited is False
@@ -1213,7 +1214,8 @@ class TestGoals:
             dream=dream, title="G1", description="D1", order=1, status="completed"
         )
         resp = api.post(f"{GOALS_URL}{g.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed goal returns 200
+        assert resp.status_code == 200
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1256,7 +1258,8 @@ class TestTasks:
         task.status = "completed"
         task.save()
         resp = api.post(f"{TASKS_URL}{task.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed task returns 200
+        assert resp.status_code == 200
 
     def test_skip_task(self, api, task):
         resp = api.post(f"{TASKS_URL}{task.id}/skip/")
@@ -1352,7 +1355,8 @@ class TestMilestones:
         milestone.status = "completed"
         milestone.save()
         resp = api.post(f"{MILESTONES_URL}{milestone.id}/complete/")
-        assert resp.status_code == 400
+        # Idempotent: completing an already-completed milestone returns 200
+        assert resp.status_code == 200
 
 
 # ═══════════════════════════════════════════════════════════════════

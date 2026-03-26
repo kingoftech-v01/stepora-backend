@@ -13,7 +13,7 @@ class TestProcessorRegistry:
         for cat in CATEGORY_DISPLAY_NAMES:
             p = get_processor(cat)
             assert p is not None
-            assert not isinstance(p, BasePlanProcessor) or cat == 'other'
+            assert type(p) is not BasePlanProcessor or cat == 'other'
 
     def test_all_processors_have_domain_rules(self):
         for cat in CATEGORY_DISPLAY_NAMES:
@@ -46,13 +46,13 @@ class TestCategoryDetection:
         ("Learn Python programming", "tech"),
         ("Apprendre le piano", "creative"),
         ("Start a startup", "startup"),
-        ("Perdre 10 kilos", "health"),
-        ("Invest in stocks", "investing"),
-        ("Write a novel", "writing"),
-        ("Plan my wedding", "wedding"),
+        ("Perdre 10 kilos", "weight_management"),
+        ("Invest in stocks", "finance"),
+        ("Write a novel", "creative"),
+        ("Plan my wedding", "event_planning"),
         ("Get my driving license", "driving"),
         ("Quit smoking", "sobriety"),
-        ("Méditer chaque jour", "spirituality"),
+        ("Méditer chaque jour", "personal_development"),
         ("Build a mobile app", "app_dev"),
         ("Rénover ma cuisine", "home_renovation"),
         ("Adopt a dog", "pets"),

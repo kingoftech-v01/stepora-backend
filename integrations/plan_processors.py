@@ -3318,6 +3318,34 @@ KEYWORD_MAP = {
         "procrastin",
         "objectifs",
         "goals",
+        # Spanish (es)
+        "hábito", "confianza", "leer", "mejorar", "autoestima",
+        # Portuguese (pt)
+        "hábito", "confiança", "ler", "melhorar", "autoestima",
+        # German (de)
+        "gewohnheit", "selbstvertrauen", "lesen", "verbessern", "selbstwert",
+        # Italian (it)
+        "abitudine", "fiducia", "leggere", "migliorare", "autostima",
+        # Dutch (nl)
+        "gewoonte", "zelfvertrouwen", "lezen", "verbeteren", "zelfbeeld",
+        # Russian (ru)
+        "привычка", "уверенность", "читать", "улучшить", "самооценка",
+        # Polish (pl)
+        "nawyk", "pewność siebie", "czytać", "poprawić", "samoocena",
+        # Turkish (tr)
+        "alışkanlık", "özgüven", "okumak", "geliştirmek", "kişisel gelişim",
+        # Japanese (ja)
+        "習慣", "自信", "読書", "自己啓発", "目標",
+        # Korean (ko)
+        "습관", "자신감", "독서", "자기계발", "목표",
+        # Chinese (zh)
+        "习惯", "自信", "阅读", "自我提升", "目标",
+        # Arabic (ar)
+        "عادة", "ثقة بالنفس", "قراءة", "تطوير الذات", "أهداف",
+        # Hindi (hi)
+        "आदत", "आत्मविश्वास", "पढ़ना", "आत्म सुधार", "लक्ष्य",
+        # Haitian Creole (ht)
+        "abitid", "konfyans", "li", "amelyore", "objektif",
     ],
     "relationships": [
         "ami",
@@ -3343,6 +3371,34 @@ KEYWORD_MAP = {
         "sortir plus",
         "parler aux gens",
         "confiance en soi",
+        # Spanish (es)
+        "amigo", "relación", "pareja", "familia", "conocer gente",
+        # Portuguese (pt)
+        "amigo", "relacionamento", "casal", "família", "conhecer pessoas",
+        # German (de)
+        "freund", "beziehung", "partner", "familie", "leute kennenlernen",
+        # Italian (it)
+        "amico", "relazione", "coppia", "famiglia", "conoscere persone",
+        # Dutch (nl)
+        "vriend", "relatie", "partner", "familie", "mensen ontmoeten",
+        # Russian (ru)
+        "друг", "отношения", "партнёр", "семья", "знакомства",
+        # Polish (pl)
+        "przyjaciel", "związek", "partner", "rodzina", "poznać ludzi",
+        # Turkish (tr)
+        "arkadaş", "ilişki", "partner", "aile", "insanlarla tanışmak",
+        # Japanese (ja)
+        "友達", "人間関係", "パートナー", "家族", "出会い",
+        # Korean (ko)
+        "친구", "인간관계", "파트너", "가족", "만남",
+        # Chinese (zh)
+        "朋友", "人际关系", "伴侣", "家庭", "社交",
+        # Arabic (ar)
+        "صديق", "علاقة", "شريك", "عائلة", "تعارف",
+        # Hindi (hi)
+        "दोस्त", "रिश्ते", "साथी", "परिवार", "लोगों से मिलना",
+        # Haitian Creole (ht)
+        "zanmi", "relasyon", "patnè", "fanmi", "rankontre moun",
     ],
     "tech": [
         "programm",
@@ -3373,6 +3429,34 @@ KEYWORD_MAP = {
         "flutter",
         "html",
         "css",
+        # Spanish (es)
+        "programación", "desarrollador", "aplicación", "informática", "tecnología",
+        # Portuguese (pt)
+        "programação", "desenvolvedor", "aplicativo", "informática", "tecnologia",
+        # German (de)
+        "programmierung", "entwickler", "anwendung", "informatik", "technologie",
+        # Italian (it)
+        "programmazione", "sviluppatore", "applicazione", "informatica", "tecnologia",
+        # Dutch (nl)
+        "programmeren", "ontwikkelaar", "applicatie", "informatica", "technologie",
+        # Russian (ru)
+        "программирование", "разработчик", "приложение", "информатика", "технологии",
+        # Polish (pl)
+        "programowanie", "programista", "aplikacja", "informatyka", "technologia",
+        # Turkish (tr)
+        "programlama", "geliştirici", "uygulama", "bilişim", "teknoloji",
+        # Japanese (ja)
+        "プログラミング", "開発者", "アプリ", "情報技術", "テクノロジー",
+        # Korean (ko)
+        "프로그래밍", "개발자", "앱", "정보기술", "기술",
+        # Chinese (zh)
+        "编程", "开发者", "应用", "信息技术", "技术",
+        # Arabic (ar)
+        "برمجة", "مطور", "تطبيق", "تكنولوجيا", "حاسوب",
+        # Hindi (hi)
+        "प्रोग्रामिंग", "डेवलपर", "ऐप", "सूचना प्रौद्योगिकी", "तकनीक",
+        # Haitian Creole (ht)
+        "pwogramasyon", "devlopè", "aplikasyon", "enfòmatik", "teknoloji",
     ],
     "travel": [
         "voyage",
@@ -3405,6 +3489,34 @@ KEYWORD_MAP = {
         "road trip",
         "sac à dos",
         "autonomie",
+        # Spanish (es)
+        "viaje", "viajar", "mochilero", "senderismo", "excursión",
+        # Portuguese (pt)
+        "viagem", "viajar", "mochileiro", "trilha", "caminhada",
+        # German (de)
+        "reise", "reisen", "wandern", "rucksack", "abenteuer",
+        # Italian (it)
+        "viaggio", "viaggiare", "zaino in spalla", "escursione", "avventura",
+        # Dutch (nl)
+        "reis", "reizen", "wandelen", "rugzak", "avontuur",
+        # Russian (ru)
+        "путешествие", "поход", "рюкзак", "приключение", "восхождение",
+        # Polish (pl)
+        "podróż", "podróżować", "wędrówka", "plecak", "przygoda",
+        # Turkish (tr)
+        "seyahat", "gezi", "yürüyüş", "macera", "tırmanış",
+        # Japanese (ja)
+        "旅行", "ハイキング", "冒険", "バックパック", "登山",
+        # Korean (ko)
+        "여행", "하이킹", "모험", "배낭여행", "등산",
+        # Chinese (zh)
+        "旅行", "徒步", "冒险", "背包旅行", "登山",
+        # Arabic (ar)
+        "سفر", "رحلة", "مغامرة", "تسلق", "حقيبة ظهر",
+        # Hindi (hi)
+        "यात्रा", "सफर", "पर्वतारोहण", "रोमांच", "ट्रेकिंग",
+        # Haitian Creole (ht)
+        "vwayaj", "vwayaje", "aventire", "randonnen", "monte",
     ],
     "education": [
         "examen",
@@ -3431,6 +3543,34 @@ KEYWORD_MAP = {
         "passer le",
         "préparer le",
         "réviser",
+        # Spanish (es)
+        "examen", "universidad", "diploma", "estudiar", "carrera universitaria",
+        # Portuguese (pt)
+        "exame", "universidade", "diploma", "estudar", "faculdade",
+        # German (de)
+        "prüfung", "universität", "diplom", "studieren", "abschluss",
+        # Italian (it)
+        "esame", "università", "diploma", "studiare", "laurea",
+        # Dutch (nl)
+        "examen", "universiteit", "diploma", "studeren", "afstuderen",
+        # Russian (ru)
+        "экзамен", "университет", "диплом", "учиться", "образование",
+        # Polish (pl)
+        "egzamin", "uniwersytet", "dyplom", "studiować", "wykształcenie",
+        # Turkish (tr)
+        "sınav", "üniversite", "diploma", "okumak", "eğitim",
+        # Japanese (ja)
+        "試験", "大学", "卒業", "勉強", "資格",
+        # Korean (ko)
+        "시험", "대학교", "졸업", "공부", "자격증",
+        # Chinese (zh)
+        "考试", "大学", "毕业", "学习", "文凭",
+        # Arabic (ar)
+        "امتحان", "جامعة", "شهادة", "دراسة", "تعليم",
+        # Hindi (hi)
+        "परीक्षा", "विश्वविद्यालय", "डिग्री", "पढ़ाई", "शिक्षा",
+        # Haitian Creole (ht)
+        "egzamen", "inivèsite", "diplòm", "etidye", "edikasyon",
     ],
     "home_renovation": [
         "rénover",
@@ -3453,6 +3593,34 @@ KEYWORD_MAP = {
         "jardin",
         "garden",
         "terrasse",
+        # Spanish (es)
+        "renovar", "casa", "cocina", "baño", "decoración",
+        # Portuguese (pt)
+        "reformar", "casa", "cozinha", "banheiro", "decoração",
+        # German (de)
+        "renovieren", "haus", "küche", "badezimmer", "dekoration",
+        # Italian (it)
+        "ristrutturare", "casa", "cucina", "bagno", "arredamento",
+        # Dutch (nl)
+        "renoveren", "huis", "keuken", "badkamer", "decoratie",
+        # Russian (ru)
+        "ремонт", "дом", "кухня", "ванная", "декор",
+        # Polish (pl)
+        "remont", "dom", "kuchnia", "łazienka", "dekoracja",
+        # Turkish (tr)
+        "tadilat", "ev", "mutfak", "banyo", "dekorasyon",
+        # Japanese (ja)
+        "リフォーム", "家", "キッチン", "バスルーム", "インテリア",
+        # Korean (ko)
+        "리모델링", "집", "주방", "욕실", "인테리어",
+        # Chinese (zh)
+        "装修", "房子", "厨房", "浴室", "装饰",
+        # Arabic (ar)
+        "تجديد", "منزل", "مطبخ", "حمام", "ديكور",
+        # Hindi (hi)
+        "नवीनीकरण", "घर", "रसोई", "बाथरूम", "सजावट",
+        # Haitian Creole (ht)
+        "renovasyon", "kay", "kizin", "twalèt", "dekorasyon",
     ],
     "diy": [
         "bricolage",
@@ -3491,6 +3659,34 @@ KEYWORD_MAP = {
         "allaitement",
         "famille",
         "family planning",
+        # Spanish (es)
+        "niño", "bebé", "padre", "madre", "crianza",
+        # Portuguese (pt)
+        "criança", "bebê", "pai", "mãe", "paternidade",
+        # German (de)
+        "kind", "eltern", "erziehung", "schwangerschaft", "geburt",
+        # Italian (it)
+        "bambino", "genitore", "educazione", "gravidanza", "nascita",
+        # Dutch (nl)
+        "kind", "ouder", "opvoeding", "zwangerschap", "geboorte",
+        # Russian (ru)
+        "ребёнок", "родитель", "воспитание", "беременность", "рождение",
+        # Polish (pl)
+        "dziecko", "rodzic", "wychowanie", "ciąża", "narodziny",
+        # Turkish (tr)
+        "çocuk", "ebeveyn", "hamilelik", "doğum", "anne",
+        # Japanese (ja)
+        "子供", "育児", "親", "妊娠", "出産",
+        # Korean (ko)
+        "아이", "육아", "부모", "임신", "출산",
+        # Chinese (zh)
+        "孩子", "育儿", "父母", "怀孕", "出生",
+        # Arabic (ar)
+        "طفل", "والد", "تربية", "حمل", "ولادة",
+        # Hindi (hi)
+        "बच्चा", "माता-पिता", "पालन-पोषण", "गर्भावस्था", "जन्म",
+        # Haitian Creole (ht)
+        "timoun", "paran", "edikasyon timoun", "gwosès", "nesans",
     ],
     "pets": [
         "chien",
@@ -3546,6 +3742,34 @@ KEYWORD_MAP = {
         "rent",
         "copropriété",
         "condo",
+        # Spanish (es)
+        "comprar casa", "inmobiliario", "hipoteca", "propiedad", "alquiler",
+        # Portuguese (pt)
+        "comprar casa", "imobiliário", "hipoteca", "propriedade", "aluguel",
+        # German (de)
+        "haus kaufen", "immobilien", "hypothek", "eigentum", "miete",
+        # Italian (it)
+        "comprare casa", "immobiliare", "mutuo", "proprietà", "affitto",
+        # Dutch (nl)
+        "huis kopen", "vastgoed", "hypotheek", "eigendom", "huur",
+        # Russian (ru)
+        "купить дом", "недвижимость", "ипотека", "собственность", "аренда",
+        # Polish (pl)
+        "kupić dom", "nieruchomości", "hipoteka", "własność", "wynajem",
+        # Turkish (tr)
+        "ev almak", "emlak", "ipotek", "mülk", "kira",
+        # Japanese (ja)
+        "家を買う", "不動産", "住宅ローン", "物件", "賃貸",
+        # Korean (ko)
+        "집 사기", "부동산", "주택담보대출", "재산", "임대",
+        # Chinese (zh)
+        "买房", "房地产", "按揭", "房产", "租金",
+        # Arabic (ar)
+        "شراء منزل", "عقارات", "رهن عقاري", "ملكية", "إيجار",
+        # Hindi (hi)
+        "घर खरीदना", "रियल एस्टेट", "गृह ऋण", "संपत्ति", "किराया",
+        # Haitian Creole (ht)
+        "achte kay", "imobilye", "ipotèk", "pwopriyete", "lwaye",
     ],
     "retirement": [
         "retraite",
@@ -3595,6 +3819,34 @@ KEYWORD_MAP = {
         "tabac",
         "tobacco",
         "drogue",
+        # Spanish (es)
+        "dejar de fumar", "sobriedad", "adicción", "alcohol", "rehabilitación",
+        # Portuguese (pt)
+        "parar de fumar", "sobriedade", "vício", "álcool", "reabilitação",
+        # German (de)
+        "aufhören zu rauchen", "nüchternheit", "sucht", "alkohol", "entzug",
+        # Italian (it)
+        "smettere di fumare", "sobrietà", "dipendenza", "alcol", "riabilitazione",
+        # Dutch (nl)
+        "stoppen met roken", "nuchterheid", "verslaving", "alcohol", "afkicken",
+        # Russian (ru)
+        "бросить курить", "трезвость", "зависимость", "алкоголь", "реабилитация",
+        # Polish (pl)
+        "rzucić palenie", "trzeźwość", "uzależnienie", "alkohol", "odwyk",
+        # Turkish (tr)
+        "sigarayı bırakmak", "bağımlılık", "alkol", "ayıklık", "rehabilitasyon",
+        # Japanese (ja)
+        "禁煙", "断酒", "依存症", "アルコール", "リハビリ",
+        # Korean (ko)
+        "금연", "금주", "중독", "알코올", "재활",
+        # Chinese (zh)
+        "戒烟", "戒酒", "成瘾", "酒精", "康复",
+        # Arabic (ar)
+        "إقلاع عن التدخين", "إدمان", "كحول", "تعافي", "علاج إدمان",
+        # Hindi (hi)
+        "धूम्रपान छोड़ना", "नशामुक्ति", "लत", "शराब", "पुनर्वास",
+        # Haitian Creole (ht)
+        "sispann fimen", "sobryete", "depandans", "alkòl", "reyabilitasyon",
     ],
     "environmental": [
         "écologie",
@@ -3617,6 +3869,34 @@ KEYWORD_MAP = {
         "climate",
         "empreinte carbone",
         "carbon footprint",
+        # Spanish (es)
+        "ecología", "medio ambiente", "reciclaje", "sostenible", "cero residuos",
+        # Portuguese (pt)
+        "ecologia", "meio ambiente", "reciclagem", "sustentável", "lixo zero",
+        # German (de)
+        "ökologie", "umwelt", "recycling", "nachhaltig", "null abfall",
+        # Italian (it)
+        "ecologia", "ambiente", "riciclo", "sostenibile", "rifiuti zero",
+        # Dutch (nl)
+        "ecologie", "milieu", "recycling", "duurzaam", "afvalvrij",
+        # Russian (ru)
+        "экология", "окружающая среда", "переработка", "устойчивый", "ноль отходов",
+        # Polish (pl)
+        "ekologia", "środowisko", "recykling", "zrównoważony", "zero waste",
+        # Turkish (tr)
+        "ekoloji", "çevre", "geri dönüşüm", "sürdürülebilir", "sıfır atık",
+        # Japanese (ja)
+        "エコロジー", "環境", "リサイクル", "持続可能", "ゼロウェイスト",
+        # Korean (ko)
+        "생태", "환경", "재활용", "지속가능", "제로웨이스트",
+        # Chinese (zh)
+        "生态", "环境", "回收", "可持续", "零废弃",
+        # Arabic (ar)
+        "بيئة", "إعادة تدوير", "استدامة", "صفر نفايات", "مناخ",
+        # Hindi (hi)
+        "पारिस्थितिकी", "पर्यावरण", "पुनर्चक्रण", "टिकाऊ", "शून्य अपशिष्ट",
+        # Haitian Creole (ht)
+        "ekoloji", "anviwònman", "resiklaj", "dirab", "zewo dechè",
     ],
     "endurance": [
         "marathon",
@@ -3708,6 +3988,34 @@ KEYWORD_MAP = {
         "physique",
         "shape",
         "forme",
+        # Spanish (es)
+        "transformación corporal", "musculación", "masa muscular", "definición", "cuerpo",
+        # Portuguese (pt)
+        "transformação corporal", "musculação", "massa muscular", "definição", "corpo",
+        # German (de)
+        "körpertransformation", "muskelaufbau", "muskelmasse", "definition", "körper",
+        # Italian (it)
+        "trasformazione corporea", "muscolazione", "massa muscolare", "definizione", "corpo",
+        # Dutch (nl)
+        "lichaamstransformatie", "spieropbouw", "spiermassa", "definitie", "lichaam",
+        # Russian (ru)
+        "трансформация тела", "бодибилдинг", "мышечная масса", "рельеф", "тело",
+        # Polish (pl)
+        "transformacja ciała", "budowanie mięśni", "masa mięśniowa", "rzeźba", "ciało",
+        # Turkish (tr)
+        "vücut dönüşümü", "kas yapma", "kas kütlesi", "tanımlı vücut", "vücut",
+        # Japanese (ja)
+        "ボディメイク", "筋肉", "肉体改造", "バルクアップ", "体づくり",
+        # Korean (ko)
+        "바디프로필", "근육", "벌크업", "몸만들기", "체형변화",
+        # Chinese (zh)
+        "身体改造", "肌肉", "增肌", "减脂", "塑形",
+        # Arabic (ar)
+        "تحول جسدي", "بناء عضلات", "كتلة عضلية", "تنشيف", "جسم",
+        # Hindi (hi)
+        "शरीर परिवर्तन", "बॉडीबिल्डिंग", "मांसपेशियां", "कटिंग", "शरीर",
+        # Haitian Creole (ht)
+        "transfòmasyon kò", "misk", "kò", "fòm", "egzèsis fòs",
     ],
     "mental_health": [
         "santé mentale",
@@ -3729,6 +4037,34 @@ KEYWORD_MAP = {
         "trauma",
         "estime de soi",
         "self-esteem",
+        # Spanish (es)
+        "salud mental", "ansiedad", "depresión", "terapia", "psicólogo",
+        # Portuguese (pt)
+        "saúde mental", "ansiedade", "depressão", "terapia", "psicólogo",
+        # German (de)
+        "psychische gesundheit", "angst", "depression", "therapie", "psychologe",
+        # Italian (it)
+        "salute mentale", "ansia", "depressione", "terapia", "psicologo",
+        # Dutch (nl)
+        "geestelijke gezondheid", "angst", "depressie", "therapie", "psycholoog",
+        # Russian (ru)
+        "психическое здоровье", "тревога", "депрессия", "терапия", "психолог",
+        # Polish (pl)
+        "zdrowie psychiczne", "lęk", "depresja", "terapia", "psycholog",
+        # Turkish (tr)
+        "ruh sağlığı", "kaygı", "depresyon", "terapi", "psikolog",
+        # Japanese (ja)
+        "メンタルヘルス", "不安", "うつ病", "セラピー", "心理",
+        # Korean (ko)
+        "정신건강", "불안", "우울증", "치료", "심리",
+        # Chinese (zh)
+        "心理健康", "焦虑", "抑郁", "治疗", "心理医生",
+        # Arabic (ar)
+        "صحة نفسية", "قلق", "اكتئاب", "علاج نفسي", "طبيب نفسي",
+        # Hindi (hi)
+        "मानसिक स्वास्थ्य", "चिंता", "अवसाद", "थेरेपी", "मनोवैज्ञानिक",
+        # Haitian Creole (ht)
+        "sante mantal", "enkyetid", "depresyon", "terapi", "sikolojis",
     ],
     "sleep": [
         "sommeil",
@@ -3748,6 +4084,34 @@ KEYWORD_MAP = {
         "sieste",
         "nap",
         "récupération",
+        # Spanish (es)
+        "sueño", "dormir", "insomnio", "despertarse", "descanso",
+        # Portuguese (pt)
+        "sono", "dormir", "insônia", "acordar", "descanso",
+        # German (de)
+        "schlaf", "schlafen", "schlaflosigkeit", "aufwachen", "erholung",
+        # Italian (it)
+        "sonno", "dormire", "insonnia", "svegliarsi", "riposo",
+        # Dutch (nl)
+        "slaap", "slapen", "slapeloosheid", "wakker worden", "rust",
+        # Russian (ru)
+        "сон", "спать", "бессонница", "просыпаться", "отдых",
+        # Polish (pl)
+        "sen", "spać", "bezsenność", "budzić się", "odpoczynek",
+        # Turkish (tr)
+        "uyku", "uyumak", "uykusuzluk", "uyanmak", "dinlenme",
+        # Japanese (ja)
+        "睡眠", "寝る", "不眠症", "早起き", "休息",
+        # Korean (ko)
+        "수면", "잠자기", "불면증", "기상", "휴식",
+        # Chinese (zh)
+        "睡眠", "睡觉", "失眠", "早起", "休息",
+        # Arabic (ar)
+        "نوم", "أرق", "استيقاظ", "راحة", "طاقة",
+        # Hindi (hi)
+        "नींद", "सोना", "अनिद्रा", "जल्दी उठना", "आराम",
+        # Haitian Creole (ht)
+        "dòmi", "somèy", "ensomni", "leve bonè", "repo",
     ],
     "aging": [
         "vieillir",
@@ -3783,6 +4147,34 @@ KEYWORD_MAP = {
         "slim",
         "obésité",
         "obesity",
+        # Spanish (es)
+        "peso", "adelgazar", "engordar", "calorías", "dieta",
+        # Portuguese (pt)
+        "peso", "emagrecer", "engordar", "calorias", "dieta",
+        # German (de)
+        "gewicht", "abnehmen", "zunehmen", "kalorien", "diät",
+        # Italian (it)
+        "peso", "dimagrire", "ingrassare", "calorie", "dieta",
+        # Dutch (nl)
+        "gewicht", "afvallen", "aankomen", "calorieën", "dieet",
+        # Russian (ru)
+        "вес", "похудеть", "набрать вес", "калории", "диета",
+        # Polish (pl)
+        "waga", "schudnąć", "przytyć", "kalorie", "dieta",
+        # Turkish (tr)
+        "kilo", "zayıflamak", "kilo almak", "kalori", "diyet",
+        # Japanese (ja)
+        "体重", "痩せる", "太る", "カロリー", "ダイエット",
+        # Korean (ko)
+        "체중", "살빼기", "살찌기", "칼로리", "다이어트",
+        # Chinese (zh)
+        "体重", "减肥", "增重", "卡路里", "节食",
+        # Arabic (ar)
+        "وزن", "تخسيس", "زيادة الوزن", "سعرات", "حمية",
+        # Hindi (hi)
+        "वजन", "वजन घटाना", "वजन बढ़ाना", "कैलोरी", "डाइट",
+        # Haitian Creole (ht)
+        "pwa", "pèdi pwa", "pran pwa", "kalori", "rejim",
     ],
     "fertility": [
         "enceinte",
@@ -4215,6 +4607,34 @@ KEYWORD_MAP = {
         "detox",
         "respiration",
         "breathing",
+        # Spanish (es)
+        "meditación", "espiritualidad", "bienestar", "oración", "respiración",
+        # Portuguese (pt)
+        "meditação", "espiritualidade", "bem-estar", "oração", "respiração",
+        # German (de)
+        "meditation", "spiritualität", "wohlbefinden", "gebet", "atmung",
+        # Italian (it)
+        "meditazione", "spiritualità", "benessere", "preghiera", "respirazione",
+        # Dutch (nl)
+        "meditatie", "spiritualiteit", "welzijn", "gebed", "ademhaling",
+        # Russian (ru)
+        "медитация", "духовность", "благополучие", "молитва", "дыхание",
+        # Polish (pl)
+        "medytacja", "duchowość", "dobrostan", "modlitwa", "oddychanie",
+        # Turkish (tr)
+        "meditasyon", "maneviyat", "iyi oluş", "dua", "nefes",
+        # Japanese (ja)
+        "瞑想", "スピリチュアル", "ウェルネス", "祈り", "呼吸法",
+        # Korean (ko)
+        "명상", "영성", "웰빙", "기도", "호흡법",
+        # Chinese (zh)
+        "冥想", "灵性", "身心健康", "祈祷", "呼吸法",
+        # Arabic (ar)
+        "تأمل", "روحانية", "رفاهية", "صلاة", "تنفس",
+        # Hindi (hi)
+        "ध्यान", "आध्यात्मिकता", "कल्याण", "प्रार्थना", "श्वास",
+        # Haitian Creole (ht)
+        "meditasyon", "espirityalite", "byennèt", "lapriyè", "respirasyon",
     ],
     "relocation": [
         "déménager",
@@ -4458,6 +4878,34 @@ KEYWORD_MAP = {
         "incubateur",
         "accelerator",
         "pitch",
+        # Spanish (es)
+        "emprendimiento", "lanzar", "idea de negocio", "inversión", "innovación",
+        # Portuguese (pt)
+        "empreendedorismo", "lançar", "ideia de negócio", "investimento", "inovação",
+        # German (de)
+        "gründung", "starten", "geschäftsidee", "investition", "innovation",
+        # Italian (it)
+        "imprenditoria", "lanciare", "idea imprenditoriale", "investimento", "innovazione",
+        # Dutch (nl)
+        "ondernemerschap", "lanceren", "bedrijfsidee", "investering", "innovatie",
+        # Russian (ru)
+        "стартап", "запустить", "бизнес-идея", "инвестиция", "инновация",
+        # Polish (pl)
+        "startup", "uruchomić", "pomysł na biznes", "inwestycja", "innowacja",
+        # Turkish (tr)
+        "girişim", "başlatmak", "iş fikri", "yatırım", "inovasyon",
+        # Japanese (ja)
+        "スタートアップ", "起業する", "ビジネスアイデア", "投資", "イノベーション",
+        # Korean (ko)
+        "스타트업", "창업하기", "사업 아이디어", "투자", "혁신",
+        # Chinese (zh)
+        "创业公司", "启动", "商业想法", "投资", "创新",
+        # Arabic (ar)
+        "شركة ناشئة", "إطلاق", "فكرة مشروع", "استثمار", "ابتكار",
+        # Hindi (hi)
+        "स्टार्टअप", "शुरू करना", "व्यापार विचार", "निवेश", "नवाचार",
+        # Haitian Creole (ht)
+        "antrepriz", "lanse", "ide biznis", "envestisman", "inovasyon",
     ],
     "freelance": [
         "freelance",

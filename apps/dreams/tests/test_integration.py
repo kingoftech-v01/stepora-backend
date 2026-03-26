@@ -323,11 +323,11 @@ class TestUpdateTaskStatus:
         reason="Pre-existing NameError in apps.users.services (BuddyPairing)"
     )
     def test_complete_already_completed_task(self, dream_client, test_task):
-        """Completing an already completed task returns 400."""
+        """Completing an already completed task is idempotent (returns 200)."""
         test_task.status = "completed"
         test_task.save()
         response = dream_client.post(f"/api/dreams/tasks/{test_task.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_list_tasks(self, dream_client, test_task):
         """List tasks for authenticated user."""
@@ -460,13 +460,13 @@ class TestMilestoneCRUD:
         assert response.data["status"] == "completed"
 
     def test_complete_already_completed_milestone(self, dream_client, test_milestone):
-        """Completing an already completed milestone returns 400."""
+        """Completing an already completed milestone is idempotent (returns 200)."""
         test_milestone.status = "completed"
         test_milestone.save()
         response = dream_client.post(
             f"/api/dreams/milestones/{test_milestone.id}/complete/"
         )
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_filter_milestones_by_dream(self, dream_client, test_dream, test_milestone):
         """Filter milestones by dream."""
@@ -730,11 +730,11 @@ class TestDreamActions:
         reason="Pre-existing NameError in apps.users.services (BuddyPairing)"
     )
     def test_complete_already_completed(self, dream_client, test_dream):
-        """Completing an already completed dream returns 400."""
+        """Completing an already completed dream is idempotent (returns 200)."""
         test_dream.status = "completed"
         test_dream.save()
         response = dream_client.post(f"/api/dreams/dreams/{test_dream.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_like_dream(self, dream_client, test_dream):
         """Toggle favorite on a dream."""
@@ -2774,11 +2774,11 @@ class TestGoalCompleteAlready:
     """Tests for completing an already completed goal."""
 
     def test_complete_already_completed_goal(self, dream_client, test_goal):
-        """Completing an already completed goal returns 400."""
+        """Completing an already completed goal is idempotent (returns 200)."""
         test_goal.status = "completed"
         test_goal.save()
         response = dream_client.post(f"/api/dreams/goals/{test_goal.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -4725,7 +4725,7 @@ class TestGoalViewSetFull:
         assert response.data["status"] == "completed"
 
     def test_complete_goal_already_completed(self, dream_client, test_dream):
-        """Completing an already completed goal returns 400."""
+        """Completing an already completed goal is idempotent (returns 200)."""
         goal = Goal.objects.create(
             dream=test_dream,
             title="Done Goal",
@@ -4733,7 +4733,7 @@ class TestGoalViewSetFull:
             status="completed",
         )
         response = dream_client.post(f"/api/dreams/goals/{goal.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_complete_goal_not_found(self, dream_client):
         """Complete non-existent goal returns 404."""
@@ -5256,7 +5256,7 @@ class TestTaskViewSetFull:
         assert response.data["status"] == "completed"
 
     def test_complete_task_already_completed(self, dream_client, test_dream):
-        """Completing an already completed task returns 400."""
+        """Completing an already completed task is idempotent (returns 200)."""
         goal = Goal.objects.create(
             dream=test_dream,
             title="CG2",
@@ -5269,7 +5269,7 @@ class TestTaskViewSetFull:
             status="completed",
         )
         response = dream_client.post(f"/api/dreams/tasks/{task.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_complete_task_not_found(self, dream_client):
         """Complete non-existent task returns 404."""
@@ -5717,7 +5717,7 @@ class TestMilestoneViewSetFull:
         assert response.data["status"] == "completed"
 
     def test_complete_milestone_already_completed(self, dream_client, test_dream):
-        """Completing an already completed milestone returns 400."""
+        """Completing an already completed milestone is idempotent (returns 200)."""
         ms = DreamMilestone.objects.create(
             dream=test_dream,
             title="Done MS",
@@ -5725,7 +5725,7 @@ class TestMilestoneViewSetFull:
             status="completed",
         )
         response = dream_client.post(f"/api/dreams/milestones/{ms.id}/complete/")
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
 
     def test_complete_milestone_not_found(self, dream_client):
         """Complete non-existent milestone returns 404."""

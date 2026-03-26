@@ -90,4 +90,6 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "referral": "10000/minute",
     "two_factor": "10000/minute",
     "email_verification": "10000/minute",
+    "public": "10000/minute",
+    "sync": "10000/minute",
 }
