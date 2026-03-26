@@ -3042,6 +3042,34 @@ KEYWORD_MAP = {
         "diet",
         "régime",
         "nutrition",
+        # Spanish (es)
+        "correr", "gimnasio", "perder peso", "ejercicio", "adelgazar",
+        # Portuguese (pt)
+        "academia", "perder peso", "exercício", "emagrecer", "musculação",
+        # German (de)
+        "laufen", "abnehmen", "fitnessstudio", "gesundheit", "übung",
+        # Italian (it)
+        "correre", "palestra", "perdere peso", "esercizio", "dimagrire",
+        # Dutch (nl)
+        "hardlopen", "sportschool", "afvallen", "gezondheid", "oefening",
+        # Russian (ru)
+        "бег", "спортзал", "похудеть", "здоровье", "тренировка",
+        # Polish (pl)
+        "bieganie", "siłownia", "schudnąć", "zdrowie", "ćwiczenia",
+        # Turkish (tr)
+        "koşmak", "spor salonu", "kilo vermek", "sağlık", "egzersiz",
+        # Japanese (ja)
+        "ランニング", "ダイエット", "筋トレ", "健康", "運動",
+        # Korean (ko)
+        "달리기", "헬스장", "다이어트", "건강", "운동",
+        # Chinese (zh)
+        "跑步", "健身房", "减肥", "健康", "锻炼",
+        # Arabic (ar)
+        "جري", "صالة رياضية", "إنقاص الوزن", "صحة", "تمارين",
+        # Hindi (hi)
+        "दौड़ना", "जिम", "वजन कम करना", "स्वास्थ्य", "व्यायाम",
+        # Haitian Creole (ht)
+        "kouri", "jimnastik", "pèdi pwa", "sante", "egzèsis",
     ],
     "finance": [
         "riche",
@@ -3061,6 +3089,34 @@ KEYWORD_MAP = {
         "wealth",
         "revenus passifs",
         "passive income",
+        # Spanish (es)
+        "dinero", "invertir", "ahorrar", "bolsa", "finanzas",
+        # Portuguese (pt)
+        "dinheiro", "investir", "poupar", "bolsa de valores", "finanças",
+        # German (de)
+        "geld", "investieren", "sparen", "börse", "finanzen",
+        # Italian (it)
+        "soldi", "investire", "risparmiare", "borsa", "finanza",
+        # Dutch (nl)
+        "geld", "beleggen", "sparen", "beurs", "financiën",
+        # Russian (ru)
+        "деньги", "инвестировать", "сбережения", "биржа", "финансы",
+        # Polish (pl)
+        "pieniądze", "inwestować", "oszczędzać", "giełda", "finanse",
+        # Turkish (tr)
+        "para", "yatırım", "birikim", "borsa", "finans",
+        # Japanese (ja)
+        "お金", "投資", "貯金", "株式", "金融",
+        # Korean (ko)
+        "돈", "투자", "저축", "주식", "금융",
+        # Chinese (zh)
+        "钱", "投资", "储蓄", "股票", "金融",
+        # Arabic (ar)
+        "مال", "استثمار", "ادخار", "بورصة", "مالية",
+        # Hindi (hi)
+        "पैसा", "निवेश", "बचत", "शेयर बाजार", "वित्त",
+        # Haitian Creole (ht)
+        "lajan", "envesti", "ekonomize", "labous", "finans",
     ],
     "career": [
         "business",
@@ -3080,6 +3136,34 @@ KEYWORD_MAP = {
         "client",
         "manager",
         "leadership",
+        # Spanish (es)
+        "negocio", "empresa", "empleo", "trabajo", "carrera",
+        # Portuguese (pt)
+        "negócio", "empresa", "emprego", "trabalho", "carreira",
+        # German (de)
+        "geschäft", "unternehmen", "beruf", "arbeit", "karriere",
+        # Italian (it)
+        "affari", "azienda", "lavoro", "impiego", "carriera",
+        # Dutch (nl)
+        "bedrijf", "onderneming", "baan", "werk", "carrière",
+        # Russian (ru)
+        "бизнес", "компания", "работа", "карьера", "зарплата",
+        # Polish (pl)
+        "biznes", "firma", "praca", "kariera", "pensja",
+        # Turkish (tr)
+        "iş", "şirket", "kariyer", "maaş", "girişimci",
+        # Japanese (ja)
+        "ビジネス", "会社", "仕事", "キャリア", "起業",
+        # Korean (ko)
+        "사업", "회사", "직업", "커리어", "창업",
+        # Chinese (zh)
+        "生意", "公司", "工作", "职业", "创业",
+        # Arabic (ar)
+        "عمل", "شركة", "وظيفة", "مهنة", "راتب",
+        # Hindi (hi)
+        "व्यापार", "कंपनी", "नौकरी", "करियर", "वेतन",
+        # Haitian Creole (ht)
+        "biznis", "antrepriz", "travay", "karyè", "salè",
     ],
     "language": [
         "langue",
@@ -3110,6 +3194,34 @@ KEYWORD_MAP = {
         "ielts",
         "toeic",
         "hsk",
+        # Spanish (es)
+        "idioma", "aprender inglés", "hablar", "vocabulario", "gramática",
+        # Portuguese (pt)
+        "idioma", "aprender inglês", "falar", "vocabulário", "gramática",
+        # German (de)
+        "sprache", "englisch lernen", "sprechen", "vokabeln", "grammatik",
+        # Italian (it)
+        "lingua", "imparare inglese", "parlare", "vocabolario", "grammatica",
+        # Dutch (nl)
+        "taal", "engels leren", "spreken", "woordenschat", "grammatica",
+        # Russian (ru)
+        "язык", "учить английский", "говорить", "словарный запас", "грамматика",
+        # Polish (pl)
+        "język", "uczyć się angielskiego", "mówić", "słownictwo", "gramatyka",
+        # Turkish (tr)
+        "dil", "ingilizce öğrenmek", "konuşmak", "kelime", "dilbilgisi",
+        # Japanese (ja)
+        "言語", "英語を学ぶ", "話す", "語彙", "文法",
+        # Korean (ko)
+        "언어", "영어 배우기", "말하기", "어휘", "문법",
+        # Chinese (zh)
+        "语言", "学英语", "说话", "词汇", "语法",
+        # Arabic (ar)
+        "لغة", "تعلم الإنجليزية", "تحدث", "مفردات", "قواعد",
+        # Hindi (hi)
+        "भाषा", "अंग्रेजी सीखना", "बोलना", "शब्दावली", "व्याकरण",
+        # Haitian Creole (ht)
+        "lang", "aprann anglè", "pale", "vokabilè", "gramè",
     ],
     "creative": [
         "guitare",
@@ -3143,6 +3255,34 @@ KEYWORD_MAP = {
         "violin",
         "batterie",
         "drums",
+        # Spanish (es)
+        "guitarra", "cantar", "pintar", "dibujar", "cocinar",
+        # Portuguese (pt)
+        "violão", "cantar", "pintar", "desenhar", "cozinhar",
+        # German (de)
+        "gitarre", "singen", "malen", "zeichnen", "kochen",
+        # Italian (it)
+        "chitarra", "cantare", "dipingere", "disegnare", "cucinare",
+        # Dutch (nl)
+        "gitaar", "zingen", "schilderen", "tekenen", "koken",
+        # Russian (ru)
+        "гитара", "петь", "рисовать", "танцевать", "готовить",
+        # Polish (pl)
+        "gitara", "śpiewać", "malować", "rysować", "gotować",
+        # Turkish (tr)
+        "gitar", "şarkı söylemek", "resim yapmak", "çizmek", "yemek yapmak",
+        # Japanese (ja)
+        "ギター", "歌う", "絵を描く", "料理", "ピアノ",
+        # Korean (ko)
+        "기타", "노래하기", "그림 그리기", "요리", "피아노",
+        # Chinese (zh)
+        "吉他", "唱歌", "画画", "烹饪", "钢琴",
+        # Arabic (ar)
+        "غيتار", "غناء", "رسم", "طبخ", "موسيقى",
+        # Hindi (hi)
+        "गिटार", "गाना", "चित्रकारी", "खाना बनाना", "संगीत",
+        # Haitian Creole (ht)
+        "gita", "chante", "pentire", "desine", "kwizin",
     ],
     "personal_development": [
         "habitude",
