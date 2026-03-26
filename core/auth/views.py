@@ -9,9 +9,12 @@ the refresh token in the response body instead of an httpOnly cookie.
 """
 
 import hashlib
+import hmac
 import html
 import json
 import logging
+import random
+import secrets
 import time
 from datetime import timedelta
 
@@ -28,7 +31,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.auth.models import EmailAddress, SocialAccount
+from core.auth.models import EmailAddress, LoginEvent, SocialAccount
 from core.auth.serializers import (
     EmailVerificationSerializer,
     LoginSerializer,
@@ -40,6 +43,7 @@ from core.auth.serializers import (
 )
 from core.auth.social import verify_apple_token, verify_google_token
 from core.auth.tasks import send_login_notification_email, send_password_changed_email
+from core.audit import log_auth_failure, log_auth_success
 from core.throttles import AuthLoginRateThrottle, AuthPasswordRateThrottle, AuthRateThrottle, AuthRegisterRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -57,6 +61,10 @@ _TFA_CHALLENGE_SALT = "stepora-2fa-challenge"
 
 # Allowed values for X-Client-Platform header
 _NATIVE_PLATFORMS = frozenset(("native", "ios", "android", "capacitor"))
+
+# Security (audit 1033/1044): minimum time in seconds for a login attempt
+# to prevent timing side-channels that reveal whether a user exists.
+_MIN_LOGIN_TIME_SEC = 0.15  # 150ms floor + random jitter
 
 _COOKIE_NAME = _DP_AUTH.get("JWT_AUTH_REFRESH_COOKIE", "dp-refresh")
 _COOKIE_DOMAIN = _DP_AUTH.get(
@@ -123,7 +131,7 @@ def _verify_challenge_token(token, request):
         expected_ip_hash = hashlib.sha256(
             _get_client_ip(request).encode()
         ).hexdigest()[:16]
-        if data.get("ip") != expected_ip_hash:
+        if not hmac.compare_digest(data.get("ip", ""), expected_ip_hash):
             logger.warning(
                 "2FA challenge token IP mismatch: expected=%s, got=%s",
                 expected_ip_hash,
@@ -194,6 +202,7 @@ def _check_lockout(request):
 
     for ident in identifiers:
         if cache.get(_lockout_key(ident)):
+            log_auth_failure(request, f"account_locked_out:{ident}")
             return identifiers, Response(
                 {"detail": "Too many failed login attempts. Please try again later."},
                 status=http_status.HTTP_429_TOO_MANY_REQUESTS,
@@ -224,6 +233,39 @@ def _clear_failed_login(identifiers):
         cache.delete(_lockout_key(ident))
 
 
+def _normalize_login_timing(start_monotonic):
+    """Pad login response time to prevent timing-based user enumeration.
+
+    Security (audit 1033/1044): Without this, login failures for
+    non-existent users return faster than failures for existing users
+    with wrong passwords (because password hashing is skipped).
+    This function sleeps until at least ``_MIN_LOGIN_TIME_SEC`` plus
+    random jitter has elapsed since ``start_monotonic``.
+    """
+    elapsed = time.monotonic() - start_monotonic
+    target = _MIN_LOGIN_TIME_SEC + random.uniform(0, 0.05)
+    remaining = target - elapsed
+    if remaining > 0:
+        time.sleep(remaining)
+
+
+def _record_login_event(request, user, login_method="password"):
+    """Record a login event for anomaly detection (V-823).
+
+    Stores IP + User-Agent for every successful login so admins can
+    detect new devices, unusual IPs, or geographic anomalies.
+    """
+    try:
+        LoginEvent.objects.create(
+            user=user,
+            ip_address=_get_client_ip(request) or None,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+            login_method=login_method,
+        )
+    except Exception:
+        logger.exception("Failed to record login event for user %s", user.id)
+
+
 # ── Views ─────────────────────────────────────────────────────────────
 
 
@@ -233,23 +275,37 @@ class LoginView(APIView):
 
     If 2FA is enabled, returns {tfaRequired: true, challengeToken: ...}
     instead of JWT tokens. Client must then call /auth/2fa-challenge/.
+
+    TODO [V-220]: Add CAPTCHA verification (e.g. reCAPTCHA v3, hCaptcha, or
+    Cloudflare Turnstile) to protect against automated credential stuffing
+    and bot-driven login attempts. Rate limiting alone is insufficient.
+    Requires: external CAPTCHA service integration + frontend widget.
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [AuthLoginRateThrottle]
 
     def post(self, request):
+        # Security (audit 1033/1044): normalize response time to prevent
+        # timing-based user enumeration. The total time for a failed login
+        # should be at least _MIN_LOGIN_TIME_MS regardless of whether the
+        # user exists (user lookup is faster for non-existent accounts).
+        _login_start = time.monotonic()
+
         identifiers, lockout_response = _check_lockout(request)
         if lockout_response:
             return lockout_response
 
         serializer = LoginSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
+            _normalize_login_timing(_login_start)
             _record_failed_login(identifiers)
+            log_auth_failure(request, "invalid_credentials")
             return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
 
         user = serializer.validated_data["user"]
         _clear_failed_login(identifiers)
+        log_auth_success(request, user)
 
         # Check 2FA
         if getattr(user, "totp_enabled", False):
@@ -261,6 +317,9 @@ class LoginView(APIView):
                 },
                 status=http_status.HTTP_200_OK,
             )
+
+        # Record login event for anomaly detection (V-823)
+        _record_login_event(request, user, login_method="password")
 
         # Send login notification
         send_login_notification_email.delay(
@@ -329,8 +388,13 @@ class TwoFactorChallengeView(APIView):
 
             stored_hashes = user.backup_codes or []
             code_hash = _hash_code(code.upper())
-            if code_hash in stored_hashes:
-                stored_hashes.remove(code_hash)
+            # Use constant-time comparison to prevent timing attacks (audit #135)
+            matched_hash = next(
+                (h for h in stored_hashes if hmac.compare_digest(h, code_hash)),
+                None,
+            )
+            if matched_hash is not None:
+                stored_hashes.remove(matched_hash)
                 user.backup_codes = stored_hashes
                 user.save(update_fields=["backup_codes"])
                 verified = True
@@ -338,10 +402,16 @@ class TwoFactorChallengeView(APIView):
         if not verified:
             # SECURITY: Record failed 2FA attempt for lockout
             _record_failed_login(identifiers)
+            log_auth_failure(request, "invalid_2fa_code")
             return Response(
                 {"error": "Invalid verification code."},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
+
+        log_auth_success(request, user)
+
+        # Record login event for anomaly detection (V-823)
+        _record_login_event(request, user, login_method="2fa")
 
         # Send login notification
         send_login_notification_email.delay(
@@ -357,6 +427,16 @@ class RegisterView(APIView):
     """
     User registration with email + password.
     Issues JWT tokens and sends verification email.
+
+    TODO [V-220]: Add CAPTCHA verification (e.g. reCAPTCHA v3, hCaptcha, or
+    Cloudflare Turnstile) to prevent automated account creation at scale.
+    Requires: external CAPTCHA service integration + frontend widget.
+
+    TODO [V-208]: Add anti-abuse measures for free trial repeat signups:
+    - Normalize email aliases (strip Gmail "+suffix")
+    - Block disposable email domains (e.g. mailinator, guerrillamail)
+    - Optionally require payment method for trial activation
+    - Consider device fingerprinting for repeat trial detection
     """
 
     permission_classes = [AllowAny]
@@ -368,6 +448,16 @@ class RegisterView(APIView):
             return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
 
         user = serializer.save(request=request)
+
+        # Anti-enumeration: if email already existed, save() returns None.
+        # Return a generic message identical to the success case so attackers
+        # cannot distinguish "email taken" from "new account created".
+        if user is None:
+            return Response(
+                {"detail": "If this email is available, a verification link has been sent."},
+                status=http_status.HTTP_200_OK,
+            )
+
         return _issue_jwt_response(user, request)
 
 
@@ -682,6 +772,12 @@ class GoogleLoginView(APIView):
     """
     Google Sign-In using ID token verification.
     Accepts {id_token: "..."} in the request body.
+
+    SECURITY NOTE (audit 043): This endpoint lacks a CSRF state parameter.
+    While login CSRF risk is low (attacker would need a valid Google id_token),
+    when enabling this feature in production, add a server-generated nonce/state
+    that the client must include in the POST body to prevent login CSRF attacks.
+    Currently feature-flagged off via USE_GOOGLE_AUTH=false.
     """
 
     permission_classes = [AllowAny]
@@ -706,6 +802,8 @@ class GoogleLoginView(APIView):
         uid, email, name, picture = verify_google_token(id_token_str)
 
         user = self._get_or_create_user(uid, email, name, picture)
+        log_auth_success(request, user)
+        _record_login_event(request, user, login_method="google")
         send_login_notification_email.delay(
             str(user.id),
             ip_address=_get_client_ip(request),
@@ -758,6 +856,11 @@ class AppleLoginView(APIView):
     """
     Apple Sign-In using ID token verification.
     Accepts {id_token: "...", name: "..."} in the request body.
+
+    SECURITY NOTE (audit 043): This endpoint lacks a CSRF state parameter.
+    When enabling this feature in production, add a server-generated nonce/state
+    that the client must include in the POST body to prevent login CSRF attacks.
+    See GoogleLoginView docstring for details.
     """
 
     permission_classes = [AllowAny]
@@ -777,6 +880,8 @@ class AppleLoginView(APIView):
         name = request.data.get("name", "")
 
         user = self._get_or_create_user(uid, email, name)
+        log_auth_success(request, user)
+        _record_login_event(request, user, login_method="apple")
         send_login_notification_email.delay(
             str(user.id),
             ip_address=_get_client_ip(request),
@@ -878,8 +983,14 @@ class AppleRedirectView(APIView):
             else:
                 deep_link = "com.stepora.app://auth/callback?error=no_token"
 
-        except Exception:
-            # SECURITY: Log the error instead of silently swallowing it
+        except (
+            serializers.ValidationError,
+            TokenError,
+            KeyError,
+            ValueError,
+            TypeError,
+            User.DoesNotExist,
+        ):
             logger.exception("Apple redirect authentication failed")
             deep_link = (
                 state + "?error=auth_failed"

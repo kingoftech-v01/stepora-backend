@@ -9,7 +9,10 @@ import time
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from django.core.cache import cache
 from django.utils import timezone
+
+from core.consumers import MAX_USER_WS_CONNECTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         self._authenticated = False
         self._message_timestamps = []
+        self._conn_limit_registered = False
 
         self._auth_timeout = None
 
@@ -54,6 +58,23 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         if self._auth_timeout:
             self._auth_timeout.cancel()
             self._auth_timeout = None
+
+        # Enforce per-user connection limit
+        cache_key = f"ws:conn_count:{self.user.id}"
+        try:
+            current = cache.get(cache_key, 0)
+            if current >= MAX_USER_WS_CONNECTIONS:
+                logger.warning(
+                    "WS connection limit reached for user %s (%d/%d)",
+                    self.user.id, current, MAX_USER_WS_CONNECTIONS,
+                )
+                await self.close(code=4008)
+                return
+            cache.set(cache_key, current + 1, timeout=3600)
+            self._conn_limit_registered = True
+        except Exception:
+            logger.debug("Connection limit check failed", exc_info=True)
+
         self._authenticated = True
         self.group_name = f"notifications_{self.user.id}"
 
@@ -100,6 +121,15 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             self._heartbeat_task.cancel()
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        # Release connection slot
+        if getattr(self, "_conn_limit_registered", False):
+            try:
+                cache_key = f"ws:conn_count:{self.user.id}"
+                current = cache.get(cache_key, 0)
+                if current > 0:
+                    cache.set(cache_key, current - 1, timeout=3600)
+            except Exception:
+                logger.debug("Connection slot release failed", exc_info=True)
 
     async def receive(self, text_data):
         """Handle incoming messages (authenticate, mark_read, mark_all_read)."""

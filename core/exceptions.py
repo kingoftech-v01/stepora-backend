@@ -114,7 +114,7 @@ def custom_exception_handler(exc, context):
                 from core.ai_usage import AIUsageTracker
 
                 response.data["reset_at"] = AIUsageTracker.get_reset_time().isoformat()
-            except Exception:
+            except (ImportError, AttributeError, TypeError):
                 pass
 
     return response

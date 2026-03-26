@@ -80,6 +80,15 @@ jobs:
           source .venv/bin/activate
           pytest --override-ini="addopts=" --cov=. --cov-report=xml --cov-report=html -v
 
+      - name: Dependency security audit (pip-audit)
+        run: |
+          source .venv/bin/activate
+          pip install pip-audit
+          pip-audit --strict --desc on -r requirements/production.txt || {
+            echo "::warning::pip-audit found vulnerabilities — review output above"
+            exit 1
+          }
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         with:

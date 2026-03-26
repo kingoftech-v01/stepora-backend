@@ -6,7 +6,11 @@ Feature ideas, improvements, and technical debt for the Stepora backend.
 
 ## High Priority
 
-- [ ] **Migrate to PKCE OAuth** — Replace Google implicit flow (`response_type=token`) with Authorization Code + PKCE for stronger security
+- [ ] **Migrate to PKCE OAuth** — Replace Google implicit flow (`response_type=token`) with Authorization Code + PKCE for stronger security. Also add OIDC nonce validation to `verify_google_token()` and `verify_apple_token()` in `core/auth/social.py` (audit #902, #903, #909)
+- [ ] **DNSSEC verification** — Verify DNSSEC is enabled for both `stepora.app` and `stepora.net` zones in Cloudflare dashboard. Both zones should show DS records published to registrar (audit #950)
+- [ ] **CSP Trusted Types** — Add `require-trusted-types-for 'script'` to CSP once frontend DOM manipulation is audited for compatibility. Defense-in-depth against DOM XSS (audit #960)
+- [ ] **CSP nonce-based styles** — `style-src 'unsafe-inline'` is required due to widespread inline styles in the frontend (React inline styles, MUI). Migrating to nonce-based style CSP would require a server-rendered nonce injected into the SPA — not feasible with static S3 hosting (audit #961)
+- [ ] **CSP violation reporting** — Add `report-uri` or `report-to` directive to CSP for monitoring policy violations. Consider using a service like report-uri.com or Sentry CSP reporting (audit #961)
 - [ ] **Admin 2FA** — Add django-otp or IP whitelist for `/admin/` access in production
 - [ ] **WebSocket token re-validation** — Long-lived WebSocket connections should re-validate JWT periodically (e.g., 1-hour max session or periodic re-auth ping)
 - [ ] **Custom 500 JSON handler** — Django's default 500 handler returns HTML; API clients should receive JSON. Add `handler500` in `config/urls.py`

@@ -3,13 +3,17 @@ Custom middleware for Stepora.
 
 Includes:
 - OriginValidationMiddleware: reject requests from unknown origins
-- SecurityHeadersMiddleware: CSP, Referrer-Policy, Permissions-Policy, COOP, CORP
+- SecurityHeadersMiddleware: CSP, Referrer-Policy, Permissions-Policy, COOP, CORP, COEP
+- CacheControlMiddleware: no-store on authenticated API responses
+- FetchMetadataMiddleware: Sec-Fetch-Site validation (defense-in-depth)
 - LastActivityMiddleware: online status tracking
+- RLSMiddleware: set PostgreSQL session variable for Row-Level Security
 """
 
 import logging
 
 from django.conf import settings
+from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -141,6 +145,7 @@ class SecurityHeadersMiddleware:
     - X-Frame-Options
     - Cross-Origin-Opener-Policy
     - Cross-Origin-Resource-Policy
+    - Cross-Origin-Embedder-Policy
     """
 
     # Default CSP — can be overridden via settings.CSP_POLICY
@@ -170,6 +175,11 @@ class SecurityHeadersMiddleware:
         response["X-Frame-Options"] = "DENY"
         response["Cross-Origin-Opener-Policy"] = "same-origin"
         response["Cross-Origin-Resource-Policy"] = "cross-origin"
+        # COEP: "credentialless" allows cross-origin subresources (fonts, images)
+        # without requiring CORS on every resource, while still enabling
+        # crossOriginIsolated for SharedArrayBuffer/high-res timers.
+        # Audit: #958
+        response["Cross-Origin-Embedder-Policy"] = "credentialless"
 
         # CSP and Permissions-Policy only apply to HTML documents.
         # Setting them on JSON API responses is meaningless and can cause
@@ -190,6 +200,118 @@ class SecurityHeadersMiddleware:
             )
 
         return response
+
+
+class CacheControlMiddleware:
+    """
+    Sets Cache-Control headers on API responses to prevent browsers and
+    proxies from caching sensitive authenticated data.
+
+    - Authenticated API responses: Cache-Control: private, no-store
+    - Unauthenticated API responses: Cache-Control: no-cache
+    - Non-API responses: untouched (WhiteNoise handles static assets)
+
+    Audit: #930, #931, #933
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        # Only set cache headers on API responses
+        if not request.path.startswith("/api/"):
+            return response
+
+        # Skip if a view already set Cache-Control explicitly
+        if response.get("Cache-Control"):
+            return response
+
+        # Authenticated requests get strict no-store
+        has_auth = request.META.get("HTTP_AUTHORIZATION", "").startswith("Bearer ")
+        has_cookie = hasattr(request, "user") and getattr(
+            request.user, "is_authenticated", False
+        )
+
+        if has_auth or has_cookie:
+            response["Cache-Control"] = "private, no-store"
+        else:
+            response["Cache-Control"] = "no-cache"
+
+        return response
+
+
+class FetchMetadataMiddleware:
+    """
+    Validates Sec-Fetch-Site header on mutating requests as defense-in-depth.
+
+    Browsers that support Fetch Metadata send Sec-Fetch-Site indicating
+    the relationship between the request origin and the target. This
+    middleware rejects cross-site mutating requests that bypass CORS
+    preflight (e.g., form submissions from attacker sites).
+
+    Policy:
+    - Allow: same-origin, same-site, none (direct navigation/bookmarks)
+    - Block: cross-site on mutating methods (POST, PUT, PATCH, DELETE)
+
+    Exempt:
+    - Safe methods (GET, HEAD, OPTIONS) — no state change
+    - Requests without Sec-Fetch-Site — older browsers, non-browser clients
+    - Health checks, webhooks, native mobile requests
+
+    Audit: #963
+    """
+
+    _SAFE_METHODS = frozenset(("GET", "HEAD", "OPTIONS"))
+    _ALLOWED_FETCH_SITES = frozenset(("same-origin", "same-site", "none"))
+    _EXEMPT_PATHS = [
+        "/health/",
+        "/api/subscriptions/webhook/",  # Stripe webhooks
+    ]
+    _NATIVE_PLATFORMS = frozenset(("native", "ios", "android", "capacitor"))
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Only check mutating methods
+        if request.method in self._SAFE_METHODS:
+            return self.get_response(request)
+
+        # Only check API paths
+        if not request.path.startswith("/api/"):
+            return self.get_response(request)
+
+        # Exempt paths
+        for path_prefix in self._EXEMPT_PATHS:
+            if request.path.startswith(path_prefix):
+                return self.get_response(request)
+
+        # Skip native mobile requests
+        platform = request.META.get("HTTP_X_CLIENT_PLATFORM", "").lower().strip()
+        if platform in self._NATIVE_PLATFORMS:
+            return self.get_response(request)
+
+        # If Sec-Fetch-Site is absent, allow (non-browser client or older browser)
+        fetch_site = request.META.get("HTTP_SEC_FETCH_SITE", "")
+        if not fetch_site:
+            return self.get_response(request)
+
+        # Allow same-origin, same-site, and direct navigation
+        if fetch_site in self._ALLOWED_FETCH_SITES:
+            return self.get_response(request)
+
+        # Block cross-site mutating requests
+        logger.warning(
+            "Blocked cross-site request: Sec-Fetch-Site=%s (path=%s, method=%s)",
+            fetch_site,
+            request.path,
+            request.method,
+        )
+        return JsonResponse(
+            {"error": "Forbidden", "code": "cross_site_request"}, status=403
+        )
 
 
 class EmailVerificationMiddleware:
@@ -230,11 +352,16 @@ class EmailVerificationMiddleware:
 
         try:
             from rest_framework_simplejwt.authentication import JWTAuthentication
+            from rest_framework_simplejwt.exceptions import (
+                AuthenticationFailed,
+                InvalidToken,
+                TokenError,
+            )
 
             jwt_auth = JWTAuthentication()
             validated_token = jwt_auth.get_validated_token(auth_header[7:])
             user = jwt_auth.get_user(validated_token)
-        except Exception:
+        except (TokenError, InvalidToken, AuthenticationFailed):
             # Invalid token — let DRF handle the 401
             return self.get_response(request)
 
@@ -319,7 +446,79 @@ class LastActivityMiddleware:
                         is_online=True,
                         last_seen=timezone.now(),
                     )
-            except Exception:
+            except (DatabaseError, ConnectionError, ValueError):
                 logger.debug("Failed to update last activity", exc_info=True)
+
+        return response
+
+
+class RLSMiddleware:
+    """
+    Set PostgreSQL session variable ``app.current_user_id`` for Row-Level Security.
+
+    Security (audit 1015): RLS policies on dreams, goals, tasks, ai_conversations,
+    and ai_messages use ``current_setting('app.current_user_id', TRUE)`` to restrict
+    data access to the row's owner. This middleware sets the session variable on every
+    request so the policies can evaluate correctly.
+
+    The variable is reset to empty string for unauthenticated requests to prevent
+    stale values from a previous connection (PgBouncer pool_mode=transaction resets
+    session state between transactions, but this is belt-and-suspenders).
+
+    Place this middleware AFTER AuthenticationMiddleware in MIDDLEWARE so that
+    ``request.user`` is already resolved.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        user_id = ""
+        if user and getattr(user, "is_authenticated", False):
+            user_id = str(user.id)
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT set_config('app.current_user_id', %s, TRUE)",
+                    [user_id],
+                )
+        except Exception:
+            # If this fails (e.g., DB down), let the request proceed anyway.
+            # RLS failure is a defense-in-depth issue, not a primary control.
+            logger.debug("Failed to set RLS session variable", exc_info=True)
+
+        return self.get_response(request)
+
+
+class APIVersionDeprecationMiddleware:
+    """
+    Add a ``Deprecation`` header to responses for unversioned API paths.
+
+    Security (audit 1056): The unversioned ``/api/`` path serves the same
+    endpoints as ``/api/v1/`` for backward compatibility. This middleware
+    signals to clients that they should migrate to ``/api/v1/`` before the
+    unversioned path is eventually removed or pinned.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        # Only flag /api/ requests that are NOT /api/v1/ (or /api/schema/, /api/docs/)
+        path = request.path
+        if (
+            path.startswith("/api/")
+            and not path.startswith("/api/v1/")
+            and not path.startswith("/api/schema")
+            and not path.startswith("/api/docs")
+            and not path.startswith("/api/redoc")
+        ):
+            response["Deprecation"] = "true"
+            response["Sunset"] = "2027-01-01"
+            response["Link"] = '</api/v1/>; rel="successor-version"'
 
         return response

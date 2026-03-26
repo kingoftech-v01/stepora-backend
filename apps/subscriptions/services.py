@@ -4,6 +4,14 @@ Stripe service layer for the Subscriptions app.
 Encapsulates all Stripe API interactions so that views and webhook handlers
 never call the Stripe SDK directly. This makes the business logic testable
 and keeps a single place to manage API keys and error handling.
+
+TODO [V-SEC]: Implement circuit breaker pattern for Stripe API calls.
+When Stripe is experiencing outages, the circuit should open to:
+- Fail fast with user-friendly error messages
+- Queue non-critical operations (e.g. webhook retries) for later
+- Auto-recover when Stripe is back (half-open state)
+Consider using pybreaker or a Redis-backed circuit breaker.
+See also: integrations/openai_service.py for OpenAI circuit breaker TODO.
 """
 
 import logging
@@ -28,7 +36,12 @@ from .models import (
     SubscriptionPlan,
 )
 
+from core.circuit_breaker import CircuitBreaker, CircuitBreakerError
+
 logger = logging.getLogger(__name__)
+
+# Circuit breaker for Stripe calls (V-326: cascading failure protection)
+_stripe_cb = CircuitBreaker("stripe")
 
 # Configure Stripe API key from environment
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
@@ -201,6 +214,14 @@ class StripeService:
                 )
                 existing.delete()
 
+        # V-326: Circuit breaker prevents cascading failures when Stripe is down
+        try:
+            _stripe_cb._check_state()
+        except CircuitBreakerError:
+            raise stripe.error.APIConnectionError(
+                "Stripe circuit breaker is open. Please try again later."
+            )
+
         try:
             customer = stripe.Customer.create(
                 email=user.email,
@@ -215,6 +236,7 @@ class StripeService:
                 stripe_customer_id=customer.id,
             )
 
+            _stripe_cb._record_success()
             logger.info(
                 "Created Stripe customer %s for user %s",
                 customer.id,
@@ -223,6 +245,7 @@ class StripeService:
             return stripe_customer
 
         except stripe.error.StripeError:
+            _stripe_cb._record_failure()
             logger.exception("Failed to create Stripe customer for user %s", user.email)
             raise
 
@@ -963,10 +986,13 @@ class StripeService:
                 raise ValueError("Webhook signature verification is not configured")
 
         try:
+            # tolerance=300 explicitly rejects events older than 5 minutes
+            # to prevent replay attacks (Stripe default is also 300s)
             event = stripe.Webhook.construct_event(
                 payload,
                 sig_header,
                 STRIPE_WEBHOOK_SECRET,
+                tolerance=300,
             )
         except stripe.error.SignatureVerificationError as e:
             logger.error("Webhook signature verification failed: %s", e)
@@ -1823,7 +1849,7 @@ class PromotionService:
 
         price = stripe.Price.create(
             product=product.id,
-            unit_amount=round(float(plan.price_monthly) * 100),
+            unit_amount=int(plan.price_monthly * 100),
             currency="usd",
             recurring={"interval": "month"},
             metadata={

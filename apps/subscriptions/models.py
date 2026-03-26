@@ -6,6 +6,7 @@ subscription tracking, and plan definitions with feature gating.
 """
 
 import uuid
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import models
@@ -614,12 +615,14 @@ class PromotionPlanDiscount(models.Model):
 
     @property
     def discounted_price(self):
-        """Calculate the discounted price for this plan."""
-        price = float(self.plan.price_monthly)
-        value = float(self.discount_value)
+        """Calculate the discounted price for this plan using Decimal arithmetic."""
+        price = Decimal(str(self.plan.price_monthly))
+        value = Decimal(str(self.discount_value))
         if self.promotion.discount_type == "percentage":
-            return round(price * (1 - value / 100), 2)
-        return round(max(0.0, price - value), 2)
+            result = price * (Decimal("1") - value / Decimal("100"))
+        else:
+            result = max(Decimal("0.00"), price - value)
+        return result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 

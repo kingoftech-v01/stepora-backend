@@ -25,6 +25,7 @@ build/
 firebase-service-account.json
 *-service-account.json
 *.pem
+keys/
 
 # IDE
 .idea/

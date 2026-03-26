@@ -125,10 +125,23 @@ class NotificationViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
-        """Delete all notifications to free up space."""
-        deleted, _ = Notification.objects.filter(
-            user=request.user,
-        ).delete()
+        """Delete all notifications to free up space.
+
+        Security (audit 1038): Bulk delete is user-scoped and capped at
+        10 000 rows per call to prevent accidental resource exhaustion.
+        """
+        MAX_BULK_DELETE = 10_000
+        qs = Notification.objects.filter(user=request.user)
+        count = qs.count()
+        if count > MAX_BULK_DELETE:
+            # Delete in batches to avoid locking too many rows at once
+            ids_to_delete = list(
+                qs.order_by("created_at")
+                .values_list("id", flat=True)[:MAX_BULK_DELETE]
+            )
+            deleted, _ = Notification.objects.filter(id__in=ids_to_delete).delete()
+        else:
+            deleted, _ = qs.delete()
 
         return Response({"marked_read": deleted})
 

@@ -13,6 +13,7 @@ from django.utils.translation import gettext as _
 
 from apps.notifications.services import NotificationService
 from apps.users.models import User
+from core.decorators import celery_distributed_lock
 from core.exceptions import OpenAIError
 from integrations.openai_service import OpenAIService
 
@@ -677,6 +678,7 @@ def detect_obstacles(self, dream_id):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=600)
 def update_dream_progress(self):
     """
     Update progress percentage for all active dreams.
@@ -746,6 +748,7 @@ def update_dream_progress(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=600)
 def check_overdue_tasks(self):
     """
     Check for overdue tasks and send notifications.
@@ -942,6 +945,7 @@ def generate_vision_board(self, dream_id):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=600)
 def cleanup_abandoned_dreams(self):
     """
     Archive dreams that have been inactive for a very long time (90+ days).
@@ -988,6 +992,7 @@ def cleanup_abandoned_dreams(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=600)
 def smart_archive_dreams(self):
     """
     Auto-pause dreams with no activity for 30+ days and notify the user.
@@ -1481,6 +1486,7 @@ def generate_initial_tasks_task(self, dream_id, user_id):
 
 
 @shared_task(bind=True, max_retries=0)
+@celery_distributed_lock(timeout=1800)
 def run_biweekly_checkins(self):
     """
     Beat task: Send reminder notifications for dreams eligible for check-in.
@@ -2124,6 +2130,7 @@ def process_checkin_responses_task(self, checkin_id):
 
 
 @shared_task(bind=True, max_retries=0)
+@celery_distributed_lock(timeout=600)
 def expire_stale_checkins(self):
     """
     Expire unanswered interactive check-ins (48h passed).

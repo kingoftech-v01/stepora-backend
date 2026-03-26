@@ -9,6 +9,14 @@ Handles all OpenAI API interactions including:
 - Micro-action generation for quick starts
 - Rescue messages for inactive users
 - Vision board image generation via DALL-E
+
+TODO [V-SEC]: Implement circuit breaker pattern for OpenAI API calls.
+When OpenAI is down or rate-limited, the circuit should open to:
+- Fail fast instead of queuing up timeouts
+- Return graceful degradation responses to users
+- Auto-recover when the service is back (half-open state)
+Consider using pybreaker or a Redis-backed circuit breaker.
+See also: apps/subscriptions/services.py for Stripe circuit breaker TODO.
 """
 
 import json
@@ -38,7 +46,12 @@ from integrations.plan_processors import (
     get_processor,
 )
 
+from core.circuit_breaker import CircuitBreaker, CircuitBreakerError  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
+# Circuit breaker for OpenAI calls (V-326: cascading failure protection)
+_openai_cb = CircuitBreaker("openai")
 
 # Retry decorator for OpenAI calls (openai v1+ exceptions)
 openai_retry = retry(
@@ -93,6 +106,7 @@ CONTENT RESTRICTIONS (ABSOLUTE - NO EXCEPTIONS):
 - REFUSE any goal involving illegal activities (theft, hacking, fraud, drug dealing, etc.).
 - REFUSE any self-harm or suicide-related content. Instead, gently suggest seeking professional support.
 - REFUSE any request to generate hateful, discriminatory, or harassing content.
+- REFUSE any request to generate exploit code, malware, hacking tools, or assist with finding security vulnerabilities in systems.
 
 WHEN REFUSING: Be empathetic and non-judgmental. Acknowledge the user's feelings briefly, explain that this falls outside your scope, and redirect them toward a positive, constructive alternative. Never be condescending or aggressive.
 
@@ -997,6 +1011,12 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
         Returns:
             Dict with 'content', 'tokens_used', 'model', and optionally 'function_call'
         """
+        # V-326: Circuit breaker prevents cascading failures when OpenAI is down
+        try:
+            _openai_cb._check_state()
+        except CircuitBreakerError as e:
+            raise OpenAIError(str(e))
+
         try:
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
             full_messages = [{"role": "system", "content": system_prompt}] + messages
@@ -1029,17 +1049,28 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                     "arguments": json.loads(fc.arguments),
                 }
 
+            _openai_cb._record_success()
             return result
 
         except openai.APIError as e:
+            _openai_cb._record_failure(e)
             raise OpenAIError(f"OpenAI API error: {str(e)}")
+        except OpenAIError:
+            raise
         except Exception as e:
+            _openai_cb._record_failure(e)
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
     async def chat_async(
         self, messages, conversation_type="general", temperature=0.7, max_tokens=1000
     ):
         """Async version of chat completion."""
+        # V-326: Circuit breaker
+        try:
+            _openai_cb._check_state()
+        except CircuitBreakerError as e:
+            raise OpenAIError(str(e))
+
         try:
             system_prompt = self.SYSTEM_PROMPTS.get(conversation_type, "")
             full_messages = [{"role": "system", "content": system_prompt}] + messages
@@ -1052,6 +1083,7 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
                 timeout=self.timeout,
             )
 
+            _openai_cb._record_success()
             return {
                 "content": response.choices[0].message.content,
                 "tokens_used": response.usage.total_tokens,
@@ -1059,8 +1091,12 @@ LANGUAGE RULE: ALL output must be in the dream's language.""",
             }
 
         except openai.APIError as e:
+            _openai_cb._record_failure(e)
             raise OpenAIError(f"OpenAI API error: {str(e)}")
+        except OpenAIError:
+            raise
         except Exception as e:
+            _openai_cb._record_failure(e)
             raise OpenAIError(f"Unexpected error: {str(e)}")
 
     async def chat_stream_async(

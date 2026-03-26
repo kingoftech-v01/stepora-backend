@@ -72,14 +72,14 @@ class IsOwnerOrSharedWith(permissions.BasePermission):
 
             if SharedDream.objects.filter(dream=obj, shared_with=request.user).exists():
                 return True
-        except Exception:
+        except (ImportError, AttributeError):
             pass
         try:
             from apps.dreams.models import DreamCollaborator
 
             if DreamCollaborator.objects.filter(dream=obj, user=request.user).exists():
                 return True
-        except Exception:
+        except (ImportError, AttributeError):
             pass
         return False
 

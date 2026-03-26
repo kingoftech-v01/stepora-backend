@@ -28,10 +28,28 @@ jobs:
           pip install -r requirements/production.txt
           pip install ruff
 
-      - name: Lint (ruff)
+      - name: Lint (ruff with security rules)
         run: |
           source .venv/bin/activate
           ruff check apps/ core/ integrations/ config/ --config ruff.toml
+
+      - name: SAST - Security scan (bandit)
+        run: |
+          source .venv/bin/activate
+          pip install bandit
+          bandit -r apps/ core/ integrations/ -c pyproject.toml --severity-level medium --confidence-level medium -f json -o bandit-report.json || true
+          bandit -r apps/ core/ integrations/ -c pyproject.toml --severity-level high --confidence-level high
+        # High-severity issues block the build; medium issues are reported only
+
+      # V-265/V-286/V-451/V-469: Dependency vulnerability scanning
+      - name: Audit Python dependencies (pip-audit)
+        run: |
+          source .venv/bin/activate
+          pip install pip-audit
+          pip-audit --strict --desc on -r requirements/production.txt || {
+            echo "::warning::pip-audit found vulnerabilities — review output above"
+            exit 1
+          }
 
       - name: Compile check (syntax errors)
         run: |
@@ -80,6 +98,19 @@ jobs:
             .
           docker push "${FULL_IMAGE}:${IMAGE_TAG}"
           docker push "${FULL_IMAGE}:latest"
+
+      # TODO [Vuln 721]: Sign container images with cosign after push.
+      # Install cosign, generate/store key pair in AWS Secrets Manager,
+      # then: cosign sign --key awssm://stepora/cosign-key "${FULL_IMAGE}:${IMAGE_TAG}"
+      # Also enable ECR image scanning and signature verification.
+
+      - name: Scan image for vulnerabilities
+        run: |
+          aws ecr start-image-scan \
+            --repository-name ${{ secrets.ECR_REPOSITORY }} \
+            --image-id imageTag=${{ github.sha }} \
+            --region ${{ env.AWS_REGION }} || true
+        # Non-blocking: results visible in ECR console. Make blocking once baseline established.
 
   # ------------------------------------------------------------------
   # 3. Deploy new image to ECS service

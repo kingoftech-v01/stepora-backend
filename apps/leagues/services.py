@@ -18,6 +18,8 @@ from django.db.models import Count, F, Window
 from django.db.models.functions import DenseRank
 from django.utils import timezone as django_timezone
 
+from core.decorators import retry_on_deadlock
+
 from apps.users.models import User
 
 from .models import (
@@ -82,6 +84,7 @@ class LeagueService:
         return League.objects.order_by("min_xp").first()
 
     @staticmethod
+    @retry_on_deadlock()
     @transaction.atomic
     def update_standing(user: User) -> Optional[LeagueStanding]:
         """

@@ -4,6 +4,13 @@ Views for the Referrals system.
 Provides API endpoints for referral code management, code redemption,
 referral tracking, reward claiming, and a combined dashboard endpoint
 for the frontend.
+
+TODO [V-210]: Add self-referral abuse prevention:
+- Correlate IP addresses between referrer and referred users
+- Add device fingerprinting to detect same-device referrals
+- Require meaningful engagement (e.g. 7-day active usage) before
+  crediting referral rewards
+- Consider requiring a paid subscription before rewarding referrer
 """
 
 import logging

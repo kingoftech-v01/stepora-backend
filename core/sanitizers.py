@@ -4,9 +4,16 @@ XSS sanitization utilities for user-generated content.
 Uses nh3 (Rust-based HTML sanitizer) — replacement for deprecated bleach library.
 """
 
+import re
 from typing import Optional
 
 import nh3
+
+# V-682: Bidirectional control characters that enable RTLO attacks.
+# U+202A-U+202E: LRE, RLE, PDF, LRO, RLO
+# U+2066-U+2069: LRI, RLI, FSI, PDI
+# U+200E-U+200F: LRM, RLM
+BIDI_CHARS = re.compile("[\u202a-\u202e\u2066-\u2069\u200e\u200f]")
 
 # Allowed HTML tags for rich text fields (if needed)
 ALLOWED_TAGS = {"p", "br", "strong", "em", "u", "ul", "ol", "li", "a"}
@@ -39,6 +46,9 @@ def sanitize_text(text: Optional[str], strip: bool = True) -> str:
         text = str(text)
 
     import html
+
+    # V-682: Strip bidirectional control characters to prevent RTLO attacks
+    text = BIDI_CHARS.sub("", text)
 
     return html.unescape(nh3.clean(text, tags=set()))
 

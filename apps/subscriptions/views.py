@@ -14,6 +14,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_
 from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from core.audit import log_webhook_event
@@ -515,7 +516,7 @@ class SubscriptionViewSet(viewsets.GenericViewSet):
 
         try:
             coupon_code = validate_coupon_code(coupon_code)
-        except Exception as e:
+        except (ValueError, ValidationError) as e:
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,

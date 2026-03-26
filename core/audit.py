@@ -25,10 +25,17 @@ def _get_client_ip(request):
 
 
 def log_auth_failure(request, reason):
-    """Log a failed authentication attempt."""
+    """Log a failed authentication attempt and record metric for anomaly detection."""
     ip = _get_client_ip(request)
     path = request.path
     security_logger.warning("AUTH_FAILURE ip=%s path=%s reason=%s", ip, path, reason)
+    # Record metric for threshold-based alerting (V-1222, V-1223)
+    try:
+        from core.tasks import record_auth_failure_metric
+
+        record_auth_failure_metric(ip)
+    except Exception:  # noqa: BLE001 - must not break auth flow
+        pass
 
 
 def log_auth_success(request, user):

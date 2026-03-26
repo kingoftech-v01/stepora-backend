@@ -36,10 +36,48 @@ jobs:
           source .venv/bin/activate
           flake8 .
 
+  security-scan:
+    name: SAST Security Scan
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create venv and install security scanners
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install bandit[toml] pip-audit
+
+      - name: Run Bandit (Python SAST)
+        run: |
+          source .venv/bin/activate
+          bandit -r apps/ core/ config/ -c pyproject.toml --format json --output bandit-report.json || true
+          bandit -r apps/ core/ config/ -c pyproject.toml --format screen
+
+      - name: Run pip-audit (dependency vulnerabilities)
+        run: |
+          source .venv/bin/activate
+          pip install -r requirements/base.txt
+          pip-audit --format json --output pip-audit-report.json || true
+          pip-audit
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            pip-audit-report.json
+          retention-days: 30
+
   comment-results:
     name: Comment PR
     runs-on: self-hosted
-    needs: [backend-quality]
+    needs: [backend-quality, security-scan]
     if: always()
 
     steps:
@@ -49,10 +87,12 @@ jobs:
           script: |
             const backendResult = '${{ needs.backend-quality.result }}';
             const backendEmoji = backendResult === 'success' ? '✅' : '❌';
+            const securityResult = '${{ needs.security-scan.result }}';
+            const securityEmoji = securityResult === 'success' ? '✅' : '❌';
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Code Quality Results\n\n${backendEmoji} Django: ${backendResult}`
+              body: `## Code Quality Results\n\n${backendEmoji} Django: ${backendResult}\n${securityEmoji} Security (SAST): ${securityResult}`
             })

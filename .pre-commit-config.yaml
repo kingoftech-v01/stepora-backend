@@ -1,0 +1,54 @@
+# Pre-commit hooks for the Stepora backend
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Secret scanning — prevents accidental credential commits
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            .*\.lock$|
+            .*migrations/.*|
+            .*\.min\.js$|
+            .*\.min\.css$
+          )$
+
+  # GitLeaks — scans for hardcoded secrets in git history
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Basic security linting with Bandit (SAST)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ['-r', '-ll', '-s', 'B101,B311']
+        exclude: |
+          (?x)^(
+            .*/tests/.*|
+            .*/test_.*\.py$|
+            tests/.*
+          )$
+
+  # Existing code quality hooks
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: ['--fix']

@@ -76,7 +76,7 @@ def _verify_google_id_token(id_token_str):
 
     except serializers.ValidationError:
         raise
-    except Exception as e:
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError) as e:
         logger.warning("Google ID token verification failed: %s", e)
         raise serializers.ValidationError("Invalid Google token.")
 
@@ -117,7 +117,7 @@ def _verify_google_access_token(access_token):
 
     except serializers.ValidationError:
         raise
-    except Exception as e:
+    except (http_requests.RequestException, KeyError, ValueError, TypeError) as e:
         logger.warning("Google access token verification failed: %s", e)
         raise serializers.ValidationError("Invalid Google token.")
 
@@ -204,7 +204,7 @@ def verify_apple_token(id_token_str):
 
     except serializers.ValidationError:
         raise
-    except Exception as e:
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError) as e:
         logger.warning("Apple token verification failed: %s", e)
         raise serializers.ValidationError("Invalid Apple token.")
 

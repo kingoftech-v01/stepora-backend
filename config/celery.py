@@ -200,10 +200,17 @@ app.conf.beat_schedule = {
         "task": "apps.subscriptions.tasks.send_free_user_upgrade_reminders",
         "schedule": crontab(hour=14, minute=0),
     },
+    # === Security Tasks (V-1222, V-1223) ===
+    # Check for auth failure anomalies every 15 minutes
+    "check-auth-failure-anomalies": {
+        "task": "core.tasks.check_auth_failure_anomalies",
+        "schedule": 900.0,  # Every 15 minutes
+    },
 }
 
 # Task configuration
 app.conf.task_routes = {
+    "core.tasks.*": {"queue": "notifications"},
     "core.auth.tasks.*": {"queue": "notifications"},
     "apps.notifications.tasks.*": {"queue": "notifications"},
     "apps.dreams.tasks.*": {"queue": "dreams"},

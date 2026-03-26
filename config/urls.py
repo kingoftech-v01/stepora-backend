@@ -65,7 +65,10 @@ urlpatterns = [
     ),
     # Versioned API (canonical)
     path("api/v1/", include((api_v1_patterns, "api-v1"))),
-    # Backward-compatible unversioned API (same endpoints)
+    # Backward-compatible unversioned API (same endpoints).
+    # Security (audit 1056): This path is deprecated. Clients should migrate to
+    # /api/v1/. When v2 is introduced, this path must be sunsetted or pinned to v1.
+    # The APIVersionDeprecationMiddleware adds a Deprecation header on responses.
     path("api/", include(api_v1_patterns)),
 ]
 

@@ -1,5 +1,13 @@
 """
 Notification models for push notifications and reminders.
+
+TODO [V-228]: Add per-recipient notification rate limiting to prevent
+notification flooding. A user performing rapid social actions
+(follow/unfollow, reactions, messages) can generate excessive
+notifications to a target. Implement:
+- Per-recipient rate limit (e.g. max 10 notifications/hour from same sender)
+- Notification deduplication for identical events within a time window
+- Aggregate similar notifications (e.g. "5 people liked your post")
 """
 
 import uuid

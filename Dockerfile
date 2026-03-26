@@ -1,4 +1,18 @@
 # Multi-stage build for production-ready Django backend
+#
+# SECURITY TODO [V-268]: Enable automated Docker image vulnerability scanning.
+# Options (implement at least one):
+# 1. AWS ECR: Enable "Scan on push" in ECR repository settings
+#    aws ecr put-image-scanning-configuration \
+#      --repository-name stepora/backend \
+#      --image-scanning-configuration scanOnPush=true
+# 2. CI/CD: Add Trivy scan step before pushing to ECR:
+#    docker run --rm aquasec/trivy image --exit-code 1 \
+#      --severity CRITICAL ${IMAGE}
+# 3. GitHub: Enable Dependabot container scanning
+#
+# SECURITY TODO [V-283]: Pin GitHub Actions by SHA instead of tag
+# for supply chain security. Pin base Docker images by digest.
 
 # Stage 1: Builder
 FROM python:3.11-slim as builder
@@ -56,10 +70,10 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --chown=appuser:appuser . .
 
 # Collect static files (FIELD_ENCRYPTION_KEY needed at build time for settings import)
-# A placeholder is used during build; the real key is injected at runtime via ECS task definition.
-ARG FIELD_ENCRYPTION_KEY="oWaFzG4bta5qhklgSfvMxFPqwqvy__35IrKHEPURBkg="
-ENV FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
-RUN python manage.py collectstatic --noinput --clear
+# A throwaway key is used ONLY during the build step. The real key is injected at
+# runtime via ECS task definition. No secret is baked into the image layer.
+ARG FIELD_ENCRYPTION_KEY="build-time-placeholder-do-not-use"
+RUN FIELD_ENCRYPTION_KEY="${FIELD_ENCRYPTION_KEY}" python manage.py collectstatic --noinput --clear
 
 # Make scripts executable
 RUN chmod +x /app/healthcheck.sh /app/entrypoint.sh

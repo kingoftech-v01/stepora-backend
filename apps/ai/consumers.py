@@ -18,6 +18,7 @@ from core.consumers import (
     MAX_MSG_CONTENT_LEN,
     MAX_MSG_SIZE,
     AuthenticatedConsumerMixin,
+    ConnectionLimitMixin,
     ModerationMixin,
     RateLimitMixin,
 )
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 class AIChatConsumer(
     RateLimitMixin,
+    ConnectionLimitMixin,
     AuthenticatedConsumerMixin,
     ModerationMixin,
     AsyncWebsocketConsumer,
@@ -228,7 +230,14 @@ class AIChatConsumer(
                     "Could you tell me more about what specific aspect of your dream you'd like help with?"
                 )
 
-            await self.send(text_data=json.dumps({"type": "stream_end"}))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "stream_end",
+                        "disclaimer": "AI-generated content may contain inaccuracies. Verify important information independently.",
+                    }
+                )
+            )
             await self._increment_ai_quota()
 
             assistant_message = await self.save_message("assistant", full_response)

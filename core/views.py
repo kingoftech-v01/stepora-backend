@@ -1,5 +1,9 @@
 """
 Core views for health checks.
+
+Security: The public /health/ endpoint returns only aggregate status
+(healthy/unhealthy) without exposing service-level details (V-292).
+Detailed service info is only returned when DEBUG is enabled.
 """
 
 import logging
@@ -14,24 +18,37 @@ logger = logging.getLogger(__name__)
 
 
 def health_check(request):
-    """Complete health check including database and cache."""
-    health_status = {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "services": {
-            "database": _check_database(),
-            "cache": _check_cache(),
-        },
-    }
+    """
+    Health check endpoint.
 
-    # Determine overall status
-    if not all(
-        service["status"] == "up" for service in health_status["services"].values()
-    ):
-        health_status["status"] = "unhealthy"
-        return JsonResponse(health_status, status=503)
+    Returns minimal information externally (V-292).
+    Full service details only in DEBUG mode to avoid leaking
+    infrastructure information (database status, cache status, latency).
+    """
+    db_status = _check_database()
+    cache_status = _check_cache()
 
-    return JsonResponse(health_status)
+    all_up = db_status["status"] == "up" and cache_status["status"] == "up"
+    overall = "healthy" if all_up else "unhealthy"
+    http_code = 200 if all_up else 503
+
+    # Only expose service-level details in DEBUG mode (V-292: Health check
+    # should not expose infrastructure details publicly)
+    if settings.DEBUG:
+        health_status = {
+            "status": overall,
+            "timestamp": time.time(),
+            "services": {
+                "database": db_status,
+                "cache": cache_status,
+            },
+        }
+    else:
+        health_status = {
+            "status": overall,
+        }
+
+    return JsonResponse(health_status, status=http_code)
 
 
 def liveness_check(request):

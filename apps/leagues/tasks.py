@@ -11,10 +11,13 @@ import logging
 from celery import shared_task
 from django.utils import timezone as django_timezone
 
+from core.decorators import celery_distributed_lock
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(name="apps.leagues.tasks.check_season_end")
+@celery_distributed_lock(timeout=300)
 def check_season_end():
     """
     Check if the active season has ended and trigger processing.
@@ -222,6 +225,7 @@ def send_league_change_notifications(season_id=None):
 
 
 @shared_task(name="apps.leagues.tasks.create_daily_rank_snapshots")
+@celery_distributed_lock(timeout=300)
 def create_daily_rank_snapshots():
     """
     Create daily rank snapshots for all users with active standings.
@@ -318,6 +322,7 @@ def rebalance_groups_task(season_id=None, league_id=None):
 
 
 @shared_task(name="apps.leagues.tasks.update_all_standings")
+@celery_distributed_lock(timeout=600)
 def update_all_standings():
     """
     Batch-update all league standings for the active season.

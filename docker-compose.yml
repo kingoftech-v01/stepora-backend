@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL database
+  # PostgreSQL database (data network only — Vuln 725 network segmentation)
   db:
     image: postgres:15-alpine
     container_name: stepora_db
@@ -9,6 +9,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stepora"]
       interval: 10s
@@ -20,13 +22,15 @@ services:
           memory: 512M
           cpus: "1.0"
 
-  # Redis for caching and Celery broker
+  # Redis for caching and Celery broker (data network only)
   redis:
     image: redis:7-alpine
     container_name: stepora_redis
     command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
+    networks:
+      - data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -38,7 +42,7 @@ services:
           memory: 256M
           cpus: "0.5"
 
-  # Elasticsearch for full-text search on encrypted fields
+  # Elasticsearch for full-text search on encrypted fields (data network only)
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: stepora_elasticsearch
@@ -49,6 +53,8 @@ services:
       - ES_JAVA_OPTS=-Xms256m -Xmx256m
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsSL -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -61,7 +67,7 @@ services:
           memory: 512M
           cpus: "1.0"
 
-  # Django web application
+  # Django web application (app + data networks)
   web:
     build:
       context: .
@@ -84,6 +90,9 @@ services:
       - media_volume:/app/mediafiles
     expose:
       - "8000"
+    networks:
+      - app
+      - data
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
       - DB_HOST=db
@@ -122,14 +131,23 @@ services:
       elasticsearch:
         condition: service_healthy
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
-  # Celery worker for background tasks
+  # Celery worker for background tasks (app + data networks)
   celery:
     build:
       context: .
@@ -141,6 +159,9 @@ services:
     container_name: stepora_celery
     volumes:
       - .:/app
+    networks:
+      - app
+      - data
     environment:
       - CONTAINER_ROLE=worker
       - DJANGO_SETTINGS_MODULE=config.settings.production
@@ -175,14 +196,23 @@ services:
       - web
       - elasticsearch
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect ping --timeout 10 2>/dev/null | grep -q OK || exit 1"]
       interval: 30s
       timeout: 15s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
-  # Celery beat for scheduled tasks
+  # Celery beat for scheduled tasks (app + data networks)
   celery-beat:
     build:
       context: .
@@ -194,6 +224,9 @@ services:
     container_name: stepora_celery_beat
     volumes:
       - .:/app
+    networks:
+      - app
+      - data
     environment:
       - CONTAINER_ROLE=beat
       - DJANGO_SETTINGS_MODULE=config.settings.production
@@ -217,14 +250,23 @@ services:
       - redis
       - celery
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
     healthcheck:
       test: ["CMD-SHELL", "test -f /tmp/celerybeat.pid && kill -0 $$(cat /tmp/celerybeat.pid) 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
-  # Daphne for WebSocket support (Channels)
+  # Daphne for WebSocket support (Channels) — (app + data networks)
   daphne:
     build:
       context: .
@@ -239,6 +281,9 @@ services:
       - .:/app
     expose:
       - "9000"
+    networks:
+      - app
+      - data
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
       - DB_HOST=db
@@ -260,14 +305,24 @@ services:
       - db
       - redis
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9000/ || exit 0"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
   # Internal nginx — security headers, gzip, rate limiting, static/media
+  # (app network only — cannot reach DB/Redis directly, Vuln 725)
   nginx:
     image: nginx:1.27-alpine
     container_name: stepora_nginx
@@ -277,6 +332,8 @@ services:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - static_volume:/app/staticfiles:ro
       - media_volume:/app/mediafiles:ro
+    networks:
+      - app
     depends_on:
       - web
       - daphne
@@ -304,6 +361,11 @@ volumes:
   static_volume:
   media_volume:
 
+# Network segmentation (Vuln 725): separate data-tier from app-tier.
+# nginx (app only) cannot reach db/redis/elasticsearch directly.
 networks:
-  default:
-    name: stepora_network
+  app:
+    name: stepora_app
+  data:
+    name: stepora_data
+    internal: true

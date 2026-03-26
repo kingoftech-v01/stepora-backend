@@ -12,6 +12,7 @@ All moderation events are logged via core.audit for admin review.
 import hashlib
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from django.conf import settings
@@ -81,6 +82,11 @@ REJECTION_MESSAGES = {
         "I wasn't able to process that request. Could you tell me about "
         "a personal goal or dream you'd like to work toward? I'm here to "
         "help with health, career, education, creative, and personal growth goals."
+    ),
+    "pii_detected": (
+        "It looks like your message contains personal information "
+        "(phone number, address, or other sensitive data). For safety, "
+        "please avoid sharing personal details in public posts or messages."
     ),
 }
 
@@ -234,6 +240,25 @@ HARMFUL_DREAM_PATTERNS_SELF_HARM = [
     ),
 ]
 
+HARMFUL_DREAM_PATTERNS_EXPLOIT = [
+    re.compile(
+        r"\b(generate|write|create|give\s+me)\s+(an?\s+)?(exploit|malware|ransomware|virus|trojan|rootkit|keylogger|backdoor|payload)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(find|discover|scan\s+for)\s+(vulnerabilit|security\s+hole|security\s+flaw|zero[- ]?day)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(sql\s+injection|xss\s+attack|csrf\s+attack|buffer\s+overflow|privilege\s+escalation)\s+(script|code|payload|example)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(brute\s*force|dictionary\s+attack|credential\s+stuffing|password\s+crack)\b",
+        re.IGNORECASE,
+    ),
+]
+
 HARMFUL_DREAM_PATTERNS_ILLEGAL = [
     re.compile(
         r"\b(steal|rob|hack\s+into|break\s+into|forge|counterfeit|drug\s+deal|sell\s+drugs|traffic)\b",
@@ -254,6 +279,85 @@ HARMFUL_DREAM_PATTERNS_ILLEGAL = [
     ),
     re.compile(r"\b(arnaquer|frauder|escroquer|usurper|d[eé]rober)\b", re.IGNORECASE),
 ]
+
+
+# ---------------------------------------------------------------------------
+# PII / Doxxing detection patterns (V-839)
+# Detects phone numbers, SSNs, addresses, and other PII that could
+# be used to doxx other users when posted in public content.
+# ---------------------------------------------------------------------------
+PII_DETECTION_PATTERNS = [
+    # US Social Security Number (XXX-XX-XXXX or XXXXXXXXX)
+    re.compile(
+        r"\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b",
+    ),
+    # US phone numbers: (XXX) XXX-XXXX, XXX-XXX-XXXX, +1XXXXXXXXXX
+    re.compile(
+        r"(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+    ),
+    # International phone numbers: +XX XXXXXXXXXX (10+ digits with country code)
+    re.compile(
+        r"\+\d{1,3}[-.\s]?\d{4,14}\b",
+    ),
+    # French phone numbers: 06/07 XX XX XX XX or +33 6 XX XX XX XX
+    re.compile(
+        r"(?:\+33[-.\s]?|0)[67][-.\s]?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}\b",
+    ),
+    # Street addresses: number + street name pattern (EN)
+    re.compile(
+        r"\b\d{1,5}\s+(north|south|east|west|n\.?|s\.?|e\.?|w\.?)?\s*"
+        r"[a-zA-Z]+\s+(street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|drive|dr\.?|lane|ln\.?|court|ct\.?|way|place|pl\.?)\b",
+        re.IGNORECASE,
+    ),
+    # French addresses: number + rue/avenue/boulevard
+    re.compile(
+        r"\b\d{1,5}\s+(rue|avenue|boulevard|place|impasse|all[eé]e|chemin)\s+[a-zA-Z\u00C0-\u017F]+",
+        re.IGNORECASE,
+    ),
+    # Credit card numbers: 4 groups of 4 digits
+    re.compile(
+        r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",
+    ),
+    # Email addresses being shared (potential doxxing of someone else's email)
+    re.compile(
+        r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Unicode normalization for moderation bypass prevention
+# ---------------------------------------------------------------------------
+
+# Zero-width and invisible characters that attackers use to evade regex
+_INVISIBLE_CHARS_RE = re.compile(
+    r"[\u200b\u200c\u200d\u200e\u200f"  # zero-width space/joiner/non-joiner/marks
+    r"\u2060\u2061\u2062\u2063\u2064"  # word joiner, invisible operators
+    r"\ufeff"  # byte order mark
+    r"\u00ad"  # soft hyphen
+    r"\u034f"  # combining grapheme joiner
+    r"\u061c"  # arabic letter mark
+    r"\u115f\u1160"  # hangul fillers
+    r"\u17b4\u17b5"  # khmer vowel inherent
+    r"\u180e"  # mongolian vowel separator
+    r"\uffa0"  # halfwidth hangul filler
+    r"]"
+)
+
+
+def _normalize_text_for_moderation(text: str) -> str:
+    """
+    Normalize text before moderation checks to prevent Unicode bypass attacks.
+
+    1. NFKC normalization: converts look-alike characters to their canonical form
+       (e.g., full-width 'ｋｉｌｌ' → 'kill', '①' → '1', 'ﬁ' → 'fi')
+    2. Strip zero-width / invisible characters that can break regex patterns
+    """
+    # NFKC normalization (compatibility decomposition + canonical composition)
+    text = unicodedata.normalize("NFKC", text)
+    # Remove invisible/zero-width characters
+    text = _INVISIBLE_CHARS_RE.sub("", text)
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -320,23 +424,35 @@ class ContentModerationService:
         """Run all moderation tiers in order."""
 
         if self._patterns_enabled:
+            # Normalize Unicode before regex checks to prevent bypass via
+            # homoglyphs, full-width characters, or zero-width insertions
+            normalized = _normalize_text_for_moderation(text)
+
             # Tier A: Jailbreak patterns
-            result = self._check_jailbreak_patterns(text)
+            result = self._check_jailbreak_patterns(normalized)
             if result.is_flagged:
                 self._log_event(text, result, context)
                 return result
 
             # Tier A: Role-play patterns
-            result = self._check_roleplay_patterns(text)
+            result = self._check_roleplay_patterns(normalized)
             if result.is_flagged:
                 self._log_event(text, result, context)
                 return result
 
             # Tier B: Harmful dream content (for all contexts except ai_output which uses simpler check)
-            result = self._check_harmful_dream_patterns(text)
+            result = self._check_harmful_dream_patterns(normalized)
             if result.is_flagged:
                 self._log_event(text, result, context)
                 return result
+
+            # Tier B2: PII / Doxxing detection (V-839)
+            # Only check in user-facing contexts (chat, posts), not AI output
+            if context not in ("ai_output",):
+                result = self._check_pii_patterns(normalized)
+                if result.is_flagged:
+                    self._log_event(text, result, context)
+                    return result
 
         # Tier C: OpenAI Moderation API
         if self._openai_enabled:
@@ -489,6 +605,34 @@ class ContentModerationService:
                     detection_source="dream_content",
                 )
 
+        # Security exploit / vulnerability discovery requests
+        for pattern in HARMFUL_DREAM_PATTERNS_EXPLOIT:
+            if pattern.search(text):
+                return ModerationResult(
+                    is_flagged=True,
+                    categories=["exploit"],
+                    severity="high",
+                    user_message=REJECTION_MESSAGES["illegal_content"],
+                    detection_source="dream_content",
+                )
+
+        return ModerationResult()
+
+    def _check_pii_patterns(self, text: str) -> ModerationResult:
+        """Check for PII / doxxing patterns (V-839).
+
+        Detects phone numbers, SSNs, street addresses, credit card numbers,
+        and email addresses in user-generated content to prevent doxxing.
+        """
+        for pattern in PII_DETECTION_PATTERNS:
+            if pattern.search(text):
+                return ModerationResult(
+                    is_flagged=True,
+                    categories=["pii_detected"],
+                    severity="medium",
+                    user_message=REJECTION_MESSAGES["pii_detected"],
+                    detection_source="pii_pattern",
+                )
         return ModerationResult()
 
     def _get_rejection_message_for_categories(self, categories: list) -> str:

@@ -24,6 +24,7 @@ from django.utils.translation import gettext as _
 from apps.dreams.models import Dream, Task
 from apps.users.models import User
 from core.ai_usage import AIUsageTracker
+from core.decorators import celery_distributed_lock
 from core.exceptions import OpenAIError
 from core.sanitizers import sanitize_text
 from integrations.openai_service import OpenAIService
@@ -137,6 +138,7 @@ def _send_digest_email(user, subject, context):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=120)
 def process_pending_notifications(self):
     """
     Process and send pending notifications.
@@ -273,6 +275,7 @@ def generate_daily_motivation(self):
 
 
 @shared_task(name="notifications.send_weekly_digests")
+@celery_distributed_lock(timeout=1800)
 def send_weekly_digests():
     """
     Dispatch per-user weekly digest tasks for all active users.
@@ -505,6 +508,7 @@ def send_weekly_report(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=600)
 def check_inactive_users(self):
     """
     Check for inactive users and send rescue mode notifications.
@@ -660,6 +664,7 @@ def send_reminder_notifications(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@celery_distributed_lock(timeout=300)
 def cleanup_old_notifications(self):
     """
     Clean up old read notifications to keep database lean.

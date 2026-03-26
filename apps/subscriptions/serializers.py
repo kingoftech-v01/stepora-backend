@@ -201,11 +201,15 @@ class PromotionPlanDiscountSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_discounted_price(self, obj):
-        price = float(obj.plan.price_monthly)
-        value = float(obj.discount_value)
+        from decimal import ROUND_HALF_UP, Decimal
+
+        price = Decimal(str(obj.plan.price_monthly))
+        value = Decimal(str(obj.discount_value))
         if obj.promotion.discount_type == "percentage":
-            return round(price * (1 - value / 100), 2)
-        return round(max(0.0, price - value), 2)
+            result = price * (Decimal("1") - value / Decimal("100"))
+        else:
+            result = max(Decimal("0.00"), price - value)
+        return str(result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 class PromotionSerializer(serializers.ModelSerializer):

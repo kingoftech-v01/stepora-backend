@@ -13,14 +13,21 @@ import os
 import sys
 import time
 
-os.environ["DB_HOST"] = "172.22.0.7"
-os.environ["DB_NAME"] = "stepora"
-os.environ["DB_USER"] = "stepora"
-os.environ["DB_PASSWORD"] = "stepora_dev_password"
-os.environ["REDIS_HOST"] = "172.22.0.3"
-os.environ["REDIS_URL"] = "redis://:dp_redis_S3cur3_2026!@172.22.0.3:6379/1"
-os.environ["CELERY_BROKER_URL"] = "redis://:dp_redis_S3cur3_2026!@172.22.0.3:6379/0"
-os.environ["CELERY_RESULT_BACKEND"] = "redis://:dp_redis_S3cur3_2026!@172.22.0.3:6379/0"
+# Load credentials from environment — do NOT hardcode secrets in source.
+# Set these in your .env or shell before running this script:
+#   DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, REDIS_HOST, REDIS_URL,
+#   CELERY_BROKER_URL, CELERY_RESULT_BACKEND
+_REQUIRED_E2E_VARS = [
+    "DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD",
+    "REDIS_URL", "CELERY_BROKER_URL", "CELERY_RESULT_BACKEND",
+]
+_missing_vars = [v for v in _REQUIRED_E2E_VARS if not os.environ.get(v)]
+if _missing_vars:
+    print(
+        f"ERROR: Missing required env vars for E2E test: {', '.join(_missing_vars)}\n"
+        f"Set them in your .env file or shell before running this script."
+    )
+    sys.exit(1)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 
 import logging

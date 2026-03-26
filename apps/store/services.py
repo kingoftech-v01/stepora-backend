@@ -14,6 +14,8 @@ import stripe
 from django.db import transaction
 from django.db.models import F
 
+from core.decorators import retry_on_deadlock
+
 from .models import Gift, RefundRequest, UserInventory
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,7 @@ class StoreService:
             raise PaymentVerificationError(f"Payment processing failed: {str(e)}")
 
     @staticmethod
+    @retry_on_deadlock()
     @transaction.atomic
     def confirm_purchase(user, item, payment_intent_id):
         """
@@ -351,6 +354,7 @@ class StoreService:
         return inventory_entry
 
     @staticmethod
+    @retry_on_deadlock()
     @transaction.atomic
     def purchase_with_xp(user, item):
         """

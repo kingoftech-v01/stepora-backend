@@ -17,6 +17,7 @@ from core.consumers import (
     MAX_MSG_SIZE,
     AuthenticatedConsumerMixin,
     BlockingMixin,
+    ConnectionLimitMixin,
     ModerationMixin,
     RateLimitMixin,
 )
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class CircleChatConsumer(
     RateLimitMixin,
+    ConnectionLimitMixin,
     AuthenticatedConsumerMixin,
     BlockingMixin,
     ModerationMixin,

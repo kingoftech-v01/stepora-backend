@@ -1,13 +1,46 @@
 line-length = 120
 
 [lint]
-select = ["E", "F", "W", "I"]
+select = [
+    "E", "F", "W", "I",
+    # Security rules (SAST) — addresses Vuln 780
+    "S102",  # use of exec()
+    "S103",  # os.chmod with permissive mask
+    "S104",  # binding to all interfaces (0.0.0.0)
+    "S105",  # hardcoded password strings
+    "S106",  # hardcoded password in function argument
+    "S107",  # hardcoded password default
+    "S108",  # hardcoded temp directory
+    "S110",  # try-except-pass (silent swallowing)
+    "S112",  # try-except-continue
+    "S301",  # pickle usage (deserialization risk)
+    "S302",  # marshal usage
+    "S303",  # insecure hash (MD5/SHA1 for crypto)
+    "S304",  # insecure cipher
+    "S305",  # insecure cipher mode
+    "S306",  # mktemp (race condition)
+    "S307",  # use of eval()
+    "S308",  # mark_safe usage
+    "S310",  # suspicious URL open
+    "S311",  # random for crypto
+    "S312",  # telnetlib
+    "S323",  # ssl unverified context
+    "S324",  # insecure hash
+    "S501",  # requests verify=False
+    "S506",  # unsafe YAML load
+    "S601",  # shell injection (paramiko)
+    "S602",  # subprocess shell=True
+    "S608",  # SQL injection (hardcoded SQL)
+    "S701",  # jinja2 autoescape disabled
+]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "S104",   # binding to 0.0.0.0 is intentional in Docker containers
 ]
 
 [lint.per-file-ignores]
 "*/migrations/*" = ["ALL"]
-"config/settings/*" = ["F401", "F403", "F405"]
-"*/tests/*" = ["F841"]
-"*/test_*" = ["F841"]
+"config/settings/*" = ["F401", "F403", "F405", "S105"]
+"*/tests/*" = ["F841", "S105", "S106", "S311"]
+"*/test_*" = ["F841", "S105", "S106", "S311"]
+"manage.py" = ["S603", "S607"]

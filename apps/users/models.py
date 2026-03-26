@@ -179,6 +179,24 @@ class User(AbstractBaseUser, PermissionsMixin):
         null=True, blank=True, help_text="Hashed 2FA backup codes"
     )
 
+    # Consent & Compliance (V-333, V-343)
+    consent_accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the user accepted terms of service and privacy policy.",
+    )
+    consent_version = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Version of the terms/privacy policy the user accepted (e.g. '2026-03-26').",
+    )
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of birth for age verification (COPPA compliance: must be 13+).",
+    )
+
     # Onboarding
     onboarding_completed = models.BooleanField(default=False)
     DREAMER_TYPES = [

@@ -1,0 +1,8 @@
+# Bandit SAST configuration (Vuln 780 — security testing in CI)
+[tool.bandit]
+exclude_dirs = ["*/tests/*", "*/test_*", "*/migrations/*", "venv", ".venv"]
+skips = [
+    "B101",  # assert used (acceptable in Django views/serializers for debug assertions)
+    "B110",  # try-except-pass (handled by ruff S110)
+    "B311",  # random (handled by ruff S311)
+]

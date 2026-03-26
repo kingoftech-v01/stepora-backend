@@ -3,6 +3,7 @@ Shared WebSocket consumer mixins for Stepora.
 
 Provides reusable building blocks for all WebSocket consumers:
 - RateLimitMixin: per-connection sliding-window rate limiter
+- ConnectionLimitMixin: per-user concurrent connection limiter (Redis-backed)
 - AuthenticatedConsumerMixin: post-connect token auth, heartbeat, error helper
 - BlockingMixin: check BlockedUser between two users
 - ModerationMixin: content moderation via ContentModerationService
@@ -15,6 +16,7 @@ import time
 from collections import deque
 
 from channels.db import database_sync_to_async
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ MAX_MSG_CONTENT_LEN = 5000
 DEFAULT_RATE_LIMIT_MSGS = 30
 DEFAULT_RATE_LIMIT_WINDOW = 60
 HEARTBEAT_INTERVAL = 45
+MAX_USER_WS_CONNECTIONS = 5  # Max concurrent WS connections per user
 
 
 class RateLimitMixin:
@@ -44,6 +47,61 @@ class RateLimitMixin:
             return True
         self._msg_timestamps.append(now)
         return False
+
+
+class ConnectionLimitMixin:
+    """
+    Per-user concurrent WebSocket connection limiter (Redis-backed).
+
+    Tracks active connections per user in the Django cache (Redis).
+    Rejects new connections that exceed MAX_USER_WS_CONNECTIONS.
+    """
+
+    max_user_connections = MAX_USER_WS_CONNECTIONS
+
+    def _conn_limit_cache_key(self, user_id):
+        return f"ws:conn_count:{user_id}"
+
+    async def _check_connection_limit(self):
+        """
+        Increment the user's connection count. Returns True if allowed,
+        False if the limit is exceeded (connection should be rejected).
+        """
+        user_id = str(self.user.id)
+        cache_key = self._conn_limit_cache_key(user_id)
+
+        try:
+            current = cache.get(cache_key, 0)
+            if current >= self.max_user_connections:
+                logger.warning(
+                    "WS connection limit reached for user %s (%d/%d)",
+                    user_id,
+                    current,
+                    self.max_user_connections,
+                )
+                return False
+            # Increment with a TTL of 1 hour (connections should disconnect
+            # and decrement, but TTL acts as a safety net against leaks)
+            cache.set(cache_key, current + 1, timeout=3600)
+            self._conn_limit_registered = True
+            return True
+        except Exception:
+            # If cache is unavailable, allow the connection (fail open for availability)
+            logger.debug("Connection limit check failed — allowing connection", exc_info=True)
+            return True
+
+    async def _release_connection_slot(self):
+        """Decrement the user's connection count on disconnect."""
+        if not getattr(self, "_conn_limit_registered", False):
+            return
+        try:
+            user_id = str(self.user.id)
+            cache_key = self._conn_limit_cache_key(user_id)
+            current = cache.get(cache_key, 0)
+            if current > 0:
+                cache.set(cache_key, current - 1, timeout=3600)
+        except Exception:
+            logger.debug("Connection slot release failed", exc_info=True)
 
 
 class AuthenticatedConsumerMixin:
@@ -87,6 +145,22 @@ class AuthenticatedConsumerMixin:
         if self._auth_timeout:
             self._auth_timeout.cancel()
             self._auth_timeout = None
+
+        # Enforce per-user connection limit (if mixin is present)
+        if hasattr(self, "_check_connection_limit"):
+            allowed = await self._check_connection_limit()
+            if not allowed:
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "type": "error",
+                            "error": "Too many active connections. Please close other tabs.",
+                        }
+                    )
+                ) if self.scope.get("_allow_post_auth") else None
+                await self.close(code=4008)
+                return
+
         self._authenticated = True
 
         if self.scope.get("_allow_post_auth"):
@@ -117,6 +191,9 @@ class AuthenticatedConsumerMixin:
             self._auth_timeout.cancel()
         if hasattr(self, "_heartbeat_task"):
             self._heartbeat_task.cancel()
+        # Release connection slot (if ConnectionLimitMixin is present)
+        if hasattr(self, "_release_connection_slot"):
+            await self._release_connection_slot()
 
     async def _handle_authenticate_message(self, data):
         """Process a {"type": "authenticate", "token": "..."} message."""

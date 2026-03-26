@@ -17,6 +17,8 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
+
+from core.decorators import retry_on_deadlock
 from rest_framework import generics, status, viewsets
 from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
@@ -2567,6 +2569,7 @@ class SocialEventViewSet(viewsets.ModelViewSet):
         responses={200: dict},
     )
     @action(detail=True, methods=["post"])
+    @retry_on_deadlock()
     def register(self, request, pk=None):
         """Register for an event."""
         event = self.get_object()

@@ -1,5 +1,17 @@
 """
 Production settings
+
+SECURITY TODOs (Infrastructure):
+  TODO [V-299]: Deploy AWS WAF in front of the ALB to filter common web attacks
+  (SQLi, XSS payloads, known bad IPs). Django ORM and template escaping
+  provide defense-in-depth, but a WAF adds signature-based blocking at the
+  edge. Consider AWS WAF Managed Rules or switching Cloudflare to proxy mode.
+
+  TODO [V-300]: Upgrade DDoS protection. Current state: AWS Shield Standard
+  (basic L3/L4) + CloudFront for frontend. Missing: no AWS Shield Advanced
+  or Cloudflare proxy (DNS-only mode). Origin server IPs may be discoverable.
+  Options: (a) enable Cloudflare proxy mode (orange cloud), or (b) subscribe
+  to AWS Shield Advanced for L7 DDoS protection on the ALB.
 """
 
 import sys
@@ -90,7 +102,7 @@ AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME") or os.getenv("AWS_REGION", 
 AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_CLOUDFRONT_DOMAIN")
 AWS_DEFAULT_ACL = None  # Required for S3 Block Public Access
 AWS_S3_FILE_OVERWRITE = False
-AWS_QUERYSTRING_AUTH = False  # Generate direct URLs (not pre-signed)
+AWS_QUERYSTRING_AUTH = True  # Generate pre-signed URLs with expiration (security audit 078)
 AWS_STATIC_LOCATION = "static"
 AWS_MEDIA_LOCATION = "media"
 
@@ -123,11 +135,15 @@ if _has_sentry and os.getenv("SENTRY_DSN"):
         environment="production",
     )
 
-# Logging — stdout-only for ECS (no file handlers)
+# Logging — structured JSON for ECS/CloudWatch (V-571, V-587 security audit fix)
+# JSON logs enable structured querying in CloudWatch Logs Insights.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
+        "json": {
+            "()": "core.logging.JSONFormatter",
+        },
         "verbose": {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
@@ -136,7 +152,7 @@ LOGGING = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "json",
         },
     },
     "root": {
@@ -149,12 +165,27 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         "apps": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
+        "core": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "security": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
@@ -193,6 +224,25 @@ DATABASES["default"]["OPTIONS"] = {
     "sslmode": os.getenv("DB_SSLMODE", "require"),
 }
 
+# TODO (security audit 1009): Enable pgaudit on RDS for database-level audit
+# logging (DDL, DCL, connection events). Steps:
+#   1. Create a custom RDS parameter group with shared_preload_libraries = pgaudit
+#   2. Set pgaudit.log = 'ddl,role' (or 'all' for full audit)
+#   3. Apply the parameter group to stepora-db and reboot
+#   4. Logs will appear in CloudWatch at /aws/rds/instance/stepora-db/postgresql
+
+# TODO (security audit 1041): Implement API key rotation schedule for third-party
+# keys (OpenAI, Stripe, Agora, VAPID). Consider:
+#   1. AWS Secrets Manager automatic rotation with a Lambda function
+#   2. Or manual rotation schedule with monitoring/alerting
+#   3. Track last rotation date per key in a config table or as a Secret tag
+
+# TODO (security audit 1031): Add migration rollback testing to CI/CD.
+# Before deploying destructive migrations, run:
+#   python manage.py showmigrations (log current state)
+#   python manage.py migrate --plan (preview migrations)
+#   Consider adding --check flag to detect unapplied migrations without running them.
+
 # Elasticsearch — auto-sync only when an ES host is explicitly configured.
 # On AWS (no ES instance) the env var is unset, so autosync stays off.
 # On VPS (Docker ES container) the env var points to the ES service.
@@ -202,8 +252,25 @@ ELASTICSEARCH_DSL_AUTOSYNC = bool(os.getenv("ELASTICSEARCH_URL"))
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 
-# Redis connection for production (supports redis:// and rediss:// schemes)
+# Redis connection for production (supports redis:// and rediss:// schemes).
+# Security (audit 1019): Use a REDIS_URL that includes AUTH credentials,
+# e.g. redis://:password@host:6379/0 or rediss://:password@host:6379/0
+# for TLS. AWS ElastiCache should have AUTH + in-transit encryption enabled.
 _redis_url = os.getenv("REDIS_URL", "")
 if _redis_url:
     CACHES["default"]["LOCATION"] = _redis_url
     CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [_redis_url]
+
+    # Warn if REDIS_URL does not appear to include AUTH credentials
+    if "collectstatic" not in sys.argv and "://:@" not in _redis_url and "://:?" not in _redis_url:
+        _has_redis_auth = ("://:@" in _redis_url) or ("://:%" in _redis_url)
+        _has_redis_password_in_url = "@" in _redis_url.split("://", 1)[-1] if "://" in _redis_url else False
+        if not _has_redis_password_in_url:
+            import warnings
+
+            warnings.warn(
+                "REDIS_URL does not appear to include AUTH credentials. "
+                "Enable AUTH on ElastiCache and use redis://:password@host:port/db "
+                "for defense-in-depth (security audit 1019).",
+                stacklevel=1,
+            )

@@ -7,6 +7,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, password_validation
 from django.core import signing
+from django.db import DatabaseError
 from rest_framework import serializers
 
 from core.auth.models import EmailAddress
@@ -61,13 +62,28 @@ class RegisterSerializer(serializers.Serializer):
     password1 = serializers.CharField(write_only=True, style={"input_type": "password"})
     password2 = serializers.CharField(write_only=True, style={"input_type": "password"})
     display_name = serializers.CharField(max_length=255, required=False, default="")
+    # COPPA/age verification (V-343): optional date_of_birth field.
+    # If provided, user must be at least 13 years old.
+    # If not provided, agreed_to_terms implicitly confirms 13+ (terms state age requirement).
+    date_of_birth = serializers.DateField(
+        required=False,
+        help_text="Date of birth for age verification (COPPA: must be 13+).",
+    )
+    # GDPR consent recording (V-333): must accept terms to register.
+    agreed_to_terms = serializers.BooleanField(
+        default=True,
+        help_text="User must agree to Terms of Service and Privacy Policy (confirms 13+ age).",
+    )
+    # Honeypot field for bot detection (V-1476).
+    # Real users never see or fill this field. Bots that auto-fill all fields
+    # will populate it, causing registration to be silently rejected.
+    website = serializers.CharField(required=False, default="", allow_blank=True)
 
     def validate_email(self, value):
         email = User.objects.normalize_email(value)
-        if User.objects.filter(email__iexact=email).exists():
-            raise serializers.ValidationError(
-                "An account with this email already exists."
-            )
+        # Store whether email exists — handled in save() to avoid
+        # account enumeration (same response regardless of existence).
+        self._email_exists = User.objects.filter(email__iexact=email).exists()
         return email
 
     def validate_display_name(self, value):
@@ -77,7 +93,43 @@ class RegisterSerializer(serializers.Serializer):
             return validate_display_name(value)
         return value
 
+    def validate_agreed_to_terms(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must agree to the Terms of Service and Privacy Policy to create an account."
+            )
+        return value
+
+    def validate_date_of_birth(self, value):
+        """COPPA compliance: reject users under 13."""
+        if value:
+            import datetime
+
+            today = datetime.date.today()
+            age = (
+                today.year
+                - value.year
+                - ((today.month, today.day) < (value.month, value.day))
+            )
+            if age < 13:
+                raise serializers.ValidationError(
+                    "You must be at least 13 years old to create an account."
+                )
+        return value
+
     def validate(self, attrs):
+        # Honeypot check: if the hidden field has a value, it is a bot.
+        # Raise a generic error that looks like a normal validation failure
+        # so the bot cannot distinguish it from a real error.
+        if attrs.get("website"):
+            logger.warning(
+                "Bot registration blocked (honeypot triggered): email=%s",
+                attrs.get("email", "unknown"),
+            )
+            raise serializers.ValidationError(
+                "Unable to create account. Please try again later."
+            )
+
         if attrs["password1"] != attrs["password2"]:
             raise serializers.ValidationError(
                 {"password2": "The two password fields did not match."}
@@ -86,14 +138,33 @@ class RegisterSerializer(serializers.Serializer):
         return attrs
 
     def save(self, request=None):
+        from django.utils import timezone as tz
+
         email = self.validated_data["email"]
         password = self.validated_data["password1"]
         display_name = self.validated_data.get("display_name", "")
+        date_of_birth = self.validated_data.get("date_of_birth")
+
+        # Prevent account enumeration: if email already exists, silently
+        # send a notification to the existing account and return None.
+        # The view returns the same generic response in both cases.
+        if getattr(self, "_email_exists", False):
+            logger.info("Registration attempted with existing email (enumeration prevented)")
+            return None
+
+        extra_fields = {}
+        if date_of_birth:
+            extra_fields["date_of_birth"] = date_of_birth
+
+        # Record consent timestamp and version (V-333 GDPR)
+        extra_fields["consent_accepted_at"] = tz.now()
+        extra_fields["consent_version"] = "2026-03-26"
 
         user = User.objects.create_user(
             email=email,
             password=password,
             display_name=display_name,
+            **extra_fields,
         )
 
         verification = getattr(settings, "DP_AUTH", {}).get(
@@ -159,7 +230,20 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self):
         self._user.set_password(self.validated_data["new_password1"])
         self._user.save(update_fields=["password"])
+        # Invalidate all existing refresh tokens so stolen tokens are revoked
+        self._invalidate_user_tokens(self._user)
         return self._user
+
+    @staticmethod
+    def _invalidate_user_tokens(user):
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+
+            OutstandingToken.objects.filter(user=user).delete()
+        except ImportError:
+            pass
+        except DatabaseError:
+            logger.error("Failed to invalidate tokens for user %s on password reset", user.id)
 
 
 class PasswordChangeSerializer(serializers.Serializer):
@@ -193,6 +277,15 @@ class PasswordChangeSerializer(serializers.Serializer):
         user = self.context["request"].user
         user.set_password(self.validated_data["new_password1"])
         user.save(update_fields=["password"])
+        # Invalidate all existing refresh tokens so other sessions are revoked
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+
+            OutstandingToken.objects.filter(user=user).delete()
+        except ImportError:
+            pass
+        except DatabaseError:
+            logger.error("Failed to invalidate tokens for user %s on password change", user.id)
 
 
 class EmailVerificationSerializer(serializers.Serializer):

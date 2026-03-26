@@ -7,8 +7,14 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from PIL import Image as _PILImage
+
 from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
+
+# Security audit #175: Prevent image decompression bombs globally.
+# Pillow will raise DecompressionBombError for images exceeding this limit.
+_PILImage.MAX_IMAGE_PIXELS = 25_000_000  # 25 megapixels
 
 # Load environment variables (graceful — may fail in containers where env is injected)
 try:
@@ -87,6 +93,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "core.middleware.OriginValidationMiddleware",
+    "core.middleware.FetchMetadataMiddleware",  # Audit #963: Sec-Fetch-Site validation
     "core.middleware.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -101,6 +108,9 @@ MIDDLEWARE = [
     "core.middleware.AdminIPRestrictionMiddleware",
     "core.middleware.EmailVerificationMiddleware",
     "core.middleware.LastActivityMiddleware",
+    "core.middleware.CacheControlMiddleware",  # Audit #930/931/933: no-store on auth'd API
+    "core.middleware.RLSMiddleware",  # Audit #1015: set pg session var for Row-Level Security
+    "core.middleware.APIVersionDeprecationMiddleware",  # Audit #1056: deprecation header on /api/
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -144,15 +154,35 @@ AUTHENTICATION_BACKENDS = [
     "core.auth.backends.EmailAuthBackend",
 ]
 
+# Password hashing -- Argon2id is the primary hasher (V-1402).
+# Django falls back to later entries for verifying old hashes and auto-upgrades
+# them to Argon2id on next login.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 10,
+        },
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+# TODO V-1500: Add HaveIBeenPwned breached-password validator.
+# Implement as a custom validator calling the k-anonymity Pwned Passwords API
+# (range endpoint, no full hash sent) and add it to AUTH_PASSWORD_VALIDATORS.
+# See: https://haveibeenpwned.com/API/v3#PwnedPasswords
 
 # Internationalization
 LANGUAGE_CODE = "en"
@@ -239,6 +269,12 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
+    ],
+    # V-304: JSON depth limit to prevent deeply nested payload attacks
+    "DEFAULT_PARSER_CLASSES": [
+        "core.json_depth_limit.DepthLimitedJSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -405,6 +441,8 @@ CELERY_TIMEZONE = "UTC"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_RESULT_EXPIRES = 3600  # 1 hour — prevents stale results from filling Redis
+CELERY_TASK_ACKS_LATE = True  # V-526: Acknowledge tasks after execution, not before — prevents data loss on worker crash
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Re-queue tasks if the worker process is killed (OOM, SIGKILL)
 
 # Redis Cache
 CACHES = {
@@ -602,6 +640,17 @@ CSRF_COOKIE_SAMESITE = "Lax"
 
 # Field-level encryption key for PII (required for encrypted model fields)
 # MUST be set via FIELD_ENCRYPTION_KEY env var in all environments.
+#
+# KEY ROTATION PROCEDURE (security audit #125):
+# django-encrypted-model-fields does NOT support key versioning.
+# To rotate FIELD_ENCRYPTION_KEY:
+#   1. Schedule a maintenance window.
+#   2. Run a management command that reads all encrypted fields with the OLD key,
+#      then re-encrypts and saves them with the NEW key.
+#   3. Update FIELD_ENCRYPTION_KEY in AWS Secrets Manager and ECS task definitions.
+#   4. Re-deploy all services (backend, celery, celery-beat).
+# Affected models: User (display_name, bio, location, avatar_url, totp_secret),
+#   Dream, Plan, CalendarEvent, ChatMessage, AIConversation, SocialPost, Notification.
 FIELD_ENCRYPTION_KEY = os.environ["FIELD_ENCRYPTION_KEY"]
 
 # WebRTC TURN server (required for NAT traversal behind symmetric NATs)

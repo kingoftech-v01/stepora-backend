@@ -11,6 +11,8 @@ import secrets
 import uuid as uuid_mod
 from datetime import timedelta
 
+from PIL import Image as PILImage
+
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -329,6 +331,37 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"error": _("File content does not match an allowed image format.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Decompression bomb protection (security audit #175):
+        # Reject images with extreme pixel counts that could exhaust memory.
+        try:
+            img = PILImage.open(avatar_file)
+            width, height = img.size
+            max_pixels = 25_000_000  # 25 megapixels
+            if width * height > max_pixels:
+                return Response(
+                    {"error": _("Image dimensions are too large (max 25 megapixels).")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Strip EXIF metadata for privacy (security audit #183):
+            # Re-save the image without EXIF data (GPS coords, device info, etc.)
+            cleaned = io.BytesIO()
+            # Convert to RGB if necessary (e.g. RGBA PNGs, palette-mode GIFs)
+            save_format = img.format or "JPEG"
+            if save_format.upper() == "JPEG" and img.mode != "RGB":
+                img = img.convert("RGB")
+            img.save(cleaned, format=save_format)
+            cleaned.seek(0)
+            avatar_file.file = cleaned
+            avatar_file.size = cleaned.getbuffer().nbytes
+        except Exception:
+            return Response(
+                {"error": _("Unable to process image file.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        finally:
+            avatar_file.seek(0)
 
         user = request.user
         # Delete old avatar image if exists
@@ -658,6 +691,13 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # ── CSV format: flatten dreams/goals/tasks into rows ───────────
         if export_format == "csv":
+
+            def _sanitize_csv_cell(value):
+                """Prevent CSV formula injection by prefixing dangerous characters."""
+                if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
+                    return "'" + value
+                return value
+
             output = io.StringIO()
             writer = csv.writer(output)
             writer.writerow(
@@ -679,9 +719,9 @@ class UserViewSet(viewsets.ModelViewSet):
                 if not dream["goals"]:
                     writer.writerow(
                         [
-                            dream["title"],
-                            dream["category"],
-                            dream["status"],
+                            _sanitize_csv_cell(dream["title"]),
+                            _sanitize_csv_cell(dream["category"]),
+                            _sanitize_csv_cell(dream["status"]),
                             dream["progress_percentage"],
                             "",
                             "",
@@ -696,12 +736,12 @@ class UserViewSet(viewsets.ModelViewSet):
                     if not goal["tasks"]:
                         writer.writerow(
                             [
-                                dream["title"],
-                                dream["category"],
-                                dream["status"],
+                                _sanitize_csv_cell(dream["title"]),
+                                _sanitize_csv_cell(dream["category"]),
+                                _sanitize_csv_cell(dream["status"]),
                                 dream["progress_percentage"],
-                                goal["title"],
-                                goal["status"],
+                                _sanitize_csv_cell(goal["title"]),
+                                _sanitize_csv_cell(goal["status"]),
                                 goal["progress_percentage"],
                                 "",
                                 "",
@@ -712,15 +752,15 @@ class UserViewSet(viewsets.ModelViewSet):
                     for task in goal["tasks"]:
                         writer.writerow(
                             [
-                                dream["title"],
-                                dream["category"],
-                                dream["status"],
+                                _sanitize_csv_cell(dream["title"]),
+                                _sanitize_csv_cell(dream["category"]),
+                                _sanitize_csv_cell(dream["status"]),
                                 dream["progress_percentage"],
-                                goal["title"],
-                                goal["status"],
+                                _sanitize_csv_cell(goal["title"]),
+                                _sanitize_csv_cell(goal["status"]),
                                 goal["progress_percentage"],
-                                task["title"],
-                                task["status"],
+                                _sanitize_csv_cell(task["title"]),
+                                _sanitize_csv_cell(task["status"]),
                                 task.get("duration_mins", ""),
                                 task.get("completed_at", ""),
                             ]
