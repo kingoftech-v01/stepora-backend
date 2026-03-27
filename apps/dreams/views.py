@@ -1172,9 +1172,10 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         total_questions = CalibrationResponse.objects.filter(dream=dream).count()
         answered_count = len(all_qa)
+        unanswered_count = total_questions - answered_count
 
         # If we've reached 25 questions, force complete (increased from 15 for deeper understanding)
-        if total_questions >= 25:
+        if total_questions >= 25 and unanswered_count == 0:
             dream.calibration_status = "completed"
             dream.save(update_fields=["calibration_status"])
 
@@ -1190,7 +1191,9 @@ class DreamViewSet(viewsets.ModelViewSet):
             )
 
         # Server-side guard: force completion after 10+ answered questions
-        if answered_count >= 10:
+        # Only trigger when all current questions are answered to avoid
+        # premature completion while user still has questions in their batch
+        if answered_count >= 10 and unanswered_count == 0:
             dream.calibration_status = "completed"
             dream.save(update_fields=["calibration_status"])
             return Response(
@@ -1202,6 +1205,18 @@ class DreamViewSet(viewsets.ModelViewSet):
                     "message": _(
                         "Calibration complete. Ready to generate your personalized plan."
                     ),
+                }
+            )
+
+        # Don't run AI check or generate follow-ups if user still has
+        # unanswered questions in current batch — wait until they finish
+        if unanswered_count > 0:
+            return Response(
+                {
+                    "status": "in_progress",
+                    "total_questions": total_questions,
+                    "answered": answered_count,
+                    "remaining": unanswered_count,
                 }
             )
 
