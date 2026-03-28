@@ -1,13 +1,20 @@
+# ⚠️ DEPLOY AWS DÉSACTIVÉ (2026-03-28)
+# Raison : Migration en cours de AWS (ECS/RDS/ElastiCache) vers VPS (Docker Compose).
+# La production tourne maintenant sur le VPS via docker-compose.
+# Les jobs CI (lint, test, security scan) restent actifs.
+# Le deploy ECR/ECS est désactivé pour éviter d'écraser la config VPS.
+# Réactiver quand/si on revient sur AWS.
 name: Deploy Backend
 
 on:
-  push:
-    branches: [main, development]
-    paths-ignore:
-      - ".github/workflows/deploy-frontend.yml"
-      - "stepora-frontend/**"
-  pull_request:
-    branches: [main, development]
+  # push:
+  #   branches: [main, development]
+  #   paths-ignore:
+  #     - ".github/workflows/deploy-frontend.yml"
+  #     - "stepora-frontend/**"
+  # pull_request:
+  #   branches: [main, development]
+  workflow_dispatch:  # Manual trigger only
 
 env:
   AWS_REGION: eu-west-3

@@ -20,7 +20,9 @@ from .base import *
 
 try:
     import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
     from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
 
     _has_sentry = True
 except ImportError:
@@ -127,12 +129,35 @@ OTA_PUBLIC_KEY_PATH = os.getenv("OTA_PUBLIC_KEY_PATH", "")
 
 # Sentry error tracking
 if _has_sentry and os.getenv("SENTRY_DSN"):
+
+    def _sentry_before_send(event, hint):
+        """Filter out noisy events: 404s and health check errors."""
+        if "exc_info" in hint:
+            exc_type, exc_value, _ = hint["exc_info"]
+            # Ignore Http404 errors
+            from django.http import Http404
+
+            if isinstance(exc_value, Http404):
+                return None
+        # Ignore health check endpoint errors
+        request = event.get("request", {})
+        url = request.get("url", "")
+        if "/health/" in url:
+            return None
+        return event
+
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
-        integrations=[DjangoIntegration()],
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
         send_default_pii=False,
-        environment="production",
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        before_send=_sentry_before_send,
     )
 
 # Logging — structured JSON for ECS/CloudWatch (V-571, V-587 security audit fix)
