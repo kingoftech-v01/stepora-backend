@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class FeatureFlagMixin:
-    """Return 501 when a feature flag is disabled."""
+    """Return 501 when a feature flag is disabled — silently, no error logging."""
 
     feature_flag = None
 
@@ -43,14 +43,21 @@ class FeatureFlagMixin:
         super().initial(request, *args, **kwargs)
         flag_name = self.feature_flag
         if flag_name and not getattr(django_settings, flag_name, False):
-            from rest_framework.exceptions import APIException
+            from rest_framework.response import Response
 
-            class FeatureComingSoon(APIException):
-                status_code = 501
-                default_detail = _("This feature is coming soon.")
-                default_code = "coming_soon"
+            self._feature_disabled = True
 
-            raise FeatureComingSoon()
+    def dispatch(self, request, *args, **kwargs):
+        # Check flag before full dispatch to avoid exception logging
+        flag_name = self.feature_flag
+        if flag_name and not getattr(django_settings, flag_name, False):
+            from rest_framework.response import Response
+
+            return Response(
+                {"detail": str(_("This feature is coming soon.")), "code": "coming_soon"},
+                status=501,
+            )
+        return super().dispatch(request, *args, **kwargs)
 
 
 @extend_schema_view(

@@ -131,7 +131,7 @@ OTA_PUBLIC_KEY_PATH = os.getenv("OTA_PUBLIC_KEY_PATH", "")
 if _has_sentry and os.getenv("SENTRY_DSN"):
 
     def _sentry_before_send(event, hint):
-        """Filter out noisy events: 404s and health check errors."""
+        """Filter out noisy events: 404s, health checks, and disabled features."""
         if "exc_info" in hint:
             exc_type, exc_value, _ = hint["exc_info"]
             # Ignore Http404 errors
@@ -139,10 +139,20 @@ if _has_sentry and os.getenv("SENTRY_DSN"):
 
             if isinstance(exc_value, Http404):
                 return None
+            # Ignore FeatureComingSoon (501 from disabled feature flags)
+            exc_name = getattr(exc_type, "__name__", "")
+            if exc_name == "FeatureComingSoon" or "coming_soon" in str(
+                getattr(exc_value, "default_code", "")
+            ):
+                return None
         # Ignore health check endpoint errors
         request = event.get("request", {})
         url = request.get("url", "")
         if "/health/" in url:
+            return None
+        # Ignore 501 responses (feature flags)
+        status = event.get("tags", {}).get("status_code") or ""
+        if str(status) == "501":
             return None
         return event
 

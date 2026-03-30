@@ -578,7 +578,7 @@ CORS_ALLOWED_METHODS = [
     "POST",
     "PUT",
 ]
-CORS_ALLOWED_HEADERS = [
+CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
     "accept-language",
@@ -590,6 +590,9 @@ CORS_ALLOWED_HEADERS = [
     "x-csrftoken",
     "x-requested-with",
     "x-client-platform",
+    "sentry-trace",
+    "baggage",
+    "x-idempotency-key",
 ]
 
 # Stripe Configuration
