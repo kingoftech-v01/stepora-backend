@@ -138,7 +138,6 @@ services:
       elasticsearch:
         condition: service_healthy
     restart: unless-stopped
-    read_only: true
     tmpfs:
       - /tmp
       - /app/logs
