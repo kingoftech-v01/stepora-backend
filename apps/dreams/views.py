@@ -888,21 +888,40 @@ class DreamViewSet(viewsets.ModelViewSet):
 
         # Resume if already in progress — return existing unanswered questions
         if dream.calibration_status == "in_progress":
-            existing = CalibrationResponse.objects.filter(
-                dream=dream, answer=""
-            ).order_by("question_number")
-            if existing.exists():
+            # EncryptedTextField: DB-level filter (answer="") doesn't work on ciphertext.
+            # Must fetch all and filter in Python after decryption.
+            all_responses = list(
+                CalibrationResponse.objects.filter(dream=dream).order_by("question_number")
+            )
+            unanswered = [cr for cr in all_responses if not cr.answer or not cr.answer.strip()]
+            answered_count = len(all_responses) - len(unanswered)
+
+            if unanswered:
                 return Response(
                     {
                         "status": "in_progress",
                         "questions": CalibrationResponseSerializer(
-                            existing, many=True
+                            unanswered, many=True
                         ).data,
                     }
                 )
-            # All questions answered — AI may be generating follow-ups
-            # or calibration should be completed via answer_calibration.
-            # Check Redis lock to prevent duplicate generation.
+
+            # All questions answered — complete calibration if enough answers
+            if answered_count >= 7:
+                dream.calibration_status = "completed"
+                dream.save(update_fields=["calibration_status"])
+                return Response(
+                    {
+                        "status": "completed",
+                        "total_questions": len(all_responses),
+                        "answered": answered_count,
+                        "message": _(
+                            "Calibration complete. Ready to generate your personalized plan."
+                        ),
+                    }
+                )
+
+            # Not enough answers — check if AI is generating more
             lock_key = f"calibration:generating:{dream.id}"
             if cache.get(lock_key):
                 return Response(
@@ -1164,13 +1183,18 @@ class DreamViewSet(viewsets.ModelViewSet):
                 continue
 
         # Get all Q&A pairs so far
-        all_qa = list(
-            CalibrationResponse.objects.filter(dream=dream, answer__gt="")
-            .order_by("question_number")
-            .values("question", "answer")
+        # EncryptedTextField: DB-level filter (answer__gt="") doesn't work on ciphertext.
+        # Must fetch all and filter in Python after decryption.
+        all_responses = list(
+            CalibrationResponse.objects.filter(dream=dream).order_by("question_number")
         )
+        all_qa = [
+            {"question": cr.question, "answer": cr.answer}
+            for cr in all_responses
+            if cr.answer and cr.answer.strip()
+        ]
 
-        total_questions = CalibrationResponse.objects.filter(dream=dream).count()
+        total_questions = len(all_responses)
         answered_count = len(all_qa)
         unanswered_count = total_questions - answered_count
 
