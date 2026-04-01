@@ -6,6 +6,12 @@ import logging
 import uuid
 
 import requests as http_requests
+from apps.dreams.calibration import (
+    check_and_update_calibration_status,
+    get_calibration_counts,
+    get_answered_qa_pairs,
+    get_unanswered_responses,
+)
 from django.core.cache import cache
 from django.db.models import Max
 from django.utils import timezone
@@ -886,16 +892,22 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Resume if already in progress — return existing unanswered questions
+        # Resume if already in progress — check status via centralized function
         if dream.calibration_status == "in_progress":
-            # EncryptedTextField: DB-level filter (answer="") doesn't work on ciphertext.
-            # Must fetch all and filter in Python after decryption.
-            all_responses = list(
-                CalibrationResponse.objects.filter(dream=dream).order_by("question_number")
-            )
-            unanswered = [cr for cr in all_responses if not cr.answer or not cr.answer.strip()]
-            answered_count = len(all_responses) - len(unanswered)
+            cal_status = check_and_update_calibration_status(dream)
+            if cal_status == "completed":
+                _responses, answered_count, _unanswered = get_calibration_counts(dream)
+                return Response(
+                    {
+                        "status": "completed",
+                        "answered": answered_count,
+                        "message": _(
+                            "Calibration complete. Ready to generate your personalized plan."
+                        ),
+                    }
+                )
 
+            unanswered = get_unanswered_responses(dream)
             if unanswered:
                 return Response(
                     {
@@ -903,21 +915,6 @@ class DreamViewSet(viewsets.ModelViewSet):
                         "questions": CalibrationResponseSerializer(
                             unanswered, many=True
                         ).data,
-                    }
-                )
-
-            # All questions answered — complete calibration if enough answers
-            if answered_count >= 7:
-                dream.calibration_status = "completed"
-                dream.save(update_fields=["calibration_status"])
-                return Response(
-                    {
-                        "status": "completed",
-                        "total_questions": len(all_responses),
-                        "answered": answered_count,
-                        "message": _(
-                            "Calibration complete. Ready to generate your personalized plan."
-                        ),
                     }
                 )
 
@@ -1182,44 +1179,13 @@ class DreamViewSet(viewsets.ModelViewSet):
             except (KeyError, ValueError):
                 continue
 
-        # Get all Q&A pairs so far
-        # EncryptedTextField: DB-level filter (answer__gt="") doesn't work on ciphertext.
-        # Must fetch all and filter in Python after decryption.
-        all_responses = list(
-            CalibrationResponse.objects.filter(dream=dream).order_by("question_number")
-        )
-        all_qa = [
-            {"question": cr.question, "answer": cr.answer}
-            for cr in all_responses
-            if cr.answer and cr.answer.strip()
-        ]
+        # Check calibration status via centralized function
+        cal_status = check_and_update_calibration_status(dream)
+        _responses, answered_count, unanswered_count = get_calibration_counts(dream)
+        all_qa = get_answered_qa_pairs(dream)
+        total_questions = answered_count + unanswered_count
 
-        total_questions = len(all_responses)
-        answered_count = len(all_qa)
-        unanswered_count = total_questions - answered_count
-
-        # If we've reached 25 questions, force complete (increased from 15 for deeper understanding)
-        if total_questions >= 25 and unanswered_count == 0:
-            dream.calibration_status = "completed"
-            dream.save(update_fields=["calibration_status"])
-
-            return Response(
-                {
-                    "status": "completed",
-                    "total_questions": total_questions,
-                    "answered": answered_count,
-                    "message": _(
-                        "Calibration complete. Ready to generate your personalized plan."
-                    ),
-                }
-            )
-
-        # Server-side guard: force completion after 10+ answered questions
-        # Only trigger when all current questions are answered to avoid
-        # premature completion while user still has questions in their batch
-        if answered_count >= 10 and unanswered_count == 0:
-            dream.calibration_status = "completed"
-            dream.save(update_fields=["calibration_status"])
+        if cal_status == "completed":
             return Response(
                 {
                     "status": "completed",
@@ -1416,11 +1382,8 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_202_ACCEPTED,
             )
 
-        # Mark calibration as completed before generating plan
-        # (plan generation means calibration is done, regardless of unanswered Qs)
-        if dream.calibration_status != "completed":
-            dream.calibration_status = "completed"
-            dream.save(update_fields=["calibration_status"])
+        # Evaluate calibration status (centralized check)
+        check_and_update_calibration_status(dream)
 
         # Dispatch skeleton generation (chains to initial tasks automatically)
         set_plan_status(

@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from django.contrib.auth import get_user_model
 from apps.dreams.models import Dream
-from apps.plans.models import CalibrationResponse
+from apps.plans.models import CalibrationResponse, Goal
 from apps.subscriptions.models import SubscriptionPlan, Subscription
 
 User = get_user_model()
@@ -193,3 +193,65 @@ class TestCalibrationStatusGuards:
 
         r = client.post(f"/api/dreams/dreams/{dream.id}/start_calibration/")
         assert r.status_code == 400
+
+
+# ─── Centralized status function ─────────────────────────────────
+
+
+class TestCheckAndUpdateCalibrationStatus:
+    """Tests for the centralized check_and_update_calibration_status function."""
+
+    def test_skipped_stays_skipped(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Skipped", description="test", calibration_status="skipped", status="active")
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "skipped"
+
+    def test_completed_stays_completed(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Done", description="test", calibration_status="completed", status="active")
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "completed"
+
+    def test_plan_exists_marks_completed(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Has plan", description="test", calibration_status="in_progress", status="active")
+        Goal.objects.create(dream=dream, title="Goal 1", order=1)
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "completed"
+        dream.refresh_from_db()
+        assert dream.calibration_status == "completed"
+
+    def test_7_answers_all_done_marks_completed(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="All done", description="test", calibration_status="in_progress", status="active")
+        for i in range(7):
+            CalibrationResponse.objects.create(dream=dream, question_number=i+1, question=f"Q{i+1}", answer=f"Answer {i+1}")
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "completed"
+        dream.refresh_from_db()
+        assert dream.calibration_status == "completed"
+
+    def test_unanswered_remain_stays_in_progress(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Partial", description="test", calibration_status="in_progress", status="active")
+        for i in range(7):
+            answer = f"Answer {i+1}" if i < 5 else ""
+            CalibrationResponse.objects.create(dream=dream, question_number=i+1, question=f"Q{i+1}", answer=answer)
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "in_progress"
+
+    def test_no_responses_stays_pending(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Fresh", description="test", calibration_status="pending", status="active")
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        assert result == "pending"
+
+    def test_fewer_than_7_all_answered_stays_in_progress(self, ai_user):
+        dream = Dream.objects.create(user=ai_user, title="Few", description="test", calibration_status="in_progress", status="active")
+        for i in range(3):
+            CalibrationResponse.objects.create(dream=dream, question_number=i+1, question=f"Q{i+1}", answer=f"Answer {i+1}")
+        from apps.dreams.calibration import check_and_update_calibration_status
+        result = check_and_update_calibration_status(dream)
+        # 3 answered, 0 unanswered, but < 7 total → stays in_progress
+        assert result == "in_progress"
