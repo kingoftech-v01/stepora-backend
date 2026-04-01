@@ -1416,6 +1416,12 @@ class DreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_202_ACCEPTED,
             )
 
+        # Mark calibration as completed before generating plan
+        # (plan generation means calibration is done, regardless of unanswered Qs)
+        if dream.calibration_status != "completed":
+            dream.calibration_status = "completed"
+            dream.save(update_fields=["calibration_status"])
+
         # Dispatch skeleton generation (chains to initial tasks automatically)
         set_plan_status(
             str(dream.id), "generating", message="Starting plan generation..."
