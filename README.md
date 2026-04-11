@@ -2,7 +2,7 @@
 
 Stepora is a comprehensive goal-tracking and achievement platform that combines AI-powered planning (GPT-4), real-time collaboration, gamification, and social features to help users turn their dreams into reality.
 
-**Backend**: Django 5.0.1 with 13 apps, 170+ API endpoints, 28 Celery tasks, 4 WebSocket consumers
+**Backend**: Django 5.0.10+ with 18 apps, 100+ API endpoints (versioned under `/api/v1/`), 70+ Celery tasks, 5 WebSocket consumers
 
 ---
 
@@ -64,7 +64,7 @@ Stepora is a comprehensive goal-tracking and achievement platform that combines 
 - **Trial Periods**: Configurable free trial for premium tiers
 - **Coupons**: Stripe coupon and promotion code support
 - **Subscription Analytics**: Tracking of MRR, churn, and conversion metrics
-- **Feature Gating**: 10 DB-driven permission classes read from SubscriptionPlan fields — all feature access is configurable without code changes
+- **Feature Gating**: 10 DB-driven permission classes read from SubscriptionPlan fields - all feature access is configurable without code changes
 - **Status Code Semantics**: 403 for subscription feature walls (triggers upgrade modal), 429 with `daily_quota_exceeded` for exhausted daily limits (shows reset time), 429 for burst rate limits
 - **Payment Receipts**: Automatic email receipts on successful payment via Celery
 
@@ -140,7 +140,7 @@ Stepora is a comprehensive goal-tracking and achievement platform that combines 
 ### Authentication and Security
 - **Custom Auth (`core.auth`)**: JWT authentication via SimpleJWT (short-lived access tokens, httpOnly refresh cookies on web, body tokens on native via `X-Client-Platform: native`)
 - **Social Auth**: Google Sign-In and Apple Sign-In via direct token verification (no allauth)
-- **Two-Factor Authentication (TOTP)**: Setup, verify, disable, status check, backup code regeneration. Login with 2FA uses challenge token flow — no JWT tokens issued until OTP is verified.
+- **Two-Factor Authentication (TOTP)**: Setup, verify, disable, status check, backup code regeneration. Login with 2FA uses challenge token flow - no JWT tokens issued until OTP is verified.
 - **Account lockout**: 5 failed login attempts locks IP + email for 15 minutes via Redis
 - **Rate limiting**: `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
 - **Email Change Verification**: Secure email change with verification link (24-hour expiry)
@@ -166,29 +166,34 @@ Stepora is a comprehensive goal-tracking and achievement platform that combines 
 ## Architecture
 
 ```
-stepora/
-+-- apps/                        # 13 Django applications
-|   +-- users/                   # User management, gamification, 2FA, GDPR
+stepora-backend/
++-- apps/                        # 18 Django applications
+|   +-- users/                   # User management, 2FA, GDPR, auth profile
 |   +-- dreams/                  # Dreams, Goals, Tasks, Obstacles, Templates, Tags, PDF export
-|   +-- conversations/           # AI chat (AIChatConsumer WebSocket), templates, voice transcription
-|   +-- notifications/           # Push notifications, templates, preferences, Celery tasks
+|   +-- plans/                   # AI-generated plans, phases, calibration
+|   +-- ai/                      # GPT-4 coaching, streaming chat (AIChatConsumer), vision/voice
+|   +-- chat/                    # Buddy chat (BuddyChatConsumer), Agora voice/video, moderation
+|   +-- gamification/            # XP, levels, ranks, streaks, badges, RPG attributes
 |   +-- calendar/                # Events, recurring, Google Calendar sync, iCal feed
-|   +-- subscriptions/           # Stripe plans, checkout, webhooks, invoices
+|   +-- notifications/           # Push/email/WS delivery, templates, preferences (NotificationConsumer)
+|   +-- subscriptions/           # Stripe plans, checkout, webhooks, invoices, feature gating
 |   +-- store/                   # Items, categories, purchases, wishlists, gifting, refunds
 |   +-- leagues/                 # Leagues, seasons, leaderboards, rank snapshots
-|   +-- circles/                 # Circles, posts, reactions, challenges, invitations, group chat, Agora calls
-|   +-- social/                  # Friends, follows, blocking, reporting, activity feed, dream posts
-|   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders, chat, calls
-|   +-- updates/                 # OTA live updates — signed web bundles via S3 (RSA code signing)
-+-- core/                        # Auth, permissions, AI validators, moderation, audit, middleware, consumer mixins
-+-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar
-+-- config/                      # Django settings, Celery, ASGI/WSGI
-+-- docker/                      # Docker configs
-|   +-- nginx.conf               # Internal nginx (security headers, rate limiting, proxy)
-+-- scripts/                     # Utility scripts
-|   +-- backup.sh                # Automated PostgreSQL backup (cron daily)
+|   +-- circles/                 # Circles, posts, reactions, challenges, group chat (CircleChatConsumer)
+|   +-- social/                  # Friends, follows, blocking, reporting, activity feed (SocialFeedConsumer)
+|   +-- friends/                 # Friend requests, mutual friends, follow graph
+|   +-- buddies/                 # Buddy pairing, encouragement, check-in reminders
+|   +-- referrals/               # Referral codes, rewards, tracking
+|   +-- search/                  # Elasticsearch-backed cross-entity search
+|   +-- updates/                 # OTA live updates - signed web bundles via S3 (RSA code signing)
++-- core/                        # Custom auth (core.auth), permissions, AI validators, moderation, audit, middleware, consumer mixins
++-- integrations/                # OpenAI (GPT-4, DALL-E, Whisper), Google Calendar, Agora, Stripe
++-- config/                      # Django settings (base/dev/prod/testing), Celery, ASGI/WSGI, URL routing
++-- docker/                      # Docker configs (nginx security headers, rate limiting)
++-- scripts/                     # Backup, deploy, OTA signing utilities
++-- requirements/                # Split requirements (base, development, production, testing)
 +-- docs/                        # Documentation
-+-- .github/workflows/           # CI/CD Pipelines
++-- .github/workflows/           # CI/CD pipelines (Django CI, code quality, deploy-backend)
 ```
 
 ---
@@ -197,11 +202,12 @@ stepora/
 
 | Component | Technology |
 |-----------|-----------|
-| **Framework** | Django 5.0.1 |
-| **API** | Django REST Framework 3.14.0 |
+| **Framework** | Django 5.0.10+ (<5.1) |
+| **API** | Django REST Framework 3.15.2 |
 | **API Docs** | drf-spectacular (OpenAPI/Swagger + ReDoc) |
-| **WebSocket** | Django Channels 4.0.0 |
-| **Background Jobs** | Celery 5.3.4 + django-celery-beat |
+| **WebSocket** | Django Channels 4.0.0 (Daphne) |
+| **Background Jobs** | Celery 5.4.0 + django-celery-beat |
+| **Search** | Elasticsearch 8.x via django-elasticsearch-dsl |
 | **Database** | PostgreSQL 15 (prod) / SQLite (dev) |
 | **Cache/Broker** | Redis 7 |
 | **Authentication** | Custom core.auth + SimpleJWT (JWT auth) |
@@ -244,14 +250,14 @@ docker compose exec web python manage.py seed_leagues
 docker compose exec web python manage.py seed_store
 
 # Services available (behind nginx on 127.0.0.1:8085):
-# API:       http://127.0.0.1:8085/api/
-# Admin:     http://127.0.0.1:8085/admin/
+# API v1:    http://127.0.0.1:8085/api/v1/
+# Admin:     http://127.0.0.1:8085/stepora-manage/
 # Swagger:   http://127.0.0.1:8085/api/docs/
 # WebSocket: ws://127.0.0.1:8085/ws/
 # Health:    http://127.0.0.1:8085/health/
 ```
 
-### Without Docker (Local development — uses SQLite + in-memory cache)
+### Without Docker (Local development - uses SQLite + in-memory cache)
 
 ```bash
 python -m venv venv
@@ -349,11 +355,15 @@ DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 ## API Documentation
 
 ### Base URL
-- **Development**: `http://localhost:8000/api`
-- **Production**: `https://api.stepora.app/api`
-- **Swagger UI**: `http://localhost:8000/api/docs/`
-- **ReDoc**: `http://localhost:8000/api/redoc/`
-- **OpenAPI Schema**: `http://localhost:8000/api/schema/`
+
+All endpoints are served under **`/api/v1/`** (canonical). The unversioned `/api/` path is kept as a backward-compatible alias and will be sunsetted when v2 is introduced; an `APIVersionDeprecationMiddleware` adds a `Deprecation` header on responses from that path.
+
+- **Development**: `http://localhost:8000/api/v1/`
+- **Production**: `https://api.stepora.app/api/v1/`
+- **Swagger UI** (DEBUG only): `http://localhost:8000/api/docs/`
+- **ReDoc** (DEBUG only): `http://localhost:8000/api/redoc/`
+- **OpenAPI Schema**: `http://localhost:8000/api/schema/` (restricted to admin in production)
+- **Django Admin**: `http://localhost:8000/stepora-manage/` (non-default path for security)
 
 ### Authentication
 
@@ -371,8 +381,8 @@ WebSocket authentication via message body (sent after connection opens):
 
 ### Authentication Endpoints
 ```
-POST   /api/auth/login/                        # Login (email + password) — returns JWT or challenge token if 2FA enabled
-POST   /api/auth/2fa-challenge/                # Verify 2FA code with challenge token — returns JWT
+POST   /api/auth/login/                        # Login (email + password) - returns JWT or challenge token if 2FA enabled
+POST   /api/auth/2fa-challenge/                # Verify 2FA code with challenge token - returns JWT
 POST   /api/auth/logout/                       # Logout
 POST   /api/auth/registration/                 # Register new account
 POST   /api/auth/password/change/              # Change password
@@ -672,11 +682,11 @@ GET    /api/social/posts/user/{user_id}/           # User's posts
 
 ### WebSocket Routes
 ```
-ws/ai-chat/{conversation_id}/                      # AIChatConsumer — AI chat (GPT-4 streaming)
+ws/ai-chat/{conversation_id}/                      # AIChatConsumer - AI chat (GPT-4 streaming)
 ws/conversations/{conversation_id}/                # (deprecated alias for ai-chat)
-ws/buddy-chat/{pairing_id}/                        # BuddyChatConsumer — buddy real-time chat + FCM
-ws/circle-chat/{circle_id}/                        # CircleChatConsumer — circle group chat
-ws/notifications/                                  # NotificationConsumer — real-time notifications
+ws/buddy-chat/{pairing_id}/                        # BuddyChatConsumer - buddy real-time chat + FCM
+ws/circle-chat/{circle_id}/                        # CircleChatConsumer - circle group chat
+ws/notifications/                                  # NotificationConsumer - real-time notifications
 ```
 
 ### Health Checks
@@ -756,10 +766,10 @@ pytest -m asyncio       # Async tests (WebSocket)
 
 ## Deployment
 
-### Docker Deployment (VPS — Preprod)
+### Docker Deployment (VPS - Preprod)
 
 Architecture on VPS: **External nginx (SSL) → Docker nginx (security) → Django/Daphne**
-Production uses AWS ECS Fargate — see `AWS_INFRASTRUCTURE.md`.
+Production uses AWS ECS Fargate - see `AWS_INFRASTRUCTURE.md`.
 
 ```bash
 cd /root/stepora
@@ -788,8 +798,8 @@ docker compose exec web python manage.py seed_store
 | `redis` | redis:7-alpine | internal | Cache + Celery broker (256M, auth required) |
 | `elasticsearch` | ES 8.12.0 | internal | Full-text search (512M, auth required) |
 | `web` | Dockerfile | 8000 (expose) | Django + Gunicorn |
-| `celery` | Dockerfile | — | Background tasks |
-| `celery-beat` | Dockerfile | — | Scheduled tasks |
+| `celery` | Dockerfile | - | Background tasks |
+| `celery-beat` | Dockerfile | - | Scheduled tasks |
 | `daphne` | Dockerfile | 9000 (expose) | WebSocket (Channels) |
 | `nginx` | nginx:1.27-alpine | 127.0.0.1:8085 | Internal reverse proxy (128M, read-only) |
 
@@ -803,7 +813,7 @@ docker compose exec web python manage.py seed_store
 # Backups stored in /root/stepora/backups/
 ```
 
-### Infrastructure (AWS — Production)
+### Infrastructure (AWS - Production)
 - **ECS Fargate**: Backend + Site vitrine containers (256 CPU, 512 MB each)
 - **RDS PostgreSQL 15**: db.t3.micro, private subnets, SSL required
 - **ElastiCache Redis**: cache.t3.micro for sessions, cache, Celery broker
@@ -833,20 +843,20 @@ docker compose exec web python manage.py seed_store
 ## Security
 
 ### Authentication & Authorization
-- **JWT auth** — Custom auth system (`core.auth`) with short-lived access tokens and httpOnly refresh cookies
-- **2FA enforcement at login** — Challenge token flow: credentials validated → signed challenge token issued (5min TTL) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification.
-- **Account lockout** — 5 failed login attempts locks IP + email for 15 minutes via Redis
-- **Rate limiting** — `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
-- **Social auth** — Google Sign-In and Apple Sign-In via direct ID token verification (no allauth)
-- **Two-Factor (TOTP)** — Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with PBKDF2 (100k iterations).
-- **10 DB-driven permission classes** — All feature access reads from `SubscriptionPlan` model fields (`has_ai`, `has_buddy`, `has_circles`, `has_circle_create`, `has_vision_board`, `has_league`, `has_store`, `has_social_feed`). Plans can be reconfigured via admin without code changes. `User.get_active_plan()` caches per-request for performance.
+- **JWT auth** - Custom auth system (`core.auth`) with short-lived access tokens and httpOnly refresh cookies
+- **2FA enforcement at login** - Challenge token flow: credentials validated → signed challenge token issued (5min TTL) → OTP verified → JWT tokens issued. No tokens leak before 2FA verification.
+- **Account lockout** - 5 failed login attempts locks IP + email for 15 minutes via Redis
+- **Rate limiting** - `AuthRateThrottle` at 5/min on login, register, password reset, and password reset confirm
+- **Social auth** - Google Sign-In and Apple Sign-In via direct ID token verification (no allauth)
+- **Two-Factor (TOTP)** - Setup, verify, disable, status, backup code regeneration. Secrets stored in `EncryptedCharField` (not plaintext). Backup codes hashed with PBKDF2 (100k iterations).
+- **10 DB-driven permission classes** - All feature access reads from `SubscriptionPlan` model fields (`has_ai`, `has_buddy`, `has_circles`, `has_circle_create`, `has_vision_board`, `has_league`, `has_store`, `has_social_feed`). Plans can be reconfigured via admin without code changes. `User.get_active_plan()` caches per-request for performance.
 
 ### Infrastructure Security
-- **AWS VPC** — ECS tasks in private subnets, only ALB is public-facing
-- **Security Groups** — Layered: Internet → ALB → ECS → RDS/Redis (no direct DB access)
-- **Secrets Manager** — All credentials in AWS Secrets Manager (not in .env or code)
-- **VPS (preprod)** — UFW firewall (22/80/443), Docker bound to 127.0.0.1, Fail2ban
-- **Daily backups** — Automated PostgreSQL backups with 7-day retention (`scripts/backup.sh`, cron at 3 AM)
+- **AWS VPC** - ECS tasks in private subnets, only ALB is public-facing
+- **Security Groups** - Layered: Internet → ALB → ECS → RDS/Redis (no direct DB access)
+- **Secrets Manager** - All credentials in AWS Secrets Manager (not in .env or code)
+- **VPS (preprod)** - UFW firewall (22/80/443), Docker bound to 127.0.0.1, Fail2ban
+- **Daily backups** - Automated PostgreSQL backups with 7-day retention (`scripts/backup.sh`, cron at 3 AM)
 
 ### Nginx Security (Docker internal)
 All security headers are set by the Docker-internal nginx (`docker/nginx.conf`). External nginx only handles SSL termination.
@@ -861,33 +871,33 @@ All security headers are set by the Docker-internal nginx (`docker/nginx.conf`).
 | Dotfiles | Denied with no logging |
 
 ### Application Security
-- **Production mode** — `DEBUG=False`, `SECURE_PROXY_SSL_HEADER` set, `SECURE_SSL_REDIRECT=False` (external nginx handles TLS)
-- **CORS** — Whitelist only (`CORS_ALLOW_ALL_ORIGINS=False`), origins from env var, credentials allowed
-- **CSRF** — `CSRF_TRUSTED_ORIGINS` configured for cross-origin frontend
-- **Cookies** — `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True`, `JWT_AUTH_SECURE=True`, `SameSite=Lax`
-- **HSTS** — 1 year, `includeSubDomains`, `preload`
-- **SQL injection** — Protected via Django ORM
-- **XSS** — DOMPurify with restricted `ALLOWED_TAGS` on frontend, `nh3` sanitizer on backend. SecurityHeadersMiddleware sets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, COOP, CORP
-- **SSRF prevention** — `validate_url_no_ssrf()` resolves DNS once and returns IP for connection pinning (prevents TOCTOU/DNS rebinding)
-- **Upload validation** — Type + size + magic byte checks on all file uploads, UUID filenames. Django-level ceilings: `DATA_UPLOAD_MAX_MEMORY_SIZE=110MB`, `FILE_UPLOAD_MAX_MEMORY_SIZE=10MB`
-- **DB SSL** — `sslmode=require` default in production
-- **WebSocket auth** — Token in message body (not URL), JWT signature + expiry validated
-- **Error redaction** — 5xx responses return generic message in production, full error logged server-side
-- **DRF throttling** — Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min. Daily AI quotas via Redis counters return 429 with `daily_quota_exceeded` code, usage info, and reset time. Burst rate limits return generic 429 (no timing hints).
-- **Input validation** — DRF Serializers + custom validation (avatar magic bytes, notification schema whitelist, channel name regex, message length limits)
+- **Production mode** - `DEBUG=False`, `SECURE_PROXY_SSL_HEADER` set, `SECURE_SSL_REDIRECT=False` (external nginx handles TLS)
+- **CORS** - Whitelist only (`CORS_ALLOW_ALL_ORIGINS=False`), origins from env var, credentials allowed
+- **CSRF** - `CSRF_TRUSTED_ORIGINS` configured for cross-origin frontend
+- **Cookies** - `SESSION_COOKIE_SECURE=True`, `CSRF_COOKIE_SECURE=True`, `JWT_AUTH_SECURE=True`, `SameSite=Lax`
+- **HSTS** - 1 year, `includeSubDomains`, `preload`
+- **SQL injection** - Protected via Django ORM
+- **XSS** - DOMPurify with restricted `ALLOWED_TAGS` on frontend, `nh3` sanitizer on backend. SecurityHeadersMiddleware sets CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, COOP, CORP
+- **SSRF prevention** - `validate_url_no_ssrf()` resolves DNS once and returns IP for connection pinning (prevents TOCTOU/DNS rebinding)
+- **Upload validation** - Type + size + magic byte checks on all file uploads, UUID filenames. Django-level ceilings: `DATA_UPLOAD_MAX_MEMORY_SIZE=110MB`, `FILE_UPLOAD_MAX_MEMORY_SIZE=10MB`
+- **DB SSL** - `sslmode=require` default in production
+- **WebSocket auth** - Token in message body (not URL), JWT signature + expiry validated
+- **Error redaction** - 5xx responses return generic message in production, full error logged server-side
+- **DRF throttling** - Anon: 20/min, User: 100/min, AI chat: 10/min, AI plan: 5/min, Export: 1/day, Auth: 5/min. Daily AI quotas via Redis counters return 429 with `daily_quota_exceeded` code, usage info, and reset time. Burst rate limits return generic 429 (no timing hints).
+- **Input validation** - DRF Serializers + custom validation (avatar magic bytes, notification schema whitelist, channel name regex, message length limits)
 
 ### Secrets Management
-- **`.env` file** — `chmod 600`, not committed to git. Contains all secrets (Django key, DB password, API keys)
-- **Docker Compose** — References `${VAR}` from `.env`, no hardcoded secrets
-- **Field encryption** — `django-encrypted-model-fields` for PII (TOTP secrets, sensitive user data)
-- **Redis auth** — `requirepass` with dedicated password
-- **Elasticsearch auth** — `xpack.security.enabled=true` with dedicated password
+- **`.env` file** - `chmod 600`, not committed to git. Contains all secrets (Django key, DB password, API keys)
+- **Docker Compose** - References `${VAR}` from `.env`, no hardcoded secrets
+- **Field encryption** - `django-encrypted-model-fields` for PII (TOTP secrets, sensitive user data)
+- **Redis auth** - `requirepass` with dedicated password
+- **Elasticsearch auth** - `xpack.security.enabled=true` with dedicated password
 
 ### Docker Hardening
-- **Read-only filesystem** — Nginx container runs with `read_only: true`
-- **Resource limits** — PostgreSQL: 512M/1CPU, Redis: 256M/0.5CPU, ES: 512M/1CPU, Nginx: 128M/0.5CPU
-- **Health checks** — All services have health checks (pg_isready, redis-cli ping, curl, wget)
-- **Port isolation** — Internal services use `expose` (not `ports`); only nginx is port-mapped to localhost
+- **Read-only filesystem** - Nginx container runs with `read_only: true`
+- **Resource limits** - PostgreSQL: 512M/1CPU, Redis: 256M/0.5CPU, ES: 512M/1CPU, Nginx: 128M/0.5CPU
+- **Health checks** - All services have health checks (pg_isready, redis-cli ping, curl, wget)
+- **Port isolation** - Internal services use `expose` (not `ports`); only nginx is port-mapped to localhost
 
 ---
 
@@ -895,7 +905,7 @@ All security headers are set by the Docker-internal nginx (`docker/nginx.conf`).
 
 ### Architecture & Navigation
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: System architecture, feature location guide, subscription tiers, infrastructure catalog — **start here to find anything**
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: System architecture, feature location guide, subscription tiers, infrastructure catalog - **start here to find anything**
 - **[docs/CROSS_APP_FLOWS.md](docs/CROSS_APP_FLOWS.md)**: Step-by-step traces of cross-app flows (task completion, dream creation, registration, notifications, subscriptions)
 - **[core/README.md](core/README.md)**: Core module docs (auth, permissions, AI validators, moderation, throttling, middleware, audit)
 
